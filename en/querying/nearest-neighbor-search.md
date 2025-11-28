@@ -8,7 +8,7 @@ redirect_from:
 Nearest neighbor search, or vector search, is a technique used
 to find the closest data points to a given query point in a high-dimensional vector space.
 This is supported in Vespa using the
-[nearestNeighbor](../reference/query-language-reference.html#nearestneighbor) query operator.
+[nearestNeighbor](../reference/querying/yql.html#nearestneighbor) query operator.
 This operator can be combined with other filters or query terms using the
 [Vespa query language](query-language.html),
 making it easy to create hybrid solutions that combine modern vector based techniques with
@@ -63,7 +63,7 @@ $ vespa query 'select * from docs where {targetHits: 3}<span class="pre-hilite">
 
 </pre>
 The `nearestNeighbor` query operator will calculate values
-used by the [closeness()](../reference/rank-features.html#closeness(dimension,name)) rank feature.
+used by the [closeness()](../reference/ranking/rank-features.html#closeness(dimension,name)) rank feature.
 {% include note.html content='closeness(`field`, d_vector)
 means that the closeness rank feature shall use the d_vector <span style="text-decoration: underline">field</span>.
 <br/><br/>
@@ -79,7 +79,7 @@ and approximate nearest neighbor search.
 
 ## Vectors
 A vector is represented by a [tensor](../ranking/tensor-user-guide.html) with one indexed dimension.
-Example [tensor type](../reference/tensor.html#tensor-type-spec) representing a float vector with 384 dimensions:
+Example [tensor type](../reference/ranking/tensor.html#tensor-type-spec) representing a float vector with 384 dimensions:
 <pre>
 tensor&lt;float&gt;(x[384])
 </pre>
@@ -112,7 +112,7 @@ rank-profile my_profile {
 }
 </pre>
 
-This all ties together with the [nearestNeighbor](../reference/query-language-reference.html#nearestneighbor) query operator
+This all ties together with the [nearestNeighbor](../reference/querying/yql.html#nearestneighbor) query operator
 that expects two arguments; the document tensor field name which is searched and the input query tensor name.
 The operator finds the documents that are closest to the query vector
 using the [distance-metric](#distance-metrics-for-nearest-neighbor-search) defined in the tensor field.
@@ -127,7 +127,7 @@ To learn how Vespa can create the vectors for you, see [embedding](../rag/embedd
 
 ## Using nearest neighbor search
 The following sections demonstrates how to use the
-[nearestNeighbor](../reference/query-language-reference.html#nearestneighbor) query operator.
+[nearestNeighbor](../reference/querying/yql.html#nearestneighbor) query operator.
 
 These examples use **exact** nearest neighbor search with perfect accuracy,
 but which is computationally expensive for large document volumes since 
@@ -249,20 +249,20 @@ Skipping the query tensor definition will cause a query time error:
 Expected a tensor value of 'query(query_embedding)' but has [...]
 ```
 
-The `closeness(field, text_embedding)` is a [rank-feature](../reference/rank-features.html#closeness(dimension,name))
-calculated by the [nearestNeighbor](../reference/query-language-reference.html#nearestneighbor) query operator. 
+The `closeness(field, text_embedding)` is a [rank-feature](../reference/ranking/rank-features.html#closeness(dimension,name))
+calculated by the [nearestNeighbor](../reference/querying/yql.html#nearestneighbor) query operator. 
 This calculates a score in the range [0, 1], where 0 is infinite distance,
 and 1 is zero distance. This is convenient because Vespa sorts hits by decreasing relevancy score,
 and one usually want the closest hits to be ranked highest.
 
-The `closeness(field, image_embeddings)` [rank-feature](../reference/rank-features.html#closeness(dimension,name))
+The `closeness(field, image_embeddings)` [rank-feature](../reference/ranking/rank-features.html#closeness(dimension,name))
 operators over a tensor field that stores multiple vectors per document.
 For each document, the vector that is closest to the query vector is used in the calculation.
 
 The `first-phase` is part of Vespa's [phased ranking](../ranking/phased-ranking.html) support.
 Phased ranking enables re-ranking of the top-k best scoring hits as ranked
 or retrieved from the previous ranking phase. The computed ranking score is rendered as `relevance` in
-the default [Vespa JSON result format](../reference/default-result-format.html). If the `relevance` field
+the default [Vespa JSON result format](../reference/querying/default-result-format.html). If the `relevance` field
 of the hit becomes 0.0 one usually have forgotten to specify the correct ranking profile. 
 
 An example of a `rank-profile` also specifying an additional [re-ranking phase](../ranking/phased-ranking.html):
@@ -281,7 +281,7 @@ rank-profile image_similarity_with_reranking {
 }
 </pre>
 In this case, hits retrieved by the
-[nearestNeighbor](../reference/query-language-reference.html#nearestneighbor)
+[nearestNeighbor](../reference/querying/yql.html#nearestneighbor)
 query operator are re-scored also using
 the product's popularity as a signal. The value of the `popularity` field can be read by the
  `attribute(popularity)` rank-feature. The `second-phase` [ranking expression](../ranking/ranking-expressions-features.html)
@@ -350,11 +350,11 @@ The above JSON formatted data can be fed to Vespa using any of the
 [Vespa feeding APIs](../writing/reads-and-writes.html#api-and-utilities).
 
 ## Querying using nearestNeighbor query operator
-The [nearestNeighbor](../reference/query-language-reference.html#nearestneighbor) query operator
+The [nearestNeighbor](../reference/querying/yql.html#nearestneighbor) query operator
 is used to search the product dataset.
 The operator expects two arguments; the document tensor field which is searched and the input query tensor name.
 
-The [targetHits](../reference/query-language-reference.html#targethits)
+The [targetHits](../reference/querying/yql.html#targethits)
 query annotation specifies the number of results to expose to `first-phase`
 ranking per content node involved in the query.
 `targetHits` is a required parameter and the query will fail if not specified.
@@ -392,7 +392,7 @@ by a constraint on the `in_stock` field.
 
 The query request
 also specifies [hits](../reference/api/query.html#hits), which determines how
-many hits are returned to the client using the [JSON result format](../reference/default-result-format.html). 
+many hits are returned to the client using the [JSON result format](../reference/querying/default-result-format.html). 
 
 The total number of hits which is ranked by the ranking profile
 depends on the query filters and how fast the nearest neighbor search algorithm converges (for exact search).

@@ -306,7 +306,7 @@ You might not have noticed, but in the above examples, each of the queries produ
 this score was in our previous examples calculated using the `default` rank profile
 which in our case used [nativeRank](../ranking/nativerank.html).
 
-We can start by analyzing other [rank features](../reference/rank-features.html) by asking Vespa to produce them for us.
+We can start by analyzing other [rank features](../reference/ranking/rank-features.html) by asking Vespa to produce them for us.
 We use [match-features](../reference/schema-reference.html#match-features)
 to return rank features with the retrieved documents.
 We explicitly mention which ranking features we want to have calculated and returned.
@@ -387,19 +387,19 @@ $ vespa query 'yql=select * from photos where userQuery()' \
   'type=any'
 </pre>
 
-The output includes [matchfeatures](../reference/default-result-format.html#matchfeatures)
+The output includes [matchfeatures](../reference/querying/default-result-format.html#matchfeatures)
 where we can see the various scores for the features:
 
 Especially look at the `elementCompleteness` and `elementSimilarity` rank features which
 are example of [features for indexed multivalued string 
-fields](../reference/rank-features.html#features-for-indexed-multivalue-string-fields).
+fields](../reference/ranking/rank-features.html#features-for-indexed-multivalue-string-fields).
 
 We can also notice that `elementCompleteness(tags).fieldCompleteness` is 1.0 which means 
 that the tag was matched exactly and the `"elementCompleteness(tags).elementWeight` outputs
 the weight of the best matched element. 
 
 The `elementSimilarity(tags)` ranking feature is very flexible and even allow us to override
-the [calculation and output new features](../reference/rank-feature-configuration.html#elementSimilarity). 
+the [calculation and output new features](../reference/ranking/rank-feature-configuration.html#elementSimilarity). 
 
 In this example we defined two new ranking features:
 
@@ -488,7 +488,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
   'query=clear sky' 'type=any'
 </pre>
 
-Each hit returned contains a [matchfeatures](../reference/default-result-format.html#matchfeatures) field
+Each hit returned contains a [matchfeatures](../reference/querying/default-result-format.html#matchfeatures) field
 where we can see the various scores for the features.
 
 Now, we can include these features in a ranking expression used in `first-phase` to actually change the ranking. 

@@ -460,7 +460,7 @@ $ vespa query \
 "relevance": 4.0
 ```
 
-Read the [closeness](../reference/rank-features.html#closeness(dimension,name)) reference documentation.
+Read the [closeness](../reference/ranking/rank-features.html#closeness(dimension,name)) reference documentation.
 
 
 ### TargetHits for ANN

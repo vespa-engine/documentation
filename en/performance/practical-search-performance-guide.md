@@ -389,7 +389,7 @@ $ vespa query \
 </pre>
 </div>
 
-The [result json output](../reference/default-result-format.html) for this query will 
+The [result json output](../reference/querying/default-result-format.html) for this query will 
 look something like this:
 
 <pre>{% highlight json%}
@@ -464,8 +464,8 @@ $ vespa query \
 </pre>
 </div>
 
-This query request combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
-with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
+This query request combines YQL [userQuery()](../reference/querying/yql.html#userquery) 
+with Vespa's [simple query language](../reference/querying/simple-query-language.html), the 
 default [query type](../reference/api/query.html#model.type) is 
 using `all`, requiring that all the terms match.
 
@@ -603,7 +603,7 @@ fields that are defined as `attribute` will be read from memory. For the `defaul
 containing at least one non-attribute field, a fill will potentially access data 
 from summary storage on disk. Read more about in-memory [attribute](../content/attributes.html) fields.
 - [summary-features](../reference/schema-reference.html#summary-features) used to return computed
- [rank features](../reference/rank-features.html) from the content nodes. 
+ [rank features](../reference/ranking/rank-features.html) from the content nodes. 
 
 Creating a dedicated [document-summary](../querying/document-summaries.html) which
 only contain the `track_id` field can improve performance, since `track_id` is defined in the schema with
@@ -731,7 +731,7 @@ potential faster query evaluation. See [Wikipedia:Inverted Index](https://en.wik
 and [Vespa internals](../content/proton.html#index). 
 The reason for this default setting is that Vespa `attribute` fields can be used
 for many different aspects: [ranking](../basics/ranking.html), [result grouping](../querying/grouping.html),
- [result sorting](../reference/sorting.html), and finally searching/matching. 
+ [result sorting](../reference/querying/sorting-language.html), and finally searching/matching. 
 
 The following section focuses on the `tags` field which we defined with `attribute`,
 matching in this field will be performed using `match:word` which is the
@@ -958,8 +958,8 @@ track example, the `tags` field could be the document side sparse representation
 is tagged with multiple `tags` using a weight, and similar the sparse user profile
 representation could use weights.
 
-In the following examples, the [dotProduct()](../reference/query-language-reference.html#dotproduct) and
-[wand()](../reference/query-language-reference.html#wand) query operators are used.
+In the following examples, the [dotProduct()](../reference/querying/yql.html#dotproduct) and
+[wand()](../reference/querying/yql.html#wand) query operators are used.
 
 To configure [ranking](../basics/ranking.html), add a `rank-profile` to the schema:
 
@@ -1010,7 +1010,7 @@ schema track {
 </pre>
 
 The `dotProduct`and `wand` query operators produce a `rank feature` called
-[rawScore(name)](../reference/rank-features.html#rawScore(field)). This feature calculates
+[rawScore(name)](../reference/ranking/rank-features.html#rawScore(field)). This feature calculates
 the sparse dot product between the query and document weights. 
 
 Deploy the application again:
@@ -1022,9 +1022,9 @@ $ vespa deploy --wait 300 app
 </pre>
 </div>
 
-The [dotProduct](../reference/query-language-reference.html#dotproduct)
+The [dotProduct](../reference/querying/yql.html#dotproduct)
 query operator accepts a field to match over and supports
-[parameter substitution](../reference/query-language-reference.html#parameter-substitution).
+[parameter substitution](../reference/querying/yql.html#parameter-substitution).
 Using substitution is recommended for large inputs as it saves compute resources when parsing the YQL input. 
 
 The following example assumes a learned sparse representation, with equal weight:
@@ -1106,7 +1106,7 @@ Including for example *pop* in the userProfile list increases the number of hits
 For a large user profile with many learned features/tags, one would easily match and rank the entire document collection. 
 Also notice the `relevance` score which is 400, since the document matches all the query input tags (4x100 = 400).
 
-To optimize the evaluation the [wand query operator](../reference/query-language-reference.html#wand)
+To optimize the evaluation the [wand query operator](../reference/querying/yql.html#wand)
 can be used. The `wand` query operator supports setting a target number of top ranking hits that gets
 exposed to the `first-phase` ranking function.
 
@@ -1402,7 +1402,7 @@ from the result set using the `not` query operator, in YQL represented as `!`.
 where !(track_id in (@userLiked))
 </pre>
 
-The [in query operator](../reference/query-language-reference.html#in)
+The [in query operator](../reference/querying/yql.html#in)
 is the most efficient multi-value *filtering* query operator, either
 using a positive filter (match if any of the keys matches) or negative filter using `not`
 (remove from result if any of the keys matches).
@@ -2039,8 +2039,8 @@ $ vespa feed -t http://localhost:8080 updates.jsonl
 </div>
 
 With that feed job completed, it is possible to select the five tracks with the highest popularity by 
-using the [range()](../reference/query-language-reference.html) query operator with
-[hitLimit](../reference/query-language-reference.html#hitlimit):
+using the [range()](../reference/querying/yql.html) query operator with
+[hitLimit](../reference/querying/yql.html#hitlimit):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -2082,7 +2082,7 @@ by using it:
 - Run ranking computations over the most recent documents 
 using a `long` to represent a timestamp (e.g., using Unix epoch).
 - Compute personalization tensor expressions over pre-selected content, e.g. using popularity.
-- Optimize [sorting](../reference/sorting.html) queries, instead of sorting a large result, 
+- Optimize [sorting](../reference/querying/sorting-language.html) queries, instead of sorting a large result, 
 find the smallest or largest values quickly by using range search with `hitLimit`.
 - Autosuggest - see [#25333](https://github.com/vespa-engine/vespa/issues/25333).
 

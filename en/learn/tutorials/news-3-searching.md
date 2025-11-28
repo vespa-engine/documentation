@@ -38,9 +38,9 @@ We can think of the results being ordered either by:
 - a fixed value, or attribute, in the document
 - a function calculating a score
 
-Ordering by an attribute is called [sorting](../../reference/sorting.html).
+Ordering by an attribute is called [sorting](../../reference/querying/sorting-language.html).
 For instance, we can sort by decreasing `date`.
-[Grouping](../../reference/grouping-syntax.html) also works on attributes.
+[Grouping](../../reference/querying/grouping-language.html) also works on attributes.
 An example is to group the results by a `category` attribute.
 
 Calculating a score to order by is generally called "ranking".
@@ -207,7 +207,7 @@ $ vespa query -v 'yql=select * from news where true limit 0 | all(group(category
 Note that expression after the pipe (`|`):
 this is the grouping expression that determines how grouping will be performed.
 You can read more about the grouping syntax in the
-[grouping reference documentation](../../reference/grouping-syntax.html).
+[grouping reference documentation](../../reference/querying/grouping-language.html).
 `limit 0` is an alternative syntax for the native `hits` parameter,
 in this case we are only interested in the group counts, so we set limit to 0. 
 

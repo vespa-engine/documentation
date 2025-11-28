@@ -78,7 +78,7 @@ model in the `models` directory, it is available for both ranking and
 
 ## Ranking with LightGBM models
 
-Vespa has a [ranking feature](../reference/rank-features.html)
+Vespa has a [ranking feature](../reference/ranking/rank-features.html)
 called `lightgbm`. This ranking feature specifies the model to use in a ranking
 expression, relative under the `models` directory. Consider the following example:
 
@@ -123,7 +123,7 @@ Take a look at the JSON file dumped from the example above:
 
 Here, the section `feature_names` consists of the feature names used in the
 training set. When this model is evaluated in Vespa, Vespa expects that these
-feature names are valid [rank features](../reference/rank-features.html).
+feature names are valid [rank features](../reference/ranking/rank-features.html).
 Examples are `attribute(field_name)` for a value that should be retrieved from
 a document, `query(name)` for a value that should be retrieved from the query,
 or possibly from other more complex rank features such as `fieldMatch(name)`.
@@ -260,6 +260,6 @@ this model for every document.
   when reading Vespa features for training as Vespa outputs features using `double` precision. 
   If the training routine rounds features to `float` or other more compact floating number representations, feature split decisions might differ in Vespa versus XGboost.
 * In a distributed setting when multiple nodes uses the model, text matching features such as `nativeRank`, `nativFieldMatch`, `bm25` and `fieldMatch`
-  might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](../reference/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
+  might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](../reference/ranking/rank-features.html#query-features), which is computed locally indexed corpus. The `term(n).significance` feature 
   is related to *Inverse Document Frequency (IDF)*. The `term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.
 

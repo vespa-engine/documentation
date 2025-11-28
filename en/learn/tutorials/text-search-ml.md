@@ -27,7 +27,7 @@ is a good resource for Learning To Rank using XGBoost and LightGBM, with linked 
 
 ## Collect rank feature data from Vespa
 
-Vespa's [rank feature set](../../reference/rank-features.html) contains a large set of low and high level features.
+Vespa's [rank feature set](../../reference/ranking/rank-features.html) contains a large set of low and high level features.
 Those features are useful to understand the behavior of your app and to improve your ranking function.
 
 
@@ -95,7 +95,7 @@ Each result will contain a field called `rankfeatures` containing the set of def
 
 ### Chose and process specific rank features
 
-If instead of returning the complete set of rank features you want to select [specific ones](../../reference/rank-features.html),
+If instead of returning the complete set of rank features you want to select [specific ones](../../reference/ranking/rank-features.html),
 you can add a new rank-profile (let's call it `collect_rank_features`) to our _msmarco.sd_ schema definition
 and disable the default ranking features by adding `ignore-default-rank-features` to the new rank-profile.
 In addition, we can specify the desired features within the `rank-features` element.
@@ -166,7 +166,7 @@ schema msmarco {
 }
 </pre>
 
-The [random](../../reference/rank-features.html#random) global feature
+The [random](../../reference/ranking/rank-features.html#random) global feature
 will be useful in the next section when we describe our data collection process.
 
 After adding the `collect_rank_features` rank-profile to _msmarco.sd_, redeploy the app:

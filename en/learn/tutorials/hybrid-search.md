@@ -386,7 +386,7 @@ $ vespa query \
 </div>
 
 Notice that we choose `ranking` to specify which rank profile to rank the documents retrieved by the query. 
-This query returns the following [JSON result response](../../reference/default-result-format.html):
+This query returns the following [JSON result response](../../reference/querying/default-result-format.html):
 
 <pre>{% highlight json %}
 {
@@ -507,7 +507,7 @@ $ vespa query \
 </pre>
 </div>
 
-This query returns the following [JSON result response](../../reference/default-result-format.html):
+This query returns the following [JSON result response](../../reference/querying/default-result-format.html):
 
 <pre>{% highlight json %}
 {
@@ -556,7 +556,7 @@ rank-profile semantic {
     }
 ```
 
-Where [closeness(field, embedding)](../../reference/rank-features.html#attribute-match-features-normalized) is a ranking feature that calculates the cosine similarity between the query and the document embedding. This returns the inverted of the distance between the two vectors. Small distance = higher closeness. This because Vespa sorts results in descending order of relevance. 
+Where [closeness(field, embedding)](../../reference/ranking/rank-features.html#attribute-match-features-normalized) is a ranking feature that calculates the cosine similarity between the query and the document embedding. This returns the inverted of the distance between the two vectors. Small distance = higher closeness. This because Vespa sorts results in descending order of relevance. 
 Descending order means the largest will appear at the top of the ranked list.
 
 Note that similarity scores of embedding vectors are often optimized via contrastive or ranking losses, which make them difficult to interpret. 
@@ -717,7 +717,7 @@ combine them into a single score.
 closeness(field, embedding) * (1 + bm25(title) + bm25(text))
 </pre>
 
-- the [closeness(field, embedding)](../../reference/rank-features.html#attribute-match-features-normalized) rank-feature returns a normalized score in the range 0 to 1 inclusive
+- the [closeness(field, embedding)](../../reference/ranking/rank-features.html#attribute-match-features-normalized) rank-feature returns a normalized score in the range 0 to 1 inclusive
 - Any of the per-field BM25 scores are in the range of 0 to infinity 
 
 We add a bias constant (1) to avoid the overall score becoming 0 if the document does not match any query terms, 
@@ -805,7 +805,7 @@ $ vespa query \
 The documents retrieved into ranking is scored by the `hybrid` rank-profile. Note that both top-k query operators might expose more than
 the the `targetHits` setting. 
 
-The above query returns the following [JSON result response](../../reference/default-result-format.html):
+The above query returns the following [JSON result response](../../reference/querying/default-result-format.html):
 
 <pre>{% highlight json %}
 {
@@ -869,7 +869,7 @@ For the sparse keyword query matching, the `weakAnd` operator is used by default
 and it requires that at least one term in the query matches the document (fieldset searched).
 
 #### Hybrid query with rank query operator
-The following combines the two top-k operators using the [rank](../../reference/query-language-reference.html#rank) query operator, which allows us to retrieve 
+The following combines the two top-k operators using the [rank](../../reference/querying/yql.html#rank) query operator, which allows us to retrieve 
 using only the first operand of the rank operator, but where the remaining operands allow computing (match) features 
 that can be used in ranking phases. 
 

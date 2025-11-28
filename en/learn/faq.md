@@ -39,7 +39,7 @@ Find an example on how to look up data in
 
 ### How to create a tensor on the fly in the ranking expression?
 Create a tensor in the ranking function from arrays or weighted sets using `tensorFrom...` functions -
-see [document features](../reference/rank-features.html#document-features).
+see [document features](../reference/ranking/rank-features.html#document-features).
 
 ### How to set a dynamic (query time) ranking drop threshold?
 Pass a ranking feature like `query(threshold)` and use an `if` statement in the ranking expression -
@@ -74,7 +74,7 @@ function bar() {
 ### Does Vespa support early termination of matching and ranking?
 Yes, this can be accomplished by configuring [match-phase](../reference/schema-reference.html#match-phase) 
 in the rank profile,  or by adding a range query item using *hitLimit* to the query tree,
-see [capped numeric range search](../reference/query-language-reference.html#numeric).
+see [capped numeric range search](../reference/querying/yql.html#numeric).
 Both methods require an *attribute* field with *fast-search*. The capped range query is faster, but beware that if 
 there are other restrictive filters in the query, one might end up with 0 hits.
 The additional filters are applied as a post filtering
@@ -82,11 +82,11 @@ step over the hits from the capped range query. *match-phase* on the other hand,
 and also supports diversification which the capped range query term does not support.
 
 ### What could cause the relevance field to be -Infinity
-The returned [relevance](../reference/default-result-format.html#relevance) for a hit can become "-Infinity" instead
+The returned [relevance](../reference/querying/default-result-format.html#relevance) for a hit can become "-Infinity" instead
 of a double. This can happen in two cases:
 
 - The [ranking](../basics/ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
--Infinity. One can use [isNan](../reference/ranking-expressions.html#isnan-x) to guard against this.
+-Infinity. One can use [isNan](../reference/ranking/ranking-expressions.html#isnan-x) to guard against this.
 - Surfacing low scoring hits using [grouping](../querying/grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](../reference/schema-reference.html#keep-rank-count).
 
 ### How to pin query results?
@@ -182,7 +182,7 @@ as filters, which means that they are not highlighted when bolding results.
 
 ### How to query for similar items?
 One way is to describe items using tensors and query for the
-[nearest neighbor](../reference/query-language-reference.html#nearestneighbor) -
+[nearest neighbor](../reference/querying/yql.html#nearestneighbor) -
 using full precision or approximate (ANN) - the latter is used when the set is too large for an exact calculation.
 Apply filters to the query to limit the neighbor candidate set.
 Using [dot products](../ranking/multivalue-query-operators.html) or [weak and](../ranking/wand.html) are alternatives.
@@ -190,7 +190,7 @@ Using [dot products](../ranking/multivalue-query-operators.html) or [weak and](.
 ### Does Vespa support stop-word removal?
 Vespa does not have a stop-word concept inherently.
 See the [sample app](https://github.com/vespa-engine/sample-apps/pull/335/files)
-for how to use [filter terms](../reference/query-language-reference.html#annotations).
+for how to use [filter terms](../reference/querying/yql.html#annotations).
 [Tripling the query performance of lexical search](https://blog.vespa.ai/tripling-the-query-performance-of-lexical-search/)
 it s good blog post on this subject.
 
@@ -245,7 +245,7 @@ public class ConfigCacheRefresher extends AbstractComponent {
 {% endhighlight %}</pre>
 
 ### Is it possible to query Vespa using a list of document ids?
-Yes, using the [in query operator](../reference/query-language-reference.html#in). Example:
+Yes, using the [in query operator](../reference/querying/yql.html#in). Example:
 ```
 select * from data where user_id in (10, 20, 30)
 ```
@@ -255,7 +255,7 @@ Refer to the [in operator example](../ranking/multivalue-query-operators.html#in
 on how to use it programmatically in a [Java Searcher](../applications/searchers.html).
 
 ### How to query documents where one field matches any values in a list? Similar to using SQL IN operator
-Use the [in query operator](../reference/query-language-reference.html#in). Example:
+Use the [in query operator](../reference/querying/yql.html#in). Example:
 ```
 select * from data where category in ('cat1', 'cat2', 'cat3')
 ```
@@ -319,7 +319,7 @@ FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery)
 ### Is it possible to query for the number of elements in an array
 There is no index or attribute data structure that allows efficient _searching_ for documents where
 an array field has a certain number of elements or items.
-The _grouping language_ has a [size()](../reference/grouping-syntax.html#list-expressions) operator that can be used in queries.
+The _grouping language_ has a [size()](../reference/querying/grouping-language.html#list-expressions) operator that can be used in queries.
 
 ### Is it possible to query for fields with NaN/no value set/null/none
 The [visiting](../writing/visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
@@ -327,7 +327,7 @@ If the field is an _attribute_ one can query using grouping to identify Nan Valu
 see count and list [fields with NaN](../querying/grouping.html#count-fields-with-nan).
 
 ### How to retrieve random documents using YQL? Functionality similar to MySQL "ORDER BY rand()"
-See the [random.match](../reference/rank-features.html#random.match) rank feature - example:
+See the [random.match](../reference/ranking/rank-features.html#random.match) rank feature - example:
 ```
 rank-profile random {
     first-phase {

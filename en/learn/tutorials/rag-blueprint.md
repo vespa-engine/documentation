@@ -205,7 +205,7 @@ In Vespa, we now have a solution for this problem. Check out our [blog post on l
 
 Below, we show how you can score both documents as well as individual chunks, and use that score to select the best chunks to be returned in a summary, instead of returning all chunks belonging to the top k ranked documents.
 
-Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal. See [rank feature reference](../../reference/rank-features.html#elementwise-bm25)
+Compute closeness per chunk in a ranking function; use `elementwise(bm25(chunks), i, double)` for a per-chunk text signal. See [rank feature reference](../../reference/ranking/rank-features.html#elementwise-bm25)
 Now available: elementwise rank functions and filtering on the content nodes.
 
 This allows you to pick a large document as the searchable unit, while still addressing the potential drawbacks many encounter as follows:
@@ -283,13 +283,13 @@ summary-features {
 {% include note.html content="The ranking expression may seem a bit complex, as we chose to embed each chunk independently, 
 store the embeddings in a binarized format, and then unpack them to calculate similarity based on their float representations. 
 For single dimension dense vector similarity between same-precision embeddings, this can be simplified significantly 
-using the [closeness](../../reference/rank-features.html#closeness(name)) convenience function." %}
+using the [closeness](../../reference/ranking/rank-features.html#closeness(name)) convenience function." %}
 
 Note that we want to use the float-representation of the query-embedding, and thus also need to convert the binary 
 embedding of the chunks to float. After that, we can calculate the similarity score between the query 
 embedding and the chunk embeddings using cosine similarity (the dot product, and then normalize it by the norms of the embeddings).
 
-See [ranking expressions](../../reference/ranking-expressions.html#non-primitive-functions) for more details on the 
+See [ranking expressions](../../reference/ranking/ranking-expressions.html#non-primitive-functions) for more details on the 
 `top`-function, and other functions available for ranking expressions.
 
 Now, we can use this summary feature in our document summary to return the top 3 chunks of the document, 
@@ -609,7 +609,7 @@ select *
         where rank({targetHits:10000}nearestNeighbor(embeddings_field, query_embedding, userInput(@query)))
 ```
 
-Notice that only the first argument of the [rank](../../reference/query-language-reference.html#rank)-operator 
+Notice that only the first argument of the [rank](../../reference/querying/yql.html#rank)-operator 
 will be used to determine if a document is a match, while all arguments are used for calculating rank features. 
 This mean we can do vector only for matching, but still use text-based features such as `bm25` and `nativeRank` for ranking.
 Note that if you do this, it makes sense to increase the number of `targetHits` for the `nearestNeighbor`-operator.
@@ -690,7 +690,7 @@ In our blueprint, we choose to index binary vectors of the documents. This does 
 float-representation of the query embedding though.
 
 By unpacking the binary document chunk embeddings to their float representations 
-(using [`unpack_bits`](../../reference/ranking-expressions.html#unpack-bits)), 
+(using [`unpack_bits`](../../reference/ranking/ranking-expressions.html#unpack-bits)), 
 we can calculate the similarity between query and document with slightly higher precision using a `float-binary` dot product, 
 instead of hamming distance (`binary-binary`)
 
@@ -734,9 +734,9 @@ rank-profile base-features {
 Vespa gives you extensive control over [linguistics](../../linguistics/linguistics.html).
 You can decide [match mode](../../reference/schema-reference.html#match), stemming, normalization, or control derived tokens.
 
-It is also possible to use more specific operators than [weakAnd](../../reference/query-language-reference.html#weakand) 
-to match only close occurrences ([near](../../reference/query-language-reference.html#near)/ 
-[onear](../../reference/query-language-reference.html#near)), multiple alternatives ([equiv](../../linguistics/query-rewriting.html#equiv)), 
+It is also possible to use more specific operators than [weakAnd](../../reference/querying/yql.html#weakand) 
+to match only close occurrences ([near](../../reference/querying/yql.html#near)/ 
+[onear](../../reference/querying/yql.html#near)), multiple alternatives ([equiv](../../linguistics/query-rewriting.html#equiv)), 
 weight items, set connectivity, and apply [query-rewrite](../../linguistics/query-rewriting.html) rules.
 
 **Don’t use this to increase recall — improve your embedding model instead.**
@@ -756,7 +756,7 @@ For this sample application, we set up an evaluation script that compares three 
 3. **Hybrid**: Combines both approaches with OR logic.
 
 {% include note.html content="Note that this is only generic suggestion for and that you are of course free to include both 
-[filter clauses](../../reference/query-language-reference.html#where), [grouping](../../grouping), 
+[filter clauses](../../reference/querying/yql.html#where), [grouping](../../grouping), 
 [predicates](../../querying/predicate-fields.html), [geosearch](../../geo-search) etc. to support your specific use cases." %}
 
 It is recommended to use a ranking profile that does not use any first-phase ranking, to run the match-phase evaluation faster.
@@ -843,8 +843,8 @@ th { width: 120px; }
 #### WeakAnd Query Evaluation
 
 The `userQuery` is just a convenience wrapper for `weakAnd`, see 
-[reference/query-language-reference.html](../../reference/query-language-reference.html). 
-The default `targetHits` for `weakAnd` is 100, but it is [overridable](../../reference/query-language-reference.html#targethits).
+[reference/query-language-reference.html](../../reference/querying/yql.html). 
+The default `targetHits` for `weakAnd` is 100, but it is [overridable](../../reference/querying/yql.html#targethits).
 
 ```sql
 select * from doc where userQuery()
@@ -1002,8 +1002,8 @@ For the first-phase ranking, we must use a computationally cheap function, as it
 Common options include (learned) linear combination of features including text similarity features, vector closeness, and metadata.
 It could also be a heuristic handwritten function.
 
-Text features should include [nativeRank](../../reference/nativerank.html#nativeRank) 
-or [bm25](../../ranking/bm25.html#ranking-function) — not [fieldMatch](../../reference/rank-features.html#field-match-features-normalized) (it is too expensive).
+Text features should include [nativeRank](../../reference/ranking/nativerank.html#nativeRank) 
+or [bm25](../../ranking/bm25.html#ranking-function) — not [fieldMatch](../../reference/ranking/rank-features.html#field-match-features-normalized) (it is too expensive).
 
 Considerations for deciding whether to choose `bm25` or `nativeRank`:
 
@@ -1400,7 +1400,7 @@ be too expensive to compute for all matched documents.
 ### Collecting features for second-phase ranking
 
 For second-phase ranking, we request Vespa's default set of rank features, which includes a comprehensive set of text 
-features. See the [rank features documentation](../../reference/rank-features.html) for complete details.
+features. See the [rank features documentation](../../reference/ranking/rank-features.html) for complete details.
 
 We can collect both match features and rank features by running the same 
 [script](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/collect_pyvespa.py) 
@@ -1464,10 +1464,10 @@ The trained model reveals which features are most important for ranking quality.
 
 Key observations:
 
-* **Text proximity features** ([nativeProximity](../../reference/nativerank.html#nativeProximity)) are highly valuable for understanding query-document relevance
+* **Text proximity features** ([nativeProximity](../../reference/ranking/nativerank.html#nativeProximity)) are highly valuable for understanding query-document relevance
 * **First-phase score** (`firstPhase`) being important validates that our first-phase ranking provides a good foundation
 * **Chunk-level features** (both text and semantic) contribute significantly to ranking quality
-* **Traditional text features** like [nativeRank](../../reference/nativerank.html#nativeRank) and [bm25](../../ranking/bm25.html#ranking-function) remain important
+* **Traditional text features** like [nativeRank](../../reference/ranking/nativerank.html#nativeRank) and [bm25](../../ranking/bm25.html#ranking-function) remain important
 
 ### Integrating the GBDT model into Vespa
 

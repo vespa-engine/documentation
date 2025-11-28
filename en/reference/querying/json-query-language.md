@@ -1,10 +1,12 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Select Query Reference"
+redirect_from:
+  - /en/reference/select-reference
 ---
 
 
-This document describes what the `select` parameter is and gives a few examples on how to use it. Refer to the [Query API](../querying/query-api.html) for how to execute queries with POST.
+This document describes what the `select` parameter is and gives a few examples on how to use it. Refer to the [Query API](../../querying/query-api.html) for how to execute queries with POST.
 
 The query has JSON syntax, and can be used with queries that are executed with HTTP POST. The `select` parameter is equivalent with YQL, and can be used instead of, but not together with YQL. Nor can it be used together with the `query` parameter.
 
@@ -41,7 +43,7 @@ curl -H "Content-Type: application/json" \
 
 ### Where
 
-Unlike the sql-like syntax in [YQL](../querying/query-language.html), the *where* queries are written in a tree syntax. By combining YQLs functions and arguments, queries equivalent with YQL can be written in JSON.
+Unlike the sql-like syntax in [YQL](../../querying/query-language.html), the *where* queries are written in a tree syntax. By combining YQLs functions and arguments, queries equivalent with YQL can be written in JSON.
 
 #### Formal structure
 
@@ -91,7 +93,7 @@ which is equivalent with the YQL.
 
 ### Grouping
 
-One or more [grouping statements](../querying/grouping.html) can be set as a JSON array in the `grouping` field.
+One or more [grouping statements](../../querying/grouping.html) can be set as a JSON array in the `grouping` field.
 Each array item is a grouping statement represented as JSON where
 - Each grouping function is represented by a JSON object where the name of the function is the field
   name and the value is the function content.

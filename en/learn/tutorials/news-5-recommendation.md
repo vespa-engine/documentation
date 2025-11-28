@@ -111,7 +111,7 @@ where we search for the maximal dotproduct.
 
 This is seen in the `recommendation` rank profile.
 Here, we've added a ranking expression using the
-[closeness](../../reference/rank-features.html#closeness(dimension,name)) ranking feature,
+[closeness](../../reference/ranking/rank-features.html#closeness(dimension,name)) ranking feature,
 which calculates the dot product and uses that to rank the news articles.
 This depends on using the `nearestNeighbor` search operator,
 which we'll get back to below when searching.
@@ -341,7 +341,7 @@ $ ./src/python/user_search.py U33527 10
 This script first retrieves the user embedding using an HTTP `GET` query to
 Vespa. It then parses the tensor containing the embedding vector. Finally, it
 issues a `nearestNeighbor` search using a `POST` (however a `GET` would work just as well).
-Please see the [nearest-neighbor operator](../../reference/query-language-reference.html#nearestneighbor)
+Please see the [nearest-neighbor operator](../../reference/querying/yql.html#nearestneighbor)
 for more on the syntax for nearest-neighbor searches.
 The `nearestNeighbor` search looks like:
 

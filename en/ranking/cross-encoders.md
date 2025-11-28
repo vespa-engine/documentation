@@ -158,7 +158,7 @@ rank-profile bert-ranker inherits default {
 }</pre>
 
 The example above limits the sequence length to `256` using the built-in 
-[convenience functions](../reference/rank-features.html#tokenInputIds(length,%20input_1,%20input_2,%20...)) 
+[convenience functions](../reference/ranking/rank-features.html#tokenInputIds(length,%20input_1,%20input_2,%20...)) 
 for generating token sequence input to Transformer models. Note that `tokenInputIds` uses 101 as start of sequence
 and 102 as padding. This is only compatible with BERT-based tokenizers. See section on [performance](#performance)
 about sequence length and impact on inference performance.
@@ -243,7 +243,7 @@ sample application demonstrates using cross-encoders.
 
 When using [multi-vector indexing](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/) 
 we can do the following to feed the best (closest) paragraph using the 
-[closest()](../reference/rank-features.html#closest(name)) feature into re-ranking with the cross-encoder model. 
+[closest()](../reference/ranking/rank-features.html#closest(name)) feature into re-ranking with the cross-encoder model. 
 
 <pre>
 schema my_document {

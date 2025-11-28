@@ -45,7 +45,7 @@ To define the Vespa app package using our custom reranking searcher, four files 
 - [pom.xml](https://maven.apache.org/guides/introduction/introduction-to-the-pom.html)
 
 Start by defining a simple schema with two fields.
-We also define a rank profile with two [rank features](../reference/rank-features.html)
+We also define a rank profile with two [rank features](../reference/ranking/rank-features.html)
 to be used in the searcher for re-ranking:
 
 <pre data-test="file" data-path="my-app/src/main/application/schemas/doc.sd"> 

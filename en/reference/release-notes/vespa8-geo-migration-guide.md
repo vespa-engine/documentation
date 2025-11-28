@@ -16,7 +16,7 @@ field myfield type position {...}
 
 
 ## Step 1: Upgrade to Vespa 8 in geo legacy mode
-Add to _services.xml_, see [legacy-v7-json-rendering](../default-result-format.html#geo-position-rendering),
+Add to _services.xml_, see [legacy-v7-json-rendering](../querying/default-result-format.html#geo-position-rendering),
 add under the root `services` tag:
 ```xml
 <services>

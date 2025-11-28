@@ -250,7 +250,7 @@ indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field.
 - `attribute:` Store this field in memory as an [attribute](../../content/attributes.html)
-  — for [sorting](../../reference/sorting.html), [querying](../../querying/query-api.html), [ranking](../../basics/ranking.html) and
+  — for [sorting](../../reference/querying/sorting-language.html), [querying](../../querying/query-api.html), [ranking](../../basics/ranking.html) and
   [grouping](../../querying/grouping.html).
 - `summary:` Lets this field be part of the [document
   summary](../../querying/document-summaries.html) in the result set.
@@ -258,7 +258,7 @@ indexing pipeline is separated by the pipe character '|':
 Here, we also use the [index](../../reference/schema-reference.html#index) property,
 which sets up parameters for how Vespa should index the field.
 For the `title`, `abstract`, and `body` fields, we configure Vespa to set up an
-index compatible with [bm25 ranking](../../reference/rank-features.html#bm25) for text search.
+index compatible with [bm25 ranking](../../reference/ranking/rank-features.html#bm25) for text search.
 
 
 ## Deploy the Application Package
@@ -428,8 +428,8 @@ $ vespa query -v \
 </pre>
 </div>
 
-This combines YQL [userQuery()](../../reference/query-language-reference.html#userquery) 
-with Vespa's [simple query language](../../reference/simple-query-language-reference.html).
+This combines YQL [userQuery()](../../reference/querying/yql.html#userquery) 
+with Vespa's [simple query language](../../reference/querying/simple-query-language.html).
 In this case, documents needs to match both "music" and "festival".
 
 <div class="pre-parent">
@@ -472,7 +472,7 @@ $ vespa query -v \
 </div>
 
 Search for "music" in the default fieldset, boost documents with festival in the title. 
-The [rank()](../../reference/query-language-reference.html#rank) query operator allows 
+The [rank()](../../reference/querying/yql.html#rank) query operator allows 
 us to retrieve on the first operand,
 and have match ranking features calculated for the second operand argument.
 The second and further operands does not impact recall (which documents match the query),
