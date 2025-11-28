@@ -136,7 +136,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     [stateless model evaluation](../../ranking/stateless-model-evaluation.html), both during
     document and query processing. 
 
-* [Vector search](querying/nearest-neighbor-search)
+* [Vector search](../../querying/nearest-neighbor-search)
 
     The default retrieval uses approximate nearest neighbor search in combination with traditional
     lexical matching. Both the keyword and vector matching is constrained by the filters such as brand, price or
