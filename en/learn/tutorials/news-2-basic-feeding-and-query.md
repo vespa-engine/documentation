@@ -159,7 +159,7 @@ Quite a lot is set up here:
   is 8080. See also [Securing Vespa with mutually authenticated TLS (mTLS)](https://blog.vespa.ai/securing-vespa-with-mutually-authenticated-tls/)
   for how to use mTLS with Vespa.
 - `<document-api>` sets up the [document
-  endpoint](../../reference/document-v1-api-reference.html) for feeding and visiting.
+  endpoint](../../reference/api/document-v1.html) for feeding and visiting.
 - `<nodes>` defines the nodes required per service.  (See the
   [reference](../../reference/services/container.html) for more on container
   cluster setup).

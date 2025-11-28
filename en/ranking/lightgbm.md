@@ -163,7 +163,7 @@ training the LightGBM model. This allows dumping rank features from Vespa
 to train a model directly. 
 
 Here, we specify that the model `lightgbm_model.json` is applied to the top ranking documents by the first-phase ranking expression. 
-The query request must specify `classify` as the [ranking.profile](../reference/query-api-reference.html#ranking.profile). 
+The query request must specify `classify` as the [ranking.profile](../reference/api/query.html#ranking.profile). 
 See also [Phased ranking](phased-ranking.html) on how to control number of data points/documents which is exposed to the model.
 
 Generally the run time complexity is determined by:
@@ -254,7 +254,7 @@ this model for every document.
 * For training, features should be scraped from Vespa, using either `match-features` or `summary-features` so
   that features from offline training matches the online Vespa computed features. Dumping
   features can also help debug any differences by zooming into specific query,document pairs
-  using [recall](../reference/query-api-reference.html#recall) parameter. 
+  using [recall](../reference/api/query.html#recall) parameter. 
 
 * It's also important to use the highest possible precision
   when reading Vespa features for training as Vespa outputs features using `double` precision. 

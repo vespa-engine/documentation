@@ -291,7 +291,7 @@ If you try to search for a single term that is *not* present in the document set
 you will see that the list of groups is empty as no documents have been matched.
 Vespa grouping is only applied over the documents which matched the query.
 
-In the following example we use the [select](../../reference/query-api-reference.html#select) 
+In the following example we use the [select](../../reference/api/query.html#select) 
 parameter to pass the grouping specification:
 
 <div class="pre-parent">

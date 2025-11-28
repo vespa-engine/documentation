@@ -72,7 +72,7 @@ visible by default.
 
 Reads are consistent on a best-effort basis and are not guaranteed to be linearizable.
 
-When using a [Get](../reference/document-v1-api-reference.html#get) or [Visit](../writing/visiting.html) operation,
+When using a [Get](../reference/api/document-v1.html#get) or [Visit](../writing/visiting.html) operation,
 the client will never observe a partially updated document.
 For these read operations, writes behave as if they are atomic.
 

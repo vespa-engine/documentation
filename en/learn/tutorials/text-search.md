@@ -231,7 +231,7 @@ Some notes about the elements above:
 
 - `<container>` defines the [container cluster](../../applications/containers.html) for document, query and result processing
 - `<search>` sets up the [query endpoint](../../querying/query-api.html).  The default port is 8080.
-- `<document-api>` sets up the [document endpoint](../../reference/document-v1-api-reference.html) for feeding.
+- `<document-api>` sets up the [document endpoint](../../reference/api/document-v1.html) for feeding.
 - `<content>` defines how documents are stored and searched
 - `<min-redundancy>` denotes how many copies to keep of each document.
 - `<documents>` assigns the document types in the _schema_  to content clusters —

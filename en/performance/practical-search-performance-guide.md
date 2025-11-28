@@ -308,7 +308,7 @@ the Vespa application — which services to run and how many nodes per service.
 The default [query profile](../querying/query-profiles.html) can be used to override
 default query api settings for all queries.
 
-The following enables [presentation.timing](../reference/query-api-reference.html#presentation.timing) and
+The following enables [presentation.timing](../reference/api/query.html#presentation.timing) and
 renders `weightedset` fields as JSON maps.
 
 <pre data-test="file" data-path="app/search/query-profiles/default.xml">
@@ -365,7 +365,7 @@ $ vespa feed -t http://localhost:8080 feed.jsonl
 </div>
 
 ## Basic text search query performance
-The following sections use the Vespa [query api](../reference/query-api-reference.html) and
+The following sections use the Vespa [query api](../reference/api/query.html) and
 formulate queries using Vespa [query language](../querying/query-language.html). 
 For readability, all query examples are expressed using the 
 [vespa-cli](../clients/vespa-cli.html) command which supports running queries against a Vespa instance.
@@ -377,7 +377,7 @@ $ vespa query -v 'yql=select ..'
 </pre>
 
 The first query uses `where true` to match all `track` documents.
-It also uses [hits](../reference/query-api-reference.html#hits) to specify how many
+It also uses [hits](../reference/api/query.html#hits) to specify how many
 documents to return in the response:
 
 <div class="pre-parent">
@@ -466,7 +466,7 @@ $ vespa query \
 
 This query request combines YQL [userQuery()](../reference/query-language-reference.html#userquery) 
 with Vespa's [simple query language](../reference/simple-query-language-reference.html), the 
-default [query type](../reference/query-api-reference.html#model.type) is 
+default [query type](../reference/api/query.html#model.type) is 
 using `all`, requiring that all the terms match.
 
 The above example searches for *total AND eclipse AND of AND the AND heart* in the fieldset `default`, 
@@ -516,7 +516,7 @@ The result output for the above query:
 
 This query only matched one document because the query terms were ANDed. 
 Matching can be relaxed to `type=any` instead using 
-[query model type](../reference/query-api-reference.html#model.type).
+[query model type](../reference/api/query.html#model.type).
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -668,7 +668,7 @@ $ vespa deploy --wait 300 app
 </div>
 
 Re-executing the query using the `track_id` `document-summary` is done by
-setting the [summary](../reference/query-api-reference.html#presentation.summary) 
+setting the [summary](../reference/api/query.html#presentation.summary) 
 query request parameter:
 
 <div class="pre-parent">
@@ -697,7 +697,7 @@ For optimal performance for use cases asking for large number of hits to the cli
 recommended to use dedicated document summaries. 
 Note also that Vespa per default limits the max hits to 400 per default, 
 the behavior can be overridden in the 
-[default queryProfile](../reference/query-api-reference.html#queryprofile).
+[default queryProfile](../reference/api/query.html#queryprofile).
 
 When requesting large amount of data with hits, it is recommended to use result compression. 
 Vespa will compress if the HTTP client uses
@@ -1735,7 +1735,7 @@ to a lower number than the global default.
 
 This adds a new `rank-profile` `similar-t2` using `num-threads-per-search: 2` instead
 of the global 4 setting. It's also possible to set the number of threads in the query request
-using [ranking.matching.numThreadsPerSearch](../reference/query-api-reference.html#ranking.matching).
+using [ranking.matching.numThreadsPerSearch](../reference/api/query.html#ranking.matching).
 
 <pre data-test="file" data-path="app/schemas/track.sd">
 schema track {
@@ -2125,7 +2125,7 @@ will be terminated early and matching and evaluaton of the query will be in the 
 by the `ranking.matchPhase.attribute` attribute field. 
 
 Match phase early termination requires using a single-value numeric field with `attribute`
-and `fast-search`. See [Match phase query parameters](../reference/query-api-reference.html#ranking.matchPhase).
+and `fast-search`. See [Match phase query parameters](../reference/api/query.html#ranking.matchPhase).
 Match-phase limit cannot terminate early or stop any potential `second-phase` ranking expression,
 only matching and `first-phase` ranking, hence the name: *match phase limit*. 
 
@@ -2263,9 +2263,9 @@ early termination kicks in.
 This section introduces query tracing. Tracing helps understand where time (and cost) is spent, and how
 to best optimize the query or schema settings. Query tracing can be enabled using the following parameters:
 
-- [trace.level](../reference/query-api-reference.html#trace.level)
-- [trace.explainLevel](../reference/query-api-reference.html#trace.explainlevel)
-- [trace.timestamps](../reference/query-api-reference.html#trace.timestamps)
+- [trace.level](../reference/api/query.html#trace.level)
+- [trace.explainLevel](../reference/api/query.html#trace.explainlevel)
+- [trace.timestamps](../reference/api/query.html#trace.timestamps)
 
 A simple example query with tracing enabled:
 

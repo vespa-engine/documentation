@@ -119,7 +119,7 @@ Let's assume we want to find similar documents, and we define document similarit
 From most perspectives, this is a poor similarity function, better functions are described later.
 
 The documents have a `term_count` field -
-so let's add an [input.query()](../reference/query-api-reference.html#ranking.features) for term count:
+so let's add an [input.query()](../reference/api/query.html#ranking.features) for term count:
 
 <a class="querystring-x">yql=select * from doc where true;&ranking=term_count_similarity&input.query(q_term_count)=1000</a>
 
@@ -261,7 +261,7 @@ This is a valid use case for many applications.
 However, ranking documents is generally CPU-expensive,
 optimizing by reducing the candidate set will increase performance.
 Example query using text matching,
-dumping [calculated rank features](../reference/query-api-reference.html#ranking.listfeatures):
+dumping [calculated rank features](../reference/api/query.html#ranking.listfeatures):
 
 <a class="querystring-x">yql=select * from doc where title contains "document"&ranking.listFeatures</a>
 

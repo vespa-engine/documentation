@@ -173,7 +173,7 @@ Migrating from one topology to another is easy, as Vespa Cloud will auto-migrate
 
 ## Feeding
 Documents are fed to Vespa Cloud using the
-[&lt;document-api&gt;](../reference/document-v1-api-reference.html#configuration) endpoint.
+[&lt;document-api&gt;](../reference/api/document-v1.html#configuration) endpoint.
 This means, one Vespa Container node forwards document writes to all the replicas, in parallel.
 As all groups have a replica, adding a group will not add feed _latency_ in theory due to the parallelism.
 However, there will be an increase in practise as more nodes means more latency variation,

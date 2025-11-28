@@ -129,8 +129,8 @@ The loss can be calculated by performing an exact neighbor search using `approxi
 compare the retrieved documents with `approximate:true` and calculate the overlap@k metric.
 
 Note that exact searches over a large vector volume require adjustment of the
-[query timeout](../reference/query-api-reference.html#timeout).
-The default [query timeout](../reference/query-api-reference.html#timeout) is 500ms,
+[query timeout](../reference/api/query.html#timeout).
+The default [query timeout](../reference/api/query.html#timeout) is 500ms,
 which will be too low for an exact search over many vectors.
 
 In addition to [targetHits](../reference/query-language-reference.html#targethits), 
@@ -175,8 +175,8 @@ Nearest neighbor search is typically used as an efficient retriever in a [phased
 pipeline. See [performance sizing](../performance/sizing-search.html). 
 
 * **Pagination**:
-Pagination uses the standard [hits](../reference/query-api-reference.html#hits) 
-and [offset](../reference/query-api-reference.html#offset) query api parameters. 
+Pagination uses the standard [hits](../reference/api/query.html#hits) 
+and [offset](../reference/api/query.html#offset) query api parameters. 
 There is no caching of results in between pagination requests,
 so a query for a higher `offset` will cause the search to be performed over again.
 This aspect is no different from [sparse search](../ranking/wand.html) not using nearest neighbor query operator.  

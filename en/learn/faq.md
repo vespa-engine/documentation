@@ -198,10 +198,10 @@ it s good blog post on this subject.
 Trying to request more than 400 hits in a query, getting this error:
 `{'code': 3, 'summary': 'Illegal query', 'message': '401 hits requested, configured limit: 400.'}`.
 
-* To increase max result set size (i.e. allow a higher [hits](../reference/query-api-reference.html#hits)),
-  configure `maxHits` in a [query profile](../reference/query-api-reference.html#queryprofile),
+* To increase max result set size (i.e. allow a higher [hits](../reference/api/query.html#hits)),
+  configure `maxHits` in a [query profile](../reference/api/query.html#queryprofile),
   e.g. `<field name="maxHits">500</field>` in `search/query-profiles/default.xml` (create as needed).
-  The [query timeout](../reference/query-api-reference.html#timeout) can be increased,
+  The [query timeout](../reference/api/query.html#timeout) can be increased,
   but it will still be costly and likely impact other queries -
   large limit more so than a large offset.
   It can be made cheaper by using a smaller [document summary](../querying/document-summaries.html),
@@ -267,10 +267,10 @@ above for more details.
 Count all documents using a query like [select * from doc where true](../querying/query-language.html) -
 this counts all documents from the "doc" source.
 Using `select * from doc where true limit 0` will return the count and no hits,
-alternatively add [hits=0](../reference/query-api-reference.html#hits).
-Pass [ranking.profile=unranked](../reference/query-api-reference.html#ranking.profile)
+alternatively add [hits=0](../reference/api/query.html#hits).
+Pass [ranking.profile=unranked](../reference/api/query.html#ranking.profile)
 to make the query less expensive to run.
-If an _estimate_ is good enough, use [hitcountestimate=true](../reference/query-api-reference.html#hitcountestimate).
+If an _estimate_ is good enough, use [hitcountestimate=true](../reference/api/query.html#hitcountestimate).
 
 ### Must all fields in a fieldset have compatible type and matching settings?
 Yes - a deployment warning with _This may lead to recall and ranking issues_ is emitted
@@ -287,7 +287,7 @@ More details on [stack overflow](https://stackoverflow.com/questions/72784136/wh
 
 ### How is the query timeout computed?
 Find query timeout details in the [Query API Guide](../querying/query-api.html#timeout)
-and the [Query API Reference](../reference/query-api-reference.html#timeout).
+and the [Query API Reference](../reference/api/query.html#timeout).
 
 ### How does backslash escapes work?
 Backslash is used to escape special characters in YQL.
@@ -598,7 +598,7 @@ then run [benchmarks](../performance/benchmarking-cloud.html) and use the [dashb
 ### Self-managed: Can one do a partial deploy to the config server / update the schema without deploying all the node configs?
 Yes, deployment is using this web service API,
 which allows you to create an edit session from the currently deployed package,
-make modifications, and deploy (prepare+activate) it: [deploy-rest-api-v2.html](../reference/deploy-rest-api-v2.html).
+make modifications, and deploy (prepare+activate) it: [deploy-rest-api-v2.html](../reference/api/deploy-v2.html).
 However, this is only useful in cases where you want to avoid transferring data to the config server unnecessarily.
 When you resend everything, the config server will notice that you did not actually change e.g. the node configs
 and avoid unnecessary noop changes.
@@ -668,7 +668,7 @@ ensures that data can be queried from all groups.
 Refer to [#17898](https://github.com/vespa-engine/vespa/issues/17898) for a discussion of options.
 
 ### Self-managed: How to check Vespa version for a running instance?
-Use [/state/v1/version](../reference/state-v1.html#state-v1-version) to find Vespa version.
+Use [/state/v1/version](../reference/api/state-v1.html#state-v1-version) to find Vespa version.
 
 ### Deploy rollback
 See [rollback](../applications/deployment.html#rollback) for options.

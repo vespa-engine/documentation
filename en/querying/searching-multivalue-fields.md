@@ -212,7 +212,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 </pre>
 
 The above query returns 0 hits, since the query requires that *all* query terms matches the document.
-By adding [trace.level](../reference/query-api-reference.html#trace.level) to the query request we can see
+By adding [trace.level](../reference/api/query.html#trace.level) to the query request we can see
 how the query is parsed and executed against the content nodes:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 0'>
@@ -230,7 +230,7 @@ Using tracing is very useful when debugging why documents match or does not matc
 Since the sample document does not contain the term *featuring* or *photos*,
 the query fails to retrieve the example document.
 Relax the query matching to instead of requiring that **all** terms match, to use **any**.
-See [model.type](../reference/query-api-reference.html#model.type) query api reference for supported query types:
+See [model.type](../reference/api/query.html#model.type) query api reference for supported query types:
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query 'yql=select * from photos where userQuery()' \
@@ -260,7 +260,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 Now, explore how Vespa matches the multivalued tags field of
 type [weightedset](../reference/schema-reference.html#weightedset). 
 Notice that we change back to `type=all`.
-In this example we also use the [default-index](../reference/query-api-reference.html#model.defaultindex) 
+In this example we also use the [default-index](../reference/api/query.html#model.defaultindex) 
 query parameter to limit matching to the `tags` field.
 
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>

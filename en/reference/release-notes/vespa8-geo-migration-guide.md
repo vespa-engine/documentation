@@ -89,7 +89,7 @@ it is however recommended changing to:
 ```
 This is the same format as in query results.
 
-The result format when using GET / VISIT in [document/v1/](../document-v1-api-reference.html) is changed from:
+The result format when using GET / VISIT in [document/v1/](../api/document-v1.html) is changed from:
 ```json
 "myfield": {
     "y": 63453700,

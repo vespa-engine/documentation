@@ -249,7 +249,7 @@ Some notes about the elements above:
 
 - `<container>` defines the [container cluster](../../applications/containers.html) for document, query and result processing.
 - `<search>` sets up the [query endpoint](../../querying/query-api.html). The default port is 8080.
-- `<document-api>` sets up the [document endpoint](../../reference/document-v1-api-reference.html) for feeding.
+- `<document-api>` sets up the [document endpoint](../../reference/api/document-v1.html) for feeding.
 - `<component>` with type `hugging-face-embedder` configures the embedder in the application package. This includes where to fetch the model files from, the prepend
 instructions, and the pooling strategy. See [huggingface-embedder](../../rag/embedding.html#huggingface-embedder) for details and other embedders supported.
 - `<content>` defines how documents are stored and searched.

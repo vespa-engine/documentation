@@ -391,13 +391,13 @@ The YQL query uses logical conjunction `and` to filter the `nearestNeighbor`
 by a constraint on the `in_stock` field. 
 
 The query request
-also specifies [hits](../reference/query-api-reference.html#hits), which determines how
+also specifies [hits](../reference/api/query.html#hits), which determines how
 many hits are returned to the client using the [JSON result format](../reference/default-result-format.html). 
 
 The total number of hits which is ranked by the ranking profile
 depends on the query filters and how fast the nearest neighbor search algorithm converges (for exact search).
 
-The [ranking.profile](../reference/query-api-reference.html#ranking.profile) parameter 
+The [ranking.profile](../reference/api/query.html#ranking.profile) parameter 
 controls which ranking profile is used.
 In this case, it simply ranks documents based on how close they are in the CLIP embedding space.
 
