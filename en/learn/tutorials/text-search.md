@@ -200,7 +200,7 @@ text-scoring [rank-features](../../reference/rank-features.html) in Vespa.
 
 ### Services Specification
 
-The [services.xml](../../reference/services.html) defines the services that make up
+The [services.xml](../../reference/services/services.html) defines the services that make up
 the Vespa application — which services to run and how many nodes per service.
 Write the following to `text-search/app/services.xml`:
 
@@ -237,7 +237,7 @@ Some notes about the elements above:
 - `<documents>` assigns the document types in the _schema_  to content clusters —
   the content cluster capacity can be increased by adding node elements —
   see [elasticity](../../content/elasticity.html).
-  (See also the [reference](../../reference/services-content.html) for more on content cluster setup.)
+  (See also the [reference](../../reference/services/content.html) for more on content cluster setup.)
 - `<nodes>` defines the hosts for the content cluster.
 
 ## Deploy the application package

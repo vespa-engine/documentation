@@ -79,7 +79,7 @@ up like this:
 </services>
 ```
 
-This sets up a new [search chain](../reference/services-search.html#chain) which
+This sets up a new [search chain](../reference/services/search.html#chain) which
 includes an `LLMSearcher`. This searcher has the responsibility of calling out to
 the LLM connection using some prompt that has been sent along with the query.
 

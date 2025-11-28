@@ -83,7 +83,7 @@ private void setSignificance(WordItem item, float significance) {
 
 ## Significance models in services.xml
 
-[`significance` element in services.xml](../reference/services-search.html#significance) specifies one or more models:
+[`significance` element in services.xml](../reference/services/search.html#significance) specifies one or more models:
 
 ```xml
 <container version="1.0">
@@ -102,7 +102,7 @@ In addition, all users can specify their own models by providing a `url` to an e
 Vespa provides a [command line tool](../reference/tools-self-managing.html#vespa-significance) to generate [model files](#significance-model-file) from documents.
 The order in which the models are specified determines the model precedence, see [model resolution](#model-resolution) for details.
 
-In addition to adding models in [services.xml](../reference/services-search.html#significance),
+In addition to adding models in [services.xml](../reference/services/search.html#significance),
 the `significance` feature must be enabled in the [`rank-profile` section of the schema](../reference/schema-reference.html#significance), e.g.
 
 ```xml
