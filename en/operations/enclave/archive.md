@@ -37,5 +37,5 @@ The directory structure in the bucket is as follows:
 There are three log types that are synced to this bucket.
 
 * `vespa`: [Vespa logs](../../reference/logs.html)
-* `access`: [Access logs](../../access-logging.html)
-* `connection`: [Connection logs](../../access-logging.html#connection-log)
+* `access`: [Access logs](../access-logging.html)
+* `connection`: [Connection logs](../access-logging.html#connection-log)
