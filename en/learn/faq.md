@@ -881,7 +881,7 @@ Vespa Cloud uses the following Cloud providers:
 The storage devices are encrypted per Cloud provider, at rest.
 
 ### Does the Vespa console have audit trails/logs module and can it be accessed by an Admin user?
-See the [security guide](../cloud/security/guide.html) for roles and permissions.
+See the [security guide](../security/guide.html) for roles and permissions.
 The Vespa Cloud Console has a log view tool,
 and logs / access logs can be exported to the customer's AWS account easily.
 Deployment operations are tracked in the deployment view, with a history.

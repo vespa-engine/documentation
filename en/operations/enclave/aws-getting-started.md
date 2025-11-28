@@ -3,8 +3,8 @@
 title: Getting started with Vespa Cloud Enclave in AWS
 category: cloud
 redirect_from:
-- /cloud/enclave/aws-getting-started
-- /cloud/enclave/aws-deploy-an-application
+- /en/cloud/enclave/aws-getting-started
+- /en/cloud/enclave/aws-deploy-an-application
 ---
 
 Setting up Vespa Cloud Enclave requires:
@@ -77,7 +77,7 @@ update [deployment.xml](../../reference/deployment.html) to reference the accoun
 ```
 
 Useful resources are [getting started](../../basics/deploy-an-application-java.html)
-and [migrating to Vespa Cloud](../migrating-to-cloud) -
+and [migrating to Vespa Cloud](../../learn/migrating-to-cloud) -
 put _deployment.xml_ next to _services.xml_.
 
 ## Next steps

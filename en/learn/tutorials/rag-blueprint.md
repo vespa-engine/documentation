@@ -391,7 +391,7 @@ Most large scale RAG application schemas contain at least a hundred structured f
 
 Vespa supports both Local LLMs, and any OpenAI-compatible API for LLM generation. For details, see [LLMs in Vespa](../../llms-in-vespa.html)
 
-The recommended way to provide an API key is by using the [secret store](../../cloud/security/secret-store.html) in Vespa Cloud.
+The recommended way to provide an API key is by using the [secret store](../../security/secret-store.html) in Vespa Cloud.
 
 To enable this, you need to create a vault (if you don't have one already) and a secret through the 
 [Vespa Cloud console](https://cloud.vespa.ai/). If your vault is named `sample-apps` and contains a secret 

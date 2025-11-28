@@ -2,7 +2,7 @@
 title: Security Guide
 category: cloud
 redirect_from:
-  - /cloud/security/guide
+- /en/cloud/security/guide
 ---
 
 Vespa Cloud has several security mechanisms it is important for developers to
@@ -141,7 +141,7 @@ the application can also be configured to consume token based authentication whe
 
 {% include note.html content='
 Token authentication must be explicitly enabled when used in combination with
-<a href="../private-endpoints.html">Private Endpoints</a>.
+<a href="../operations/private-endpoints.html">Private Endpoints</a>.
 '%}
 
 #### Create tokens using the console
@@ -297,7 +297,7 @@ Many developers prefer interactive tools like
 use Postman with Vespa</a>.
 
 #### Using Cloudflare Workers
-See [Using Cloudflare Workers with Vespa Cloud](cloudflare-workers.md).
+See [Using Cloudflare Workers with Vespa Cloud](cloudflare-workers).
 
 
 

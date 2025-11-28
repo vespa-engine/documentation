@@ -3,7 +3,7 @@
 title: Architecture for Vespa Cloud Enclave in GCP
 category: cloud
 redirect_from:
-- /cloud/enclave/gcp-architecture
+- /en/cloud/enclave/gcp-architecture
 ---
 
 ### Architecture
@@ -73,4 +73,4 @@ The tenant that registered the GCP project is the only tenant that can deploy
 applications targeting the Enclave.
 
 For more general information about security in Vespa Cloud, see the
-[whitepaper](../security/whitepaper).
+[whitepaper](../../security/whitepaper).
