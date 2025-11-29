@@ -169,7 +169,7 @@ about sequence length and impact on inference performance.
 ROBERTA-based models only have two inputs (input_ids and attention_mask). In addition, the default tokenizer
 start of sequence token is 1 and end of sequence is 2. In this case we use the
 `customTokenInputIds` function in `my_input_ids` function. See
-[customTokenInputIds](../reference/rank-features.html#customTokenInputIds(start_sequence_id, sep_sequence_id, length, input_1, input_2, ...)).
+[customTokenInputIds](../reference/ranking/rank-features.html#customTokenInputIds(start_sequence_id, sep_sequence_id, length, input_1, input_2, ...)).
 
 <pre>
 rank-profile roberta-ranker inherits default {
