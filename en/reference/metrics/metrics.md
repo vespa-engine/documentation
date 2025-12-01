@@ -1,13 +1,15 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Metrics Reference"
+redirect_from:
+  - en/reference/metrics-reference.html
 ---
 
 # Metrics reference documentation
 
 ## Metric types
 
-Each metric have one of the types documented [here](unit-metrics-reference.html).
+Each metric have one of the types documented [here](metric-units.html).
 
 ## Metric aggregator suffixes
 
@@ -33,16 +35,16 @@ The following aggregators are available:
 A metric set is a collection of metrics which can be referenced for convenience.
 The following metric sets are defined in Vespa.
 
-* [Vespa Metric Set Reference](vespa-set-metrics-reference.html)
-* [Default Metric Set Reference](default-set-metrics-reference.html)
-* [Container Metrics Reference](container-metrics-reference.html)
-* [Distributor Metrics Reference](distributor-metrics-reference.html)
-* [Searchnode Metrics Reference](searchnode-metrics-reference.html)
-* [Storage Metrics Reference](storage-metrics-reference.html)
-* [Configserver Metrics Reference](configserver-metrics-reference.html)
-* [Logd Metrics Reference](logd-metrics-reference.html)
-* [Node Admin Metrics Reference](nodeadmin-metrics-reference.html)
-* [Slobrok Metrics Reference](slobrok-metrics-reference.html)
-* [Clustercontroller Metrics Reference](clustercontroller-metrics-reference.html)
-* [Sentinel Metrics Reference](sentinel-metrics-reference.html)
-* [Metric Units Reference](unit-metrics-reference.html)
+* [Vespa Metric Set Reference](vespa-metric-set.html)
+* [Default Metric Set Reference](default-metric-set.html)
+* [Metric Units Reference](metric-units.html)
+* [Container Metrics Reference](container.html)
+* [Distributor Metrics Reference](distributor.html)
+* [Searchnode Metrics Reference](searchnode.html)
+* [Storage Metrics Reference](storage.html)
+* [Configserver Metrics Reference](configserver.html)
+* [Logd Metrics Reference](logd.html)
+* [Node Admin Metrics Reference](nodeadmin.html)
+* [Slobrok Metrics Reference](slobrok.html)
+* [Clustercontroller Metrics Reference](clustercontroller.html)
+* [Sentinel Metrics Reference](sentinel.html)
