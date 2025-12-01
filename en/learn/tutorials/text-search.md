@@ -54,7 +54,7 @@ Many tasks are associated with MS MARCO datasets,
 but we want to build an end-to-end search application that returns relevant documents to a text query.
 We have included a small dataset sample for this tutorial under the `ext/sample` directory, which contains around 1000 documents.
 
-The sample data must be converted to Vespa [JSON feed format](../../reference/document-json-format.html).
+The sample data must be converted to Vespa [JSON feed format](../../reference/writing/document-json-format.html).
 The following step includes extracting documents, queries and relevance judgments from the sample files:
 
 <div class="pre-parent">

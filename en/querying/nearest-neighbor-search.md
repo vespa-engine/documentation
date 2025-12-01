@@ -291,12 +291,12 @@ combines the popularity with the `closeness(field, image_embeddings)` rank-featu
 ## Indexing product data
 After deploying the application package with the document schema, you
 can [index](../writing/reads-and-writes.html) the product data using the
-[Vespa JSON feed format](../reference/document-json-format.html).
+[Vespa JSON feed format](../reference/writing/document-json-format.html).
 
 In the example below there are two documents.
 The vector embedding fields are using
-[indexed tensor short form](../reference/document-json-format.html#tensor)
-and [mixed tensor short form](../reference/document-json-format.html#tensor):
+[indexed tensor short form](../reference/writing/document-json-format.html#tensor)
+and [mixed tensor short form](../reference/writing/document-json-format.html#tensor):
 ```json
 [
     {

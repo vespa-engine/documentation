@@ -58,7 +58,7 @@ $ unzip lastfm_test.zip
 </div>
 
 The downloaded data needs to be converted to
-[the JSON format expected by Vespa](../reference/document-json-format.html). 
+[the JSON format expected by Vespa](../reference/writing/document-json-format.html). 
 
 This [python](https://www.python.org/) script is used to traverse the dataset
 files and create a JSONL formatted feed file with Vespa feed operations.

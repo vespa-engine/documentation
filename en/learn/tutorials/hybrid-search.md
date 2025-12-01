@@ -56,7 +56,7 @@ The NFCorpus documents have four fields:
 - The `text` and the `title` 
 
 We are interested in the title and the text, and we want to be able to search across these two fields. We also need to store the `doc_id` to evaluate [ranking](../../basics/ranking.html)
-accuracy. We will create a small script that converts the above output to [Vespa JSON document](../../reference/document-json-format.html) format. Create a `convert.py` file:
+accuracy. We will create a small script that converts the above output to [Vespa JSON document](../../reference/writing/document-json-format.html) format. Create a `convert.py` file:
 
 <div class="pre-parent">
 <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

@@ -101,7 +101,7 @@ More concretely, an example of such a tensor is
 
 This tensor holds all the CTR scores for all the categories.
 When updating this tensor, we can update individual cells if we don't need to update the whole tensor.
-This is called [tensor modify](../../reference/document-json-format.html#tensor-modify)
+This is called [tensor modify](../../reference/writing/document-json-format.html#tensor-modify)
 and can be helpful when you have large tensors.
 
 To use this document, add it to `services.xml`:
