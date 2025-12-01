@@ -63,7 +63,7 @@ $ unzip lastfm_test.zip
 </div>
 
 The downloaded data must be be converted to
-[the Vespa JSON feed format](../reference/document-json-format.html). 
+[the Vespa JSON feed format](../reference/writing/document-json-format.html). 
 
 This [python](https://www.python.org/) script can be used to traverse 
 the dataset files and create a JSONL formatted feed file with Vespa put operations. 
@@ -180,7 +180,7 @@ for filename in sorted_files:
 {% endhighlight %}</pre></div>
 
 Process the dataset and convert it to
-[Vespa JSON document operation](../reference/document-json-format.html) format.
+[Vespa JSON document operation](../reference/writing/document-json-format.html) format.
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

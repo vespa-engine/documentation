@@ -304,7 +304,7 @@ $ vespa visit -t http://localhost:8080 | vespa feed - -t http://localhost:8081
 
 **Data copy 5%**
 
-This is an example on how to use a [selection](../reference/document-select-language.html)
+This is an example on how to use a [selection](../reference/writing/document-selector-language.html)
 to specify a subset of the documents - here a "random" 5% selection:
 ```
 $ vespa visit -t http://localhost:8080 --selection 'id.hash().abs() % 20 = 0' | \

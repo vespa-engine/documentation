@@ -93,7 +93,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     injected to the component during construction. This application uses custom
     config to set up the Vespa host details for the handler.
 
-* [Partial update](../../reference/document-json-format.html#update)
+* [Partial update](../../reference/writing/document-json-format.html#update)
 
     With Vespa, you can make changes to an existing document without submitting
     the full document. Examples are setting the value of a single field, adding

@@ -26,7 +26,7 @@ This section provides guidelines for configuring document enrichment, using the
 
 ### Defining generated fields
 
-Enrichments are defined in a schema using a [generate indexing expression](../reference/indexing-language-reference.html#generate).
+Enrichments are defined in a schema using a [generate indexing expression](../reference/writing/indexing-language.html#generate).
 For example the following schema defines two [synthetic fields](../operations/reindexing.html) with `generate`:
 
 ```
@@ -341,7 +341,7 @@ For example, a JSON schema for `field questions type array<string>` in document 
 ```
 
 Constructed schemas for different data types correspond to the 
-[document JSON format](../reference/document-json-format.html#) used for feeding.
+[document JSON format](../reference/writing/document-json-format.html#) used for feeding.
 The following field types are supported:
 - string
 - bool

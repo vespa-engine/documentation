@@ -245,7 +245,7 @@ This document contains several fields. Each field has a
 `tensor`. Fields also have properties. For instance, property `indexing`
 configures the _indexing pipeline_ for a field, which defines how Vespa will
 treat input during indexing — see [indexing
-language](../../reference/indexing-language-reference.html). Each part of the
+language](../../reference/writing/indexing-language.html). Each part of the
 indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field.
@@ -284,7 +284,7 @@ $ vespa deploy --wait 300 my-app
 
 The data fed to Vespa must match the schema for the document type.
 The downloaded MIND data must be converted to a valid Vespa JSON [document
-format](../../reference/document-json-format.html) before it can be fed to Vespa:
+format](../../reference/writing/document-json-format.html) before it can be fed to Vespa:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

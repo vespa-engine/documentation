@@ -53,7 +53,7 @@ measuring quality loss for each iteration - this procedure it built with that in
 
 
 ## Converters
-Vespa’s built-in indexing language [converters](../reference/indexing-language-reference.html#converters)
+Vespa’s built-in indexing language [converters](../reference/writing/indexing-language.html#converters)
 `binarize` and `pack_bits` let you easily generate binarized vectors.
 Example schema definitions used to generate the vectors in the table above:
 
@@ -315,7 +315,7 @@ $ vespa query \
     'ranking=app_ranking_bin'
 ```
 
-See [tensor-hex-dump](../reference/document-json-format.html#tensor-hex-dump)
+See [tensor-hex-dump](../reference/writing/document-json-format.html#tensor-hex-dump)
 for more information about how to create the int8-typed tensor.
 
 
@@ -547,7 +547,7 @@ schema doc {
 
 ## Appendix: Binarizing from text input
 To generate the embedding from other data types, like text,
-use the [converters](../reference/indexing-language-reference.html#converters) - example:
+use the [converters](../reference/writing/indexing-language.html#converters) - example:
 
 ```
     field doc_embedding type tensor<int8>(x[1]) {
