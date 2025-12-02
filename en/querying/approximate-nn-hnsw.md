@@ -10,7 +10,7 @@ For an introduction to nearest neighbor search, see [nearest neighbor search](ne
 for practical usage of Vespa's nearest neighbor search, see [nearest neighbor search - a practical guide](nearest-neighbor-search-guide),
 and to have Vespa create vectors for you, see [embedding](../rag/embedding.html).
 This document describes how to speed up searches for nearest neighbors by adding a
-[HNSW index](../reference/applications/schemas.html#index-hnsw) to the
+[HNSW index](../reference/schemas/schemas.html#index-hnsw) to the
 tensor field.
 
 Vespa implements a modified version of the Hierarchical Navigable Small World (HNSW) graph algorithm [paper](https://arxiv.org/abs/1603.09320).
@@ -78,7 +78,7 @@ In the schema snippet above, fast approximate search is enabled by building an `
 `image_embeddings` indexes multiple vectors per document,
 while `text_embedding` indexes one vector per document.
 
-The two vector fields use different [distance-metric](../reference/applications/schemas.html#distance-metric)
+The two vector fields use different [distance-metric](../reference/schemas/schemas.html#distance-metric)
 and `HNSW` index settings:
 
 * `max-links-per-node` - a higher value increases recall accuracy, but also memory usage, indexing and search cost.
@@ -86,7 +86,7 @@ and `HNSW` index settings:
 
 Choosing the value of these parameters affects both accuracy, search performance, memory usage and indexing performance.
 See [Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/)
-for a detailed description of these tradeoffs. See [HNSW index reference](../reference/applications/schemas.html#index-hnsw) 
+for a detailed description of these tradeoffs. See [HNSW index reference](../reference/schemas/schemas.html#index-hnsw) 
 for details on the index parameters. 
 
 ### Indexing throughput 
@@ -146,8 +146,8 @@ There are two high-level strategies for combining query filters with approximate
 * [post-filtering](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#post-filtering-strategy)
 
 These strategies can be configured in a rank profile using
-[approximate-threshold](../reference/applications/schemas.html#approximate-threshold) and
-[post-filter-threshold](../reference/applications/schemas.html#post-filter-threshold).
+[approximate-threshold](../reference/schemas/schemas.html#approximate-threshold) and
+[post-filter-threshold](../reference/schemas/schemas.html#post-filter-threshold).
 See
 [Controlling the filtering behavior with approximate nearest neighbor search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#controlling-the-filtering-behavior-with-approximate-nearest-neighbor-search)
 for more details.
@@ -235,7 +235,7 @@ or combines nearest neighbor search with filters.
 
 
 ## HNSW Operations 
-Changing the [distance-metric](../reference/applications/schemas.html#distance-metric)
-for a tensor field with `hnsw` index requires [restarting](../reference/applications/schemas.html#changes-that-require-restart-but-not-re-feed),
+Changing the [distance-metric](../reference/schemas/schemas.html#distance-metric)
+for a tensor field with `hnsw` index requires [restarting](../reference/schemas/schemas.html#changes-that-require-restart-but-not-re-feed),
 but not re-indexing (re-feed vectors). Similar, changing the `max-links-per-node` and
 `neighbors-to-explore-at-insert` construction parameters requires re-starting. 

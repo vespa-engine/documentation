@@ -315,7 +315,7 @@ $ vespa query \
     'ranking=app_ranking_bin'
 ```
 
-See [tensor-hex-dump](../reference/writing/document-json-format.html#tensor-hex-dump)
+See [tensor-hex-dump](../reference/schemas/document-json-format.html#tensor-hex-dump)
 for more information about how to create the int8-typed tensor.
 
 
@@ -329,7 +329,7 @@ Example embeddings:
 | [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]         | [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]   |                -119 |
 
 
-Use [matchfeatures](../reference/applications/schemas.html#match-features)
+Use [matchfeatures](../reference/schemas/schemas.html#match-features)
 to debug ranking (see ranking profile `app_ranking_bin` below):
 ```json
 "matchfeatures": {

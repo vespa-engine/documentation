@@ -85,8 +85,8 @@ tensor&lt;float&gt;(x[384])
 </pre>
 
 Document vectors are stored in a
-[tensor field](../reference/applications/schemas.html#tensor)
-defined in the document [schema](../reference/applications/schemas.html).
+[tensor field](../reference/schemas/schemas.html#tensor)
+defined in the document [schema](../reference/schemas/schemas.html).
 A tensor type (dense) with one indexed dimension stores a single vector per document:
 <pre>
 field doc_embedding type tensor&lt;float&gt;(x[384]) {
@@ -102,7 +102,7 @@ field doc_embeddings type tensor&lt;float&gt;(m{},x[384]) {
 </pre>
 
 Similarly, the type of a query vector is defined in a
-[rank-profile](../reference/applications/schemas.html#rank-profile):
+[rank-profile](../reference/schemas/schemas.html#rank-profile):
 <pre>
 rank-profile my_profile {
     inputs {
@@ -190,17 +190,17 @@ The fields of type [tensor](../ranking/tensor-user-guide.html) represent vector 
 - `image_embeddings` - multiple float vectors with 512 dimensions.
 
 The `text_embedding` field stores a dense vectorized embedding representation
-of the product description and which use [prenormalized-angular](../reference/applications/schemas.html#distance-metric)
+of the product description and which use [prenormalized-angular](../reference/schemas/schemas.html#distance-metric)
 as `distance-metric`. See for example
 [Dense Retrieval using bi-encoders over Transformer models](https://blog.vespa.ai/pretrained-transformer-language-models-for-search-part-2/).
 
 The `image_embeddings` field stores multiple dense vectorized embedding representations
-of the product images and which use [angular](../reference/applications/schemas.html#distance-metric)
+of the product images and which use [angular](../reference/schemas/schemas.html#distance-metric)
 as `distance-metric`.
 See for example [text to image search using CLIP with Vespa](https://blog.vespa.ai/text-image-search/).
 
 ### Distance metrics for nearest neighbor search
-Vespa supports six different [distance-metrics](../reference/applications/schemas.html#distance-metric):
+Vespa supports six different [distance-metrics](../reference/schemas/schemas.html#distance-metric):
 
 * `euclidean`
 * `angular`
@@ -291,12 +291,12 @@ combines the popularity with the `closeness(field, image_embeddings)` rank-featu
 ## Indexing product data
 After deploying the application package with the document schema, you
 can [index](../writing/reads-and-writes.html) the product data using the
-[Vespa JSON feed format](../reference/writing/document-json-format.html).
+[Vespa JSON feed format](../reference/schemas/document-json-format.html).
 
 In the example below there are two documents.
 The vector embedding fields are using
-[indexed tensor short form](../reference/writing/document-json-format.html#tensor)
-and [mixed tensor short form](../reference/writing/document-json-format.html#tensor):
+[indexed tensor short form](../reference/schemas/document-json-format.html#tensor)
+and [mixed tensor short form](../reference/schemas/document-json-format.html#tensor):
 ```json
 [
     {
@@ -433,7 +433,7 @@ rank-profile hamming-nn {
 
 Hamming distance search over binary vectors is implemented with xor and pop count cpu instructions.
 The rank-profile specifies 
-[num-threads-per-search](../reference/applications/schemas.html#num-threads-per-search) to 
+[num-threads-per-search](../reference/schemas/schemas.html#num-threads-per-search) to 
 reduce serving latency (but not cost).
 
 See the [Billion Scale Vector Search with Vespa](https://blog.vespa.ai/billion-scale-knn-part-two/)

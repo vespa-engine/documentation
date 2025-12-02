@@ -116,7 +116,7 @@ Bert-based models have three inputs:
 - attention_mask
 
 
-The [onnx-model](../reference/applications/schemas.html#onnx-model) configuration specifies the input names
+The [onnx-model](../reference/schemas/schemas.html#onnx-model) configuration specifies the input names
 of the model and how to calculate them. It also specifies the file `models/model.onnx`.
 Notice also the [GPU](../operations/self-managed/vespa-gpu-container.html).
 GPU inference is not required, and Vespa will fall back to CPU if no GPU device is found.
@@ -225,7 +225,7 @@ The retriever (query + first-phase ranking) can be anything, including
 
 There are three major scaling dimensions:
 
-- The number of hits that are re-ranked [rerank-count](../reference/applications/schemas.html#globalphase-rerank-count) Complexity is linear with the number of hits that are re-ranked.
+- The number of hits that are re-ranked [rerank-count](../reference/schemas/schemas.html#globalphase-rerank-count) Complexity is linear with the number of hits that are re-ranked.
 - The size of the transformer model used.
 - The sequence input length. Transformer models scales quadratic with the input sequence length.
 

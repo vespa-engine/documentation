@@ -101,7 +101,7 @@ More concretely, an example of such a tensor is
 
 This tensor holds all the CTR scores for all the categories.
 When updating this tensor, we can update individual cells if we don't need to update the whole tensor.
-This is called [tensor modify](../../reference/writing/document-json-format.html#tensor-modify)
+This is called [tensor modify](../../reference/schemas/document-json-format.html#tensor-modify)
 and can be helpful when you have large tensors.
 
 To use this document, add it to `services.xml`:
@@ -262,7 +262,7 @@ Note that, as a first attempt, we just multiply the nearest-neighbor with the ca
 This is not necessarily the correct way to combine these values,
 but we'll get back to that in a bit.
 
-We've added a section for [summary features](../../reference/applications/schemas.html#summary-features).
+We've added a section for [summary features](../../reference/schemas/schemas.html#summary-features).
 This is simply a list of features that will be returned with the hit when using this rank profile.
 Recall that we can specify which features should be returned in the summary
 with the `indexing: summary` statement with each field.

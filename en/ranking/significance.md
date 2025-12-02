@@ -99,11 +99,11 @@ private void setSignificance(WordItem item, float significance) {
 
 Vespa Cloud users have access to [pre-built models](https://cloud.vespa.ai/en/model-hub#significance-models), identified by `model-id`.
 In addition, all users can specify their own models by providing a `url` to an external resource or a `path` to a model file within the application package.
-Vespa provides a [command line tool](../reference/operations/tools-self-managing.html#vespa-significance) to generate [model files](#significance-model-file) from documents.
+Vespa provides a [command line tool](../reference/operations/self-managing/tools.html#vespa-significance) to generate [model files](#significance-model-file) from documents.
 The order in which the models are specified determines the model precedence, see [model resolution](#model-resolution) for details.
 
 In addition to adding models in [services.xml](../reference/applications/services/search.html#significance),
-the `significance` feature must be enabled in the [`rank-profile` section of the schema](../reference/applications/schemas.html#significance), e.g.
+the `significance` feature must be enabled in the [`rank-profile` section of the schema](../reference/schemas/schemas.html#significance), e.g.
 
 ```xml
 schema example {

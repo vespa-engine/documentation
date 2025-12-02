@@ -89,7 +89,7 @@ requested document from all divergent replicas. The client then receives the
 version with the newest timestamp.
 
 If replicas diverge during a Visit, the behavior is slightly different between
-the Document V1 API and [vespa-visit](/en/reference/operations/tools-self-managing.html#vespa-visit):
+the Document V1 API and [vespa-visit](/en/reference/operations/self-managed/tools.html#vespa-visit):
 
   * Document V1 will prefer immediately visiting the replica that contains the
     most documents. This means it's possible for a subset of documents in a bucket

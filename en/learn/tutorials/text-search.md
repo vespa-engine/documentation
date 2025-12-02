@@ -54,7 +54,7 @@ Many tasks are associated with MS MARCO datasets,
 but we want to build an end-to-end search application that returns relevant documents to a text query.
 We have included a small dataset sample for this tutorial under the `ext/sample` directory, which contains around 1000 documents.
 
-The sample data must be converted to Vespa [JSON feed format](../../reference/writing/document-json-format.html).
+The sample data must be converted to Vespa [JSON feed format](../../reference/schemas/document-json-format.html).
 The following step includes extracting documents, queries and relevance judgments from the sample files:
 
 <div class="pre-parent">
@@ -162,11 +162,11 @@ A lot is going on here; let us go through it in detail.
 #### Document type and fields
 
 The `document` section contains the fields of the document, their types,
-and how Vespa should index and [match](../../reference/applications/schemas.html#match) them.
+and how Vespa should index and [match](../../reference/schemas/schemas.html#match) them.
 
 The field property `indexing` configures the _indexing pipeline_ for a field.
 For more information, see [schemas - indexing](../../basics/schemas.html#document-fields).
-The [string](../../reference/applications/schemas.html#string) data type is used to represent both unstructured and structured texts, 
+The [string](../../reference/schemas/schemas.html#string) data type is used to represent both unstructured and structured texts, 
 and there are significant differences between [index and attribute](../../querying/text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
@@ -177,9 +177,9 @@ text fields. Read more in [linguistics](../../linguistics/linguistics.html).
 
 #### Fieldset for matching across multiple fields
 
-[Fieldset](../../reference/applications/schemas.html#fieldset) allows searching across multiple fields. Defining `fieldset` does not 
+[Fieldset](../../reference/schemas/schemas.html#fieldset) allows searching across multiple fields. Defining `fieldset` does not 
 add indexing/storage overhead. String fields grouped using fieldsets must share the same 
-[match](../../reference/applications/schemas.html#match) and [linguistic processing](../../linguistics/linguistics.html) settings because
+[match](../../reference/schemas/schemas.html#match) and [linguistic processing](../../linguistics/linguistics.html) settings because
 the query processing that searches a field or fieldset uses *one* type of transformation.
 
 #### Document summaries to control search response contents
@@ -483,7 +483,7 @@ In that case, we should create a separate field to avoid phrase matching, phrase
 
 
 ### Debugging token string matching
-Query tracing, combined with a summary using [tokens](../../reference/applications/schemas.html#tokens) can help debug matching. 
+Query tracing, combined with a summary using [tokens](../../reference/schemas/schemas.html#tokens) can help debug matching. 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="what-is-a-dadbod">

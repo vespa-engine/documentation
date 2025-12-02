@@ -6,9 +6,9 @@ redirect_from:
 ---
 
 This guide explains how to search and rank over structured multivalued fields.
-The examples in this guide use the [weightedset](../reference/applications/schemas.html#weightedset)
-[field type](../reference/applications/schemas.html#field).
-The generic [map<key-type,value-type>](../reference/applications/schemas.html#map) field type
+The examples in this guide use the [weightedset](../reference/schemas/schemas.html#weightedset)
+[field type](../reference/schemas/schemas.html#field).
+The generic [map<key-type,value-type>](../reference/schemas/schemas.html#map) field type
 does not currently support ranking and can only be used for matching and filtering.
 
 When building a search application we need to think about:
@@ -26,8 +26,8 @@ designing and mapping our document model to a Vespa document schema:
 - For string fields there are also several
 [linguistic processing](../linguistics/linguistics.html) options like [tokenization](../linguistics/linguistics.html#tokenization), 
 normalization and language dependent [stemming](../linguistics/linguistics.html#stemming).
-- String fields which shares the same [match](../reference/applications/schemas.html#match) 
-and linguistic processing settings can be combined using [fieldsets](../reference/applications/schemas.html#fieldset). 
+- String fields which shares the same [match](../reference/schemas/schemas.html#match) 
+and linguistic processing settings can be combined using [fieldsets](../reference/schemas/schemas.html#fieldset). 
 
 At query time, we can take the user query and translate it into a valid Vespa query request which implements
 our matching and retrieval strategy over the designed document schema.
@@ -65,7 +65,7 @@ tag-like field where there is a weight associated with each element.
 </pre>
 
 Structured data like the <code>tags</code>, where we both want to match and rank is best represented using 
-the [weightedset](../reference/applications/schemas.html#weightedset) [field type](../reference/applications/schemas.html#field).
+the [weightedset](../reference/schemas/schemas.html#weightedset) [field type](../reference/schemas/schemas.html#field).
 The Vespa weightedset field type can be used to represent:
 
 - Document side tags like in the above example.
@@ -122,11 +122,11 @@ schema photo {
 }
 </pre>
 
-In the schema we disable [stemming](../reference/applications/schemas.html#stemming) and
+In the schema we disable [stemming](../reference/schemas/schemas.html#stemming) and
 also enable [bm25](../ranking/bm25.html) text ranking feature for all string fields.
 
-Since all string fields shares the same [match](../reference/applications/schemas.html#match)
-settings we can use a [fieldset](../reference/applications/schemas.html#fieldset) 
+Since all string fields shares the same [match](../reference/schemas/schemas.html#match)
+settings we can use a [fieldset](../reference/schemas/schemas.html#fieldset) 
 so that queries does not need to mention all three fields.
 
 We also include a default rank profile (this is the implicit default rank profile)
@@ -258,7 +258,7 @@ $ vespa query 'yql=select * from photos where userQuery()' \
 </pre>
 
 Now, explore how Vespa matches the multivalued tags field of
-type [weightedset](../reference/applications/schemas.html#weightedset). 
+type [weightedset](../reference/schemas/schemas.html#weightedset). 
 Notice that we change back to `type=all`.
 In this example we also use the [default-index](../reference/api/query.html#model.defaultindex) 
 query parameter to limit matching to the `tags` field.
@@ -307,7 +307,7 @@ this score was in our previous examples calculated using the `default` rank prof
 which in our case used [nativeRank](../ranking/nativerank.html).
 
 We can start by analyzing other [rank features](../reference/ranking/rank-features.html) by asking Vespa to produce them for us.
-We use [match-features](../reference/applications/schemas.html#match-features)
+We use [match-features](../reference/schemas/schemas.html#match-features)
 to return rank features with the retrieved documents.
 We explicitly mention which ranking features we want to have calculated and returned.
 Notice that we don't change the actual scoring, we still use `nativeRank` as the scoring function:
