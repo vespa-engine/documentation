@@ -51,7 +51,7 @@ should be sent by your frontends or backends.
  
 Internode communication inside a Vespa installation is not encrypted by default
 and will need to be configured explicitly as documented in 
-[Securing Vespa with mutually authenticated TLS](mtls).
+[Securing Vespa with mutually authenticated TLS](mtls.md).
 
 
 
@@ -91,6 +91,6 @@ encryption.
 ## Securing Vespa with mutually authenticated TLS (mTLS)
 
 Protect all internal endpoints and protocols in Vespa with mutually authenticated Transport Layer Security (mTLS).
-See the [dedicated documentation](mtls) on how to get started,
+See the [dedicated documentation](mtls.md) on how to get started,
 and try the [multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)
 example.
