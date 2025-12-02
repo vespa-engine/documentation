@@ -72,7 +72,7 @@ function bar() {
 </pre>
 
 ### Does Vespa support early termination of matching and ranking?
-Yes, this can be accomplished by configuring [match-phase](../reference/applications/schemas.html#match-phase) 
+Yes, this can be accomplished by configuring [match-phase](../reference/schemas/schemas.html#match-phase) 
 in the rank profile,  or by adding a range query item using *hitLimit* to the query tree,
 see [capped numeric range search](../reference/querying/yql.html#numeric).
 Both methods require an *attribute* field with *fast-search*. The capped range query is faster, but beware that if 
@@ -87,7 +87,7 @@ of a double. This can happen in two cases:
 
 - The [ranking](../basics/ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
 -Infinity. One can use [isNan](../reference/ranking/ranking-expressions.html#isnan-x) to guard against this.
-- Surfacing low scoring hits using [grouping](../querying/grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](../reference/applications/schemas.html#keep-rank-count).
+- Surfacing low scoring hits using [grouping](../querying/grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside of what Vespa computed and caches on a heap. This is controlled by the [keep-rank-count](../reference/schemas/schemas.html#keep-rank-count).
 
 ### How to pin query results?
 To hard-code documents to positions in the result set,
@@ -125,7 +125,7 @@ as an acceptable (and to some extent configurable) trade-off.
 Wildcard fields are not supported in vespa.
 Workaround would be to use maps to store the wildcard fields.
 Map needs to be defined with <code>indexing: attribute</code> and hence will be stored in memory.
-Refer to [map](../reference/applications/schemas.html#map).
+Refer to [map](../reference/schemas/schemas.html#map).
 
 ### Can we set a limit for the number of elements that can be stored in an array?
 Implement a [document processor](../applications/document-processors.html) for this.
@@ -275,7 +275,7 @@ If an _estimate_ is good enough, use [hitcountestimate=true](../reference/api/qu
 ### Must all fields in a fieldset have compatible type and matching settings?
 Yes - a deployment warning with _This may lead to recall and ranking issues_ is emitted
 when fields with conflicting tokenization are put in the same
-[fieldset](../reference/applications/schemas.html#fieldset).
+[fieldset](../reference/schemas/schemas.html#fieldset).
 This is because a given query item searching one fieldset is tokenized just once,
 so there's no right choice of tokenization in this case.
 If you have user input that you want to apply to multiple fields with different tokenization,
@@ -441,11 +441,11 @@ and have limited text match modes (i.e. `indexing: index` cannot be used).
 
 If you have added vectors to your documents and queries, and see that the rank feature
 closeness(field, yourEmbeddingField) produces 1.0 for all documents, you are likely using
-[distance-metric](../reference/applications/schemas.html#distance-metric): innerproduct/prenormalized-angular,
+[distance-metric](../reference/schemas/schemas.html#distance-metric): innerproduct/prenormalized-angular,
 but your vectors are not normalized, and the solution is normally to switch to
-[distance-metric: angular](../reference/applications/schemas.html#angular)
+[distance-metric: angular](../reference/schemas/schemas.html#angular)
 or use
-[distance-metric: dotproduct](../reference/applications/schemas.html#dotproduct)
+[distance-metric: dotproduct](../reference/schemas/schemas.html#dotproduct)
 (available from {% include version.html version="8.170.18" %}).
 
 With non-normalized vectors, you often get negative distances, and those are capped to 0,
@@ -744,7 +744,7 @@ the hosts wait for ZooKeeper in a catch 22 -
 see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
 
 ### How to display vespa.log?
-Use [vespa-logfmt](../reference/operations/tools-self-managing.html#vespa-logfmt) to dump logs.
+Use [vespa-logfmt](../reference/operations/self-managed/tools.html#vespa-logfmt) to dump logs.
 If Vespa is running in a local container (named "vespa"), run `docker exec vespa vespa-logfmt`.
 
 ### How to fix encoding problems in document text?
@@ -793,7 +793,7 @@ see [elasticity](../content/elasticity.html).
 
 ### How to modify a schema?
 Schema changes might require data reindexing, which is automated, but takes some time.
-Other schema changes require data refeed - [details](../reference/applications/schemas.html#modifying-schemas)
+Other schema changes require data refeed - [details](../reference/schemas/schemas.html#modifying-schemas)
 <!-- ToDo: we should really have a "managing resources" guide for Vespa Cloud -->
 
 ### How to evaluate how much memory a field is using?
@@ -837,12 +837,12 @@ as redundant document buckets are activated for queries automatically,
 and auto data-migration kicks in for node failures / replacements.
 
 ### What actions are needed when deploying schema changes?
-* Schema changes that [require service restart](../reference/applications/schemas.html#changes-that-require-restart-but-not-re-feed)
+* Schema changes that [require service restart](../reference/schemas/schemas.html#changes-that-require-restart-but-not-re-feed)
   are handled automatically by Vespa Cloud. A deployment job involves waiting for these to complete.
-* Schema changes that [require reindexing](../reference/applications/schemas.html#changes-that-require-reindexing)
+* Schema changes that [require reindexing](../reference/schemas/schemas.html#changes-that-require-reindexing)
   of data require a validation override, and will trigger automatic reindexing. Status can be tracked in the console application view.
   Vespa Cloud also periodically re-indexes all data, with minimal resource usage, to account for changes in linguistics libraries.
-* Schema changes that [require refeeding](../reference/applications/schemas.html#changes-that-require-re-feed)
+* Schema changes that [require refeeding](../reference/schemas/schemas.html#changes-that-require-re-feed)
   data require a validation override, and the user must refeed the data after deployment.
 
 ### What are the Vespa Cloud data retention policies?

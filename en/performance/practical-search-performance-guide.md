@@ -58,7 +58,7 @@ $ unzip lastfm_test.zip
 </div>
 
 The downloaded data needs to be converted to
-[the JSON format expected by Vespa](../reference/writing/document-json-format.html). 
+[the JSON format expected by Vespa](../reference/schemas/document-json-format.html). 
 
 This [python](https://www.python.org/) script is used to traverse the dataset
 files and create a JSONL formatted feed file with Vespa feed operations.
@@ -274,9 +274,9 @@ schema track {
 
 Notice that the `track_id` field has :
 
-- [rank: filter](../reference/applications/schemas.html#rank). 
+- [rank: filter](../reference/schemas/schemas.html#rank). 
 This setting can save resources when matching against the field.   
-- [match: word](../reference/applications/schemas.html#match). 
+- [match: word](../reference/schemas/schemas.html#match). 
 This is a database-style matching mode, preserving punctuation characters. 
 
 ### Services Specification
@@ -602,7 +602,7 @@ For example, a [document-summary](../querying/document-summaries.html) which onl
 fields that are defined as `attribute` will be read from memory. For the `default` summary, or others 
 containing at least one non-attribute field, a fill will potentially access data 
 from summary storage on disk. Read more about in-memory [attribute](../content/attributes.html) fields.
-- [summary-features](../reference/applications/schemas.html#summary-features) used to return computed
+- [summary-features](../reference/schemas/schemas.html#summary-features) used to return computed
  [rank features](../reference/ranking/rank-features.html) from the content nodes. 
 
 Creating a dedicated [document-summary](../querying/document-summaries.html) which
@@ -709,15 +709,15 @@ Accept-Encoding: gzip
 ## Searching attribute fields 
 
 The previous section covered free text searching in a `fieldset` containing fields with
-`indexing:index`. See [indexing reference](../reference/applications/schemas.html#indexing). 
-Fields of [type string](../reference/applications/schemas.html#field) are 
+`indexing:index`. See [indexing reference](../reference/schemas/schemas.html#indexing). 
+Fields of [type string](../reference/schemas/schemas.html#field) are 
 treated differently depending on having `index` or `attribute`:
 
 - `index` integrates with [linguistic](../linguistics/linguistics.html) processing and is matched using 
-[match:text](../reference/applications/schemas.html#match). 
+[match:text](../reference/schemas/schemas.html#match). 
 
 - `attribute` does not integrate with linguistic processing and is matched using 
-[match:word](../reference/applications/schemas.html#match). 
+[match:word](../reference/schemas/schemas.html#match). 
 
 With `index` Vespa builds inverted index data structures which roughly consist of:
 
@@ -736,7 +736,7 @@ for many different aspects: [ranking](../basics/ranking.html), [result grouping]
 The following section focuses on the `tags` field which we defined with `attribute`,
 matching in this field will be performed using `match:word` which is the
 default match mode for string fields with `indexing: attribute`.
-The `tags` field is of type [weightedset](../reference/applications/schemas.html#weightedset).
+The `tags` field is of type [weightedset](../reference/schemas/schemas.html#weightedset).
 
 <pre>
  field tags type weightedset&lt;string&gt; {
@@ -872,7 +872,7 @@ Waiting up to 300 seconds for query service to become available ...
 To enable `fast-search`, content node(s) needs to be restarted to re-build the fast-search data structures
 for the attribute. 
 
-The following uses [vespa-sentinel-cmd command tool](/en/reference/operations/tools-self-managing.html#vespa-sentinel-cmd)
+The following uses [vespa-sentinel-cmd command tool](/en/reference/operations/self-managed/tools.html#vespa-sentinel-cmd)
 to restart the searchnode process:
 
 <div class="pre-parent">
@@ -921,11 +921,11 @@ increased memory usage and slightly reduced indexing throughput. See also
 [when to use fast-search for attributes](feature-tuning.html#when-to-use-fast-search-for-attribute-fields).
 
 For use cases requiring `match:text` when searching multivalued string field types
-like [weightedset](../reference/applications/schemas.html#weightedset), see
+like [weightedset](../reference/schemas/schemas.html#weightedset), see
 [searching multi-value fields](../searching-multi-valued-fields.html).
 
 For fields that don't need any match ranking features, it's strongly recommended
-to use [rank: filter](../reference/applications/schemas.html#rank).
+to use [rank: filter](../reference/schemas/schemas.html#rank).
 
 <pre>
 field availability type int {
@@ -1133,7 +1133,7 @@ which cannot make it into the top-k results. [Using wand with Vespa](../ranking/
 guide has more details on the WAND algorithm.
 
 Finally, these multi-value query operators work on both single-valued fields and array fields,
-but optimal performance is achieved using the [weightedset](../reference/applications/schemas.html#weightedset)
+but optimal performance is achieved using the [weightedset](../reference/schemas/schemas.html#weightedset)
 field type. The `weightedset` field type only supports integer weights. The next section
 covers tensors that support more floating point number types. 
 
@@ -1729,7 +1729,7 @@ using multiple search threads and `querytime` drops to about 15 ms.
 
 The setting in `services.xml` sets the global *persearch* value, 
 It is possible to tune down the number of threads used for a query with 
-`rank-profile` overrides using [num-threads-per-search](../reference/applications/schemas.html#num-threads-per-search).
+`rank-profile` overrides using [num-threads-per-search](../reference/schemas/schemas.html#num-threads-per-search).
 Note that the per rank-profile setting can only be used to tune the number of threads
 to a lower number than the global default. 
 
@@ -2105,8 +2105,8 @@ top-k result with the popularity=99 filter constraint ends up with 0 results.
 
 Using range search query operator with `hitLimit` is practical for search use cases 
 like auto-complete or [search suggestions](https://github.com/vespa-engine/sample-apps/tree/master/incremental-search/search-suggestions)
-where one typically use [match: prefix](../reference/applications/schemas.html#match) or
-n-gram matching using [match: gram](../reference/applications/schemas.html#match). Limiting the short 
+where one typically use [match: prefix](../reference/schemas/schemas.html#match) or
+n-gram matching using [match: gram](../reference/schemas/schemas.html#match). Limiting the short 
 few first character searches to include a `hitLimit` range on popularity 
 can greatly improve the query performance and at the same time match against popular suggestions. 
 As the user types more characters, the number of matches is greatly reduced, so ranking can focus on more factors
@@ -2114,7 +2114,7 @@ than just the single popularity attribute and increase the `hitLimit`.
 
 ## Match phase limit - early termination 
 An alternative to `range` search with `hitLimit` is using
-early termination with [match-phase](../reference/applications/schemas.html#match-phase),
+early termination with [match-phase](../reference/schemas/schemas.html#match-phase),
 which enables early termination of search and `first-phase` ranking
 using a document field to determine the search evaluation order. 
 

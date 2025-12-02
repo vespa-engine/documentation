@@ -46,7 +46,7 @@ which is a [document feature](../reference/ranking/rank-features.html#document-f
 ## Observing values used in ranking
 
 When developing ranking expressions, it is useful to observe the input values.
-Output the input values using [summary-features](../reference/applications/schemas.html#summary-features).
+Output the input values using [summary-features](../reference/schemas/schemas.html#summary-features).
 In this experiment, we will use another rank function, still counting in-links but scoring older documents lower:
 
 
@@ -158,8 +158,8 @@ Use different names for more query features.
 ## Ranking with a query tensor
 
 Another similarity function can be overlap in in-links.
-We will map the inlinks [weightedset](../reference/applications/schemas.html#weightedset) into a
-[tensor](../reference/applications/schemas.html#tensor),
+We will map the inlinks [weightedset](../reference/schemas/schemas.html#weightedset) into a
+[tensor](../reference/schemas/schemas.html#tensor),
 query with a tensor of same type and create a scalar using a tensor product as the rank score.
 We use a [mapped](../reference/ranking/tensor.html#general-literal-form) query tensor,
 where the document name is the address in the tensor, using a value of 1 for each in-link:
@@ -172,7 +172,7 @@ where the document name is the address in the tensor, using a value of 1 for eac
 ```
 
 {% include important.html content="Vespa cannot know the query tensor type from looking at it -
-it must be configured using [inputs](../reference/applications/schemas.html#inputs)."%}
+it must be configured using [inputs](../reference/schemas/schemas.html#inputs)."%}
 
 As the in-link data is represented in a weightedset,
 we use the [tensorFromWeightedSet](../reference/ranking/rank-features.html#document-features)
@@ -317,7 +317,7 @@ Here, `num_inlinks` and `rank_score` are defined in a rank profile we used earli
 In the results, observe that no document has a _rankingExpression(num_inlinks)_ less than or equal to 10.0,
 meaning all such documents were purged in the first ranking phase due to the `rank-score-drop-limit`.
 Normally, the `rank-score-drop-limit` is not used, as the `keep-rank-count` is most important.
-Read more in the [reference](../reference/applications/schemas.html#rank-score-drop-limit).
+Read more in the [reference](../reference/schemas/schemas.html#rank-score-drop-limit).
 
 For a dynamic limit, pass a ranking feature like `query(threshold)`
 and use an `if` statement to check if the score is above the threshold or not -
@@ -326,7 +326,7 @@ Read more in [ranking expressions](ranking-expressions-features.html#the-if-func
 
 Two-phased ranking is a performance optimization - this guide is about functionality,
 so the rest of the examples will only be using one ranking phase.
-Read more in [first-phase](../reference/applications/schemas.html#firstphase-rank).
+Read more in [first-phase](../reference/schemas/schemas.html#firstphase-rank).
 
 
 ## Retrieval: AND, OR, weakAnd

@@ -24,12 +24,12 @@ this guide outlines strategies and tradeoffs to create good-looking result sets.
 
 
 ## Diversity
-You can use the [diversity](../reference/applications/schemas.html#diversity) element in the schema definition
+You can use the [diversity](../reference/schemas/schemas.html#diversity) element in the schema definition
 to filter out non-diverse results before second-phase ranking (and during match-phase if used):
 
-* The [attribute](../reference/applications/schemas.html#diversity-attribute) value is the name of the attribute field
+* The [attribute](../reference/schemas/schemas.html#diversity-attribute) value is the name of the attribute field
   that holds the value to diversify over (think of the domain in the example above).
-* [min-groups](../reference/applications/schemas.html#diversity-min-groups) is the minimum number of different values
+* [min-groups](../reference/schemas/schemas.html#diversity-min-groups) is the minimum number of different values
   of that attribute that should be included in the result set (when available).
 
 Example:
@@ -83,7 +83,7 @@ and means the second phase will be used to pick the best result also in each gro
 ## Match-phase diversity
 Diversity above runs over the result after first-phase ranking.
 
-The [match-phase](../reference/applications/schemas.html#match-phase) feature lets you increase performance
+The [match-phase](../reference/schemas/schemas.html#match-phase) feature lets you increase performance
 by limiting hits exposed to first-phase ranking to the highest (lowest) values of some attribute.
 Adding the diversity element when using match-phase means that the diversity field attribute
 is also used to produce the set of matches returned from the match-phase attribute.

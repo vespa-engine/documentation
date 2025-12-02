@@ -239,7 +239,7 @@ field chunk_embeddings type tensor<int8>(chunk{}, x[96]) {
 ```
 
 In Vespa, we can specify which chunks to be returned with a summary feature, see 
-[docs](../../reference/applications/schemas.html#select-elements-by) for details. For this blueprint, 
+[docs](../../reference/schemas/schemas.html#select-elements-by) for details. For this blueprint, 
 we will return the top 3 chunks based on the similarity score of the chunk embeddings, 
 which is calculated in the ranking phase. Note that this feature could be any chunk-level 
 summary feature defined in your rank-profile.
@@ -309,7 +309,7 @@ document-summary top_3_chunks {
 ### Use multiple text fields, consider multiple embeddings
 
 We recommend indexing different textual content as separate indexes.
-These can be searched together, using [field-sets](../../reference/applications/schemas.html#fieldset)
+These can be searched together, using [field-sets](../../reference/schemas/schemas.html#fieldset)
 
 In our schema, this is exemplified by the sections below, which define the `title` and `chunks` fields as separate indexed text fields.
 
@@ -681,7 +681,7 @@ field chunk_embeddings type tensor<bfloat16>(chunk{}, x) {
 For example, if you want to calculate `closeness` for a paged embedding vector in first-phase, consider configuring 
 your retrieval operators (typically `weakAnd` and/or `nearestNeighbor`, optionally combined with filters) so that not 
 too many hits are matched. Another option is to enable match-phase limiting, see 
-[match-phase docs](../../reference/applications/schemas.html#match-phase). 
+[match-phase docs](../../reference/schemas/schemas.html#match-phase). 
 In essence, you restrict the number of matches by specifying an attribute field.
 
 ### Consider float-binary for ranking
@@ -732,7 +732,7 @@ rank-profile base-features {
 ### Use complex linguistics/recall only for precision
 
 Vespa gives you extensive control over [linguistics](../../linguistics/linguistics.html).
-You can decide [match mode](../../reference/applications/schemas.html#match), stemming, normalization, or control derived tokens.
+You can decide [match mode](../../reference/schemas/schemas.html#match), stemming, normalization, or control derived tokens.
 
 It is also possible to use more specific operators than [weakAnd](../../reference/querying/yql.html#weakand) 
 to match only close occurrences ([near](../../reference/querying/yql.html#near)/ 
@@ -989,7 +989,7 @@ rank-profile optimized inherits baseline {
   }
 ```
 
-See the [reference](../../reference/applications/schemas.html#weakand) for more details on the `weakAnd` parameters.
+See the [reference](../../reference/schemas/schemas.html#weakand) for more details on the `weakAnd` parameters.
 These can also be set as query parameters.
 
 1. As already [mentioned](#consider-binary-vectors-for-recall), consider binary vectors for your embeddings.
@@ -1597,7 +1597,7 @@ providing the precision needed for effective LLM context while maintaining reaso
 
 ## (Optional) Global-phase ranking
 
-We also have the option of configuring [global-phase](../../reference/applications/schemas.html#globalphase-rank) ranking, which can rerank the top k 
+We also have the option of configuring [global-phase](../../reference/schemas/schemas.html#globalphase-rank) ranking, which can rerank the top k 
 (as set by `rerank-count` parameter) documents from the second-phase ranking.
 
 Common options for global-phase are [cross-encoders](../../ranking/cross-encoders.html) or another GBDT model, trained for 

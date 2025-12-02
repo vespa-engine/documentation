@@ -93,7 +93,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     injected to the component during construction. This application uses custom
     config to set up the Vespa host details for the handler.
 
-* [Partial update](../../reference/writing/document-json-format.html#update)
+* [Partial update](../../reference/schemas/document-json-format.html#update)
 
     With Vespa, you can make changes to an existing document without submitting
     the full document. Examples are setting the value of a single field, adding
@@ -142,7 +142,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     lexical matching. Both the keyword and vector matching is constrained by the filters such as brand, price or
     category. 
 
-* [Ranking functions](../../reference/applications/schemas.html#function-rank)
+* [Ranking functions](../../reference/schemas/schemas.html#function-rank)
 
     Ranking functions are contained in rank profiles and can be referenced
     as part of any ranking expression from either first-phase, second-phase, global-phase or

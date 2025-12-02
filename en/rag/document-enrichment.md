@@ -341,7 +341,7 @@ For example, a JSON schema for `field questions type array<string>` in document 
 ```
 
 Constructed schemas for different data types correspond to the 
-[document JSON format](../reference/writing/document-json-format.html#) used for feeding.
+[document JSON format](../reference/schemas/document-json-format.html#) used for feeding.
 The following field types are supported:
 - string
 - bool
