@@ -132,7 +132,7 @@ so that queries does not need to mention all three fields.
 We also include a default rank profile (this is the implicit default rank profile)
 using the Vespa [nativeRank](../ranking/nativerank.html) text matching rank feature. 
 
-Along with the schema, we also need a [services.xml](../reference/services/applications/services.html) file
+Along with the schema, we also need a [services.xml](../reference/applications/services/services.html) file
 to make up a Vespa [application package](../reference/applications/application-packages.html):
 
 <pre data-test="file" data-path="my-app/services.xml">

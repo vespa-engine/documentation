@@ -22,7 +22,7 @@ See [#15762](https://github.com/vespa-engine/vespa/issues/15762) for other node 
 ## Configuration
 
 1. ZooKeeper must be explicitly enabled in the [container cluster
-configuration](../reference/services/applications/container.html#zookeeper).
+configuration](../reference/applications/services/container.html#zookeeper).
 
 2. The application must specify a dependency on `zkfacade`. Example for `pom.xml`:
    
