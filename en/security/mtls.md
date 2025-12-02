@@ -13,7 +13,7 @@ redirect_from:
 to enable secure, tamper-proof communication over the network.
 This document describes the TLS functionality in Vespa and how to configure it.
 When properly configured, TLS ensures only trusted Vespa services can talk to each other.
-See accompanying [reference](../reference/release-notes/mtls.md) for details on configuration syntax.
+See accompanying [reference](../reference/security/mtls.md) for details on configuration syntax.
 
 By default, all communication between self-hosted Vespa nodes is *unauthenticated* and *unencrypted*.
 This means anyone with network access can read and write data and potentially execute commands on the system.
@@ -128,7 +128,7 @@ In that case simply having a valid certificate is not sufficient to be used as a
 You can constrain which certificates may access the internal Vespa service by using *authorization rules*.
 These are consulted as part of every TLS handshake and must pass before any connection can be established.
 
-Authorization rules are specified as part of the JSON configuration file using the top-level [`authorized-peers`](../reference/release-notes/mtls.md#top-level-elements) member.
+Authorization rules are specified as part of the JSON configuration file using the top-level [`authorized-peers`](../reference/security/mtls.md#top-level-elements) member.
 
 #### Example
 
@@ -169,7 +169,7 @@ Our TLS config file implementing these rules may look like this:
 }
 ```
 
-See the [reference documentation](../reference/release-notes/mtls.md#peer-authorization-rules) for details on syntax and semantics.
+See the [reference documentation](../reference/security/mtls.md#peer-authorization-rules) for details on syntax and semantics.
 
 
 ### Automatic reloading of crypto material
@@ -272,7 +272,7 @@ $ openssl s_client -connect <hostname>:<port> \
 Vespa enables the [HTTPS endpoint identification algorithm](https://datatracker.ietf.org/doc/html/rfc2818#section-3) by default.
 This extra verification can only be used if all certificates have their respective host's IP addresses and hostnames
 in the Subject / Subject Alternative Names extensions.
-[Disable hostname validation](../reference/release-notes/mtls.md#top-level-elements) if this is not the case.
+[Disable hostname validation](../reference/security/mtls.md#top-level-elements) if this is not the case.
 
 
 ## Appendix A: setting up with a self-signed Certificate Authority
