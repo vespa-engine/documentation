@@ -1,13 +1,14 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Mutually authenticated TLS (mTLS) reference"
+redirect_from:
+  - en/reference/mtls.html
 ---
 
 {% include note.html content="See [Securing a self-hosted Vespa application with mutually authenticated TLS (mTLS)](../../security/mtls.md) 
 for a practical guide." %}
 
 ## Environment variables
-
 
 <table class="table table-striped">
     <tr><th>Name</th><th>Description</th></tr>
@@ -22,6 +23,7 @@ for a practical guide." %}
 </table>
 
 ### TLS mixed mode
+
 Possible TLS mixed mode settings for `VESPA_TLS_INSECURE_MIXED_MODE`:
 
 <table class="table table-striped">
