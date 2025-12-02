@@ -37,7 +37,7 @@ there are more resource dimensions like GPU use, or CPU architecture, available.
 Optimizing for cost/performance is therefore easy.
 Simplified, applications can be CPU, disk, or memory bound.
 A general rule of thumb is to be bound by the most expensive component, often CPU.
-Refer to the node resource [reference](../reference/services/applications/services.html#resources) for all dimensions.
+Refer to the node resource [reference](../reference/applications/services/services.html#resources) for all dimensions.
 
 
 ## Resource suggestions

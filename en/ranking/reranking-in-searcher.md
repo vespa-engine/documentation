@@ -131,7 +131,7 @@ public class ReRankingSearcher extends Searcher {
 }
 </pre>
 
-[services.xml](../reference/services/applications/services.html) is needed 
+[services.xml](../reference/applications/services/services.html) is needed 
 to make up a Vespa [application package](../reference/applications/application-packages.html). 
 Here we include the custom searcher in the `default` [search chain](../applications/chaining.html):
 

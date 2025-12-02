@@ -42,7 +42,7 @@ which demonstrates how to set up a local LLM.
 
 To set up the required inference engine for running your model, you need to
 define a `LocalLLM` component in your application's
-[services.xml](../reference/services/applications/services.html):
+[services.xml](../reference/applications/services/services.html):
 
 ```xml
 <services version="1.0">
@@ -268,7 +268,7 @@ To set up GPUs on self-hosted, please refer to [Container GPU setup](../operatio
 for more details.
 
 It is very easy to use GPU acceleration on Vespa Cloud. To enable GPU
-inference, you need to [request GPUs](../reference/services/applications/services.html#gpu) on the container
+inference, you need to [request GPUs](../reference/applications/services/services.html#gpu) on the container
 nodes. For a more practical introduction, please take a look at the 
 [RAG sample app](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)
 which also demonstrates how to evaluate the LLM on GPUs on Vespa Cloud.
