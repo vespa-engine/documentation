@@ -31,7 +31,7 @@ Remove the CI job that builds and deploys application packages, if any.
 To remove an instance or a deployment to a region from an application:
 
 1. Remove the `region` from `prod`, or the `instance` from `deployment`
-   in [deployment.xml](../reference/deployment.html#instance):
+   in [deployment.xml](../reference/applications/deployment.html#instance):
 
     ```xml
     <deployment version="1.0">
@@ -43,7 +43,7 @@ To remove an instance or a deployment to a region from an application:
     </deployment>
     ```
 
-2.  Add or modify [validation-overrides.xml](../reference/validation-overrides.html),
+2.  Add or modify [validation-overrides.xml](../reference/applications/validation-overrides.html),
     allowing Vespa Cloud to remove production instances:
 
     ```xml

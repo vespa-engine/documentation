@@ -142,7 +142,7 @@ To do this correctly, one should probably calculate this offline so a re-feed do
     lexical matching. Both the keyword and vector matching is constrained by the filters such as brand, price or
     category. 
 
-* [Ranking functions](../../reference/schema-reference.html#function-rank)
+* [Ranking functions](../../reference/applications/schemas.html#function-rank)
 
     Ranking functions are contained in rank profiles and can be referenced
     as part of any ranking expression from either first-phase, second-phase, global-phase or

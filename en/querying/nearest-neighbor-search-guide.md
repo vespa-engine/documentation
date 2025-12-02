@@ -446,7 +446,7 @@ field is populated by Vespa's [embedding](../rag/embedding.html) functionality. 
 text embedding model (described in this [blog post](https://blog.vespa.ai/enhancing-vespas-embedding-management-capabilities/)). 
 
 Note that the `closeness` rank-profile defines two
-query input tensors using [inputs](../reference/schema-reference.html#inputs). 
+query input tensors using [inputs](../reference/applications/schemas.html#inputs). 
 
 <pre>
 field embedding type tensor&lt;float&gt;(x[384]) {
@@ -1152,11 +1152,11 @@ but with a varying distance.
 With restrictive filters, the neighbors that are returned might be of low quality (far distance). 
 One way to combat this effect is to use the [distanceThreshold](../reference/querying/yql.html#distancethreshold)
 query annotation parameter of the `nearestNeighbor` query operator. 
-The value of the `distance` depends on the [distance-metric](../reference/schema-reference.html#distance-metric) used. 
+The value of the `distance` depends on the [distance-metric](../reference/applications/schemas.html#distance-metric) used. 
 By adding the [distance(field,embedding)](../reference/ranking/rank-features.html#distance(dimension,name)) rank-feature to
 the `match-features` of the `closeness` rank-profiles, it is possible to analyze what distance 
 could be considered too far. 
-See [match-features reference](../reference/schema-reference.html#match-features).
+See [match-features reference](../reference/applications/schemas.html#match-features).
 
 
 Note that distance of 0 is perfect, while distance of 1 is distant. The `distanceThreshold` 
@@ -1417,7 +1417,7 @@ The query returns the following result:
     }
 }{% endhighlight %}</pre>
 
-The result hits also include [match-features](../reference/schema-reference.html#match-features) which 
+The result hits also include [match-features](../reference/applications/schemas.html#match-features) which 
 can be used for feature logging for learning to rank, or to simply
 debug the various feature components used to calculate the `relevance` score. 
 
@@ -2009,7 +2009,7 @@ which can be used to control the filtering behavior. The parameters are
 - [ranking.matching.approximateThreshold](../reference/api/query.html#ranking.matching) default 0.05
 
 These parameters can be used per query or configured in the rank-profile in the 
-[document schema](../reference/schema-reference.html#post-filter-threshold). 
+[document schema](../reference/applications/schemas.html#post-filter-threshold). 
 
 The following query runs with the default setting for *ranking.matching.postFilterThreshold* which is 1, which means, 
 do not perform post-filtering, use *pre-filtering* strategy:

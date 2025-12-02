@@ -241,7 +241,7 @@ The `document` is wrapped inside another element called `schema`.
 The name following these elements, here `news`, must be exactly the same for both.
 
 This document contains several fields. Each field has a
-[type](../../reference/schema-reference.html#field), such as `string`, `int`, or
+[type](../../reference/applications/schemas.html#field), such as `string`, `int`, or
 `tensor`. Fields also have properties. For instance, property `indexing`
 configures the _indexing pipeline_ for a field, which defines how Vespa will
 treat input during indexing — see [indexing
@@ -255,7 +255,7 @@ indexing pipeline is separated by the pipe character '|':
 - `summary:` Lets this field be part of the [document
   summary](../../querying/document-summaries.html) in the result set.
 
-Here, we also use the [index](../../reference/schema-reference.html#index) property,
+Here, we also use the [index](../../reference/applications/schemas.html#index) property,
 which sets up parameters for how Vespa should index the field.
 For the `title`, `abstract`, and `body` fields, we configure Vespa to set up an
 index compatible with [bm25 ranking](../../reference/ranking/rank-features.html#bm25) for text search.
