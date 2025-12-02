@@ -27,7 +27,7 @@ Content nodes can be deployed in different topologies - example using 6 nodes:
 
 Vespa Cloud requires a redundancy of at least 2.
 In this guide, it is assumed that redundancy, configured as
-[min-redundancy](../reference/services/content.html#min-redundancy), is set to n=3.
+[min-redundancy](../reference/services/applications/content.html#min-redundancy), is set to n=3.
 Redundancy is a function of data availability / criticality and cost, and varies from application to application.
 
 Redundancy is for storing a document replica on a node.

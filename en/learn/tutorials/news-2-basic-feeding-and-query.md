@@ -122,7 +122,7 @@ We'll go through them here, starting with the specification of services.
 
 ### Services Specification
 
-The [services.xml](../../reference/services/services.html) file defines the services that
+The [services.xml](../../reference/services/applications/services.html) file defines the services that
 make up the Vespa application — which services to run and how many nodes per
 service. Write the following to `news/my-app/services.xml`:
 
@@ -161,13 +161,13 @@ Quite a lot is set up here:
 - `<document-api>` sets up the [document
   endpoint](../../reference/api/document-v1.html) for feeding and visiting.
 - `<nodes>` defines the nodes required per service.  (See the
-  [reference](../../reference/services/container.html) for more on container
+  [reference](../../reference/services/applications/container.html) for more on container
   cluster setup).
 - `<content>` The stateful content cluster
 - `<redundancy>` denotes how many copies to store of each document.
 - `<documents>` assigns the document types in the _schema_ — the content
   cluster capacity can be increased by adding node elements — see [elasticity](../../content/elasticity.html). (See also the
-  [reference](../../reference/services/content.html) for more on content cluster
+  [reference](../../reference/services/applications/content.html) for more on content cluster
   setup.)
 
 
