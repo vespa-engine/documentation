@@ -757,7 +757,7 @@ For this sample application, we set up an evaluation script that compares three 
 
 {% include note.html content="Note that this is only generic suggestion for and that you are of course free to include both 
 [filter clauses](../../reference/querying/yql.html#where), [grouping](../../grouping), 
-[predicates](../../querying/predicate-fields.html), [geosearch](../../geo-search) etc. to support your specific use cases." %}
+[predicates](../../schemas/predicate-fields.html), [geosearch](../../geo-search) etc. to support your specific use cases." %}
 
 It is recommended to use a ranking profile that does not use any first-phase ranking, to run the match-phase evaluation faster.
 
