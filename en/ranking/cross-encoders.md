@@ -34,7 +34,7 @@ $ optimum-cli export onnx --task text-classification -m BAAI/bge-reranker-base r
 </pre>
 
 These two example ranking models use different 
-language model [tokenization](../reference/embedding-reference.html#huggingface-tokenizer-embedder) and also
+language model [tokenization](../reference/rag/embedding.html#huggingface-tokenizer-embedder) and also
 different transformer inputs.
 
 After the above Optimum export command you have two important
@@ -68,7 +68,7 @@ created by Optimum to the Vespa [application package](../basics/applications.htm
 ## Configure tokenizer embedder
 
 To speed up inference, Vespa avoids re-tokenizing the document tokens, so we need to configure the 
-[huggingface-tokenizer-embedder](../reference/embedding-reference.html#huggingface-tokenizer-embedder) 
+[huggingface-tokenizer-embedder](../reference/rag/embedding.html#huggingface-tokenizer-embedder) 
 in the `services.xml` file:
 
 <pre>

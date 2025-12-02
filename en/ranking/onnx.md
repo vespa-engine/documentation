@@ -206,7 +206,7 @@ The [model-exporting](https://github.com/vespa-engine/sample-apps/tree/master/ex
 example includes two scripts to export models and vocabulary files using the default expected input and output names
 for embedders using ONNX models.
 The input and output names to the embedder are tunable via the `transformer-`parameters in the
-[config of the embedder in question](../reference/embedding-reference.html).
+[config of the embedder in question](../reference/rag/embedding.html).
 
 
 ### Debugging ONNX models
@@ -233,9 +233,9 @@ model meta-data:
 ```
 
 The above model input and output names conform with the
-default [bert-embedder parameters](../reference/embedding-reference.html#bert-embedder-reference-config).
+default [bert-embedder parameters](../reference/rag/embedding.html#bert-embedder-reference-config).
 
-Similarly, a model for the [hugging-face-embedder parameters](../reference/embedding-reference.html#huggingface-embedder-reference-config) defaults:
+Similarly, a model for the [hugging-face-embedder parameters](../reference/rag/embedding.html#huggingface-embedder-reference-config) defaults:
 ```
 model meta-data:
   input[0]: 'input_ids' long[batch][sequence]
@@ -270,7 +270,7 @@ Error: service 'query' is unavailable: services have not converged
 ```
 
 Embedders supports changing the input and output names,
-consult [embedding reference](../reference/embedding-reference.html) documentation.
+consult [embedding reference](../reference/rag/embedding.html) documentation.
 
 
 ### Using vespa-analyze-onnx-model
