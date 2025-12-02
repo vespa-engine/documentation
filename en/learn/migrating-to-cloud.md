@@ -83,7 +83,7 @@ and add a public certificate to it:
 ```
 
 The command also installs a key/certificate pair in the Vespa CLI home directory, see
-[vespa auth cert](../reference/vespa-cli/vespa_auth_cert.html).
+[vespa auth cert](../reference/clients/vespa-cli/vespa_auth_cert.html).
 This pair is used in subsequent accesses to the data plane for document and query operations.
 
 
