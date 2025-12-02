@@ -872,7 +872,7 @@ Waiting up to 300 seconds for query service to become available ...
 To enable `fast-search`, content node(s) needs to be restarted to re-build the fast-search data structures
 for the attribute. 
 
-The following uses [vespa-sentinel-cmd command tool](/en/reference/tools-self-managing.html#vespa-sentinel-cmd)
+The following uses [vespa-sentinel-cmd command tool](/en/reference/operations/tools-self-managing.html#vespa-sentinel-cmd)
 to restart the searchnode process:
 
 <div class="pre-parent">

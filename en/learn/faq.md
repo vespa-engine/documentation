@@ -489,7 +489,7 @@ injected and use that to get documents by id instead of the HTTP API.
 Vespa uses Java 17 - it will support 20 some time in the future.
 
 ### How to write debug output from a custom component?
-Use `System.out.println` to write text to the [vespa.log](../reference/logs.html).
+Use `System.out.println` to write text to the [vespa.log](../reference/operations/log-files.html).
 
 
 
@@ -744,7 +744,7 @@ the hosts wait for ZooKeeper in a catch 22 -
 see [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting).
 
 ### How to display vespa.log?
-Use [vespa-logfmt](../reference/tools-self-managing.html#vespa-logfmt) to dump logs.
+Use [vespa-logfmt](../reference/operations/tools-self-managing.html#vespa-logfmt) to dump logs.
 If Vespa is running in a local container (named "vespa"), run `docker exec vespa vespa-logfmt`.
 
 ### How to fix encoding problems in document text?
