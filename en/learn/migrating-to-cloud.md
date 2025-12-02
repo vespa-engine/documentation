@@ -90,7 +90,7 @@ This pair is used in subsequent accesses to the data plane for document and quer
 ### 5. Vespa Cloud Enclave Only: Add Account
 {% include note.html content='Skip this step unless you are using [Vespa Cloud Enclave](../operations/enclave/enclave.html).'%}
 
-Add [deployment.xml](../reference/deployment.html#deployment) with your cloud provider account -
+Add [deployment.xml](../reference/applications/deployment.html#deployment) with your cloud provider account -
 This ensures the deployment uses resources from the correct account - examples:
 ```xml
 <deployment version="1.0" cloud-account="gcp:project-name">

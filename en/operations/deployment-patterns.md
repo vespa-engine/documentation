@@ -95,7 +95,7 @@ Deploy to a (downscaled) instance first, and add a delay before propagating to l
 ```
 
 ### Deployment variants 
-[Deployment variants](../reference/deployment-variants.html) are useful to set up a downscaled instance.
+[Deployment variants](deployment-variants.html) are useful to set up a downscaled instance.
 In [services.xml](../reference/services/services.html), override settings per instance:
 ```xml
 <nodes deploy:instance="canary" count="2">

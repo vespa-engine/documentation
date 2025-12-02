@@ -64,7 +64,7 @@ will let you know when a new release is available.
 
 By default, all applications are deployed on resources in Vespa Cloud accounts.
 To deploy in your Enclave account,
-update [deployment.xml](../../reference/deployment.html) to reference the account used in step 1:
+update [deployment.xml](../../reference/applications/deployment.html) to reference the account used in step 1:
 
 ```xml
 <deployment version="1.0" cloud-account="gcp:a-project-id">

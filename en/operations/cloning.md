@@ -106,7 +106,7 @@ https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/d
 </pre>
   </li>
   <li>
-    Deployments to the <code>prod</code> environment requires <a href="/en/reference/deployment.html">deployment.xml</a> -
+    Deployments to the <code>prod</code> environment requires <a href="/en/reference/applications/deployment.html">deployment.xml</a> -
     select which <a href="https://cloud.vespa.ai/en/reference/zones">zone</a> to deploy to:
 <pre>
 $ cat &lt;&lt;EOF &gt; deployment.xml

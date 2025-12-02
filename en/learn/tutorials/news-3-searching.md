@@ -345,7 +345,7 @@ However, string fields with `indexing:attributes` do not support `match:text`,
 only *exact matching* or *prefix matching*.
 Exact matching is the default, and, as the name implies,
 it requires you to search for the exact contents of the field in order to get a match.
-See supported [match](../../reference/schema-reference.html#match) modes
+See supported [match](../../reference/applications/schemas.html#match) modes
 and the differences in support between `attribute` and `index`.  
 
 #### Memory usage
@@ -522,7 +522,7 @@ schema news {
   Note that the weight here, `10`, is set by observation.
   A better approach would be to learn such values using machine learning.
 
-More information can be found in the [schema reference](../../reference/schema-reference.html#rank-profile).
+More information can be found in the [schema reference](../../reference/applications/schemas.html#rank-profile).
 
 Deploy the _popularity_ rank profile:
 

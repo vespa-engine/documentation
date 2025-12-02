@@ -49,7 +49,7 @@ $ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout key.pem -out sec
 ```
 
 The certificate is placed inside the application package in
-[security/clients.pem](../reference/application-packages-reference.html). Make sure
+[security/clients.pem](../reference/applications/application-packages.html). Make sure
 `clients.pem` is placed correctly if the certificate is created with OpenSSL,
 while the Vespa CLI will handle this automatically.
 
