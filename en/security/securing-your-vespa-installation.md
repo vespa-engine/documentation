@@ -72,7 +72,6 @@ If you do not set up TLS with restrictive filter logic, you should restrict the
 container port in the same way as you would the rest of the Vespa hosts.
 
 
-
 ## Locking down directory permissions
 
 All Vespa processes run under the Linux user given by `$VESPA_USER` and store their
@@ -85,7 +84,6 @@ to be readable by the container process only.
 Vespa does not have application-level support for encryption of on-disk document stores or
 indexes. This would typically be implemented through file-system or storage-level (e.g. remote cloud storage)
 encryption.
-
 
 
 ## Securing Vespa with mutually authenticated TLS (mTLS)
