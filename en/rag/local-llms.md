@@ -70,7 +70,7 @@ This can be helpful for instance if you have multiple LLMs that don't fit in the
 available GPU memory, or you would like to offload LLM inference to dedicated
 nodes for performance reasons.
 
-The [`model`](../reference/config-files.html#parameter-types) configuration
+The [`model`](../reference/applications/config-files.html#parameter-types) configuration
 parameter can be either set to a known `model-id` for Vespa Cloud, a `url` or a
 `path` to the model inside the application package. Usually, however, LLM files
 are too large to practically be included in the application package, so the

@@ -468,7 +468,7 @@ it is more flexible to write application logic in a JVM-supported language, usin
 ### How can I batch-get documents by ids in a Searcher
 A [Searcher](../applications/searchers.html) intercepts a query and/or result.
 To get a number of documents by id in a Searcher or other component like a [Document processor](../applications/document-processors.html),
-you can have an instance of [com.yahoo.documentapi.DocumentAccess](../reference/component-reference.html#injectable-components)
+you can have an instance of [com.yahoo.documentapi.DocumentAccess](../reference/applications/components.html#injectable-components)
 injected and use that to get documents by id instead of the HTTP API.
 
 <!-- How to add custom code to a Vespa application? -->
