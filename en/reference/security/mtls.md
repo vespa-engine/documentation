@@ -5,7 +5,7 @@ redirect_from:
   - en/reference/mtls.html
 ---
 
-{% include note.html content="See [Securing a self-hosted Vespa application with mutually authenticated TLS (mTLS)](../../security/mtls.md) 
+{% include note.html content="See [Securing a self-hosted Vespa application with mutually authenticated TLS (mTLS)](../../security/mtls) 
 for a practical guide." %}
 
 ## Environment variables
