@@ -98,7 +98,7 @@ see the [pin results example](../ranking/multivalue-query-operators.html#pin-res
 ## Documents
 
 ### What limits apply to document size?
-There is a [maximum document size](../reference/services/content.html#max-document-size) of 128 MiB,
+There is a [maximum document size](../reference/services/applications/content.html#max-document-size) of 128 MiB,
 which is configurable per content cluster in services.xml.
 
 ### Is there any size limitation for multivalued fields?
@@ -531,7 +531,7 @@ It is for unstructured text.
 
 It is possible to guarantee that fields that are defined with `index`
 have both the dictionary and the postings in memory by changing from `mmap` to `populate`,
-see [index > io > search](../reference/services/content.html#index-io-search).
+see [index > io > search](../reference/services/applications/content.html#index-io-search).
 Make sure that the content nodes run on nodes with plenty of memory available,
 during index switch the memory footprint will 2x.
 Familiarity with Linux tools like `pmap` can help diagnose what is mapped and if it’s resident or not.
@@ -565,7 +565,7 @@ using features like [feed block](../writing/feed-block.html).
 
 When deleting documents, one can observe a slight <span style="text-decoration: underline">increase</span> in memory.
 A deleted document is represented using a [tombstone](../operations/self-managed/admin-procedures.html#content-cluster-configuration),
-that will later be removed, see [removed-db-prune-age](../reference/services/content.html#removed-db-prune-age).
+that will later be removed, see [removed-db-prune-age](../reference/services/applications/content.html#removed-db-prune-age).
 When running garbage collection,
 the summary store is scanned using mmap and both VIRT and page cache memory usage increases.
 
@@ -653,7 +653,7 @@ Yes just add a `deleted` attribute, add [fast-search](../content/attributes.html
 and create a searcher which adds an `andnot deleted` item to queries.
 
 ### Can we configure a grace period for bucket distribution so that buckets are not redistributed as soon as a node goes down?
-You can set a [transition-time](../reference/services/content.html#transition-time) in services.xml
+You can set a [transition-time](../reference/services/applications/content.html#transition-time) in services.xml
 to configure the cluster controller how long a node is to be kept in maintenance mode
 before being automatically marked down.
 

@@ -82,7 +82,7 @@ complete. Once a write is complete, all index updates are visible.
 
 Searches may observe transient loss of coverage when nodes go down. Vespa will
 restore coverage automatically when this happens. How fast this happens depends
-on the configured [searchable-copies](../reference/services/content.html#searchable-copies) value.
+on the configured [searchable-copies](../reference/services/applications/content.html#searchable-copies) value.
 
 If replicas diverge during a Get, Vespa performs a read-repair. This fetches the
 requested document from all divergent replicas. The client then receives the

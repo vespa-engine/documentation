@@ -211,7 +211,7 @@ Both profiles specify a single [ranking phase](../../ranking/phased-ranking.html
 
 ### Services Specification
 
-The [services.xml](../../reference/services/services.html) defines the services that make up
+The [services.xml](../../reference/services/applications/services.html) defines the services that make up
 the Vespa application — which services to run and how many nodes per service.
 Write the following to `app/services.xml`:
 

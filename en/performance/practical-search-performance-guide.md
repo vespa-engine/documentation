@@ -281,7 +281,7 @@ This is a database-style matching mode, preserving punctuation characters.
 
 ### Services Specification
 
-The [services.xml](../reference/services/services.html) defines the services that make up
+The [services.xml](../reference/services/applications/services.html) defines the services that make up
 the Vespa application — which services to run and how many nodes per service.
 
 <pre data-test="file" data-path="app/services.xml">
@@ -1645,7 +1645,7 @@ Multithreaded search and ranking can improve query latency significantly and mak
 use of multi-cpu core architectures. 
 
 The following adds a `tuning` element to `services.xml` overriding 
-[requestthreads:persearch](../reference/services/content.html#requestthreads-persearch).
+[requestthreads:persearch](../reference/services/applications/content.html#requestthreads-persearch).
 The default number of threads used `persearch` is one. 
 
 <pre data-test="file" data-path="app/services.xml">
