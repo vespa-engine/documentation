@@ -103,7 +103,7 @@ Vespa provides a [command line tool](../reference/tools-self-managing.html#vespa
 The order in which the models are specified determines the model precedence, see [model resolution](#model-resolution) for details.
 
 In addition to adding models in [services.xml](../reference/services/search.html#significance),
-the `significance` feature must be enabled in the [`rank-profile` section of the schema](../reference/schema-reference.html#significance), e.g.
+the `significance` feature must be enabled in the [`rank-profile` section of the schema](../reference/applications/schemas.html#significance), e.g.
 
 ```xml
 schema example {

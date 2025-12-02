@@ -68,7 +68,7 @@ refer to the README for stack-specific instructions.
 
 By default, all applications are deployed on resources in Vespa Cloud accounts.
 To deploy in your Enclave account,
-update [deployment.xml](../../reference/deployment.html) to reference the account used in step two:
+update [deployment.xml](../../reference/applications/deployment.html) to reference the account used in step two:
 
 ```xml
 <deployment version="1.0" cloud-account="aws:123456789012">

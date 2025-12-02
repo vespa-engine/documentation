@@ -262,7 +262,7 @@ Note that, as a first attempt, we just multiply the nearest-neighbor with the ca
 This is not necessarily the correct way to combine these values,
 but we'll get back to that in a bit.
 
-We've added a section for [summary features](../../reference/schema-reference.html#summary-features).
+We've added a section for [summary features](../../reference/applications/schemas.html#summary-features).
 This is simply a list of features that will be returned with the hit when using this rank profile.
 Recall that we can specify which features should be returned in the summary
 with the `indexing: summary` statement with each field.

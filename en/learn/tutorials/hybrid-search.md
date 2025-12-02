@@ -162,11 +162,11 @@ A lot is happening here; let us go through it in detail.
 
 #### Document type and fields
 The `document` section contains the fields of the document, their types,
-and how Vespa should index and [match](../../reference/schema-reference.html#match) them.
+and how Vespa should index and [match](../../reference/applications/schemas.html#match) them.
 
 The field property `indexing` configures the _indexing pipeline_ for a field.
 For more information, see [schemas - indexing](../../basics/schemas.html#document-fields).
-The [string](../../reference/schema-reference.html#string) data type represents both unstructured and structured texts, 
+The [string](../../reference/applications/schemas.html#string) data type represents both unstructured and structured texts, 
 and there are significant differences between [index and attribute](../../querying/text-matching.html#index-and-attribute). The above
 schema includes default `match` modes for `attribute` and `index` property for visibility.  
 
@@ -177,9 +177,9 @@ text fields. Read more in [linguistics](../../linguistics/linguistics.html).
 
 #### Fieldset for matching across multiple fields
 
-[Fieldset](../../reference/schema-reference.html#fieldset) allows searching across multiple fields. Defining `fieldset` does not 
+[Fieldset](../../reference/applications/schemas.html#fieldset) allows searching across multiple fields. Defining `fieldset` does not 
 add indexing/storage overhead. String fields grouped using fieldsets must share the same 
-[match](../../reference/schema-reference.html#match) and [linguistic processing](../../linguistics/linguistics.html) settings because
+[match](../../reference/applications/schemas.html#match) and [linguistic processing](../../linguistics/linguistics.html) settings because
 the query processing that searches a field or fieldset uses *one* type of transformation.
 
 #### Embedding inference
@@ -195,7 +195,7 @@ field embedding type tensor<bfloat16>(v[384]) {
 ```
 The `indexing` expression creates the input to the `embed` inference call (in our example the concatenation of the title and the text field). Since
 the dataset is small, we do not specify `index` which would build [HNSW](../../querying/approximate-nn-hnsw) data structures for faster (but approximate) vector search. This guide uses [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) as the text embedding model. The model is
-trained with cosine similarity, which maps to Vespa's `angular` [distance-metric](../../reference/schema-reference.html#distance-metric) for 
+trained with cosine similarity, which maps to Vespa's `angular` [distance-metric](../../reference/applications/schemas.html#distance-metric) for 
 nearestNeighbor search. 
 
 #### Ranking to determine matched documents ordering
@@ -700,7 +700,7 @@ These top-k query operators use `index` structures to accelerate the query evalu
 search, the following Vespa top-k query operators are relevant: 
 
 - YQL `{targetHits:k}nearestNeighbor()` for dense representations (text embeddings) using 
-a configured [distance-metric](../../reference/schema-reference.html#distance-metric) as the scoring function. 
+a configured [distance-metric](../../reference/applications/schemas.html#distance-metric) as the scoring function. 
 - YQL `{targetHits:k}userInput(@user-query)` which by default uses [weakAnd](../../ranking/wand.html) for sparse representations.
 
 

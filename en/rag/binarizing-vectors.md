@@ -329,7 +329,7 @@ Example embeddings:
 | [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]         | [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]   |                -119 |
 
 
-Use [matchfeatures](../reference/schema-reference.html#match-features)
+Use [matchfeatures](../reference/applications/schemas.html#match-features)
 to debug ranking (see ranking profile `app_ranking_bin` below):
 ```json
 "matchfeatures": {

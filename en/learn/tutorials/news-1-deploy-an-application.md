@@ -261,7 +261,7 @@ $ docker exec vespa vespa-start-services
 </pre>
 </div>
 
-If a [restart is required](../../reference/schema-reference.html#changes-that-require-restart-but-not-re-feed)
+If a [restart is required](../../reference/applications/schemas.html#changes-that-require-restart-but-not-re-feed)
 due to changes in the application package,
 these two steps are what you need to do.
 

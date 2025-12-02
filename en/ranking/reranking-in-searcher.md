@@ -15,7 +15,7 @@ The reranking searcher uses [multiphase searching](../applications/searchers.htm
 **Matching query protocol phase:** The matching protocol phase which asks each content node involved in the query
 to return the locally best ranking hits (ranked by the configurable ranking expressions defined in the schema).
 This matching query protocol phase can include several ranking phases which are executed per content node. 
-In the query protocol phase the content nodes can also return [match-features](../reference/schema-reference.html#match-features) which
+In the query protocol phase the content nodes can also return [match-features](../reference/applications/schemas.html#match-features) which
 a re-ranking searcher can use to re-rank results (or feature logging). 
 In the custom searcher one is working on the global best ranking hits from the content nodes, and
 can have access to aggregated features which is calculated across the top-ranking documents (the global best documents).
@@ -132,7 +132,7 @@ public class ReRankingSearcher extends Searcher {
 </pre>
 
 [services.xml](../reference/services/services.html) is needed 
-to make up a Vespa [application package](../reference/application-packages-reference.html). 
+to make up a Vespa [application package](../reference/applications/application-packages.html). 
 Here we include the custom searcher in the `default` [search chain](../applications/chaining.html):
 
 <pre data-test="file" data-path="my-app/src/main/application/services.xml">
