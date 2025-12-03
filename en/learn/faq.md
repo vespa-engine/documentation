@@ -861,7 +861,7 @@ The following data retention policies applies to Vespa Cloud:
 
 
 
-### Is Vespa Cloud certified for ISO 27001 or SOC II?
+### Is Vespa Cloud certified for ISO 27001 or SOC 2?
 Yes, Vespa.ai has a SOC 2 attestation: [Trust Center](https://trust.vespa.ai).
 
 ### Is Vespa Cloud GDPR compliant?
