@@ -10,7 +10,7 @@ redirect_from:
 Setting up Vespa Cloud Enclave requires:
 
 1. Registration at [Vespa Cloud](https://console.vespa-cloud.com), or use a pre-existing tenant.
-2. Registration of the GCP project in Vespa Cloud
+2. Registration of the GCP project in Vespa Cloud.
 3. Running a [Terraform](https://www.terraform.io/) configuration to provision necessary GCP resources in the project.
 4. Deployment of a Vespa application.
 
