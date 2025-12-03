@@ -4,6 +4,7 @@ title: Node Resources
 category: cloud
 redirect_from:
   - /cloud/node-resources
+  - /en/cloud/node-resources.html
 ---
 
 This guide goes through the following aspects of node resource configuration:
