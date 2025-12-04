@@ -19,9 +19,10 @@ Configuration is written to $HOME/.vespa by default. This path can be
 overridden by setting the VESPA_CLI_HOME environment variable.
 
 When setting an option locally, the configuration is written to .vespa in the
-working directory, where that directory is assumed to be a Vespa application
-directory. This allows you to have separate configuration options per
-application.
+working directory. When reading configuration, Vespa CLI searches for .vespa
+in the current directory and parent directories, allowing you to run commands
+from subdirectories of your application. This allows you to have separate
+configuration options per application.
 
 Vespa CLI chooses the value for a given option in the following order, from
 most to least preferred:
