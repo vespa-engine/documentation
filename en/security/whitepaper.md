@@ -29,6 +29,10 @@ redirect_from:
 This document describes the Vespa Cloud service security features and
 operational procedures.
 
+Vespa.ai has a SOC 2 attestation - read more in the [Trust Center](https://trust.vespa.ai/).
+
+
+
 ## Concepts and architecture
 
 <!-- TODO: Make figure have split data plane? -->
