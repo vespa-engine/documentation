@@ -1,6 +1,6 @@
 ---
 title: Security Guide
-category: cloud
+applies_to: cloud
 redirect_from:
 - /en/cloud/security/guide
 ---

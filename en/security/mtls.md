@@ -1,7 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Securing Vespa with mutually authenticated TLS (mTLS)"
-category: self-managed
+applies_to: self-managed
 redirect_from:
 - /en/mtls.html
 - /en/operations-selfhosted/mtls

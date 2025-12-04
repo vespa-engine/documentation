@@ -1,7 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Getting started with Vespa Cloud Enclave in AWS
-category: cloud
+applies_to: cloud
 redirect_from:
 - /en/cloud/enclave/aws-getting-started
 - /en/cloud/enclave/aws-deploy-an-application

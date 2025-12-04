@@ -1,7 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: HTTP Best Practices
-category: cloud
+applies_to: cloud
 redirect_from:
   - /en/cloud/http-best-practices
 ---

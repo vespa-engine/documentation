@@ -1,7 +1,7 @@
 ---
 # Copyright Verizon Media. All rights reserved.
 title: Deleting Applications
-category: cloud
+applies_to: cloud
 redirect_from:
 - /en/cloud/deleting-applications
 ---

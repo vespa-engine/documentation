@@ -1,7 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: "Securing a Vespa Installation"
-category: self-managed
+applies_to: self-managed
 redirect_from:
 - /en/securing-your-vespa-installation.html
 - /en/operations-selfhosted/securing-your-vespa-installation

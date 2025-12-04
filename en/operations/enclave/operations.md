@@ -1,7 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Operations and Support for Vespa Cloud Enclave
-category: cloud
+applies_to: cloud
 redirect_from:
 - /en/cloud/enclave/operations
 ---

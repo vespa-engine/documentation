@@ -1,7 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Archive guide
-category: cloud
+applies_to: cloud
 redirect_from:
 - /en/cloud/archive-guide
 ---
