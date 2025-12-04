@@ -1,7 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Node Resources
-category: cloud
+applies_to: cloud
 redirect_from:
   - /cloud/node-resources
   - /en/cloud/node-resources.html

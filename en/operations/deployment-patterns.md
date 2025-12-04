@@ -1,7 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Deployment patterns 
-category: cloud
+applies_to: cloud
 redirect_from:
 - /en/cloud/deployment-patterns
 ---

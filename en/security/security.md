@@ -1,6 +1,6 @@
 ---
 title: Vespa Cloud Security
-category: cloud
+applies_to: cloud
 redirect_from:
 - /en/cloud/security/security
 ---

@@ -1,7 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Architecture for Vespa Cloud Enclave in GCP
-category: cloud
+applies_to: cloud
 redirect_from:
 - /en/cloud/enclave/gcp-architecture
 ---

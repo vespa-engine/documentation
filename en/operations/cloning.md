@@ -1,7 +1,7 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
 title: Cloning applications and data
-category: cloud
+applies_to: cloud
 redirect_from:
 - /en/cloud/cloning-applications-and-data.html
 ---
