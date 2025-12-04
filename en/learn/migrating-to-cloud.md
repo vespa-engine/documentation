@@ -21,7 +21,7 @@ $ export VESPA_TENANT_NAME=mytenant
 ```
 
 {% include pre-req.html %}
-{% include note.html content='[Vespa Cloud Enclave](../operations/enclave/enclave.html) users: Run the Enclave setup steps first.'%}
+{% include note.html content='[Vespa Cloud Enclave](../operations/enclave/enclave.html) users: Run the enclave setup steps first.'%}
 
 ### 1. Verify source application package
 An [application package](../basics/applications.html) from a self-hosted system
