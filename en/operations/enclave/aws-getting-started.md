@@ -47,7 +47,7 @@ If you are unfamiliar with Terraform: It is a tool to manage resources and their
 configuration in various cloud providers, like AWS and GCP.
 Terraform has published an
 [AWS](https://developer.hashicorp.com/terraform/tutorials/aws-get-started)
-tutorial, and we strongly encourage Enclave users to read and follow the
+tutorial, and we strongly encourage enclave users to read and follow the
 Terraform recommendations for
 [CI/CD](https://developer.hashicorp.com/terraform/tutorials/automation/automate-terraform).
 
@@ -67,7 +67,7 @@ refer to the README for stack-specific instructions.
 ### 4. Deploy a Vespa application
 
 By default, all applications are deployed on resources in Vespa Cloud accounts.
-To deploy in your Enclave account,
+To deploy in your enclave account,
 update [deployment.xml](../../reference/applications/deployment.html) to reference the account used in step two:
 
 ```xml
