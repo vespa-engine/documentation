@@ -14,6 +14,13 @@ applications.
 The _Control Plane_ and the _Data Plane_ has different security mechanisms,
 described in this guide.
 
+
+
+## SOC 2
+Vespa.ai has a SOC 2 attestation - read more in the [Trust Center](https://trust.vespa.ai/).
+
+
+
 ## Data Plane
 
 Data plane is protected using mutual TLS or optionally tokens.
