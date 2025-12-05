@@ -1,6 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved. 
-title: "Approximate Nearest Neighbor Search using HNSW Index"
+title: "Approximate nearest neighbor search using HNSW index"
 keywords: "ann, approximate nearest neighbor"
 redirect_from:
   - /en/approximate-nn-hnsw
