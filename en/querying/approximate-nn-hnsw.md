@@ -6,36 +6,53 @@ redirect_from:
   - /en/approximate-nn-hnsw
 ---
 
+This document describes how to speed up searches for nearest neighbors in vector spaces by adding
+[HNSW index](../reference/schemas/schemas.html#index-hnsw) to tensor fields.
 For an introduction to nearest neighbor search, see [nearest neighbor search](nearest-neighbor-search) documentation, 
 for practical usage of Vespa's nearest neighbor search, see [nearest neighbor search - a practical guide](nearest-neighbor-search-guide),
 and to have Vespa create vectors for you, see [embedding](../rag/embedding.html).
-This document describes how to speed up searches for nearest neighbors by adding a
-[HNSW index](../reference/schemas/schemas.html#index-hnsw) to the
-tensor field.
 
 Vespa implements a modified version of the Hierarchical Navigable Small World (HNSW) graph algorithm [paper](https://arxiv.org/abs/1603.09320).
 The implementation in Vespa supports:
 
-* **Filtering** - The search for nearest neighbors can be constrained by query filters
-as the nearest neighbor search in Vespa is expressed as a query operator.
+* **Filtering** - The search for nearest neighbors can be constrained by query filters.
 The [nearestNeighbor](../reference/querying/yql.html#nearestneighbor) query operator can be combined with other filters or query terms using the [Vespa query language](query-language.html).
-See many query examples in the [practical guide](nearest-neighbor-search-guide#combining-approximate-nearest-neighbor-search-with-query-filters).
+See the query examples in the [practical guide](nearest-neighbor-search-guide#combining-approximate-nearest-neighbor-search-with-query-filters).
 
-* **Multi-vector Indexing** - Since {% include version.html version="8.144" %} multiple vectors per document can be indexed.
-In this case documents are retrieved by the closest vector in each document compared to the query vector.
+* **Multi-field vector Indexing** - A schema can include multiple indexed tensor fields and search any combination
+of them in a query. This is useful to support multiple models, multiple text sources, and multi-modal search such
+as indexing both a textual description and image for the same entity.
+
+* **Multi-vector Indexing** - A single document field can contain any number of vector values by
+defining it as a mixed tensor (a "map of vectors").
+Documents will then be retrieved by the closest vector in each document compared to the query vector.
 See the [Multi-vector indexing sample application](https://github.com/vespa-engine/sample-apps/tree/master/multi-vector-indexing)
 for examples.
-For use cases and implementation details see the following blog post:
-[Revolutionizing semantic search with multi-vector HNSW indexing in Vespa](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/#implementation)
+This is commonly used to [index documents with multiple chunks](../rag/working-with-chunks.html).
+See also [this blog post](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/#implementation).
 
-* **Real Time Indexing** - CRUD (Create, Add, Update, Remove) vectors in the index with low latency and high throughput.
+* **Real Time Indexing** - CRUD (Create, Add, Update, Remove) vectors in the index in true real time.
 
-* **Mutable HNSW Graph** - No query or indexing overhead from searching multiple <em>HNSW</em> graphs. In Vespa, there is one graph per tensor field per content node.
-No segmented or partitioned graph where a query against a content node need to scan multiple HNSW graphs.
+* **Mutable HNSW Graph** - No query or indexing overhead from searching multiple <em>HNSW</em> graphs. In Vespa, 
+there is one graph per tensor field per content node. No segmented or partitioned graph where a query against 
+a content node need to scan multiple HNSW graphs.
 
 * **Multithreaded Indexing** - The costly part when performing real time changes to the *HNSW* graph
 is distance calculations while searching the graph layers to find which links to change.
 These distance calculations are performed by multiple indexing threads.
+
+* **Multiple value types** - The cost driver of vector search is often storing the vectors in memory,
+which is required to produce accurate results at low latency. An effective way to reduce cost is to reduce the
+size of each vector value. Vespa supports double, float, bfloat16, int8 and [single-bit values](../rag/binarizing-vectors.md).
+Changing from float to bfloat16 can halve cost with negligible impact on accuracy, while single-bit
+values greatly reduce both memory and cpu costs, and can be effectively combined with larger vector values 
+stored on disk as a paged attribute to be used for ranking.
+
+* **Optimized HNSW lookups** - ANN searches in Vespa [support](https://blog.vespa.ai/tweaking-ann-parameters/) 
+both pre-and post-filtering, beam exploration, and filtering before distance calculation ("Acorn 1").
+Tuning parameters for these makes it possible to strike a good balance between performance and accuracy for any
+data set. Vespa's [ANN tuning tool](https://vespa-engine.github.io/pyvespa/examples/ann-parameter-tuning-vespa-cloud.html) 
+can be used to automate the process.
 
 ## Using Vespa's approximate nearest neighbor search
 The query examples in [nearest neighbor search](nearest-neighbor-search) uses exact search, which has perfect accuracy.
@@ -209,7 +226,7 @@ instead of `float` saves close to 50% memory usage without significant accuracy 
 
 Vespa [tensor cell value types](../performance/feature-tuning.html#cell-value-types) include:
 
-* `int8` - 1 byte per value. Used to represent binary vectors, for example 64 bits can be represented using 8 `int8` values.
+* `int8` - 1 byte per value. Also used to represent [packed binary values](../rag/binarizing-vectors.md).
 * `bfloat16` - 2 bytes per value. See [bfloat16 floating-point format](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format).
 * `float` - 4 bytes per value. Standard float.
 * `double` - 8 bytes per value. Standard double.
@@ -230,8 +247,7 @@ use [grouped data distribution](../performance/sizing-search.html#data-distribut
 
 Note that strongly sublinear search is not necessarily true if the application
 uses nearest neighbor search for candidate retrieval in a <a href="../phased-ranking.html">multiphase ranking</a> pipeline, 
-or combines nearest neighbor search with filters. 
-
+or combines nearest neighbor search with filters.
 
 
 ## HNSW Operations 
