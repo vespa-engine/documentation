@@ -1,14 +1,14 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
-title: Architecture for Vespa Cloud Enclave in GCP
+title: Architecture for Vespa Cloud Enclave in Azure
 applies_to: cloud
 redirect_from:
-- /en/cloud/enclave/gcp-architecture
+- /en/cloud/enclave/azure-architecture
 ---
 
 ### Architecture
 
-Each Vespa Cloud Enclave in the tenant GCP project corresponds to a Vespa Cloud
+Each Vespa Cloud Enclave in the Vespa tenant's Azure subscription corresponds to a Vespa Cloud
 [zone](../zones.html). Inside the tenant GCP project one enclave is
 contained within one single [VPC](https://cloud.google.com/vpc/).
 

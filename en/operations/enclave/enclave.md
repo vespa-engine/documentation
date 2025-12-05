@@ -26,6 +26,7 @@ resource costs from your cloud provider in _addition_ to the Vespa Cloud costs.
 
 ## Azure
 * [Getting started](azure-getting-started.html)
+* [Architecture and security](azure-architecture)
 
 ## GCP
 * [Getting started](gcp-getting-started.html)
