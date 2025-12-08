@@ -8,69 +8,72 @@ redirect_from:
 
 ### Architecture
 
-Each Vespa Cloud Enclave in the Vespa tenant's Azure subscription corresponds to a Vespa Cloud
-[zone](../zones.html). Inside the tenant GCP project one enclave is
-contained within one single [VPC](https://cloud.google.com/vpc/).
+With Vespa Cloud Enclave, all Azure resources associated with your Vespa Cloud applications
+are in your enclave Azure subscription, as opposed to a shared Vespa Cloud subscription.
 
-![Enclave architecture](/assets/img/vespa-cloud-enclave-gcp.png)
+Each Vespa Cloud [zone](../zones.html) has an associated zone resource group (RG)
+in the enclave subscription, that contains all the resources for that zone.  For instance,
+it has one Virtual Network (VNet aka [VPC](https://cloud.google.com/vpc/)).
 
-#### Compute Instances, Load Balancers, and Cloud Storage buckets
+![Enclave architecture](/assets/img/vespa-cloud-enclave-azure.png)
 
-Configuration Servers inside the Vespa Cloud zone makes the decision to create
-or destroy compute instances ("Vespa Hosts" in diagram) based on the Vespa
-applications that are deployed. The Configuration Servers also set up the
-Network Load Balancers needed to communicate with the deployed Vespa
+#### Virtual Machines, Load Balancers, and Blob Storage
+
+Config Servers inside the Vespa Cloud subscription makes the decision to create
+or destroy virtual machines ("Vespa Hosts" in diagram) based on the Vespa
+applications that are deployed. The Config Servers also set up the
+Load Balancers needed to communicate with the deployed Vespa
 application.
 
-Each Vespa Host will periodically sync its logs to a Cloud Storage bucket ("Log
-Archive"). This bucket is "local" to the enclave and provisioned by the
-Terraform module inside the tenant's GCP project.
+Each Vespa Host will periodically sync its logs to a Blob Storage container ("Log
+Archive") in a Storage Account in the zone RG. This storage account is "local" 
+to the enclave and provisioned by the Terraform module inside your Azure subscription.
 
 #### Networking
 
-The enclave VPC is very network restricted. Vespa Hosts do not have public IPv4
-addresses and there is no
-[NAT gateway](https://cloud.google.com/nat/docs/overview) available in the VPC.
+The Zone Virtual Network (VNet aka VPC) is very network restricted. The Vespa Hosts do not
+have a public IPv4 address.  But your application can connect to external IPv4 services using a 
+[NAT gateway](https://learn.microsoft.com/en-us/azure/nat-gateway/nat-overview).
 Vespa Hosts have public IPv6 addresses and are able to make outbound
 connections. Inbound connections are not allowed. Outbound IPv6 connections are
-used to bootstrap communication with the Configuration Servers, and to report
+used to bootstrap communication with the Config Servers, and to report
 operational metrics back to Vespa Cloud.
 
 When a Vespa Host is booted it will set up an encrypted tunnel back to the
-Configuration Servers. All communication between Configuration Servers and the
+Config Servers. All communication between Configuration Servers and the
 Vespa Hosts will be run over this tunnel after it is set up.
 
 ### Security
 
 The Vespa Cloud operations team does _not_ have any direct access to the
-resources that is part of the customer account. The only possible access is
+resources in your subscription. The only possible access is
 through the management APIs needed to run Vespa itself. In case it is needed
 for, e.g. incident debugging, direct access can only be granted to the Vespa
-team by the tenant itself. Enabling direct access is done by setting the
+team by you. Enable direct access by setting the
 `enable_ssh` input to true in the enclave module. For further details, see the
 documentation for the
-[enclave module inputs](https://registry.terraform.io/modules/vespa-cloud/enclave/google/latest/?tab=inputs).
+[enclave module inputs](https://registry.terraform.io/modules/vespa-cloud/enclave/azure/latest/?tab=inputs).
 
-All communication between the enclave and the Vespa Cloud configuration servers
-is encrypted, authenticated and authorized using
+All communication between the enclave and the Vespa Cloud config servers
+is encrypted, authenticated, and authorized using
 [mTLS](https://en.wikipedia.org/wiki/Mutual_authentication#mTLS) with identities
 embedded in the certificate. mTLS communication is facilitated with the
 [Athenz](https://www.athenz.io/) service.
 
 All data stored is encrypted at rest using
-[Cloud Key Management](https://cloud.google.com/security-key-management). All
-keys are managed by the tenant in the tenant's GCP project.
+[Encryption At Host](https://learn.microsoft.com/en-us/azure/virtual-machines/disk-encryption-overview). All
+keys are managed automatically by the Azure platform.
 
-The resources provisioned in the tenant GCP project is either provisioned by the
-Terraform module executed by the tenant, or by the orchestration services inside
+The resources provisioned in your Azure subscription are either provisioned by the
+Vespa Cloud Enclave Terraform module you apply, or by the orchestration services inside
 a Vespa Cloud zone.
 
-Resources are provisioned by the Vespa Cloud configuration servers, using the
-[`vespa_cloud_provisioner_role`](https://github.com/vespa-cloud/terraform-google-enclave/blob/main/main.tf)
-IAM role defined in the Terraform module.
+Resources are provisioned by the Vespa Cloud config servers, using the
+[`id-provisioner`](https://github.com/vespa-cloud/terraform-azure-enclave/blob/main/provisioner.tf)
+user-assigned managed identity defined in the Terraform module.
 
-The tenant that registered the GCP project is the only tenant that can deploy
-applications targeting the enclave.
+Your Vespa tenant that registered the Azure subscription is the only Vespa Cloud tenant that can deploy
+applications targeting your enclave.
 
 For more general information about security in Vespa Cloud, see the
 [whitepaper](../../security/whitepaper).
