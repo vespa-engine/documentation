@@ -638,7 +638,7 @@ schema msmarco {
             index: enable-bm25
         }
         field body type string {
-            indexing: index
+            indexing: index | summary
             match: text
             index: enable-bm25
         }
