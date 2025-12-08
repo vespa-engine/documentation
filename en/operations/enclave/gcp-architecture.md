@@ -61,7 +61,7 @@ All data stored is encrypted at rest using
 [Cloud Key Management](https://cloud.google.com/security-key-management). All
 keys are managed by the tenant in the tenant's GCP project.
 
-The resources provisioned in the tenant GCP project is either provisioned by the
+The resources provisioned in the tenant GCP project are either provisioned by the
 Terraform module executed by the tenant, or by the orchestration services inside
 a Vespa Cloud zone.
 

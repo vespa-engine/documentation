@@ -19,10 +19,10 @@ it has one Virtual Network (VNet aka [VPC](https://cloud.google.com/vpc/)).
 
 #### Virtual Machines, Load Balancers, and Blob Storage
 
-Config Servers inside the Vespa Cloud subscription makes the decision to create
+Configuration Servers inside the Vespa Cloud subscription makes the decision to create
 or destroy virtual machines ("Vespa Hosts" in diagram) based on the Vespa
-applications that are deployed. The Config Servers also set up the
-Load Balancers needed to communicate with the deployed Vespa
+applications that are deployed. The Configuration Servers also set up the
+Container Load Balancers needed to communicate with the deployed Vespa
 application.
 
 Each Vespa Host will periodically sync its logs to a Blob Storage container ("Log
@@ -36,11 +36,11 @@ have a public IPv4 address.  But your application can connect to external IPv4 s
 [NAT gateway](https://learn.microsoft.com/en-us/azure/nat-gateway/nat-overview).
 Vespa Hosts have public IPv6 addresses and are able to make outbound
 connections. Inbound connections are not allowed. Outbound IPv6 connections are
-used to bootstrap communication with the Config Servers, and to report
+used to bootstrap communication with the Configuration Servers, and to report
 operational metrics back to Vespa Cloud.
 
 When a Vespa Host is booted it will set up an encrypted tunnel back to the
-Config Servers. All communication between Configuration Servers and the
+Configuration Servers. All communication between Configuration Servers and the
 Vespa Hosts will be run over this tunnel after it is set up.
 
 ### Security
@@ -54,7 +54,7 @@ team by you. Enable direct access by setting the
 documentation for the
 [enclave module inputs](https://registry.terraform.io/modules/vespa-cloud/enclave/azure/latest/?tab=inputs).
 
-All communication between the enclave and the Vespa Cloud config servers
+All communication between the enclave and the Vespa Cloud Configuration servers
 is encrypted, authenticated, and authorized using
 [mTLS](https://en.wikipedia.org/wiki/Mutual_authentication#mTLS) with identities
 embedded in the certificate. mTLS communication is facilitated with the
@@ -68,12 +68,11 @@ The resources provisioned in your Azure subscription are either provisioned by t
 Vespa Cloud Enclave Terraform module you apply, or by the orchestration services inside
 a Vespa Cloud zone.
 
-Resources are provisioned by the Vespa Cloud config servers, using the
+Resources are provisioned by the Vespa Cloud Configuration servers, using the
 [`id-provisioner`](https://github.com/vespa-cloud/terraform-azure-enclave/blob/main/provisioner.tf)
 user-assigned managed identity defined in the Terraform module.
 
-Your Vespa tenant that registered the Azure subscription is the only Vespa Cloud tenant that can deploy
-applications targeting your enclave.
+Only your Vespa tenant (that registered this Azure subscription) can deploy applications targeting your enclave.
 
 For more general information about security in Vespa Cloud, see the
 [whitepaper](../../security/whitepaper).

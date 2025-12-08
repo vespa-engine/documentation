@@ -58,7 +58,7 @@ All data stored is encrypted at rest using
 [KMS](https://docs.aws.amazon.com/kms/latest/developerguide/overview.html). All
 keys are managed by the tenant in the tenant's AWS account.
 
-The resources provisioned in the tenant AWS account is either provisioned by the
+The resources provisioned in the tenant AWS account are either provisioned by the
 Terraform module executed by the tenant, or by the orchestration services inside
 a Vespa Cloud Zone.
 
