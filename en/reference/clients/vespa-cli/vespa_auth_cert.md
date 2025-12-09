@@ -21,7 +21,7 @@ environment variables. This can be useful in continuous integration systems.
 
 It's also possible override the CA certificate which can be useful when using
 self-signed certificates with a self-hosted Vespa service.
-See [https://docs.vespa.ai/en/operations-selfhosted/mtls.html](https://docs.vespa.ai/en/operations-selfhosted/mtls.html) for more
+See [https://docs.vespa.ai/en/security/mtls.html](https://docs.vespa.ai/en/security/mtls.html) for more
 information.
 
 Example of setting the CA certificate, certificate and key in-line:
@@ -45,7 +45,7 @@ Note that when overriding key pair through environment variables, that key pair
 will always be used for all applications. It's not possible to specify an
 application-specific key.
 
-See [https://docs.vespa.ai/en/cloud/security/guide.html](https://docs.vespa.ai/en/cloud/security/guide.html) for more details.
+See [https://docs.vespa.ai/en/security/guide.html](https://docs.vespa.ai/en/security/guide.html) for more details.
 
 ```
 vespa auth cert [flags]

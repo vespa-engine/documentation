@@ -12,12 +12,12 @@ Issue a single document operation to Vespa
 Issue a single document operation to Vespa.
 
 The operation must be on the format documented in
-[https://docs.vespa.ai/en/reference/document-json-format.html#document-operations](https://docs.vespa.ai/en/reference/document-json-format.html#document-operations)
+[https://docs.vespa.ai/en/reference/schemas/document-json-format.html#document-operations](https://docs.vespa.ai/en/reference/schemas/document-json-format.html#document-operations)
 
 When this returns successfully, the document is guaranteed to be visible in any
 subsequent get or query operation.
 
-To feed with high throughput, [https://docs.vespa.ai/en/reference/vespa-cli/vespa_feed.html](https://docs.vespa.ai/en/reference/vespa-cli/vespa_feed.html)
+To feed with high throughput, [https://docs.vespa.ai/en/reference/clients/vespa-cli/vespa_feed.html](https://docs.vespa.ai/en/reference/clients/vespa-cli/vespa_feed.html)
 should be used instead of this.
 
 ```
