@@ -12,7 +12,7 @@ Deploy (prepare and activate) an application package
 Deploy (prepare and activate) an application package.
 
 An application package defines a deployable Vespa application. See
-[https://docs.vespa.ai/en/reference/application-packages-reference.html](https://docs.vespa.ai/en/reference/application-packages-reference.html) for
+[https://docs.vespa.ai/en/reference/applications/application-packages.html](https://docs.vespa.ai/en/reference/applications/application-packages.html) for
 details about the files contained in this package.
 
 To get started, 'vespa clone' can be used to download a sample application.

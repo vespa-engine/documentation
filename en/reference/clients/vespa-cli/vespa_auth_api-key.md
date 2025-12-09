@@ -34,7 +34,7 @@ Note that when overriding the developer key through environment variables,
 that key will always be used. It's not possible to specify a tenant-specific
 key through the environment.
 
-See [https://docs.vespa.ai/en/cloud/security/guide.html](https://docs.vespa.ai/en/cloud/security/guide.html) for more details about developer keys.
+See [https://docs.vespa.ai/en/security/guide.html](https://docs.vespa.ai/en/security/guide.html) for more details about developer keys.
 
 ```
 vespa auth api-key [flags]
