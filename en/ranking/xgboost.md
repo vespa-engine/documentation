@@ -7,6 +7,8 @@ redirect_from:
 
 Vespa supports importing Gradient Boosting Decision Tree (GBDT) models trained with XGBoost. 
 
+{% include warning.html content="Vespa only supports XGBoost models trained with XGBoost version 1.5 or earlier. Using models trained with later versions of XGBoost may result in prediction mismatches between Vespa and XGBoost's native predict functions."%}
+
 ## Exporting models from XGBoost
 
 Vespa supports importing XGBoost's JSON model dump, e.g. Python API
