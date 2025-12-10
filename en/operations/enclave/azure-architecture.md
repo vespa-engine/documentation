@@ -19,7 +19,7 @@ it has one Virtual Network (VNet aka [VPC](https://cloud.google.com/vpc/)).
 
 #### Virtual Machines, Load Balancers, and Blob Storage
 
-Configuration Servers inside the Vespa Cloud subscription makes the decision to create
+Configuration Servers inside the Vespa Cloud subscription make the decision to create
 or destroy virtual machines ("Vespa Hosts" in diagram) based on the Vespa
 applications that are deployed. The Configuration Servers also set up the
 Container Load Balancers needed to communicate with the deployed Vespa
