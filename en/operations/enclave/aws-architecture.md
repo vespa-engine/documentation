@@ -6,8 +6,8 @@ redirect_from:
 - /en/cloud/enclave/aws-architecture
 ---
 
-Each Enclave in the tenant AWS account corresponds to a Vespa Cloud
-[zone](../zones.html). Inside the tenant AWS account one Enclave is
+Each Vespa Cloud Enclave in the tenant AWS account corresponds to a Vespa Cloud
+[zone](../zones.html). Inside the tenant AWS account one enclave is
 contained within one single
 [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html).
 
@@ -22,12 +22,12 @@ Network Load Balancers needed to communicate with the deployed Vespa
 application.
 
 Each Vespa Host will periodically sync its logs to a S3 bucket ("Log Archive").
-This bucket is "local" to the Enclave and provisioned by the Terraform module
+This bucket is "local" to the enclave and provisioned by the Terraform module
 inside the tenant's AWS account.
 
 #### Networking
 
-The Enclave VPC is very network restricted. Vespa Hosts do not have public IPv4
+The enclave VPC is very network restricted. Vespa Hosts do not have public IPv4
 addresses and there is no
 [NAT gateway](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html)
 available in the VPC. Vespa Hosts have public IPv6 addresses and are able to
@@ -48,7 +48,7 @@ for, e.g. incident debugging, direct access can only be granted to the Vespa
 team by the tenant itself. For further details, see the documentation for the
 [`ssh`-submodule](https://registry.terraform.io/modules/vespa-cloud/enclave/aws/latest/submodules/ssh).
 
-All communication between the Enclave and the Vespa Cloud configuration servers
+All communication between the enclave and the Vespa Cloud configuration servers
 is encrypted, authenticated and authorized using
 [mTLS](https://en.wikipedia.org/wiki/Mutual_authentication#mTLS) with identities
 embedded in the certificate. mTLS communication is facilitated with the
@@ -58,7 +58,7 @@ All data stored is encrypted at rest using
 [KMS](https://docs.aws.amazon.com/kms/latest/developerguide/overview.html). All
 keys are managed by the tenant in the tenant's AWS account.
 
-The resources provisioned in the tenant AWS account is either provisioned by the
+The resources provisioned in the tenant AWS account are either provisioned by the
 Terraform module executed by the tenant, or by the orchestration services inside
 a Vespa Cloud Zone.
 
@@ -67,7 +67,7 @@ Resources are provisioned by the Vespa Cloud configuration servers, using the
 AWS IAM policy document defined in the Terraform module.
 
 The tenant that registered the AWS account is the only tenant that can deploy
-applications targeting the Enclave.
+applications targeting the enclave.
 
 For more general information about security in Vespa Cloud, see the
 [whitepaper](../../security/whitepaper).

@@ -8,8 +8,8 @@ redirect_from:
 
 ### Architecture
 
-Each Enclave in the tenant GCP project corresponds to a Vespa Cloud
-[zone](../zones.html). Inside the tenant GCP project one Enclave is
+Each Vespa Cloud Enclave in the tenant GCP project corresponds to a Vespa Cloud
+[zone](../zones.html). Inside the tenant GCP project one enclave is
 contained within one single [VPC](https://cloud.google.com/vpc/).
 
 ![Enclave architecture](/assets/img/vespa-cloud-enclave-gcp.png)
@@ -23,12 +23,12 @@ Network Load Balancers needed to communicate with the deployed Vespa
 application.
 
 Each Vespa Host will periodically sync its logs to a Cloud Storage bucket ("Log
-Archive"). This bucket is "local" to the Enclave and provisioned by the
+Archive"). This bucket is "local" to the enclave and provisioned by the
 Terraform module inside the tenant's GCP project.
 
 #### Networking
 
-The Enclave VPC is very network restricted. Vespa Hosts do not have public IPv4
+The enclave VPC is very network restricted. Vespa Hosts do not have public IPv4
 addresses and there is no
 [NAT gateway](https://cloud.google.com/nat/docs/overview) available in the VPC.
 Vespa Hosts have public IPv6 addresses and are able to make outbound
@@ -51,7 +51,7 @@ team by the tenant itself. Enabling direct access is done by setting the
 documentation for the
 [enclave module inputs](https://registry.terraform.io/modules/vespa-cloud/enclave/google/latest/?tab=inputs).
 
-All communication between the Enclave and the Vespa Cloud configuration servers
+All communication between the enclave and the Vespa Cloud configuration servers
 is encrypted, authenticated and authorized using
 [mTLS](https://en.wikipedia.org/wiki/Mutual_authentication#mTLS) with identities
 embedded in the certificate. mTLS communication is facilitated with the
@@ -61,7 +61,7 @@ All data stored is encrypted at rest using
 [Cloud Key Management](https://cloud.google.com/security-key-management). All
 keys are managed by the tenant in the tenant's GCP project.
 
-The resources provisioned in the tenant GCP project is either provisioned by the
+The resources provisioned in the tenant GCP project are either provisioned by the
 Terraform module executed by the tenant, or by the orchestration services inside
 a Vespa Cloud zone.
 
@@ -70,7 +70,7 @@ Resources are provisioned by the Vespa Cloud configuration servers, using the
 IAM role defined in the Terraform module.
 
 The tenant that registered the GCP project is the only tenant that can deploy
-applications targeting the Enclave.
+applications targeting the enclave.
 
 For more general information about security in Vespa Cloud, see the
 [whitepaper](../../security/whitepaper).

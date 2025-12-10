@@ -8,12 +8,12 @@ redirect_from:
 
 {% include warning.html content="The structure of log archive buckets may change without notice" %}
 
-After an Enclave is established in your cloud provider account using Terraform,
-the module will have created a storage bucket per Vespa Cloud zone you configured in your Enclave.
+After Vespa Cloud Enclave is established in your cloud provider account using Terraform,
+the module will have created a storage bucket per Vespa Cloud zone you configured in your enclave.
 These storage buckets are used to archive logs from the machines that run Vespa inside your account.
 
-There will be one storage bucket per Vespa Cloud Zone that is configured in the Enclave.
-The name of the bucket will depend on the cloud provider you are setting up the Enclave in.
+There will be one storage bucket per Vespa Cloud Zone that is configured in the enclave.
+The name of the bucket will depend on the cloud provider you are setting up the enclave in.
 
 Files are synchronized to the archive bucket when the file is rotated by the logging system,
 or when a virtual machine is deprovisioned from the application.  The consequence of this is
