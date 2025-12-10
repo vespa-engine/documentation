@@ -39,7 +39,7 @@ connections. Inbound connections are not allowed. Outbound IPv6 connections are
 used to bootstrap communication with the Configuration Servers, and to report
 operational metrics back to Vespa Cloud.
 
-When a Vespa Host is booted it will set up an encrypted tunnel back to the
+When a Vespa Host is booted, it will set up an encrypted tunnel back to the
 Configuration Servers. All communication between Configuration Servers and the
 Vespa Hosts will be run over this tunnel after it is set up.
 
