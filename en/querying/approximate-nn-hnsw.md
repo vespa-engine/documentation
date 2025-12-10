@@ -43,7 +43,7 @@ These distance calculations are performed by multiple indexing threads.
 
 * **Multiple value types** - The cost driver of vector search is often storing the vectors in memory,
 which is required to produce accurate results at low latency. An effective way to reduce cost is to reduce the
-size of each vector value. Vespa supports double, float, bfloat16, int8 and [single-bit values](../rag/binarizing-vectors.md).
+size of each vector value. Vespa supports double, float, bfloat16, int8 and [single-bit values](../rag/binarizing-vectors.html).
 Changing from float to bfloat16 can halve cost with negligible impact on accuracy, while single-bit
 values greatly reduce both memory and cpu costs, and can be effectively combined with larger vector values 
 stored on disk as a paged attribute to be used for ranking.
@@ -226,7 +226,7 @@ instead of `float` saves close to 50% memory usage without significant accuracy 
 
 Vespa [tensor cell value types](../performance/feature-tuning.html#cell-value-types) include:
 
-* `int8` - 1 byte per value. Also used to represent [packed binary values](../rag/binarizing-vectors.md).
+* `int8` - 1 byte per value. Also used to represent [packed binary values](../rag/binarizing-vectors.html).
 * `bfloat16` - 2 bytes per value. See [bfloat16 floating-point format](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format).
 * `float` - 4 bytes per value. Standard float.
 * `double` - 8 bytes per value. Standard double.
