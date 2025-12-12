@@ -11,7 +11,7 @@ Issue a query to Vespa
 
 Issue a query to Vespa.
 
-Any parameter from [https://docs.vespa.ai/en/reference/querying/yql.html](https://docs.vespa.ai/en/reference/querying/yql.html)
+Any parameter from [https://docs.vespa.ai/en/reference/api/query.html](https://docs.vespa.ai/en/reference/api/query.html)
 can be set by the syntax [parameter-name]=[value].
 
 ```
