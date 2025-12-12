@@ -573,6 +573,21 @@ Read up on [attributes](../content/attributes.html) to understand more of how su
 [Paged attributes](../content/attributes.html#paged-attributes) trades off memory usage vs. query latency
 for a lower max memory usage.
 
+### Do empty fields consume memory?
+A field is of type _index_ or _attribute_ - [details](../querying/text-matching.html#index-and-attribute).
+
+Fields with _index_ use no incremental memory at deployment, if the field has no value.
+
+Fields with _attribute_ use memory, even if the field value is not set,
+
+Attributes are optimized for random access: To be able to jump to the value of any document in O(1) time.
+That requires allocating a constant amount of memory (the value, or a pointer) per document,
+regardless of whether there is a value.
+In short, knowing that a value is unset is a value in itself for attributes,
+so deploying new fields or new schemas with attributes will cause an incremental increase in memory.
+Applications with many unused schemas and fields can factor this in when sizing for memory.
+Refer to [attributes](../content/attributes.html#attribute-memory-usage) for details.
+
 ### What is the best practice for scaling Vespa for day vs night?
 [Autoscaling](../operations/autoscaling.html) is the best guide to understand how to size and autoscale the system.
 Container clusters are stateless and can be autoscaled more quickly than content clusters.
