@@ -36,7 +36,8 @@ Use [Terraform](https://www.terraform.io/) to set up the necessary resources usi
 published by the Vespa team.
 
 Feel free to use the
-[multi-region example](https://github.com/vespa-cloud/terraform-azure-enclave/blob/main/examples/multi-region/main.tf)
+[example](https://github.com/vespa-cloud/terraform-azure-enclave/blob/main/examples/basic/main.tf)
+<!-- ToDo: change to this when zones are set up [multi-region example](https://github.com/vespa-cloud/terraform-azure-enclave/blob/main/examples/multi-region/main.tf) -->
 to get started.
 
 If you are unfamiliar with Terraform: It is a tool to manage resources and their
