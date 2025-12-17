@@ -47,23 +47,22 @@ each one possibly doing a small amount of processing.
 This can be seen by adding a `&trace.level=5` to a query:
 
 ```json
-    { "message": "Invoke searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'" },
-    { "message": "Invoke searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'" },
-    { "message": "Invoke searcher 'com.yahoo.prelude.querytransform.PhrasingSearcher in vespa'" },
-    { "message": "Invoke searcher 'com.yahoo.prelude.searcher.FieldCollapsingSearcher in vespa'" },
-    { "message": "Invoke searcher 'com.yahoo.search.yql.MinimalQueryInserter in vespa'" },
+{ "message": "Invoke searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'" },
+{ "message": "Invoke searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'" },
+{ "message": "Invoke searcher 'com.yahoo.prelude.querytransform.PhrasingSearcher in vespa'" },
+{ "message": "Invoke searcher 'com.yahoo.prelude.searcher.FieldCollapsingSearcher in vespa'" },
+{ "message": "Invoke searcher 'com.yahoo.search.yql.MinimalQueryInserter in vespa'" },
 
-    { "message": "Federating to [mind]" },
+{ "message": "Federating to [mind]" },
 
-    { "message": "Got 10 hits from source:mind" },
-    { "message": "Return searcher 'federation in native'" },
+{ "message": "Got 10 hits from source:mind" },
+{ "message": "Return searcher 'federation in native'" },
 
-    { "message": "Return searcher 'com.yahoo.search.yql.MinimalQueryInserter in vespa'" },
-    { "message": "Return searcher 'com.yahoo.prelude.searcher.FieldCollapsingSearcher in vespa'" },
-    { "message": "Return searcher 'com.yahoo.prelude.querytransform.PhrasingSearcher in vespa'" },
-    { "message": "Return searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'" },
-    { "message": "Return searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'" },
-
+{ "message": "Return searcher 'com.yahoo.search.yql.MinimalQueryInserter in vespa'" },
+{ "message": "Return searcher 'com.yahoo.prelude.searcher.FieldCollapsingSearcher in vespa'" },
+{ "message": "Return searcher 'com.yahoo.prelude.querytransform.PhrasingSearcher in vespa'" },
+{ "message": "Return searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'" },
+{ "message": "Return searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'" },
 ```
 
 This shows a small sample of the additional output when using `trace.level`.
@@ -122,7 +121,9 @@ So, what we do before we pass the query along (in `execution.search(query)`) and
 before we return the results is completely up to us.
 So, we implement our `UserProfileSearcher` like this:
 
-```java
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
 public class UserProfileSearcher extends Searcher {
 
     public Result search(Query query, Execution execution) {
@@ -167,7 +168,8 @@ public class UserProfileSearcher extends Searcher {
     }
 
 }
-```
+</pre>
+</div>
 
 First, we retrieve the `user_id` from the query.
 If this is given in the query, we first call the `retrieveUserEmbedding` method,
@@ -200,19 +202,20 @@ just in Java.
 ## Adding a search chain
 
 To add this Searcher to Vespa, we need to modify `services.xml`:
-
-```xml
-<container id="default" version="1.0">
-    <search>
-        <chain id="user" inherits="vespa">
-            <searcher bundle="news-recommendation-searcher"
-                      id="ai.vespa.example.UserProfileSearcher" />
-        </chain>
-    </search>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+&lt;container id="default" version="1.0"&gt;
+    &lt;search&gt;
+        &lt;chain id="user" inherits="vespa"&gt;
+            &lt;searcher bundle="news-recommendation-searcher"
+                      id="ai.vespa.example.UserProfileSearcher" /&gt;
+        &lt;/chain&gt;
+    &lt;/search&gt;
     ...
-</container>
-```
-
+&lt;/container&gt;
+</pre>
+</div>
 
 Here, we instruct Vespa to add a new search chain called `user`
 (which inherits the default `vespa` search chain),
@@ -322,11 +325,14 @@ so this does not have to be passed with the query request.
 This is done by adding it to the default query profile in
 [src/main/application/search/query-profiles/default.xml](https://github.com/vespa-engine/sample-apps/blob/master/news/app-6-recommendation-with-searchers/src/main/application/search/query-profiles/default.xml):
 
-```xml
-<query-profile id="default" type="root">
-    <field name="searchChain">user</field>
-</query-profile>
-```
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+&lt;query-profile id="default" type="root"&lt;
+    &lt;field name="searchChain"&gt;user&lt;/field&lt;
+&lt;/query-profile&gt;
+</pre>
+</div>
 
 {% include note.html content="[src/python/evaluate.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/evaluate.py)
 can now be modified to use this Searcher.

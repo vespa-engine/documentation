@@ -126,6 +126,8 @@ The [services.xml](../../reference/applications/services/services.html) file def
 make up the Vespa application — which services to run and how many nodes per
 service. Write the following to `news/my-app/services.xml`:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="file" data-path="news/my-app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;services version="1.0"&gt;
@@ -150,6 +152,7 @@ service. Write the following to `news/my-app/services.xml`:
 
 &lt;/services&gt;
 </pre>
+</div>
 
 Quite a lot is set up here:
 
@@ -190,6 +193,8 @@ and **must** have the same name as the document type mentioned in `services.xml`
 Given the MIND dataset described above, we'll set up the schema as follows.
 Write the following to `news/my-app/schemas/news.sd`:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
     document news {
@@ -236,6 +241,7 @@ schema news {
 
 }
 </pre>
+</div>
 
 The `document` is wrapped inside another element called `schema`.
 The name following these elements, here `news`, must be exactly the same for both.

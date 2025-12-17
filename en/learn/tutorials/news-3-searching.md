@@ -434,6 +434,8 @@ by including a `popularity` rank profile,
 as defined below at the bottom of `schemas/news.sd`.
 Note that rank profiles are defined outside the `document` block:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
     document news {
@@ -488,6 +490,7 @@ schema news {
     }
 }
 </pre>
+</div>
 
 - `rank-profile popularity inherits default`
 
