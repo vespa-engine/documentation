@@ -106,16 +106,19 @@ and can be helpful when you have large tensors.
 
 To use this document, add it to `services.xml`:
 
-```xml
-<content id="mind" version="1.0">
-    <documents>
-        <document type="news" mode="index" />
-        <document type="user" mode="index" />
-        <document type="category_ctr" mode="index" global="true" />
-    </documents>
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+&lt;content id="mind" version="1.0"&gt;
+    &lt;documents&gt;
+        &lt;document type="news" mode="index" /&gt;
+        &lt;document type="user" mode="index" /&gt;
+        &lt;document type="category_ctr" mode="index" global="true" /&gt;
+    &lt;/documents>
 
-</content>
-```
+&lt;/content&gt;
+</pre>
+</div>
 
 
 Notice that we've set `global="true"`,

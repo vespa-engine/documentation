@@ -33,6 +33,8 @@ sub-directory of the `news` sample application.
 First, we need to modify the `news.sd` search definition to include a field
 to hold the embedding and a recommendation rank profile:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
     document news {
@@ -98,6 +100,7 @@ schema news {
     }
 }
 </pre>
+</div>
 
 The `embedding` field is a tensor field.
 Tensors in Vespa are flexible multi-dimensional data structures, and, as first-class citizens,
@@ -143,6 +146,8 @@ Please refer to [Vespa reads and writes](../../writing/reads-and-writes.html) fo
 We need to add another document type to represent a user.
 Add this schema in `schemas/user.sd`:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="file" data-path="news/my-app/schemas/user.sd">
 schema user {
     document user {
@@ -156,12 +161,15 @@ schema user {
     }
 }
 </pre>
+</div>
 
 This schema is set up so that we can search for a `user_id` and retrieve the user's embedding vector.
 
 We also need to let Vespa know we want to use this document type,
 so we modify `services.xml` and add it under `documents` in the `content` section:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="file" data-path="news/my-app/services.xml">
 &lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;services version="1.0"&gt;
@@ -187,6 +195,7 @@ so we modify `services.xml` and add it under `documents` in the `content` sectio
 
 &lt;/services&gt;
 </pre>
+</div>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -252,18 +261,24 @@ Still we need to set up a default query profile to set up the types of query par
 
 So, write the following to `news/my-app/search/query-profiles/default.xml`:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="file" data-path="news/my-app/search/query-profiles/default.xml">
 &lt;query-profile id="default" type="root" /&gt;
 </pre>
+</div>
 
 To set up the query profile types, write them to the file
 `search/query-profiles/types/root.xml`:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="file" data-path="news/my-app/search/query-profiles/types/root.xml">
 &lt;query-profile-type id="root" inherits="native"&gt;
     &lt;field name="ranking.features.query(user_embedding)" type="tensor&amp;lt;float&amp;gt;(d0[50])" /&gt;
 &lt;/query-profile-type&gt;
 </pre>
+</div>
 
 This configures Vespa to expect a float tensor with dimension `d0[50]` when the
 query parameter `ranking.features.query(user_embedding)` is passed.
@@ -438,6 +453,8 @@ This number is the number of times a document has been put in the top 10 results
 
 Let's switch to using approximate nearest-neighbors by adding `index` to the embedding field in `news.sd`:
 
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="file" data-path="news/my-app/schemas/news.sd">
 schema news {
     document news {
@@ -504,6 +521,7 @@ schema news {
     }
 }
 </pre>
+</div>
 
 If you make this change and deploy it, you will get prompted by Vespa that a
 restart is required so that the index can be built:
