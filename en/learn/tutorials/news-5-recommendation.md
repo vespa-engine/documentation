@@ -230,7 +230,7 @@ $ sleep 20
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='28603'>
+<pre data-test="exec" data-test-assert-contains='65238'>
 $ vespa query -v \
   'yql=select * from news where true' \
   'hits=0'
@@ -348,7 +348,7 @@ which queries Vespa:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"documents": 28603'>
+<pre data-test="exec" data-test-assert-contains='"documents": 65238'>
 $ ./src/python/user_search.py U33527 10
 </pre>
 </div>
@@ -375,8 +375,7 @@ The tensor for the `user_embedding` is in the `ranking.features.query(user_embed
 Recall from above that we set a query profile type for this exact query parameter,
 so Vespa knows what to expect here. <!-- ToDo: use inputs instead -->
 
-When Vespa receives this query, it scans linearly through all documents
-(28603 if you are using the MIND DEMO dataset),
+When Vespa receives this query, it scans linearly through all documents,
 and scores them using the `recommendation` rank profile we set up above.
 Recall that we ask Vespa to convert the problem from maximum inner product to
 a nearest distance problem by using the `dotproduct` distance metric;
@@ -439,7 +438,7 @@ for single users above (with `targetHits` equals to 10):
     },
     "coverage": {
       "coverage": 100,
-      "documents": 28603,
+      "documents": 65238,
       "full": true,
       "nodes": 1,
       "results": 1,
@@ -447,7 +446,7 @@ for single users above (with `targetHits` equals to 10):
     }
 ```
 
-Here, `coverage` shows that Vespa did scan through all 28603 documents.
+Here, `coverage` shows that Vespa did scan through all 65238 documents.
 The interesting piece here is the `totalCount`.
 This number is the number of times a document has been put in the top 10 results during this linear scan.
 
@@ -568,7 +567,7 @@ $ ./src/python/user_search.py U33527 10
     },
     "coverage": {
       "coverage": 100,
-      "documents": 28603,
+      "documents": 65238,
       "full": true,
       "nodes": 1,
       "results": 1,
