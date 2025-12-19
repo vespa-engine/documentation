@@ -221,7 +221,7 @@ $ vespa feed mind/vespa_news_embeddings.json --target http://localhost:8080
 </div>
 
 Once the feeding jobs finishes, the index is ready to be used,
-we can verify that we have 28,603 news documents and 5000 user documents:
+we can verify that we have 65238 news documents and 94057 user documents:
 
 <!-- Sometimes a query timeout, increase stability of auto testing -->
 <pre data-test="exec" style="display:none">
@@ -239,7 +239,7 @@ $ vespa query -v \
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='5000'>
+<pre data-test="exec" data-test-assert-contains='94057'>
 $ vespa query -v \
   'yql=select * from user where true' \
   'hits=0'
