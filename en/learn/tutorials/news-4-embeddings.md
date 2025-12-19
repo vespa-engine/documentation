@@ -384,7 +384,7 @@ Running this results in:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ python3 src/python/train_cold_start.py mind 10
+$ python3 src/python/train_cold_start.py mind 5
 </pre>
 </div>
 
