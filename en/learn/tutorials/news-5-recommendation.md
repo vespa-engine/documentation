@@ -496,7 +496,7 @@ schema news {
         field embedding type tensor&lt;float&gt;(d0[50]) {
             indexing: attribute | index
             attribute {
-                distance-metric: euclidean
+                distance-metric: dotproduct
             }
         }
     }
