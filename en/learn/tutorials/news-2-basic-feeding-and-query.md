@@ -61,14 +61,14 @@ be our starting point. We've included a script to download the data for us:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
-$ ./bin/download-mind.sh demo
+$ ./bin/download-mind.sh small
 </pre>
 </div>
 
-The argument defines which dataset to download. Here, we download the `demo`
+The argument defines which dataset to download. Here, we download the `small`
 dataset, but `small` and `large` are valid options. Both the training and
-validation parts are downloaded to a directory called `mind`. The `demo`
-dataset is around 27 Mb. Both `train` and `dev` datasets will be downloaded.
+validation parts are downloaded to a directory called `mind`.
+Both `train` and `dev` datasets will be downloaded.
 
 Taking a look at the data, in `mind/train/news.tsv`, we see tab-separated
 lines like the following:
@@ -313,11 +313,11 @@ $ vespa feed mind/vespa.json --target http://localhost:8080
 
 `vespa feed` reads a JSON array of document operations,
 or JSONL with one Vespa document JSON formatted operation per line.
-Once the feed job finishes, all our 28 603 documents are searchable, let us do a quick query to verify:
+Once the feed job finishes, all our 65 238 documents are searchable, let us do a quick query to verify:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='28603'>
+<pre data-test="exec" data-test-assert-contains='65238'>
 $ vespa query -v 'yql=select * from news where true' 'hits=0'
 </pre>
 </div>
