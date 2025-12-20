@@ -290,7 +290,7 @@ Now we can search for a user's recommended news articles directly from the `user
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"documents": 28603'>
+<pre data-test="exec" data-test-assert-contains='"documents": 65238'>
 $ vespa query -v \
   'user_id=U33527' \
   'searchChain=user'
@@ -302,7 +302,7 @@ Indeed, if we now add a with a `trace.level=5`, we see the Searcher being invoke
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains='"documents": 28603'>
+<pre data-test="exec" data-test-assert-contains='"documents": 65238'>
 $ vespa query -v \
   'user_id=U33527' \
   'searchChain=user' \
