@@ -699,12 +699,19 @@ Note also that Vespa per default limits the max hits to 400 per default,
 the behavior can be overridden in the 
 [default queryProfile](../reference/api/query.html#queryprofile).
 
-When requesting large amount of data with hits, it is recommended to use result compression. 
-Vespa will compress if the HTTP client uses
+When requesting large amounts of data, consider how to reduce response size.
+Vespa supports gzip compression if the HTTP client uses
 the [Accept-Encoding](https://www.rfc-editor.org/rfc/rfc9110.html#name-accept-encoding) HTTP request header:
 <pre>
 Accept-Encoding: gzip
 </pre>
+
+Compression reduces data transfer but adds CPU overhead.
+The lowest latency is achieved without compression if network bandwidth is sufficient.
+[CBOR format](../reference/api/query.html#presentation.format) (`format=cbor` or `Accept: application/cbor`)
+is both more compact and faster to generate than JSON, especially for numeric data
+such as tensors and embeddings. CBOR can also be combined with gzip compression.
+CBOR is a drop-in replacement for JSON - when deserialized, the result is identical.
 
 ## Searching attribute fields 
 
