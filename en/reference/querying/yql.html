@@ -331,10 +331,13 @@ where field contains onear("java", "tutorial", !"script")
   <tr>
     <th>sameElement</th>
     <td>
-      <p id="sameelement">
-        <em>sameElement()</em> is an operator that requires the terms to match within the same struct element
-        in an array or a map field. Example:
-      </p>
+      <p id="sameelement">The <code>sameElement()</code> operator lets you denote conditions that must match within the
+      <i>same</i> element in multivalue fields containing structs or strings.</p>
+
+      <p>By default, sameElement uses <code>AND</code> to combine the conditions: <i>All</i> the conditions
+      must match in the same element to produce a match.</p>
+
+      <p>For example, given this <b>struct</b>:</p>
 <pre>
 struct person {
     field first_name    type string {}
@@ -348,6 +351,17 @@ field persons type array&lt;person&gt; {
     struct-field last_name     { indexing: attribute }
     struct-field year_of_birth { indexing: attribute }
 }
+</pre>
+      <p>We can use this query:</p>
+<pre>
+where persons contains sameElement(first_name contains 'Joe', last_name contains 'Smith', year_of_birth < 1940)
+</pre>
+      <p>to return all documents containing a Joe Smith born before 1940 in the <code>persons</code> array.</p>
+
+      <p>Searching a <b>map</b> is done by treating it as an array of a struct with the field members <code>key</code> and <code>value</code>.
+        For example, given this map:
+      </p>
+<pre>
 field identities type map&lt;string, person&gt; {
     indexing: summary
     struct-field key                 { indexing: attribute }
@@ -356,62 +370,37 @@ field identities type map&lt;string, person&gt; {
     struct-field value.year_of_birth { indexing: attribute }
 }
 </pre>
-      <p>
-        With normal <em>AND</em> the query <code>persons.first_name AND persons.last_name</code>
-        will normally not give you what you want.
-        It will match if a document has a <em>persons</em> element with a matching <em>first_name</em>
-        <em>AND</em> any element with a matching <em>last_name</em>.
-        So you will get a lot of false positives since there is nothing limiting them to the same element.
-        However, that is what <em>sameElement</em> ensures. Note that <em>sameElement</em> uses
-        <em>AND</em> to connect the operands. To use <em>OR</em>, use multiple sameElement operators using logical OR.
-      </p>
-<pre>
-where persons contains sameElement(first_name contains 'Joe', last_name contains 'Smith', year_of_birth < 1940)
-</pre>
-      <p>
-        The above returns all documents containing Joe Smith born before 1940 in the <em>persons</em> array.
-      </p>
-      <p>
-        Searching in a map is similar to searching in an array of struct.
-        The difference is that you have an extra synthetic struct with the field members <em>key</em> and <em>value</em>.
-        The above example with the <em>identities</em> map looks like this:
-      </p>
-<pre>
+      <p>We can use this query:</p>
+      <pre>
 where identities contains sameElement(key contains 'father', value.first_name contains 'Joe', value.last_name contains 'Smith', value.year_of_birth < 1940)
 </pre>
-      <p>
-        The above returns all documents that have tagged Joe Smith born before 1940 as a 'father'.
-        The importance here is using the indirection of <em>key</em> and <em>value</em>
-        to address the keys and the values of the map.
-      </p>
-      <hr>
-      <p>
-	<em>sameElement()</em> can also be used on an indexed array of string since
-	{% include version.html version="8.602.85" %}
-      </p>
-<pre>
-field descriptions type array&lt;string&gt; {
+      <p>to return all documents that have a Joe Smith born before 1940 keyed as a 'father'.</p>
+
+      <p><code>sameElement()</code> may also be used to search <b>array of string</b> fields. Supported query operators
+      inside sameElement() are <code>and</code>, <code>equiv</code>,
+      <code>near</code>, <code>onear</code>, <code>or</code>, <code>rank</code> and <code>phrase</code>.
+      <code>and</code> can be used with <code>!</code>.</p>
+      <p>For example given this field:
+      <pre>
+field chunks type array&lt;string&gt; {
     indexing: index | summary
 }
 </pre>
-      <p>
-	Supported query operators inside <em>sameElement()</em> are <code>and</code>, <code>equiv</code>,
-	<code>near</code>, <code>onear</code>, <code>or</code>, <code>rank</code> and <code>phrase</code>.
-	<code>and</code> can be used with <code>!</code>.
-	Example <em>sameElement()</em> queries:
-      </p>
+
+      <p>We can use these queries:</p>
+
 <pre>
-where descriptions contains sameElement("one" and "two")
-where descriptions contains sameElement("one" and equiv("two","three"))
-where descriptions contains sameElement("one" and ({distance: 5}near("two","three",!"four")))
-where descriptions contains sameElement("one" and phrase("two","three"))
-where descriptions contains sameElement("one" and !"two")
-where descriptions contains sameElement("one" or "two")
-where descriptions contains sameElement(rank("one" and "two", "three"))
+where chunks contains sameElement("one" and "two")
+where chunks contains sameElement("one" and equiv("two","three"))
+where chunks contains sameElement("one" and ({distance: 5}near("two","three",!"four")))
+where chunks contains sameElement("one" and phrase("two","three"))
+where chunks contains sameElement("one" and !"two")
+where chunks contains sameElement("one" or "two")
+where chunks contains sameElement(rank("one" and "two", "three"))
 </pre>
       <p>
-	Features inside <em>sameElement()</em> for indexed fields are filtered based on the matching elements, e.g.
-	<a href="../ranking/rank-features.html#elementwise-bm25"><em>elementwise(bm25(descriptions),x,double)</em></a> will only
+	Features inside sameElement() for indexed fields are filtered based on the matching elements, e.g.
+	<a href="../ranking/rank-features.html#elementwise-bm25">elementwise(bm25(descriptions),x,double)</a> will only
 	contain tensor cells based on the matching elements.
       </p>
     </td>
@@ -419,19 +408,18 @@ where descriptions contains sameElement(rank("one" and "two", "three"))
 
   <tr><th>equiv</th><td>
     <p id="equiv">
-      If two terms in the same field should give exactly the same behavior when matched,
-      the <code>equiv()</code> operator behaves like a special case of <code>or</code>.
+      For cases where two terms in the same field should produce exactly the same behavior when matched,
+      the <code>equiv()</code> operator can be used. This behaves like a special case of <code>or</code>.
     </p>
 <pre>
 where fieldName contains equiv("A","B")
 </pre>
     <p>
-      In many cases, the OR operator will give the same results as an EQUIV.
-      The matching logic is exactly the same,
+      The matching logic of quiv is the same as OR,
       and an OR does not have the limitations that EQUIV does (below).
       The difference is in how matches are visible to ranking functions.
-      All words that are children of an OR count for ranking.
-      When using an EQUIV however, it looks like a single word:
+      All words that are children of an OR count for ranking, while with
+      EQUIV, they look like a single word to ranking:
     </p>
     <ul>
       <li>Counts as only +1 for queryTermCount</li>
