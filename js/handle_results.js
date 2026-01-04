@@ -50,7 +50,7 @@ const handleResults = (data, query) => {
       blog: "https://blog.vespa.ai",
       vespaai: "https://vespa.ai",
       vespaapps: "https://github.com/vespa-engine/sample-apps/tree/master",
-      pyvespa: "https://pyvespa.readthedocs.io/en/latest",
+      pyvespa: "https://vespa-engine.github.io/pyvespa",
     };
 
     const sourceName = {

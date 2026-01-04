@@ -14,7 +14,7 @@ This operator can be combined with other filters or query terms using the
 making it easy to create hybrid solutions that combine modern vector based techniques with
 [traditional information retrieval](text-matching.html).
 
-Also see the [pyvespa examples](https://pyvespa.readthedocs.io/en/latest/examples/pyvespa-examples.html#Neighbors).
+Also see the [pyvespa examples](https://vespa-engine.github.io/pyvespa/examples/pyvespa-examples.html#Neighbors).
 
 
 ## Minimal example
