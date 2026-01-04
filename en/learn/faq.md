@@ -351,7 +351,7 @@ you can with angular distance multiply your `clip_query_embedding` by the scalar
 Then you are searching for the points that are closest to the point
 which is the farthest away from your `clip_query_embedding`.
 
-Also see a [pyvespa example](https://pyvespa.readthedocs.io/en/latest/examples/pyvespa-examples.html#Neighbors).
+Also see a [pyvespa example](https://vespa-engine.github.io/pyvespa/examples/pyvespa-examples.html#Neighbors).
 
 
 {:.faq-section}

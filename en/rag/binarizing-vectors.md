@@ -612,7 +612,7 @@ def binarize_tensor(tensor: torch.Tensor) -> str:
 
 
 Multivector example, from
-[ColPali: Efficient Document Retrieval with Vision Language Models](https://pyvespa.readthedocs.io/en/latest/examples/colpali-document-retrieval-vision-language-models-cloud.html):
+[ColPali: Efficient Document Retrieval with Vision Language Models](https://vespa-engine.github.io/pyvespa/examples/colpali-document-retrieval-vision-language-models-cloud.html):
 
 ```python
 import numpy as np
