@@ -4,7 +4,7 @@ title: FAQ - frequently asked questions
 redirect_from:
   - /en/faq
 ---
-Refer to [Vespa Support](https://vespa.ai/support) for more support options.
+Refer to [Vespa Support](https://vespa.ai/support/) for more support options.
 
 <style>
 .subpage h2 {
@@ -772,7 +772,7 @@ for how to handle and remove control characters from the document feed.
 
 ### How to get started?
 [Deploy an application](../basics/deploy-an-application.html) to create a tenant and start your 
-[free trial](https://vespa.ai/free-trial).
+[free trial](https://vespa.ai/free-trial/).
 This tenant can be your personal tenant, or shared with others.
 It can not be renamed.
 
