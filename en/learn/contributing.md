@@ -28,7 +28,7 @@ If you want to become a committer/OWNER making some quality contributions is the
 We require all pull request checks to pass.
 
 ## Versioning
-Vespa uses semantic versioning - see [vespa versions](https://vespa.ai/releases#versions).
+Vespa uses semantic versioning - see [vespa versions](releases.html).
 Notice in particular that any Java API in a package having a @PublicAPI
 annotation in the package-info file cannot be changed in an incompatible way
 between major versions: Existing types and method signatures must be preserved
