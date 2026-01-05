@@ -43,5 +43,5 @@ which no one are working on yet.
 
 ## Community
 If you have questions, want to share your experience or help others,
-please join our community on the [Vespa Slack](http://slack.vespa.ai),
+please join our community on the [Vespa Slack](https://slack.vespa.ai),
 or see Vespa on [Stack Overflow](http://stackoverflow.com/questions/tagged/vespa).
