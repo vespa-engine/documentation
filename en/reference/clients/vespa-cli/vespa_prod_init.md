@@ -16,8 +16,8 @@ advanced configuration see the relevant Vespa Cloud documentation and make
 changes to deployment.xml and services.xml directly.
 
 Reference:
-[https://docs.vespa.ai/en/reference/services/services.html](https://docs.vespa.ai/en/reference/services/services.html)
-[https://docs.vespa.ai/en/reference/services/deployment.html](https://docs.vespa.ai/en/reference/services/deployment.html)
+[https://docs.vespa.ai/en/reference/applications/services/services.html](https://docs.vespa.ai/en/reference/applications/services/services.html)
+[https://docs.vespa.ai/en/reference/applications/deployment.html](https://docs.vespa.ai/en/reference/applications/deployment.html)
 
 ```
 vespa prod init [flags]
