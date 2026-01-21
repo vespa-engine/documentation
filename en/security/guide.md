@@ -301,6 +301,35 @@ use Postman with Vespa</a>.
 See [Using Cloudflare Workers with Vespa Cloud](cloudflare-workers).
 
 
+### Different credentials per instance
+To use different credentials per [instance](../learn/tenant-apps-instances.html),
+use [services.xml variants](../operations/deployment-variants.html#services.xml-variants).
+As an example, use this to have a separate MTLS keypair for production instances
+(use the same pattern if using tokens.):
+```xml
+<container id="default" version="1.0">
+    <clients>
+        <client id="mtls" permissions="read" deploy:instance="default">
+            <certificate file="security/clients_dev.pem"/>
+        </client>
+        <client id="mtls" permissions="read" deploy:instance="qa">
+            <certificate file="security/clients_qa.pem"/>
+        </client>
+        <client id="mtls" permissions="read" deploy:instance="prod">
+            <certificate file="security/clients_prod.pem"/>
+        </client>
+    </clients>
+    <search/>
+    <document-api/>
+</container>
+```
+
+Depending on the [instance](../operations/automated-deployments.html) deployed to,
+a different keypair will be used for dataplane access.
+Use the same mechanism to have a dedicated credential for the [dev](../operations/environments.html#dev) environment,
+using `deploy:environment="dev"`.
+
+
 
 ## Control Plane
 
