@@ -583,6 +583,41 @@ vespa query \
   'input.query(q)=embed(voyage, "machine learning tutorials")'
 {% endhighlight %}</pre>
 
+<h4 id="voyageai-best-practices">Best practices</h4>
+<p>For production deployments, we recommend configuring <strong>separate embedder components for feed and search operations</strong>.
+This architectural pattern provides two key benefits - cost optimization and rate limit isolation.
+In Vespa Cloud, it's best practice to configure these embedders in separate container clusters for feed and search.</p>
+
+<pre>{% highlight xml %}
+<container id="feed" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-large</model>
+        <api-key-secret-ref>voyage_feed_api_key</api-key-secret-ref>
+    </component>
+    <document-api/>
+</container>
+
+<container id="search" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-lite</model>
+        <api-key-secret-ref>voyage_search_api_key</api-key-secret-ref>
+    </component>
+    <search/>
+</container>
+{% endhighlight %}</pre>
+
+<h5 id="voyageai-cost-optimization">Cost optimization with model variants</h5>
+<p>The <a href="https://blog.voyageai.com/2026/01/15/voyage-4/">Voyage 4 model family</a> features a shared embedding space
+across different model sizes. This enables a cost-effective strategy where you can use a more powerful (and expensive) model
+for document embeddings, while using a smaller, cheaper model for query embeddings.
+Since document embedding happens once during indexing but query embedding occurs on every search request,
+this approach can significantly reduce operational costs while maintaining quality.</p>
+
+<h5 id="voyageai-rate-limit-isolation">Rate limit isolation</h5>
+<p>Separating feed and search operations is particularly important for managing VoyageAI API rate limits.
+Bursty document feeding operations can consume significant API quota, potentially causing rate limit errors
+that affect search queries. By using <strong>separate API keys</strong> for feed and search embedders,
+you ensure that feeding bursts don't negatively impact search.</p>
 
 <h2 id="embedder-performance">Embedder performance</h2>
 
