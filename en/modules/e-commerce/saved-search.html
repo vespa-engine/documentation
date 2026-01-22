@@ -1,0 +1,163 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Saved search notifications
+applies_to: enterprise
+---
+
+<p>
+  Vespa for e-commerce includes a module for storing queries in Vespa and issuing notifications
+  when a new or updated document matches any saved searches.
+  A typical use case in e-commerce is letting users store queries on products using filters on
+  keywords, price, location etc. and sending them a notification when new products match their query.
+</p>
+
+<h2 id="overview">Overview</h2>
+
+<p>
+  The ecommerce-saved-search module supports:
+</p>
+<ul>
+  <li><strong>Storing predicate queries</strong> - Saved searches contain arbitrary boolean expressions over a set of string attributes and numerical ranges.</li>
+  <li><strong>Schema wiring configuration</strong> - Wirings between the saved search attributes and the document fields can be configured by the application.</li>
+  <li><strong>Webhook notifications</strong> - A match between a new or updated document and a set of saved searches can be sent to a HTTP endpoint in a JSON format.</li>
+  <li><strong>Separate document processing</strong> - Separate routing to the saved search component allows processing of saved searches simultaneously while feeding to the main cluster.</li>
+</ul>
+
+<h2 id="quick-start">Quick Start</h2>
+
+A minimal setup for demonstrating saved search notification capabilities is given in this section.
+We will develop a small shopping use-case example with a few search attributes.
+
+<h3 id="define-schemas">Define Schemas</h3>
+
+Create two schemas: one for products and one for storing the saved searches.
+
+<h4 id="product.sd">Product Schema</h4>
+
+<p>
+  We create a minimal document type representing a product for sale. 
+  Each of the three fields will correspond to a searchable attribute in the saved searches.
+</p>
+
+<pre>{% highlight xml %}
+schema product {
+    document product {
+        
+        # Other fields
+
+        field price type int {
+            indexing: attribute
+        }
+
+        field category type string {
+            indexing: attribute
+        }
+
+        field condition type string {
+            indexing: attribute
+        }
+    }
+
+    # rank-profiles etc.
+}
+{% endhighlight %}</pre>
+
+<h4 id="saved_search.sd">Saved Search Schema</h4>
+
+<p>
+  The predicate field will contain the entire search expression used to match products.
+</p>
+
+<pre>{% highlight xml %}
+schema saved_search {
+    document saved_search {
+        field filters type predicate {
+            indexing: attribute
+            index {
+                arity: 2 # Mandatory
+                # Range of values the expressions are expected to operate on. 
+                # Better performance if these are smaller
+                lower-bound: 3
+                upper-bound: 500
+
+                dense-posting-list-threshold: 0.25
+            }
+        }
+    }
+}
+{% endhighlight %}</pre>
+
+<h3 id="configure-services">Configure Services</h3>
+
+<p>
+  A minimal <code>services.xml</code> configuring the saved search component can look like this:
+</p>
+
+<pre>{% highlight xml %}
+<services version="1.0">
+    <container id="default" version="1.0">
+        <search />
+        <document-api />
+
+        <document-processing>
+            <chain id="notification">
+                <documentprocessor id="ai.vespa.ecommerce.savedsearch.SavedSearchDocumentProcessor" 
+                                   bundle="ecommerce-saved-search" />
+                <config name="ai.vespa.ecommerce.savedsearch.schema-wiring">
+                    <notification>
+                        <kind>WEBHOOK</kind>
+                        <webhook>
+                            <URL>http://localhost:8000/notification</URL>
+                        </webhook>
+                    </notification>
+
+                    <itemDocumentType>product</itemDocumentType>
+                    <savedSearchDocumentType>saved_search</savedSearchDocumentType>
+                    <predicateFieldName>filters</predicateFieldName>
+                    <savedSearchNumHits>10</savedSearchNumHits>
+
+                    <regularAttributes>
+                        <item>
+                            <predicateName>category</predicateName>
+                            <fieldPath>category</fieldPath>
+                            <required>true</required>
+                        </item>
+                        <item>
+                            <predicateName>condition</predicateName>
+                            <fieldPath>condition</fieldPath>
+                            <required>false</required>
+                        </item>
+                    </regularAttributes>
+                    <rangeAttributes>
+                        <item>
+                            <predicateName>price</predicateName>
+                            <fieldPath>price</fieldPath>
+                            <required>true</required>
+                        </item>
+                    </rangeAttributes>
+                </config>
+            </chain>
+        </document-processing>
+    </container>
+
+    <content version="1.0" id="content">
+        <min-redundancy>2</min-redundancy>
+        <documents>
+            <document type="saved_search" mode="index" />
+            <document type="product" mode="index" />
+
+            <document-processing />
+        </documents>
+    </content>
+
+    <routing version="1.0">
+        <routingtable protocol="document">
+            <route name="notification-route" hops="forkhop" />
+            <hop name="forkhop" selector="[DocumentRouteSelector]">
+                <recipient session="default/chain.notification" />
+                <recipient session="itemcluster" />
+            </hop>
+        </routingtable>
+    </routing>
+</services>
+{% endhighlight %}</pre>
