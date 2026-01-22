@@ -500,12 +500,15 @@ telling the splade embedder the name of the tensor dimension to use for the chun
 
 <p>An embedder that uses the <a href="https://www.voyageai.com/">VoyageAI</a> embedding API
 to generate high-quality embeddings for semantic search. This embedder calls the VoyageAI API service
-and does not require local model files or ONNX inference.</p>
+and does not require local model files or ONNX inference. All embeddings returned by VoyageAI are normalized
+to unit length, making them suitable for cosine similarity and
+<a href="../reference/schemas/schemas.html#prenormalized-angular">prenormalized-angular</a> distance metrics
+(see <a href="https://docs.voyageai.com/docs/faq#which-similarity-function-should-i-use">VoyageAI FAQ</a>).</p>
 
 <pre>{% highlight xml %}
 <container version="1.0">
     <component id="voyage" type="voyage-ai-embedder">
-        <model>voyage-3.5</model>
+        <model>voyage-4</model>
         <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
     </component>
 </container>
@@ -514,10 +517,6 @@ and does not require local model files or ONNX inference.</p>
 <ul>
     <li>
         The <code>model</code> specifies which VoyageAI model to use.
-        Available models include <code>voyage-3.5</code> (1024 dimensions, latest and best),
-        <code>voyage-3.5-lite</code> (512 dimensions, fastest),
-        <code>voyage-code-3</code> (optimized for code), and others.
-        See the <a href="https://docs.voyageai.com/docs/embeddings">VoyageAI documentation</a> for the full list.
     </li>
     <li>
         The <code>api-key-secret-ref</code> references a secret in Vespa's
@@ -526,89 +525,26 @@ and does not require local model files or ONNX inference.</p>
     </li>
 </ul>
 
-<p>Add your VoyageAI API key to the secret store:</p>
-<pre>
-vespa secret add voyage_api_key --value "pa-xxxxx..."
-</pre>
-
-<p>See the <a href="reference/embedding-reference.html#voyageai-embedder-reference-config">reference</a>
-for all configuration parameters including caching, retry logic, and performance tuning.</p>
+<p>See the <a href="../reference/rag/embedding.html#voyageai-embedder-reference-config">reference</a>
+for all configuration parameters.</p>
 
 <h4 id="voyageai-embedder-models">VoyageAI embedder models</h4>
-<p>
-    VoyageAI offers several embedding models optimized for different use cases.
-    The resulting <a href="reference/tensor.html#tensor-type-spec">tensor type</a> can be <code>float</code> or
-    <code>bfloat16</code> for storage efficiency.
-</p>
-
-<p>Latest general-purpose models (recommended):</p>
+<p>For the complete list of available models and their specifications, see:</p>
 <ul>
-    <li><a href="https://docs.voyageai.com/docs/embeddings"><strong>voyage-3.5</strong></a> produces <code>tensor&lt;float&gt;(x[1024])</code> - <strong>latest and best quality</strong>, state-of-the-art for most applications</li>
-    <li><strong>voyage-3.5-lite</strong> produces <code>tensor&lt;float&gt;(x[512])</code> - <strong>newest lite model</strong>, excellent quality at lower cost and faster speed</li>
-</ul>
-
-<p>Previous generation general-purpose models:</p>
-<ul>
-    <li>voyage-3 produces <code>tensor&lt;float&gt;(x[1024])</code> - high quality (use voyage-3.5 for best results)</li>
-    <li>voyage-3-lite produces <code>tensor&lt;float&gt;(x[512])</code> - cost-efficient (use voyage-3.5-lite for better performance)</li>
-</ul>
-
-<p>Specialized models:</p>
-<ul>
-    <li>voyage-code-3 produces <code>tensor&lt;float&gt;(x[1024])</code> - optimized for code search and technical content</li>
-    <li>voyage-finance-2 produces <code>tensor&lt;float&gt;(x[1024])</code> - optimized for financial documents</li>
-    <li>voyage-law-2 produces <code>tensor&lt;float&gt;(x[1024])</code> - optimized for legal documents</li>
-    <li>voyage-multilingual-2 produces <code>tensor&lt;float&gt;(x[1024])</code> - supports 100+ languages</li>
-</ul>
-
-<p>Contextual model:</p>
-<ul>
-    <li><strong>voyage-context-3</strong> produces <code>tensor&lt;float&gt;(x[1024])</code> (configurable: 256, 512, 1024, 2048) -
-        contextualized embeddings for document chunks with surrounding context awareness</li>
-</ul>
-
-<p>Multimodal model (preview):</p>
-<ul>
-    <li><strong>voyage-multimodal-3.5</strong> produces <code>tensor&lt;float&gt;(x[1024])</code> (configurable: 256, 512, 1024, 2048) -
-        multimodal embeddings for text, images, and video in a shared vector space</li>
+    <li><a href="https://docs.voyageai.com/docs/embeddings">VoyageAI Embeddings Documentation</a> - General-purpose and specialized models</li>
+    <li><a href="https://docs.voyageai.com/docs/contextualized-chunk-embeddings">Contextualized Chunk Embeddings</a> - Models for embedding document chunks with surrounding context. See <a href="../rag/working-with-chunks.html">Working with chunks</a>.</li>
+    <li><a href="https://docs.voyageai.com/docs/multimodal-embeddings">Multimodal Embeddings</a> - Multimodal models for text, images, and video</li>
 </ul>
 
 <h4 id="voyageai-input-types">Input type detection</h4>
 <p>VoyageAI models distinguish between query and document embeddings for improved retrieval quality.
-The embedder automatically detects the context and sets the appropriate input type:</p>
-<ul>
-    <li><strong>Query context</strong>: When embedding text in query requests via <code>embed()</code></li>
-    <li><strong>Document context</strong>: When embedding document fields during indexing</li>
-</ul>
+The embedder automatically detects the context and sets the appropriate input type based on whether
+the embedding is performed during feed (indexing) or query processing in Vespa.</p>
 
-<p>You can disable auto-detection and set a fixed input type:</p>
-<pre>{% highlight xml %}
-<component id="voyage" type="voyage-ai-embedder">
-    <model>voyage-3.5</model>
-    <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
-    <auto-detect-input-type>false</auto-detect-input-type>
-    <default-input-type>query</default-input-type>
-</component>
-{% endhighlight %}</pre>
-
-<h4 id="voyageai-performance">VoyageAI performance features</h4>
-<p>The VoyageAI embedder includes several performance optimizations:</p>
-<ul>
-    <li><strong>Caching</strong>: Automatically caches recent embeddings to reduce API calls.</li>
-    <li><strong>Connection pooling</strong>: Reuses HTTP connections for efficiency. Configure with <code>max-idle-connections</code> (default: 5).</li>
-    <li><strong>Retry logic</strong>: Automatically retries on rate limits and transient errors with exponential backoff. Configure with <code>max-retries</code> (default: 10).</li>
-    <li><strong>Normalization</strong>: Optional L2 normalization for cosine similarity. Enable with <code>normalize</code> set to <code>true</code>.</li>
-</ul>
-
-<p>Example with performance tuning:</p>
-<pre>{% highlight xml %}
-<component id="voyage" type="voyage-ai-embedder">
-    <model>voyage-3.5</model>
-    <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
-    <max-idle-connections>20</max-idle-connections>
-    <normalize>true</normalize>
-</component>
-{% endhighlight %}</pre>
+<p>For advanced use cases where you need to control the input type programmatically,
+you can use the <code>destination</code> property of the
+<a href="https://javadoc.io/static/com.yahoo.vespa/linguistics/8.620.35/com/yahoo/language/process/Embedder.Context.html">Embedder.Context</a>
+when calling the embedder from Java code.</p>
 
 <h4 id="voyageai-usage-example">Usage example</h4>
 <p>Complete example showing document indexing and query-time embedding:</p>
@@ -625,7 +561,7 @@ schema doc {
     field embedding type tensor&lt;float&gt;(x[1024]) {
         indexing: input text | embed voyage | attribute | index
         attribute {
-            distance-metric: angular
+            distance-metric: prenormalized-angular
         }
     }
 
@@ -646,10 +582,6 @@ vespa query \
   'yql=select * from doc where {targetHits:10}nearestNeighbor(embedding,q)' \
   'input.query(q)=embed(voyage, "machine learning tutorials")'
 {% endhighlight %}</pre>
-
-<p>When using <code>normalize</code> set to <code>true</code>, use
-<a href="reference/schema-reference.html#prenormalized-angular">distance-metric: prenormalized-angular</a>
-for more efficient similarity computation.</p>
 
 
 <h2 id="embedder-performance">Embedder performance</h2>
