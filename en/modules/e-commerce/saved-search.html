@@ -5,10 +5,10 @@ applies_to: enterprise
 ---
 
 <p>
-  Vespa for e-commerce includes a module for storing queries in Vespa and issuing notifications
+  Vespa for e-commerce includes a module for storing queries in Vespa ("searches") and issuing notifications
   when a new or updated document matches any saved searches.
   A typical use case in e-commerce is letting users store queries on products using filters on
-  keywords, price, location etc. and sending them a notification when new products match their query.
+  keywords, price, location etc. and sending them a notification when a new product matches their query.
 </p>
 
 <h2 id="overview">Overview</h2>
@@ -17,20 +17,24 @@ applies_to: enterprise
   The ecommerce-saved-search module supports:
 </p>
 <ul>
-  <li><strong>Storing predicate queries</strong> - Saved searches contain arbitrary boolean expressions over a set of string attributes and numerical ranges.</li>
+  <li><strong>Storing predicate queries</strong> - Saved searches contain arbitrary boolean expressions over a set of string attributes and numerical ranges. See <a href="../../schemas/predicate-fields.html">Predicate Fields</a>.</li>
   <li><strong>Schema wiring configuration</strong> - Wirings between the saved search attributes and the document fields can be configured by the application.</li>
   <li><strong>Webhook notifications</strong> - A match between a new or updated document and a set of saved searches can be sent to a HTTP endpoint in a JSON format.</li>
-  <li><strong>Separate document processing</strong> - Separate routing to the saved search component allows processing of saved searches simultaneously while feeding to the main cluster.</li>
+  <li><strong>Separate document processing</strong> - Separate routing to the saved search component allows processing of saved searches without disrupting normal feed operations.</li>
 </ul>
 
 <h2 id="quick-start">Quick Start</h2>
 
-A minimal setup for demonstrating saved search notification capabilities is given in this section.
-We will develop a small shopping use-case example with a few search attributes.
+<p>
+  A minimal setup for demonstrating saved search notification capabilities is given in this section.
+  We will develop a small shopping use-case example with a few saved search attributes.
+</p>
 
 <h3 id="define-schemas">Define Schemas</h3>
 
-Create two schemas: one for products and one for storing the saved searches.
+<p>
+  Create two schemas: one for products and one for storing the saved searches.
+</p>
 
 <h4 id="product.sd">Product Schema</h4>
 
@@ -155,9 +159,359 @@ schema saved_search {
             <route name="notification-route" hops="forkhop" />
             <hop name="forkhop" selector="[DocumentRouteSelector]">
                 <recipient session="default/chain.notification" />
-                <recipient session="itemcluster" />
+                <recipient session="content" />
             </hop>
         </routingtable>
     </routing>
 </services>
 {% endhighlight %}</pre>
+
+<h3 id="feeding">Feed Data</h3>
+
+<h4 id="feed-saved-search">Feed saved searches</h4>
+
+<p>
+  To test the functionality, feed two saved search documents:
+</p>
+
+<pre>{% highlight json %}
+{"put": "id:saved_search:saved_search::search1", "fields": {
+    "filters": "price in [20..100] and category in [Sports, Books]"
+}}
+{"put": "id:saved_search:saved_search::search2", "fields": {
+    "filters": "price in [200..487] and category in [Electronics]"
+}}
+{% endhighlight %}</pre>
+
+<h4 id="feed-product-notification">Feed a product to the notification route</h4>
+
+<p>
+  Assume a new product is available, with the following schema:
+</p>
+
+<pre>{% highlight json %}
+{"put": "id:saved_search:product::product1", "fields":{"category": "Sports", "price": 50}}
+{% endhighlight %}</pre>
+
+<p>
+  To enable notifications when feeding this product, feed it to the <code>notification-route</code>:
+</p>
+
+<pre>{% highlight shell %}
+$ vespa feed --route notification-route product.jsonl
+{% endhighlight %}</pre>
+
+<p>
+  Assuming everything is set up correctly, it should match <code>id:saved_search:saved_search::search1</code> but not <code>search2</code>.
+
+  If a server is receiving requests at the endpoint specified in the <code>URL</code> parameter of the <code>webhook</code> configuration, 
+  you should see a request with a JSON body representing the matched pair.
+</p>
+
+{% include warning.html content='The <code>SavedSearchDocumentProcessor</code> acts as a <b>sink</b> for incoming documents. That is, <code>Put</code> and <code>Update</code> operations sent to that document processor will not propagate down to the content nodes, effectively discarding the operations. This is why a <code>routingtable</code> is specified in the example - documents going to the route <code>notification-route</code> will "fork", with one path going to the content cluster and one path to the saved search component.' %}
+
+<h2 id="notification-kinds">Notification kinds</h2>
+
+<h3 id="notification-kind-webhook">Webhook</h3>
+
+<p>
+  The webhook notification kind will send a request to a specified URL for each document that matches a set of saved searches. 
+
+  It requires an external application to provide the handling of such requests.
+
+</p>
+<p>
+  If the configuration parameter <code>notification.kind == WEBHOOK</code>, all configuration parameters prefixed with <code>notification.webhook</code> will take effect.
+
+  The requests from the saved search application will be <code>POST</code>-requests with a JSON body:
+</p>
+
+<pre>{% highlight json %}
+{
+  "id": "<product-id>",
+  "timestamp": "<ISO-8601-timestamp>",
+  "matched_documents": [
+    "<saved-search-id-1>",
+    "<saved-search-id-2>",
+    ...
+  ]
+}
+{% endhighlight %}</pre>
+
+<h4 id="notification-security">Security</h4>
+
+<p>
+  In most cases, the Webhook endpoint handling the notifications is (and should be) protected in some way.
+
+  The currently supported way to send authorized requests to the webhook endpoint is by combining the <a href="../../security/secret-store.html">Vespa secret store</a> with the <code>notification.webhook.headers[].secret</code> config parameter.
+
+  Assume we want to send notifications to <code>https://my.webhook.com/notification</code>, and that the api requires the following header:
+</p>
+
+<pre>{% highlight yaml %}
+Authorization: Bearer TOKEN
+{% endhighlight %}</pre>
+
+<p>
+  to be present in all requests. To enable our application to use this, first create the secret in Vespa Cloud and let it contain the <b>full</b> 
+  value of the header: <code>Bearer TOKEN</code>, replacing <code>TOKEN</code> with the actual token.
+</p>
+
+<p>
+  Next, add the secret to the application in <code>services.xml</code>:
+</p>
+
+<pre>{% highlight xml %}
+<container>
+    ...
+    <secrets>
+        <myApiToken vault="my-vault" name="my-token-name" />
+    </secrets>
+{% endhighlight %}</pre>
+
+<p>
+  Finally, configure the <code>SavedSearchDocumentProcessor</code> to add a header with this secret value to all notification requests:
+</p>
+
+<pre>{% highlight xml %}
+    ...
+    <documentprocessor id="ai.vespa.ecommerce.savedsearch.SavedSearchDocumentProcessor" 
+                       bundle="ecommerce-saved-search" />
+    <config name="ai.vespa.ecommerce.savedsearch.schema-wiring">
+        <notification>
+            <kind>WEBHOOK</kind>
+            <webhook>
+            <headers>
+                <item>
+                    <key>Authorization</key>
+                    <!-- Value of secret will be placed in the value field of the HTTP header. -->
+                    <secret>myApiToken</secret>
+                </item>
+            </headers>
+            </webhook>
+        </notification>
+    </config>
+</container>
+{% endhighlight %}</pre>
+
+<h3 id="notification-kind-vespa">Vespa Schema</h3>
+
+<p>
+  For a simpler way to test saved search notification, a method for storing the notifications within the Vespa application is provided.
+
+  This method represents each notification between a pair of a product and a saved search using a dedicated Vespa document type. 
+
+  It is recommended for testing purposes only.
+</p>
+<p>
+  If the configuration parameter <code>notification.kind == VESPA_SCHEMA</code>, all configuration parameters prefixed with <code>notification.vespaSchema</code> will take effect.
+
+  A minimal working example of this notification kind is given below.
+</p>
+
+<h4 id="notification-vespa-example">Notification example</h4>
+
+<p>
+  Define a document type for storing the notifications, for example <code>notification.sd</code>:
+</p>
+
+<pre>{% highlight xml %}
+schema notification {
+    document notification {
+        field product_id type string {
+            indexing: attribute | summary
+        }
+
+        field saved_search_id type string {
+            indexing: attribute | summary
+        }
+
+        field timestamp type long {
+            indexing: attribute | summary
+        }
+    }
+}
+{% endhighlight %}</pre>
+
+<p>
+  Add the document type to the application:
+</p>
+
+<pre>{% highlight xml %}
+<content>
+    <documents>
+        ...
+        <document type="notification" mode="index" />
+    </documents>
+</content>
+{% endhighlight %}</pre>
+
+<p>
+  Configure the schema wirings of the <code>SavedSearchDocumentProcessor</code>:
+</p>
+
+<pre>{% highlight xml %}
+<container>
+    <documentprocessor id="ai.vespa.ecommerce.savedsearch.SavedSearchDocumentProcessor" 
+                       bundle="ecommerce-saved-search" />
+    <config name="ai.vespa.ecommerce.savedsearch.schema-wiring">
+        <notification>
+            <kind>VESPA_SCHEMA</kind>
+            <vespaSchema>
+                <documentType>notification</documentType>
+                <namespace>saved_search</namespace>
+                <fieldPathProductId>product_id</fieldPathProductId>
+                <fieldPathSavedSearchId>saved_search_id</fieldPathSavedSearchId>
+                <fieldPathTimestamp>timestamp</fieldPathTimestamp>
+            </vespaSchema>
+        </notification>
+    </config>
+</container>
+{% endhighlight %}</pre>
+
+Now notifications can be inspected by using <code>vespa visit</code> or <code>vespa query</code> with the appropriate parameters.
+
+<h2 id="configuration">Configuration reference</h2>
+
+<p>
+This section describes the possible <a href="../../applications/configuring-components.html">configuration parameters</a> used by the document processor.
+</p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>notification.kind</code></td>
+      <td>Method to use for sending notifications.</td>
+      <td><code>enum {WEBHOOK, DUMMY, VESPA_SCHEMA}</code></td>
+      <td><code>DUMMY</code></td>
+    </tr>
+    <tr>
+      <td><code>notification.webhook.URL</code></td>
+      <td>URL to send notification requests.</td>
+      <td><code>string</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>notification.webhook.connectionPoolSize</code></td>
+      <td>Number of HTTP client threads to use in the container cluster.</td>
+      <td><code>int</code></td>
+      <td><code>20</code></td>
+    </tr>
+    <tr>
+      <td><code>notification.webhook.headers[].key</code></td>
+      <td>Key of a header to add to all webhook requests.</td>
+      <td><code>string</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>notification.webhook.headers[].value</code></td>
+      <td>Value of a header to add to all webhook requests.</td>
+      <td><code>string</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>notification.webhook.headers[].secret</code></td>
+      <td>Use a secret from Vespa secret store instead of the value provided in <code>.value</code>. The value provided here should match the name of a secret specified with a <code>secrets</code> tag in <code>services.xml</code>.</td>
+      <td><code>string</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>notification.vespaSchema.documentType</code></td>
+      <td>Name of the Vespa document type to use for storing notifications. This document type has to be defined in the application.</td>
+      <td><code>string</code></td>
+      <td>saved_search_notification</td>
+    </tr>
+    <tr>
+      <td><code>notification.vespaSchema.namespace</code></td>
+      <td>Namespace to use for creating document ids for the notification documents.</td>
+      <td><code>string</code></td>
+      <td>saved_search</td>
+    </tr>
+    <tr>
+      <td><code>notification.vespaSchema.fieldPathProductId</code></td>
+      <td>Fieldpath for storing the product id in the notification documents.</td>
+      <td><code>string</code></td>
+      <td>product_id</td>
+    </tr>
+    <tr>
+      <td><code>notification.vespaSchema.fieldPathSavedSearchId</code></td>
+      <td>Fieldpath for storing saved search id in the notification documents.</td>
+      <td><code>string</code></td>
+      <td>saved_search_id</td>
+    </tr>
+    <tr>
+      <td><code>notification.vespaSchema.fieldPathTimestamp</code></td>
+      <td>Fieldpath for storing timestamps in the notification documents.</td>
+      <td><code>string</code></td>
+      <td>timestamp</td>
+    </tr>
+    <tr>
+      <td><code>itemDocumentType</code></td>
+      <td>The name of the document type that can trigger notifications, e.g. <code>product</code>.</td>
+      <td><code>string</code></td>
+      <td>product</td>
+    </tr>
+    <tr>
+      <td><code>savedSearchDocumentType</code></td>
+      <td>The name of the document type storing saved searches, e.g. <code>saved_search</code>.</td>
+      <td><code>string</code></td>
+      <td>saved_search</td>
+    </tr>
+    <tr>
+      <td><code>predicateFieldName</code></td>
+      <td>The name of the field in <code>savedSearchDocumentType</code> storing the predicate query.</td>
+      <td><code>string</code></td>
+      <td>filters</td>
+    </tr>
+    <tr>
+      <td><code>savedSearchNumHits</code></td>
+      <td>Maximum number of saved searches to issue a notification for one product.</td>
+      <td><code>int</code></td>
+      <td>100</td>
+    </tr>
+    <tr>
+      <td><code>regularAttributes[].predicateName</code></td>
+      <td>The name of a regular (string) attribute to be used in the saved search predicate field.</td>
+      <td><code>string</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>regularAttributes[].fieldPath</code></td>
+      <td>The field in the <code>itemDocumentType</code> to be matched with this attribute. This field should be of type <code>string</code>.</td>
+      <td><code>string</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>regularAttributes[].required</code></td>
+      <td>Whether documents are required to specify this attribute.</td>
+      <td><code>bool</code></td>
+      <td><code>false</code></td>
+    </tr>
+    <tr>
+      <td><code>rangeAttributes[].predicateName</code></td>
+      <td>The name of a numerical range attribute to be used in the saved search predicate field.</td>
+      <td><code>string</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>rangeAttributes[].fieldPath</code></td>
+      <td>The field in the <code>itemDocumentType</code> to be matched with this attribute. This field should be of a numeric type, e.g. <code>int</code>.</td>
+      <td><code>string</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>rangeAttributes[].required</code></td>
+      <td>Whether documents are required to specify this attribute.</td>
+      <td><code>bool</code></td>
+      <td><code>false</code></td>
+    </tr>
+  </tbody>
+</table>
