@@ -119,8 +119,19 @@ The text analysis works as follows:
 <h2 id="linguistics-key">Linguistics key</h2>
 
 <p>
-  Linguistics keys identify a configuration of text analysis.
-  A key has 2 parts: a mandatory <a href="https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/Language.java">
+  Linguistics keys identify a configuration of text analysis. It can be made of two parts,
+  separated by a semicolon, though you can omit one or the other. The two parts are:
+  <ul>
+    <li>
+      A <a href="linguistics.html#linguistics-profiles">linguistics profile</a>.
+    </li>
+    <li>
+      A language key.
+    </li>
+  </ul>
+</p>
+<p>
+  The language key, in turn, has 2 parts: a mandatory <a href="https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/Language.java">
   language code</a> and an optional stemming mode.
   The format is <code>LANGUAGE_CODE[/STEM_MODE]</code>.
   There are 5 stemming modes: <code>NONE, DEFAULT, ALL, SHORTEST, BEST</code> (they can be specified in the <a href="../reference/schemas/schemas.html#stemming">field schema</a>).
@@ -129,12 +140,27 @@ The text analysis works as follows:
 <p>Examples of linguistics key:</p>
 <ul>
   <li>
-    <code>en</code>: English language.
+    <code>profile=whitespaceLowercase</code>: a profile that applies to all languages. You can bind it to
+    different fields by specifying their <a href="linguistics.html#linguistics-profiles">linguistics profiles</a> in the schema.
   </li>
   <li>
-    <code>en/BEST</code>: English language with the <code>BEST</code> stemming mode.
+    <code>profile=whitespaceLowercase;language=en</code>: a profile that applies to the English language.
+    You'd still bind it to fields via their <a href="linguistics.html#linguistics-profiles">linguistics profiles</a> in the schema,
+    but it will only be applied to the English texts (either at indexing or query time).
+  </li>
+  <li>
+    <code>en</code>: English language: applies to all English texts where no profile is specified
+    (in the schema or <a href="linguistics.html#overriding-profile-for-query-strings">in the query</a>).
+  </li>
+  <li>
+    <code>en/BEST</code>: English language with the <code>BEST</code> stemming mode. Like the previous example,
+    but only applies when <a href="../reference/schemas/schemas.html#stemming">stemming</a> is set to <code>BEST</code>.
   </li>
 </ul>
+
+{% include note.html content='You can use different profiles for document fields and query strings.
+See <a href="linguistics.html#different-processing-for-query-strings">Different processing for query strings</a> and the
+<a href="https://github.com/vespa-engine/sample-apps/tree/master/examples/lucene-linguistics/multiple-profiles">multiple-profiles sample app</a> for more information.' %}
 
 <h2 id="custom-analysis">Customizing text analysis</h2>
 
@@ -159,46 +185,53 @@ The text analysis works as follows:
   Example for the English language:
 </p>
 
-<pre>
-  &lt;component id=&quot;linguistics&quot;
-             class=&quot;com.yahoo.language.lucene.LuceneLinguistics&quot;
-             bundle=&quot;your-bundle-name&quot;&gt;
-    &lt;config name=&quot;com.yahoo.language.lucene.lucene-analysis&quot;&gt;
-      &lt;configDir&gt;lucene-linguistics&lt;/configDir&gt;
-      &lt;analysis&gt;
-        &lt;item key=&quot;en&quot;&gt;
-          &lt;tokenizer&gt;
-            &lt;name&gt;standard&lt;/name&gt;
-          &lt;/tokenizer&gt;
-          &lt;tokenFilters&gt;
-            &lt;item&gt;
-              &lt;name&gt;stop&lt;/name&gt;
-              &lt;conf&gt;
-                &lt;item key=&quot;words&quot;&gt;en/stopwords.txt&lt;/item&gt;
-                &lt;item key=&quot;ignoreCase&quot;&gt;true&lt;/item&gt;
-              &lt;/conf&gt;
-            &lt;/item&gt;
-            &lt;item&gt;
-              &lt;name&gt;englishMinimalStem&lt;/name&gt;
-            &lt;/item&gt;
-          &lt;/tokenFilters&gt;
-        &lt;/item&gt;
-      &lt;/analysis&gt;
-    &lt;/config&gt;
-  &lt;/component&gt;
-</pre>
+<pre>{% highlight xml %}
+  <component id="linguistics"
+             class="com.yahoo.language.lucene.LuceneLinguistics"
+             bundle="your-bundle-name">
+    <config name="com.yahoo.language.lucene.lucene-analysis">
+      <configDir>lucene-linguistics</configDir>
+      <analysis>
+        <item key="profile=standardStopStem;language=en">
+          <tokenizer>
+            <name>standard</name>
+          </tokenizer>
+          <tokenFilters>
+            <item>
+              <name>stop</name>
+              <conf>
+                <item key="words">en/stopwords.txt</item>
+                <item key="ignoreCase">true</item>
+              </conf>
+            </item>
+            <item>
+              <name>englishMinimalStem</name>
+            </item>
+          </tokenFilters>
+        </item>
+      </analysis>
+    </config>
+  </component>
+{% endhighlight %}</pre>
 
 <p>Notes:</p>
 <ul>
   <li>
-    <code>item key="en"</code> value is a <a href="#linguistics-key">linguistics key</a>.
+    <code>item key="profile=standardStopStem;language=en"</code> value is a <a href="#linguistics-key">linguistics key</a>.
   </li>
   <li>
-    the <code>en/stopwords.txt</code> file must be placed in your application package under
-    the <code>lucene-linguistics</code> directory.
+    <code>name</code> values are the <a href="https://docs.oracle.com/en/java/javase/17/docs/api/java.naming/javax/naming/spi/package-summary.html">SPI names</a>
+    of the text analysis components. You'll typically find them in the
+    <a href="https://lucene.apache.org/core/9_11_1/analysis/common/allclasses-index.html">Lucene analysis JavaDocs</a>.
+    For example, the name <code>stop</code> along with other options can be found in the
+    <a href="https://lucene.apache.org/core/9_11_1/analysis/common/org/apache/lucene/analysis/core/StopFilterFactory.html">StopFilterFactory JavaDoc</a>.
   </li>
   <li>
-    If the <code>configDir</code> is not provided the files must be on the classpath.
+    The <code>en/stopwords.txt</code> file must be placed in your application package under
+    the <code>lucene-linguistics</code> directory, which is referenced by the <code>configDir</code> option.
+  </li>
+  <li>
+    If <code>configDir</code> is not provided the files must be on the classpath.
   </li>
 </ul>
 
@@ -212,12 +245,12 @@ The text analysis works as follows:
 <p>
 </p>
 
-<pre>
-&lt;component
-    id=&quot;en&quot;
-    class=&quot;org.apache.lucene.analysis.core.SimpleAnalyzer&quot;
-    bundle=&quot;your-bundle-name&quot; /&gt;
-</pre>
+<pre>{% highlight xml %}
+<component
+    id="en"
+    class="org.apache.lucene.analysis.core.SimpleAnalyzer"
+    bundle="your-bundle-name" />
+{% endhighlight %}</pre>
 
 <p>
   Where:
@@ -273,3 +306,90 @@ The text analysis works as follows:
   This means that for both feeding and searching you should provide a
   <a href="../reference/api/query.html#model.language">language parameter</a>.
 </p>
+
+<h2 id="troubleshooting-lucene-text-analysis">Troubleshooting Lucene text analysis</h2>
+
+<p>
+  If your documents don't match as expected, there are two ways to get more information.
+
+  First, you can get the tokenized text for a field by using <a href="../reference/schemas/schemas.html#tokens">tokens</a>
+  in the <a href="../querying/document-summaries.html">document summary</a>.
+  For example, to get the original text and tokens for the <code>title</code> field:
+</p>
+
+<pre>
+  document-summary debug-text-tokens {
+    summary title {}
+    summary title_tokens {
+        source: title
+        tokens
+    }
+    from-disk
+}
+</pre>
+
+<p>
+  Then, at query time, you can also get the tokens of the query string
+  by increasing the <a href="../reference/api/query.html#trace.level">trace level</a>:
+</p>
+
+<pre>{% highlight json %}
+{
+  "yql": "select * from sources * where title contains \"dog\"",
+  "presentation.summary": "debug-text-tokens",
+  "model.locale": "en",
+  "trace.level": 2
+}
+{% endhighlight %}</pre>
+
+<h3 id="indexing-all-stemmed-words">Indexing all stems</h3>
+
+<p>
+  Some analyzers expand the input text into multiple tokens on the same position.
+  For example, those based on the <a href="https://lucene.apache.org/core/9_11_1/analysis/common/org/apache/lucene/analysis/ngram/NGramTokenFilter.html">NGramTokenFilter</a>.
+  Here's a sample analyzer configuration:
+</p>
+
+<pre>{% highlight xml %}
+<item key="profile=ngram;language=en">
+  <tokenizer>
+    <name>whitespace</name>
+  </tokenizer>
+  <tokenFilters>
+    <item>
+      <name>nGram</name>
+      <conf>
+        <item key="minGramSize">2</item>
+        <item key="maxGramSize">2</item>
+      </conf>
+    </item>
+  </tokenFilters>
+</item>
+{% endhighlight %}</pre>
+
+<p>
+  This will take a text like <code>dog</code> and produce <code>do</code> and <code>og</code> as tokens, plus (by default) the original <code>dog</code>.
+  However, Vespa only takes the first token (<code>do</code>) and writes it to the index, ignoring the other "stems". As a result,
+  a search for <code>og</code> will not match documents that contain <code>dog</code>, which is the whole point of using letter n-grams.
+</p>
+
+<p>
+  To index all stems, you can use the <a href="../reference/schemas/schemas.html#stemming">stemming</a> parameter in the schema definition of your field:
+</p>
+
+<pre>
+field title_grams type string {
+  indexing: summary | index
+  linguistics {
+      profile: ngram
+  }
+  stemming: multiple
+}
+</pre>
+
+<p>
+  Now, Vespa will index all stems, and a search for <code>og</code> will match documents that contain <code>dog</code>.
+</p>
+
+{% include note.html content='Queries look for all stems by default (regardless of the schema configuration). For example, a search for
+<code>dog</code> would expand to <code>do</code> and <code>og</code> as well, looking for all three terms.' %}
