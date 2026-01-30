@@ -1,0 +1,326 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Install Vespa on Kubernetes
+applies_to: enterprise
+---
+
+<p>
+  The Vespa Operator can be installed using the official Helm chart.
+  The operator depends on the installation of the <code>VespaSet</code> <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource Definition</a> (CRD), which is defined at the Kubernetes cluster scope.
+  Through the Helm Chart, the installation of the CRD and the required RBAC permissions can be simplified. The required permissions are listed in the <a href="#permissions">Permissions</a> section.
+</p>
+
+<p>
+  Our support team will provide credentials for accessing an OCI container image, referred to as <code>$OCI_IMAGE_REFERENCE</code> below. Use the image version based on the Vespa version
+  provided in the <a href="vespa-on-kubernetes.html#compatibility">Supported Versions</a>. We will refer to the image version as <code>$OCI_IMAGE_TAG</code>.
+</p>
+
+<h2>Requirements</h2>
+
+<p>
+  The following tools are encouraged for a smooth deployment. Refer to the <a href="vespa-on-kubernetes.html#compatibility">Supported Versions</a> section for a full list of version compatibility.
+</p>
+
+<ul>
+  <li><a href="https://helm.sh/docs/intro/install/">Helm CLI</a></li>
+  <li>Kubernetes Command Line Tool (<a href="https://kubernetes.io/docs/reference/kubectl/">kubectl</a>)</li>
+  <li><a href="https://docs.vespa.ai/en/clients/vespa-cli.html">Vespa CLI</a></li>
+</ul>
+
+<p>
+  These instructions assume that <code>kubeconfig</code> is pointing to an active Kubernetes cluster. Refer to the <a href="https://kubernetes.io/docs/setup/">Getting Started</a> guide to create a Kubernetes cluster.
+</p>
+
+<h2>Install via Helm Chart</h2>
+<p>
+  An official Helm Chart can be accessed through an OCI Helm Chart distributed by our support team. The Helm Chart installs the Vespa Operator
+  and the <code>Role</code>, <code>RoleBinding</code>, and <code>ServiceAccount</code> resources with the necessary permissions to operate Vespa. Optionally, the
+  CRD specification can be installed onto the Kubernetes cluster. The Helm Chart distribution will be referred to as <code>$HELM_OCI_CHART_REFERENCE</code> in the sections below.
+</p>
+
+<p>
+  This image bundles the Vespa Operator, Config Server, and application artifacts.
+  For production use, we recommend mirroring this image into your own OCI registry or a well-known internal repository appropriate for your infrastructure.
+</p>
+
+<p>
+  An installation can be performed as follows. This will deploy the Vespa Operator to the <code>vespa</code> namespace and apply
+  the <code>VespaSet</code> CRD specification to the cluster.
+</p>
+<pre>
+$ helm install vespa-operator $OCI_REPOSITORY --namespace vespa --create-namespace --set image.repository $OCI_IMAGE_REFERENCE --set image.tag $OCI_IMAGE_TAG
+</pre>
+<p>
+  If CRDs are managed separately, the CRD installation can be disabled. However, the CRD specification must
+  be manually applied to the cluster before installing the Helm Chart. Our support team can provide this specification if necessary.
+</p>
+
+<pre>
+$ kubectl apply vespasets.k8s.ai.vespa-v1.yaml
+$ helm install vespa-operator $OCI_REPOSITORY --namespace $NAMESPACE --create-namespace --skip-crds --set image.repository $OCI_IMAGE_REFERENCE --set image.tag $OCI_IMAGE_TAG
+</pre>
+
+<p>
+  Ensure that the <code>Deployment</code> resource was successfully applied and the operator <code>Pod</code> was created. It can be done
+  using the following check.
+</p>
+
+<pre>
+$ kubectl wait --for=condition=available deployment/vespa-operator --timeout=120s -n $NAMESPACE \
+&& kubectl get pods -l app=vespa-operator -o wide -n $NAMESPACE
+</pre>
+
+<p>
+  The full reference guide for the Helm Chart can be found in the <a href="helm-reference.html">Helm Reference</a> section.
+</p>
+
+<h2>
+  Deploy a VespaSet
+</h2>
+
+<p>
+  A <code>VespaSet</code> represents a quorum of <a href="https://docs.vespa.ai/en/operations/self-managed/configuration-server.html">ConfigServers</a> that manage Vespa applications. Several examples of
+  <code>VespaSet</code> specifications are provided in the Helm Chart <code>samples</code> directory.
+  A sample <code>VespaSet</code> resource for <a href="https://aws.amazon.com/eks/">Amazon Elastic Kubernetes Service</a> (EKS) is shown below.
+</p>
+
+<pre>
+# VespaSet configuration for AWS EKS
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: vespaset-sample
+  namespace: vespa
+spec:
+  version: $OCI_IMAGE_TAG
+
+  configServer:
+    image: "$OCI_IMAGE_REFERENCE"
+    storageClass: "gp3"
+    generateRbac: false
+
+  application:
+    image: "$OCI_IMAGE_REFERENCE"
+    storageClass: "gp3"
+
+  ingress:
+    endpointType: "NODE_PORT"
+</pre>
+
+<p>
+  Note that the <code>$OCI_IMAGE_REFERENCE</code> is shared between the Vespa Operator, the ConfigServer, and the Vespa Operator.
+</p>
+
+<p>
+  Apply the <code>VespaSet</code> resource to the Kubernetes Cluster. The operator will automatically detect the <code>VespaSet</code> and create a quorum of
+  ConfigServers.
+</p>
+
+<p>
+  The ConfigServers will then bootstrap the Vespa infrastructure. This process takes roughly a minute. The bootstrap process is completed once
+  the <code>VespaSet</code> shows the status as `RUNNING` for all ConfigServer Pods.
+</p>
+
+<pre>
+$ kubectl describe vespaset vespaset-sample -n vespa
+Name:         vespaset-sample
+Namespace:    vespa
+Labels:       &lt;none&gt;
+Annotations:  &lt;none&gt;
+API Version:  k8s.ai.vespa/v1
+Kind:         VespaSet
+Metadata:
+  Creation Timestamp:  2026-01-29T21:32:27Z
+  Finalizers:
+    vespasets.k8s.ai.vespa/finalizer
+  Generation:        1
+  Resource Version:  121822902
+  UID:               a70f56e9-6625-4011-acd7-9f7cad29dbc2
+Spec:
+  Application:
+    Image:          $OCI_IMAGE_REFERENCE
+    Storage Class:  gp3
+  Config Server:
+    Generate Rbac:    false
+    Image:            $OCI_IMAGE_REFERENCE
+    Storage Class:    gp3
+  Ingress:
+    Endpoint Type:  NODE_PORT
+  Version:          $OCI_IMAGE_TAG
+Status:
+  Bootstrap Status:
+    Pods:
+      cfg-0:
+        Last Updated:  2026-01-29T21:38:45Z
+        Message:       Pod is running
+        Phase:         RUNNING
+      cfg-1:
+        Last Updated:  2026-01-29T21:38:09Z
+        Message:       Pod is running
+        Phase:         RUNNING
+      cfg-2:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+  Last Transition Time:  2026-01-29T21:33:55Z
+  Message:               All configservers running
+  Phase:                 RUNNING
+Events:                  &lt;none&gt;
+</pre>
+
+<p>
+  The status of the bootstrap process can be easily queried as follows.
+</p>
+
+<pre>
+$ kubectl get vespaset upgradetest-vespaset -n mramdenbourg-upgradetest -o json \
+| jq -e '
+  .status.bootstrapStatus.pods as $p
+  | ($p["cfg-0"].phase == "RUNNING")
+  and ($p["cfg-1"].phase == "RUNNING")
+  and ($p["cfg-2"].phase == "RUNNING")
+'
+</pre>
+
+<p>
+  The full reference guide for the VespaSet CRD can be found in the <a href="vespaset-reference.html">VespaSet Reference</a> section.
+</p>
+
+<h2>Deploy a Vespa Application</h2>
+
+<p>
+  A Vespa application can be deployed once the bootstrap process has completed. Refer to the <a href="https://github.com/vespa-engine/sample-apps">Vespa Sample Applications</a>
+  to get started. In the following example, we will use the <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation">Album Recommendation</a> sample.
+</p>
+
+<p>
+  Set up the Vespa CLI to download the Album Recommendation sample application to a working directory and use the local endpoints.
+</p>
+
+<pre>
+$ vespa clone album-recommendation myapp && cd myapp
+$ vespa config set target local
+</pre>
+
+<p>
+  Enable a port-forward of the ConfigServer's ingress port to a port locally.
+</p>
+
+<pre>
+$ kubectl -n mramdenbourg-upgradetest port-forward pod/cfg-0 19071:19071
+</pre>
+
+<p>
+  The application can be deployed using the Vespa CLI.
+</p>
+
+<pre>
+$ vespa deploy --wait 600
+</pre>
+
+<p>
+  This will create the Container, Content, and Cluster-Controller Pods as specified in the application package. The deployment
+  is considered complete once all Pods are in phase <code>RUNNING</code> in the <code>VespaSet</code> status. This can be queried
+  as follows.
+</p>
+
+<pre>
+$ kubectl get vespaset upgradetest-vespaset -n mramdenbourg-upgradetest -o json \
+| jq -e '
+  .status.bootstrapStatus.pods
+  | with_entries(
+      select(
+        .key as $k
+        | [
+            "cluster-controllers-104",
+            "cluster-controllers-105",
+            "cluster-controllers-106",
+            "default-100",
+            "default-101",
+            "documentation-102",
+            "documentation-103"
+          ]
+        | index($k) | not
+      )
+    )
+  | all(.phase == "RUNNING")
+'
+</pre>
+
+<p>
+  Note the names of the Pods may change depending on your specific Application Package configuration.
+</p>
+
+<p>
+  Port forwarding provides a simple way to access the application locally.
+  For other ingress options, see the <a href="ingress.html">Configuring the External Access Layer</a> section.
+</p>
+
+<h2 id="permissions">Permissions</h2>
+
+<p>
+  The Vespa Operator requires the following permissions.
+  These permissions are listed by Kubernetes <a href="https://kubernetes.io/docs/reference/access-authn-authz/rbac/">API verbs</a> per resource.
+</p>
+
+<table class="table">
+  <thead>
+  <tr>
+    <th>Kubernetes Resource</th>
+    <th>Required Permissions</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>CustomResourceDefinitions</td>
+    <td>create, get, list, watch</td>
+  </tr>
+  <tr>
+    <td>VespaSet</td>
+    <td>get, list, watch, create, update, patch, delete</td>
+  </tr>
+  <tr>
+    <td>VespaSet Subresources</td>
+    <td>
+      <code>vespasets/status</code>: update, patch<br/>
+      <code>vespasets/finalizers</code>: update
+    </td>
+  </tr>
+  <tr>
+    <td>ConfigMaps</td>
+    <td>get, list, watch, create, update, patch, delete</td>
+  </tr>
+  <tr>
+    <td>Services</td>
+    <td>get, list, watch, create, update, patch, delete</td>
+  </tr>
+  <tr>
+    <td>Pods</td>
+    <td>get, list, watch, create, update, patch, delete</td>
+  </tr>
+  <tr>
+    <td>Pod Execution</td>
+    <td>get, create</td>
+  </tr>
+  <tr>
+    <td>Events</td>
+    <td>create, patch</td>
+  </tr>
+  <tr>
+    <td>PersistentVolumeClaims</td>
+    <td>get, list, watch, create, update, patch, delete</td>
+  </tr>
+  <tr>
+    <td>ServiceAccounts</td>
+    <td>get, list, watch, create, update, patch, delete</td>
+  </tr>
+  <tr>
+    <td>Roles</td>
+    <td>get, list, watch, create, update, patch, delete</td>
+  </tr>
+  <tr>
+    <td>RoleBindings</td>
+    <td>get, list, watch, create, update, patch, delete</td>
+  </tr>
+  </tbody>
+</table>
