@@ -24,8 +24,8 @@ designing and mapping our document model to a Vespa document schema:
 
 - For string fields we should think about using text style matching or database-style exact matching.
 - For string fields there are also several
-[linguistic processing](../linguistics/linguistics.html) options like [tokenization](../linguistics/linguistics.html#tokenization), 
-normalization and language dependent [stemming](../linguistics/linguistics.html#stemming).
+[linguistic processing](../linguistics/linguistics.html) options like [tokenization](../linguistics/linguistics-opennlp.html#tokenization), 
+normalization and language dependent [stemming](../linguistics/linguistics-opennlp.html#stemming).
 - String fields which shares the same [match](../reference/schemas/schemas.html#match) 
 and linguistic processing settings can be combined using [fieldsets](../reference/schemas/schemas.html#fieldset). 
 

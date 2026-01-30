@@ -1,0 +1,207 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "OpenNLP Linguistics"
+redirect_from:
+- /en/linguistics-opennlp.html
+---
+
+<p>
+    The default Vespa linguistics implementation uses <a href="https://opennlp.apache.org/">OpenNLP</a>. The Apache
+    OpenNLP language detection is also used, by default, even if you're using a different implementation. See
+     <a href="linguistics.html#language-handling">Language handling</a> for more information. OpenNLP has support
+    for 103 languages.
+</p>
+
+<h2 id="language-detection">OpenNLP language detection</h2>
+<p>
+    The OpenNLP language detector gives a prediction with a
+    confidence; with confidence typically increasing with more
+    input. The threshold for using the prediction can be configured
+    with a number typically from 1.0 (wild guess) to 6.0 (confident
+    guess), with 2.0 as the default:
+<pre>
+  &lt;container id="..." version="1.0"&gt;
+    ...
+    &lt;config name="ai.vespa.opennlp.open-nlp"&gt;
+      &lt;detectConfidenceThreshold&gt;4.2&lt;/detectConfidenceThreshold&gt;
+    &lt;/config&gt;
+</pre>
+  </p>
+
+<h2 id="default-languages">Default languages</h2>
+<p>
+  OpenNLP tokenization and stemming supports these languages:
+  <ul>
+    <li>Arabic (ar)</li>
+    <li>Catalan (ca)</li>
+    <li>Danish (da)</li>
+    <li>Dutch (nl)</li>
+    <li>English (en)</li>
+    <li>Finnish (fi)</li>
+    <li>French (fr)</li>
+    <li>German (de)</li>
+    <li>Greek (el)</li>
+    <li>Hungarian (hu)</li>
+    <li>Indonesian (id)</li>
+    <li>Irish (ga)</li>
+    <li>Italian (it)</li>
+    <li>Norwegian (no)</li>
+    <li>Portuguese (pt)</li>
+    <li>Romanian (ro)</li>
+    <li>Russian (ru)</li>
+    <li>Spanish (es)</li>
+    <li>Swedish (sv)</li>
+    <li>Turkish (tr)</li>
+  </ul>
+
+  <p>Other languages will use a fallback to English <em>en</em>.</p>
+
+  <p>English uses a simpler stemmer (kStem) by default, which produces fewer stems and therefore lower recall.
+  To use OpenNlp stemming (Snowball) also for English add this config to your &lt;container&gt; element(s):
+<pre>
+  &lt;container id="..." version="1.0"&gt;
+    ...
+    &lt;config name="ai.vespa.opennlp.open-nlp"&gt;
+      &lt;snowballStemmingForEnglish&gt;true&lt;/snowballStemmingForEnglish&gt;
+    &lt;/config&gt;
+</pre>
+
+  <p>See <em>Tokens</em> <a href="https://opennlp.apache.org/models.html">OpenNLP models</a> and <a href="../querying/text-matching.html">text matching</a>
+  for examples and how to experiment with linguistics.</p>
+
+<p>If you need support for more languages, you can consider replacing the default OpenNLP based linguistic integration
+  with the <a href="lucene-linguistics.html">Lucene Linguistics</a> implementation which supports more languages.
+</p>
+
+<h3 id="chinese">Chinese</h3>
+
+<p>The default linguistics implementation does not segment Chinese into tokens, but this can be turned on by config:</p>
+
+<pre>
+  &lt;container id="..." version="1.0"&gt;
+    ...
+    &lt;config name="ai.vespa.opennlp.open-nlp"&gt;
+      &lt;cjk&gt;true&lt;/cjk&gt;
+      &lt;createCjkGrams&gt;true&lt;/createCjkGrams&gt;
+    &lt;/config&gt;
+</pre>
+
+<p>The createCjkGrams adds substrings of segments longer than 2 characters, which may increase recall.</p>
+
+
+<h2 id="tokenization">Tokenization</h2>
+<p>
+  Tokenization removes any non-word characters,
+  and splits the string into <em>tokens</em> on each word boundary.
+  In addition, CJK tokens are split using a <em>segmentation</em> algorithm.
+  The resulting tokens are then searchable in the index.
+</p>
+<p>Also see <a href="../reference/schemas/schemas.html#gram">N-gram matching</a>.</p>
+
+
+
+<h2 id="normalization">Normalization</h2>
+<p> <!-- ToDo: write more here -->
+An example normalization is à &#x21D2; a.
+Normalizing will cause accents and similar decorations which are often misspelled
+to be normalized the same way both in documents and queries.
+</p><p>
+Vespa uses <a href="https://docs.oracle.com/javase/7/docs/api/java/text/Normalizer.html">java.text.Normalizer</a>
+to normalize text, see
+<a href="https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/simple/SimpleTransformer.java">
+SimpleTransformer.java</a>.
+Normalization preserves case.
+</p>
+<p>
+  Refer to the <a href="../reference/querying/yql.html#nfkc">nfkc</a> query term annotation.
+  Also see the YQL <a href="../reference/querying/yql.html#accentdrop">accentDrop</a> annotation.
+</p>
+
+
+
+<h2 id="stemming">Stemming</h2>
+<p>
+Stemming means <em>translate a word to its base form</em>
+(singular forms for nouns, infinitive for verbs),
+using a <a href="https://en.wikipedia.org/wiki/Stemming">stemmer</a>.
+Use of stemming increases search recall,
+because the searcher is usually interested in documents containing query words
+regardless of the word form used.
+Stemming in Vespa is symmetric,
+i.e. words are converted to stems both when indexing and searching.
+</p><p>
+Examples of this is when text is indexed,
+the stemmer will convert the noun <em>reports</em> (plural) to <em>report</em>,
+and the latter will be stored in the index.
+Likewise, before searching, <em>reports</em> will be stemmed to <em>report</em>.
+Another example is that <em>am</em>, <em>are</em> and <em>was</em>
+will be stemmed to <em>be</em> both in queries and indexes.
+</p><p>
+When <a href="../reference/schemas/schemas.html#bolding">bolding</a> is enabled,
+all forms of the query term will be bolded.
+I.e. when searching for <em>reports</em>,
+both <em>report</em>, <em>reported</em> and <em>reports</em> will be bolded.
+</p>
+<p>
+  See the <a href="../reference/querying/yql.html#stem">stem</a> query term annotation.
+</p>
+
+
+<h3 id="theory">Theory</h3>
+<p>
+From a matching point of view,
+stemming takes all possible token strings and maps them into equivalence classes.
+So in the example above, the set of tokens
+{ <em>report</em>, <em>reports</em>, <em>reported</em> } are in an equivalence class.
+To represent the class,
+the linguistics library should pick the <span style="text-decoration: underline;">best</span> element in the class.
+At query time, the text typed by a user will be tokenized,
+and then each token should be mapped to the most likely equivalence class,
+again represented by the shortest element that belongs to the class.
+</p><p>
+While the theory sounds pretty simple,
+in practice it is not always possible to figure out which equivalence class a token should belong to.
+A typical example is the string <em>number</em>.
+In most cases we would guess this to mean a numerical entity of some kind,
+and the equivalence class would be { <em>number</em>, <em>numbers</em> } - but it could also be a verb,
+with a different equivalence class { <em>number</em>, <em>numbered</em>, <em>numbering</em> }.
+These are of course closely related, and in practice they will be merged,
+so we'll have a slightly larger equivalence class
+{ <em>number</em>, <em>numbers</em>, <em>numbered</em>, <em>numbering</em> }
+and be happy with that.
+However, in a sentence such as <em>my legs keep getting number every day</em>,
+the <em>number</em> token clearly does not have the semantics of a numerical entity,
+but should be in the equivalence class
+{ <em>numb</em>, <em>number</em>, <em>numbest</em>, <em>numbness</em> } instead.
+But blindly assigning <em>number</em> to the equivalence class <em>numb</em> is clearly not right,
+since the <em>more numb</em> meaning is much less likely than the <em>numerical entity</em> meaning.
+</p><p>
+The approach currently taken by the low-level linguistics library
+will often lead to problems in the <em>number</em>-like cases as described above.
+To give better recall, Vespa has implemented a <em>multiple</em> stemming option.
+</p>
+
+
+<h3 id="configuration">Configuration</h3>
+<p>
+By default, all words are stemmed to their <em>best</em> form.
+Refer to the <a href="../reference/schemas/schemas.html#stemming">
+stemming reference</a> for other stemming types. To change type, add:
+</p>
+<pre>
+stemming: [stemming-type]
+</pre>
+<p>
+  Stemming can be set either for a field, a fieldset or as a default for all fields.
+  Example: Disable stemming for the field <em>title</em>:
+</p>
+<pre>
+field title type string {
+    indexing: summary | index
+    stemming: none
+}
+</pre>
+<p>
+  See <a href="../reference/querying/yql.html#andsegmenting">andSegmenting</a>
+  for how to control re-segmenting when stemming.
+</p>

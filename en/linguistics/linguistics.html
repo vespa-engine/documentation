@@ -34,14 +34,16 @@ redirect_from:
     <!-- ToDo: link to detector / info here -->
   </li>
   <li>
-    The field's content is tokenized, normalized and stemmed,
+    The field's content is processed (e.g., tokenized, normalized, stemmed, etc.),
     and the resulting terms are added to the index.
     {% include note.html content='The language for the field is not persisted on the content node,
     just the processed terms themselves' %}
   </li>
   <li>
-    A query is also processed the same way - this is symmetric with the schema.
-    The language of the strings is <a href="#query-language-detection">detected</a> unless specified using
+    A query is also processed in a similar fashion. Typically through the same 
+    <a href="../reference/schemas/schemas.html#linguistics">linguistics profile</a> as the field content,
+    producing the same terms from the same text.
+    The language of query strings is <a href="#query-language-detection">detected</a> unless specified using
     <a href="../reference/api/query.html#model.locale">model.locale</a>
     or <a href="../reference/querying/yql.html#annotations">annotations</a> like <code>language</code>.
     {% include note.html content='This is a very common query problem -
@@ -49,8 +51,7 @@ redirect_from:
   </li>
   <li>
     The processed query is evaluated on the content nodes,
-    and will only work as expected if both documents and queries are processed using identical settings
-    (like same language).
+    and will only work as expected if both documents and queries produce the same terms.
   </li>
 </ol>
 <p>
@@ -59,81 +60,20 @@ redirect_from:
   for how to enable/disable transforms per query term.
 </p>
 
-<h3 id="default-languages">Default languages</h3>
+<h2 id="linguistics-implementations">Linguistics implementations</h2>
 <p>
-  The default Vespa linguistics implementation uses <a href="https://opennlp.apache.org/">OpenNLP</a>. Apache OpenNLP
-  language detection has support for 103 languages, and OpenNLP tokenization and stemming supports these languages:
-  <ul>
-    <li>Arabic (ar)</li>
-    <li>Catalan (ca)</li>
-    <li>Danish (da)</li>
-    <li>Dutch (nl)</li>
-    <li>English (en)</li>
-    <li>Finnish (fi)</li>
-    <li>French (fr)</li>
-    <li>German (de)</li>
-    <li>Greek (el)</li>
-    <li>Hungarian (hu)</li>
-    <li>Indonesian (id)</li>
-    <li>Irish (ga)</li>
-    <li>Italian (it)</li>
-    <li>Norwegian (no)</li>
-    <li>Portuguese (pt)</li>
-    <li>Romanian (ro)</li>
-    <li>Russian (ru)</li>
-    <li>Spanish (es)</li>
-    <li>Swedish (sv)</li>
-    <li>Turkish (tr)</li>
-  </ul>
-
-  <p>Other languages that will use a fallback to English <em>en</em>.</p>
-  <p>
-    The OpenNLP language detector gives a prediction with a
-    confidence; with confidence typically increasing with more
-    input. The threshold for using the prediction can be configured
-    with a number typically from 1.0 (wild guess) to 6.0 (confident
-    guess), with 2.0 as the default:
-<pre>
-  &lt;container id="..." version="1.0"&gt;
-    ...
-    &lt;config name="ai.vespa.opennlp.open-nlp"&gt;
-      &lt;detectConfidenceThreshold&gt;4.2&lt;/detectConfidenceThreshold&gt;
-    &lt;/config&gt;
-</pre>
-  </p>
-
-  <p>English uses a simpler stemmer (kStem) by default, which produces fewer stems and therefore lower recall.
-  To use OpenNlp stemming (Snowball) also for English add this config to your &lt;container&gt; element(s):
-<pre>
-  &lt;container id="..." version="1.0"&gt;
-    ...
-    &lt;config name="ai.vespa.opennlp.open-nlp"&gt;
-      &lt;snowballStemmingForEnglish&gt;true&lt;/snowballStemmingForEnglish&gt;
-    &lt;/config&gt;
-</pre>
-
-  <p>See <em>Tokens</em> <a href="https://opennlp.apache.org/models.html">OpenNLP models</a> and <a href="../querying/text-matching.html">text matching</a>
-  for examples and how to experiment with linguistics.</p>
-
-<p>If you need support for more languages, you can consider replacing the default OpenNLP based linguistic integration
-  with the <a href="lucene-linguistics.html">Lucene Linguistics</a> implementation which supports more languages.
+  Vespa comes with two linguistics variants out of the box:
+  <a href="linguistics-opennlp.html">OpenNLP</a> and <a href="lucene-linguistics.html">Lucene</a>.
+  Check out the respective pages for more information on how to configure them.
 </p>
-
-<h3 id="chinese">Chinese</h3>
-
-<p>The default linguistics implementation does not segment Chinese into tokens, but this can be turned on by config:</p>
-
-<pre>
-  &lt;container id="..." version="1.0"&gt;
-    ...
-    &lt;config name="ai.vespa.opennlp.open-nlp"&gt;
-      &lt;cjk&gt;true&lt;/cjk&gt;
-      &lt;createCjkGrams&gt;true&lt;/createCjkGrams&gt;
-    &lt;/config&gt;
-</pre>
-
-<p>The createCjkGrams adds substrings of segments longer than 2 characters, which may increase recall.</p>
-
+<p>
+  You can also implement a custom <a href="linguistics-custom.html">Linguistics</a> component.
+</p>
+<p>
+  The default linguistics variant is <a href="linguistics-opennlp.html">OpenNLP</a>, but for the
+  rest of this page we'll go through common options, such as language handling, inherited by
+  all implementations.
+</p>
 
 <h2 id="language-handling">Language handling</h2>
 <p>
@@ -146,8 +86,8 @@ use when calling the underlying linguistics library</li>
 </ol>
 <p>
 If no language is explicitly set in a document or a query,
-Vespa will run its configured language detector on the available text
-(the full content of a document field, or the full <code>query=</code> parameter value).
+Vespa will run its configured language detector (by default, <a href="linguistics-opennlp.html#language-detection">OpenNLP language detection</a>)
+on the available text (the full content of a document field, or the full <code>query=</code> parameter value).
 </p><p>
 A document that contains the exact same word as a query might not be recall-able
 if the language of the document field is detected differently from the query.
@@ -249,7 +189,8 @@ schema doc {
 <h3 id="querying-with-language">Querying with language</h3>
 <p>
   The content of an indexed string field is language-agnostic.
-  One must therefore apply a symmetric tokenization on the query terms in order to match the content of that field.
+  One must therefore apply a compatible tokenization on the query terms (e.g., stemming for the same language)
+  in order to match the content of that field.
 </p>
 <p>
   The query parser subscribes to configuration that tells it what fields are indexed strings,
@@ -344,170 +285,117 @@ Benefit of <em>equiv</em> is that it allows multiple term variants to share the 
 so that proximity ranking does not become broken by this approach.
 </p>
 
+<h2 id="linguistics-profiles">Linguistics profiles</h2>
 
-
-<h2 id="tokenization">Tokenization</h2>
 <p>
-  Tokenization removes any non-word characters,
-  and splits the string into <em>tokens</em> on each word boundary.
-  In addition, CJK tokens are split using a <em>segmentation</em> algorithm.
-  The resulting tokens are then searchable in the index.
-</p>
-<p>Also see <a href="../reference/schemas/schemas.html#gram">N-gram matching</a>.</p>
-
-
-
-<h2 id="normalization">Normalization</h2>
-<p> <!-- ToDo: write more here -->
-An example normalization is à &#x21D2; a.
-Normalizing will cause accents and similar decorations which are often misspelled
-to be normalized the same way both in documents and queries.
-</p><p>
-Vespa uses <a href="https://docs.oracle.com/javase/7/docs/api/java/text/Normalizer.html">java.text.Normalizer</a>
-to normalize text, see
-<a href="https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/simple/SimpleTransformer.java">
-SimpleTransformer.java</a>.
-Normalization preserves case.
-</p>
-<p>
-  Refer to the <a href="../reference/querying/yql.html#nfkc">nfkc</a> query term annotation.
-  Also see the YQL <a href="../reference/querying/yql.html#accentdrop">accentDrop</a> annotation.
+  <a href="../reference/schemas/schemas.html#linguistics"></a>Linguistics profiles</a> are used
+  to configure linguistics processing for a field in the schema. They are typically used with
+  the <a href="lucene-linguistics.html">Lucene linguistics implementation</a>, but can be used
+  in e.g., <a href="linguistics-custom.html">custom linguistics implementations</a> as well.
 </p>
 
+<h3 id="symmetrical-processing">Symmetrical processing</h3>
 
-
-<h2 id="stemming">Stemming</h2>
 <p>
-Stemming means <em>translate a word to its base form</em>
-(singular forms for nouns, infinitive for verbs),
-using a <a href="https://en.wikipedia.org/wiki/Stemming">stemmer</a>.
-Use of stemming increases search recall,
-because the searcher is usually interested in documents containing query words
-regardless of the word form used.
-Stemming in Vespa is symmetric,
-i.e. words are converted to stems both when indexing and searching.
-</p><p>
-Examples of this is when text is indexed,
-the stemmer will convert the noun <em>reports</em> (plural) to <em>report</em>,
-and the latter will be stored in the index.
-Likewise, before searching, <em>reports</em> will be stemmed to <em>report</em>.
-Another example is that <em>am</em>, <em>are</em> and <em>was</em>
-will be stemmed to <em>be</em> both in queries and indexes.
-</p><p>
-When <a href="../reference/schemas/schemas.html#bolding">bolding</a> is enabled,
-all forms of the query term will be bolded.
-I.e. when searching for <em>reports</em>,
-both <em>report</em>, <em>reported</em> and <em>reports</em> will be bolded.
-</p>
-<p>
-  See the <a href="../reference/querying/yql.html#stem">stem</a> query term annotation.
-</p>
-
-
-<h3 id="theory">Theory</h3>
-<p>
-From a matching point of view,
-stemming takes all possible token strings and maps them into equivalence classes.
-So in the example above, the set of tokens
-{ <em>report</em>, <em>reports</em>, <em>reported</em> } are in an equivalence class.
-To represent the class,
-the linguistics library should pick the <span style="text-decoration: underline;">best</span> element in the class.
-At query time, the text typed by a user will be tokenized,
-and then each token should be mapped to the most likely equivalence class,
-again represented by the shortest element that belongs to the class.
-</p><p>
-While the theory sounds pretty simple,
-in practice it is not always possible to figure out which equivalence class a token should belong to.
-A typical example is the string <em>number</em>.
-In most cases we would guess this to mean a numerical entity of some kind,
-and the equivalence class would be { <em>number</em>, <em>numbers</em> } - but it could also be a verb,
-with a different equivalence class { <em>number</em>, <em>numbered</em>, <em>numbering</em> }.
-These are of course closely related, and in practice they will be merged,
-so we'll have a slightly larger equivalence class
-{ <em>number</em>, <em>numbers</em>, <em>numbered</em>, <em>numbering</em> }
-and be happy with that.
-However, in a sentence such as <em>my legs keep getting number every day</em>,
-the <em>number</em> token clearly does not have the semantics of a numerical entity,
-but should be in the equivalence class
-{ <em>numb</em>, <em>number</em>, <em>numbest</em>, <em>numbness</em> } instead.
-But blindly assigning <em>number</em> to the equivalence class <em>numb</em> is clearly not right,
-since the <em>more numb</em> meaning is much less likely than the <em>numerical entity</em> meaning.
-</p><p>
-The approach currently taken by the low-level linguistics library
-will often lead to problems in the <em>number</em>-like cases as described above.
-To give better recall, Vespa has implemented a <em>multiple</em> stemming option.
-</p>
-
-
-<h3 id="configuration">Configuration</h3>
-<p>
-By default, all words are stemmed to their <em>best</em> form.
-Refer to the <a href="../reference/schemas/schemas.html#stemming">
-stemming reference</a> for other stemming types. To change type, add:
-</p>
-<pre>
-stemming: [stemming-type]
-</pre>
-<p>
-  Stemming can be set either for a field, a fieldset or as a default for all fields.
-  Example: Disable stemming for the field <em>title</em>:
+  For example, a definition like this:
 </p>
 <pre>
 field title type string {
-    indexing: summary | index
-    stemming: none
+  indexing: summary | index
+  linguistics {
+      profile: whitespaceLowercase
+  }
 }
 </pre>
+
 <p>
-  See <a href="../reference/querying/yql.html#andsegmenting">andSegmenting</a>
-  for how to control re-segmenting when stemming.
+  Will look for a profile named <code>whitespaceLowercase</code>, which could be defined like this
+  in <code>services.xml</code>:
+</p>
+<pre>{% highlight xml %}
+  <item key="profile=whitespaceLowercase;language=en">
+    <tokenizer>
+      <name>whitespace</name>
+    </tokenizer>
+    <tokenFilters>
+      <item>
+        <name>lowercase</name>
+      </item>
+    </tokenFilters>
+  </item>
+{% endhighlight %}</pre>
+
+<p>
+  Note <code>language=en</code> there. It is optional: if it's not set,
+  the profile will be used for all languages. But you can have different
+  definitions for different languages on the same profile (e.g., different stemming).
 </p>
 
-<h2 id="creating-a-custom-linguistics-implementation">Creating a custom linguistics implementation</h2>
+<h3 id="different-processing-for-query-strings">Different processing for query strings</h3>
+
 <p>
-A linguistics component is an implementation of
-<a href="https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/Linguistics.java">
-    com.yahoo.language.Linguistics</a>. Refer to the
-<a href="https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/simple/SimpleLinguistics.java">
-    com.yahoo.language.simple.SimpleLinguistics</a> implementation (which  can be subclassed for convenience).
-</p><p>
-SimpleLinguistics provides support for english stemming only.
-Try loading the <code>com.yahoo.language.simple.SimpleLinguistics</code> module,
-or providing another linguistics module.
-</p><p>
-The linguistics implementation must be configured as a component
-in container clusters doing linguistics processing,
-see <a href="../applications/dependency-injection.html">injecting components</a>.
-</p><p>
-As document processing for indexing is by default done by an autogenerated container cluster
-which cannot be configured, specify a container cluster for indexing explicitly.
-</p><p>
-This example shows how to configure SimpleLinguistics for linguistics using the same cluster for both query and indexing processing
-(if using different clusters, add the same linguistics component to all of them):
+  For some use cases, you may want to process the query string differently than the document content.
+  Synonyms are a good example. If you expand <code>dog</code> to <code>dog,puppy</code> at query time,
+  it will match either term in the document anyway - no need to expand it at write-time.
 </p>
+
+<p>
+  To do this, you'd define a different profile for the query string. Like:
+</p>
+<pre>{% highlight xml %}
+  <item key="profile=whitespaceLowercaseSynonyms;language=en">
+    <tokenizer>
+      <name>whitespace</name>
+    </tokenizer>
+    <tokenFilters>
+      <item>
+        <name>lowercase</name>
+      </item>
+      <item>
+        <name>synonymGraph</name>
+        <conf>
+          <!--
+            Synonyms file should contain something like:
+            dog,puppy
+          -->
+          <item key="synonyms">en/synonyms.txt</item>
+        </conf>
+      </item>
+    </tokenFilters>
+  </item>
+{% endhighlight %}</pre>
+
+<p>
+  Then, in the schema, expand <code>profile</code> to <code>profile.index</code> and <code>profile.search</code>:
+</p>
+
 <pre>
-&lt;services&gt;
-
-    &lt;container version="1.0" id="mycontainer"&gt;
-        <span class="pre-hilite">&lt;component id="com.yahoo.language.simple.SimpleLinguistics"/&gt;</span>
-        &lt;document-processing/&gt;
-        &lt;search/&gt;
-        &lt;nodes ...&gt;
-    &lt;/container&gt;
-
-    &lt;content version="1.0"&gt;
-        &lt;redundancy&gt;1&lt;/redundancy&gt;
-        &lt;documents&gt;
-            &lt;document type="mydocument" mode="index"/&gt;
-            <span class="pre-hilite">&lt;document-processing cluster="mycontainer"/&gt;</span>
-        &lt;/documents&gt;
-        &lt;nodes ...&gt;
-    &lt;/content&gt;
-
-&lt;/services&gt;
+  field title type string {
+    indexing: summary | index
+    linguistics {
+        profile {
+            index: whitespaceLowercase
+            search: whitespaceLowercaseSynonyms
+        }
+    }
+}
 </pre>
+
 <p>
-If changing the linguistics component of a live system,
-recall can be reduced until all documents are re-written.
-This because documents will still be stored with tokens generated by the previous linguistics module.
+  At this point, <code>where synonyms_test contains 'dog'</code> will match a document containing <code>puppy</code>.
 </p>
+
+<h3 id="overriding-profile-for-query-strings">Overriding profile for query strings</h3>
+
+<p>
+  At query time, you can force Vespa to use a specific profile to process the query string via <a href="../reference/querying/yql.html#grammar">grammar.profile</a>.
+  This works with <a href="../reference/querying/yql.html#userinput">userInput()</a>.
+  For example, to use the <code>whitespaceLowercase</code> profile for the query string:
+</p>
+
+<pre>
+where {defaultIndex:'title', grammar.profile: 'whitespaceLowercase', grammar: 'linguistics'}userInput('dog')
+</pre>
+
+{% include note.html content='You should use grammar=linguistics (like in the example above) with grammar.profile to ensure that there is no
+additional processing (e.g., tokenization) besides what is already defined in the profile.' %}
