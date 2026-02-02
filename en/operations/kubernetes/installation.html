@@ -11,36 +11,108 @@ applies_to: enterprise
 </p>
 
 <p>
-  Our support team will provide credentials for accessing an OCI container image, referred to as <code>$OCI_IMAGE_REFERENCE</code> below. Use the image version based on the Vespa version
-  provided in the <a href="vespa-on-kubernetes.html#compatibility">Supported Versions</a>. We will refer to the image version as <code>$OCI_IMAGE_TAG</code>.
+  Our support team will provide credentials for accessing the Vespa on Kubernetes image, referred to as <code>$OCI_IMAGE_REFERENCE</code> below, and the Vespa Operator,
+  referred to as <code>$OCI_IMAGE_REFERENCE_OPERATOR</code>, below.
+  Use an image version based on the desired Vespa version. We will refer to the image version as <code>$OCI_IMAGE_TAG</code>. Our support team will
+  additionally provide credentials for accessing the official Helm Chart, referred to as <code>$HELM_OCI_CHART_REFERENCE</code> below.
+</p>
+
+<p>
+  Our registries are located at `image.ves.pa` and `images-experimenta.ves.pa`.
+  For production use, we recommend mirroring these images into your own OCI registry or a well-known internal repository appropriate for your infrastructure.
 </p>
 
 <h2>Requirements</h2>
 
 <p>
-  The following tools are encouraged for a smooth deployment. Refer to the <a href="vespa-on-kubernetes.html#compatibility">Supported Versions</a> section for a full list of version compatibility.
+  The following tools are encouraged for a smooth deployment.
 </p>
 
 <ul>
   <li><a href="https://helm.sh/docs/intro/install/">Helm CLI</a></li>
   <li>Kubernetes Command Line Tool (<a href="https://kubernetes.io/docs/reference/kubectl/">kubectl</a>)</li>
   <li><a href="https://docs.vespa.ai/en/clients/vespa-cli.html">Vespa CLI</a></li>
+  <li>Vespa on Kubernetes Image</li>
+  <li>Vespa Operator Image</li>
+  <li>Vespa Operator Helm Chart</li>
+  <li><a href="https://minikube.sigs.k8s.io/docs/">MiniKube (Optional)</a></li>
+  <li>Podman or Docker</li>
 </ul>
 
 <p>
   These instructions assume that <code>kubeconfig</code> is pointing to an active Kubernetes cluster. Refer to the <a href="https://kubernetes.io/docs/setup/">Getting Started</a> guide to create a Kubernetes cluster.
 </p>
 
-<h2>Install via Helm Chart</h2>
+<h2>MiniKube Setup</h2>
+
 <p>
-  An official Helm Chart can be accessed through an OCI Helm Chart distributed by our support team. The Helm Chart installs the Vespa Operator
-  and the <code>Role</code>, <code>RoleBinding</code>, and <code>ServiceAccount</code> resources with the necessary permissions to operate Vespa. Optionally, the
-  CRD specification can be installed onto the Kubernetes cluster. The Helm Chart distribution will be referred to as <code>$HELM_OCI_CHART_REFERENCE</code> in the sections below.
+  MiniKube allows for simple local testing of Vespa on Kubernetes. Skip to the <a href="#install-helm-chart">Deploy Vespa Operator</a> section below to directly start installation.
 </p>
 
 <p>
-  This image bundles the Vespa Operator, Config Server, and application artifacts.
-  For production use, we recommend mirroring this image into your own OCI registry or a well-known internal repository appropriate for your infrastructure.
+  Initialize a Minikube cluster with 8 nodes, 2CPUs and 4GiB memory each ausing the Podman driver. Enable Minikube's image registry
+  add-on to allow the Minikube nodes to access the image.
+</p>
+
+<pre>
+# Start Minikube
+minikube start --nodes 8 --cpus 2 --memory 4GiB --driver=podman --insecure-registry="192.168.49.0/24"
+
+# Enable Image Registry add-on
+minikube addons enable registry
+
+# Verify MiniKube cluster was created
+minikube status
+</pre>
+
+<p>
+  Pull the latest Vespa on Kubernetes image from Cloudsmith. Our support team will provide the token to authenticate to our OCI registries.
+  They are hosted at `images.ves.pa` and `images-experimental.ves.pa`.
+</p>
+
+<pre>
+# Authenticate to the registry
+echo $TOKEN | podman login images-experimental.ves.pa \
+  -u "vespa/oci-experimental" \
+  --password-stdin
+
+# Cache the images locally
+podman pull images-experimental.ves.pa/oci-experimental/kubernetes/vespa:$VESPA_VERSION
+podman pull images-experimental.ves.pa/oci-experimental/kubernetes/operator:$VESPA_VERSION
+</pre>
+
+<p>
+  Once the Minikube cluster is set up, push the images to the MiniKube registry, to make accessible to the MiniKube nodes. The MiniKube registry is accessible from
+  <code>$(minikube ip):5000</code>.
+</p>
+
+<pre>
+# Save the minikube registry endpoint
+$MINIKUBE_REGISTRY=$(minikube ip)
+
+# Push the kubernetes/vespa image to the registry
+podman tag  oci-experimental/kubernetes/vespa:$VESPA_VERSION $MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa:$VESPA_VERSION
+podman push --tls-verify=false $MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa:$VESPA_VERSION
+
+# Push the kubernetes/operator image to the registry
+podman tag  oci-experimental/kubernetes/operator:$VESPA_VERSION $MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION
+podman push --tls-verify=false $MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION
+</pre>
+
+<p>
+  The images will now be available to the Minikube nodes from <code>$MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION</code>.
+</p>
+
+<pre>
+export OCI_IMAGE_REFERENCE=$MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa
+export OCI_IMAGE_REFERENCE_OPERATOR=$MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator
+export OCI_IMAGE_TAG=$VESPA_VERSION
+</pre>
+
+<h2 id="install-helm-chart">Deploy Vespa Operator</h2>
+<p>
+  The Helm Chart installs the Vespa Operator and the <code>Role</code>, <code>RoleBinding</code>, and <code>ServiceAccount</code> resources with the necessary permissions to operate Vespa. Optionally, the
+  CRD specification can be installed onto the Kubernetes cluster.
 </p>
 
 <p>
@@ -48,7 +120,7 @@ applies_to: enterprise
   the <code>VespaSet</code> CRD specification to the cluster.
 </p>
 <pre>
-$ helm install vespa-operator $OCI_REPOSITORY --namespace vespa --create-namespace --set image.repository $OCI_IMAGE_REFERENCE --set image.tag $OCI_IMAGE_TAG
+$ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace vespa --create-namespace --set image.repository $OCI_IMAGE_REFERENCE_OPERATOR --set image.tag $OCI_IMAGE_TAG
 </pre>
 <p>
   If CRDs are managed separately, the CRD installation can be disabled. However, the CRD specification must
@@ -57,7 +129,7 @@ $ helm install vespa-operator $OCI_REPOSITORY --namespace vespa --create-namespa
 
 <pre>
 $ kubectl apply vespasets.k8s.ai.vespa-v1.yaml
-$ helm install vespa-operator $OCI_REPOSITORY --namespace $NAMESPACE --create-namespace --skip-crds --set image.repository $OCI_IMAGE_REFERENCE --set image.tag $OCI_IMAGE_TAG
+$ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace $NAMESPACE --create-namespace --skip-crds --set image.repository $OCI_IMAGE_REFERENCE_OPERATOR --set image.tag $OCI_IMAGE_TAG
 </pre>
 
 <p>
@@ -108,7 +180,7 @@ spec:
 </pre>
 
 <p>
-  Note that the <code>$OCI_IMAGE_REFERENCE</code> is shared between the Vespa Operator, the ConfigServer, and the Vespa Operator.
+  Note that the <code>$OCI_IMAGE_REFERENCE</code> is shared between the ConfigServer and the Vespa Application Pods.
 </p>
 
 <p>
@@ -255,6 +327,25 @@ $ kubectl get vespaset upgradetest-vespaset -n mramdenbourg-upgradetest -o json 
   Port forwarding provides a simple way to access the application locally.
   For other ingress options, see the <a href="ingress.html">Configuring the External Access Layer</a> section.
 </p>
+
+<h2>Feed Documents</h2>
+
+<p>
+  Feed documents to the Dataplane entrypoint by port-forwarding to both the Dataplane Pod and the ConfigServer Pod.
+</p>
+
+<pre>
+$ kubectl -n mramdenbourg-upgradetest port-forward pod/cfg-0 19071:19071
+$ kubectl -n mramdenbourg-upgradetest port-forward pod/default-100 8080:8080
+</pre>
+
+<p>
+  Then, use the Vespa CLI to feed a document.
+</p>
+
+<pre>
+vespa feed dataset/A-Head-Full-of-Dreams.json
+</pre>
 
 <h2 id="permissions">Permissions</h2>
 
