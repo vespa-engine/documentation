@@ -21,24 +21,30 @@ Vespa Cloud Enclave is available in AWS, Azure, and GCP.
 resource costs from your cloud provider in _addition_ to the Vespa Cloud costs.
 
 ## AWS
+
 * [Getting started](aws-getting-started.html)
 * [Architecture and security](aws-architecture)
 
 ## Azure
+
 * [Getting started](azure-getting-started.html)
 * [Architecture and security](azure-architecture)
 
 ## GCP
+
 * [Getting started](gcp-getting-started.html)
 * [Architecture and security](gcp-architecture)
 
 ## Guides
+
 * [Log archive](archive)
 * [Operations and Support](operations)
 
 ## FAQ
+
 **Which kind of permission is needed for the Vespa control plane to access my AWS accounts / Azure subscriptions / GCP projects?**
 The permissions required are coded into the Terraform modules found at:
+
 * [terraform-aws](https://github.com/vespa-cloud/terraform-aws-enclave/tree/main)
 * [terraform-azure](https://github.com/vespa-cloud/terraform-azure-enclave/tree/main)
 * [terraform-google](https://github.com/vespa-cloud/terraform-google-enclave/tree/main)
@@ -52,6 +58,13 @@ for a complete example.
 
 **Deployment failure: Could not provision ...**
 This happens if you deploy to new zones _before_ running the Terraform/CloudFormation templates:
+
 ```
 Deployment failed: Invalid application: In container cluster 'mycluster': Could not provision load balancer mytenant:myapp:myinstance:mycluster: Expected to find exactly 1 resource, but got 0 for subnet with service 'tenantelb'
 ```
+
+**Do we  need to take any actions when AWS sends us Amazon EC2 Instance Retirement, Amazon EC2 Instance Availability Issue or Amazon EC@ Maintenance notifications,?**
+
+Vespa Cloud will take proactive actions on maintenance operations, and replace instances that are scheduled for maintenance tasks ahead of time to reduce any impact the maintenance may incur.
+
+All EC2 instance failures are detected by our control plane, and the problematic instances are automatically replaced. The system will as part of the replacement process also ensure that the document distribution is kept in line with your application configuration.
