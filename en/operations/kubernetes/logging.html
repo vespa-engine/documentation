@@ -1,0 +1,177 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Configure Log Collection
+applies_to: enterprise
+---
+
+<p>
+    Use the Fluent Bit Operator to collect logs and forward them to Grafana Cloud Loki.
+</p>
+
+<h2>1. Install Fluent Bit Operator</h2>
+
+<p>
+    Install the Fluent Bit Operator in a dedicated <code>logging</code> namespace.
+</p>
+
+<pre>
+$ helm repo add fluent https://fluent.github.io/helm-charts
+$ helm repo update
+$ kubectl create namespace logging
+$ helm install fluent-operator fluent/fluent-operator --namespace logging --set operator.logLevel=debug
+</pre>
+
+<p>
+    Verify the installation by ensuring the operator Pod is running:
+</p>
+
+<pre>
+$ kubectl get pods -n logging
+</pre>
+
+<h2>2. Configure Loki Credentials</h2>
+
+<p>
+    To forward logs to Grafana Cloud Loki, you must create a Kubernetes Secret containing your credentials.
+    Obtain your User ID and API Token from the Grafana Cloud Portal under <em>Connections → Loki</em>.
+</p>
+
+<pre>
+$ kubectl create secret generic grafana-cloud-loki -n logging --from-literal=username=$USER_ID --from-literal=password=$API_TOKEN
+</pre>
+
+<h2>3. Deploy Fluent Bit Configuration</h2>
+
+<p>
+    The Fluent Operator uses Custom Resources to define the logging pipeline.
+    The following configuration sets up a <strong>ClusterInput</strong> to tail container logs, a <strong>ClusterFilter</strong> to add Kubernetes metadata, and a <strong>ClusterOutput</strong> to ship logs to Loki.
+</p>
+
+<p>
+    Save the following as <code>fluentbit-logging.yaml</code>. <strong>Note:</strong> Replace <code>logs-prod-006.grafana.net</code> with your specific Loki endpoint.
+</p>
+
+<pre>
+    apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterFluentBitConfig
+metadata:
+  name: fluent-bit-config
+spec:
+  service:
+    httpServer: true
+    parsersFile: parsers.conf
+  inputSelector:
+    matchLabels:
+      fluentbit.fluent.io/enabled: "true"
+  filterSelector:
+    matchLabels:
+      fluentbit.fluent.io/enabled: "true"
+  outputSelector:
+    matchLabels:
+      fluentbit.fluent.io/enabled: "true"
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterInput
+metadata:
+  name: kube-containers
+  labels:
+    fluentbit.fluent.io/enabled: "true"
+spec:
+  tail:
+    tag: kube.*
+    path: /var/log/containers/*.log
+    parser: cri
+    readFromHead: false
+    memBufLimit: 5MB
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterFilter
+metadata:
+  name: k8s-meta
+  labels:
+    fluentbit.fluent.io/enabled: "true"
+spec:
+  match: "kube.*"
+  filters:
+    - kubernetes:
+        mergeLog: true
+        keepLog: false
+        labels: true
+        annotations: true
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterOutput
+metadata:
+  name: loki
+  labels:
+    fluentbit.fluent.io/enabled: "true"
+spec:
+  match: "kube.*"
+  loki:
+    host: logs-prod-006.grafana.net
+    port: 443
+    tls:
+      verify: false
+    httpUser:
+      valueFrom:
+        secretKeyRef:
+          name: grafana-cloud-loki
+          key: username
+    httpPassword:
+      valueFrom:
+        secretKeyRef:
+          name: grafana-cloud-loki
+          key: password
+    labels:
+      - job=fluentbit
+      - cluster=minikube
+    autoKubernetesLabels: "off"
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: FluentBit
+metadata:
+  name: fluent-bit
+  namespace: logging
+spec:
+  fluentBitConfigName: fluent-bit-config
+  image: ghcr.io/fluent/fluent-operator/fluent-bit:3.1.4
+  tolerations:
+    - operator: Exists
+</pre>
+
+<p>
+    Apply the configuration to your cluster:
+</p>
+
+<pre>
+$ kubectl apply -f fluentbit-logging.yaml
+</pre>
+
+<h2>4. Query Logs</h2>
+
+<p>
+    Once deployed, Fluent Bit will run as a <code>DaemonSet</code> on every node. You can query the logs using LogQL in Grafana Explore.
+</p>
+
+<p>
+    Check the Fluent Bit logs to ensure there are no authentication errors (HTTP 401):
+</p>
+
+<pre>
+$ kubectl logs -n logging -l app.kubernetes.io/name=fluent-bit --tail=50
+</pre>
+
+<p>
+    Use these LogQL queries to inspect Vespa components specifically:
+</p>
+
+<pre>
+# Filter logs for the Config Server
+{cluster="minikube", namespace_name="default", pod_name=~"cfg-.*"}
+
+# Filter logs for specific containers (e.g., query container)
+{cluster="minikube", container_name="vespa"}
+
+# Search for errors across all Vespa pods
+{cluster="minikube"} |= "error"
+</pre>

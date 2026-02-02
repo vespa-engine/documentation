@@ -1,0 +1,209 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Configure External Access Layer
+applies_to: enterprise
+---
+
+<p>
+    The Vespa Operator automatically provisions Kubernetes <code>Service</code> resources to enable external access for feeding and querying data.
+    This behavior is controlled by the <code>VespaSet</code> Custom Resource configuration. Refer to the <a href="vespaset-reference.html">VespaSet Reference</a> to
+    configure the <code>VespaSet</code>.
+</p>
+
+<p>
+    Load balancers are provisioned exclusively for Container clusters. Content clusters communicate internally
+    and do not require external load balancing services. The type of service provisioned is determined by the
+    <code>spec.ingress.endpointType</code> field in the <code>VespaSet</code>.
+</p>
+
+<h2>Supported Endpoint Types</h2>
+
+<p>
+    The operator supports four endpoint types to cover different infrastructure requirements.
+</p>
+
+<table class="table">
+    <thead>
+    <tr>
+        <th>Endpoint Type</th>
+        <th>Kubernetes Service Type</th>
+        <th>Use Case</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td><code>LOAD_BALANCER</code></td>
+        <td><code>LoadBalancer</code></td>
+        <td>Provision the cloud-native (AWS, GCP, Azure) load-balancer.</td>
+    </tr>
+    <tr>
+        <td><code>NODE_PORT</code></td>
+        <td><code>NodePort</code></td>
+        <td>Expose a static port across every worker node, allowing external traffic to access the cluster from any node's IP.</td>
+    </tr>
+    <tr>
+        <td><code>CLUSTER_IP</code></td>
+        <td><code>ClusterIP</code></td>
+        <td>Each Container Pod will expose an internal IP address. Should not be used for production use-cases.</td>
+    </tr>
+    <tr>
+        <td><code>NONE</code></td>
+        <td>N/A</td>
+        <td>An external access layer will not be provisioned. Custom networking setups (Istio, Ingress Controllers) where no automatic service is desired.</td>
+    </tr>
+    </tbody>
+</table>
+
+<h2>LOAD_BALANCER</h2>
+
+<p>
+    This is the recommended configuration for production deployments on cloud providers (EKS, GKE, AKS).
+    The operator creates a standard Kubernetes <code>LoadBalancer</code> service, triggering the cloud provider to provision
+    a managed load balancer (e.g., AWS NLB).
+</p>
+
+<p>
+    <strong>Configuration:</strong>
+</p>
+<pre>
+ingress:
+  endpointType: LOAD_BALANCER
+</pre>
+
+<p>
+    On AWS, the ConfigServer automatically applies the annotation <code>service.beta.kubernetes.io/aws-load-balancer-internal: "true"</code> to all Container pods.
+    This provisions an <strong>internal</strong> Network Load Balancer (NLB) accessible only within the VPC where the EKS cluster nodes reside.
+</p>
+
+<h2>NODE_PORT</h2>
+
+<p>
+    The <code>NODE_PORT</code> type exposes the Vespa container cluster on a specific port (range 30000-32767) across all Kubernetes worker nodes.
+</p>
+
+<p>
+    <strong>Configuration:</strong>
+</p>
+<pre>
+ingress:
+  endpointType: NODE_PORT
+</pre>
+
+<p>
+    When this option is set, Kubernetes opens a static port on every worker node. External traffic can reach the application via <code>&lt;NodeIP&gt;:&lt;NodePort&gt;</code>.
+    Note that unlike <code>LOAD_BALANCER</code>, this does not provide health checks at the entry point level. If a worker node with a connection crashes, the connection will simply
+    time out or fail. This additionally requires all worker nodes to expose an External IP.
+</p>
+
+<p>
+    To use the <code>NODE_PORT</code> service, find the assigned port.
+</p>
+
+<pre>
+$ kubectl get service lb-default -n $NAMESPACE
+
+NAME         TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+lb-default   NodePort   10.100.150.25   &lt;none&gt;        <b>80:31942/TCP</b>     5m
+</pre>
+
+<p>
+    Get the list of nodes and look for their External IP addresses.
+</p>
+
+<pre>
+$ kubectl get nodes -o wide
+
+NAME                                       STATUS   ROLES    AGE   VERSION               INTERNAL-IP    EXTERNAL-IP      OS-IMAGE         KERNEL-VERSION
+ip-192-168-3-50.us-east-2.compute.internal Ready    &lt;none&gt;   10d   v1.27.3-eks-a5565ad   192.168.3.50   <b>18.221.100.45</b>    Amazon Linux 2   5.10.184-175.731.amzn2.x86_64
+ip-192-168-3-51.us-east-2.compute.internal Ready    &lt;none&gt;   10d   v1.27.3-eks-a5565ad   192.168.3.51   <b>3.142.200.10</b>     Amazon Linux 2   5.10.184-175.731.amzn2.x86_64
+</pre>
+
+<p>
+    Choose any External IP and combine the IP and port to access the service.
+</p>
+
+<pre>
+$ curl http://18.221.100.45:31942/state/v1/health
+
+{
+  "time" : 1769981985754,
+  "status" : {
+    "code" : "up"
+  },
+  "metrics" : {
+    "snapshot" : {
+      "from" : 1.769981924895E9,
+      "to" : 1.769981984895E9
+    },
+    "values" : [ {
+      "name" : "requestsPerSecond",
+      "values" : {
+        "count" : 19,
+        "rate" : 0.31666666666666665
+      }
+    }, {
+      "name" : "latencySeconds",
+      "values" : {
+        "average" : 0.009578947368421053,
+        "sum" : 0.182,
+        "count" : 19,
+        "last" : 0.003,
+        "max" : 0.057,
+        "min" : 0.0,
+        "rate" : 0.31666666666666665
+      }
+    } ]
+  }
+}
+</pre>
+
+<h2>CLUSTER_IP</h2>
+
+<p>
+    This type restricts access to within the Kubernetes cluster. It provides a stable internal IP and DNS name
+    (e.g., <code>lb-default.vespa.svc.cluster.local</code>) but assigns no external IP.
+</p>
+
+<p>
+    <strong>Configuration:</strong>
+</p>
+<pre>
+ingress:
+  endpointType: CLUSTER_IP
+</pre>
+
+<p>
+    The <code>CLUSTER_IP</code> service is ideal for architectures where the clients (e.g., front-end applications or ingestion services) run inside the same Kubernetes cluster as Vespa.
+</p>
+
+<h2>NONE</h2>
+
+<p>
+    This option disables automatic Service provisioning. Use this if you intend to manually define <code>Ingress</code> resources,
+    use a Service Mesh (like Istio or Linkerd), or have complex networking requirements not covered by the standard types.
+</p>
+
+<p>
+    <strong>Configuration:</strong>
+</p>
+<pre>
+ingress:
+  endpointType: NONE
+</pre>
+
+<h2>Traffic Routing & Labeling</h2>
+
+<p>
+    To ensure zero-downtime deployments, the ConfigServer manages traffic routing dynamically using Kubernetes labels.
+    The created Services use the selector <code>vespa.ai/tenant-lb: backend</code>. When the Pod is provisioned, these labels
+    are automatically attached.
+</p>
+
+<p>
+    During a rolling upgrade, the label is removed from the terminating Pod(s) before they are shut down. This provides a window
+    for the remaining traffic to drain before the Pod is upgraded.
+</p>
+
+<p>
+    <b>Note</b>: The Service exposes port <strong>80</strong> (plaintext) and <strong>443</strong> (TLS) externally, mapping them to the container's port 4443.
+</p>

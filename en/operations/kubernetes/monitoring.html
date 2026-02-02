@@ -1,0 +1,235 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Monitor a Vespa on Kubernetes Deployment
+applies_to: enterprise
+---
+
+<p>
+    Use the Prometheus Operator to collect metrics from a Vespa on Kubernetes deployment.
+    This guide covers the installation of the monitoring stack, configuration of <code>PodMonitor</code> resources for Vespa components, and forwarding metrics to Grafana Cloud.
+</p>
+
+<h2>Prerequisites</h2>
+
+<ul>
+    <li>A Kubernetes cluster (EKS, GKE, AKS, or Minikube).</li>
+    <li><a href="https://helm.sh/docs/intro/install/">Helm CLI</a></li>
+    <li>Kubernetes Command Line Tool (<a href="https://kubernetes.io/docs/reference/kubectl/">kubectl</a>)</li>
+    <li>A Grafana Cloud account</li>
+</ul>
+
+<h2>1. Install Prometheus Operator</h2>
+
+<p>
+    The recommended way to install Prometheus on Kubernetes is via the <a href="https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack">kube-prometheus-stack</a> Helm chart.
+    Add the repository and create a monitoring namespace.
+</p>
+
+<pre>
+$ helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+$ helm repo update
+$ kubectl create namespace monitoring
+</pre>
+
+<h3>Configure Grafana Cloud Credentials</h3>
+<p>
+    If you intend to forward metrics to Grafana Cloud, create a Kubernetes Secret with your credentials.
+    Retrieve your <strong>Instance ID</strong> (User) and <strong>API Token</strong> (Password) from the Grafana Cloud Portal under <em>Configure Prometheus</em>.
+</p>
+
+<pre>
+$ kubectl create secret generic grafana-cloud-prometheus -n monitoring --from-literal=username=$INSTANCE_ID --from-literal=password=$API_TOKEN
+</pre>
+
+<h3>Configure Helm Values</h3>
+<p>
+    Create a <code>prometheus-values.yaml</code> file. This configuration enables remote writing to Grafana Cloud,
+    configures the Prometheus Operator to select all <code>PodMonitors</code>, and disables the local Grafana instance.
+</p>
+
+<pre>
+prometheus:
+  prometheusSpec:
+  # Allow Prometheus to discover PodMonitors in other namespaces
+  podMonitorSelectorNilUsesHelmValues: false
+  serviceMonitorSelectorNilUsesHelmValues: false
+
+  # Remote write configuration for Grafana Cloud
+  remoteWrite:
+    - url: [https://prometheus-prod-XX-prod-XX.grafana.net/api/prom/push](https://prometheus-prod-XX-prod-XX.grafana.net/api/prom/push)
+      basicAuth:
+        username:
+          name: grafana-cloud-prometheus
+          key: username
+        password:
+          name: grafana-cloud-prometheus
+          key: password
+      writeRelabelConfigs:
+        - sourceLabels: [__address__]
+          targetLabel: cluster
+          replacement: my-cluster-name
+
+# Disable local Grafana
+grafana:
+  enabled: false
+
+# Enable Alertmanager and Kube State Metrics
+alertmanager:
+  enabled: true
+  kube-state-metrics:
+  enabled: true
+</pre>
+
+<p>
+    Install the stack using Helm:
+</p>
+
+<pre>
+$ helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring --values prometheus-values.yaml
+</pre>
+
+<h2>2. Configure PodMonitors</h2>
+
+<p>
+    Vespa exposes metrics on specific ports that differ from standard web traffic ports.
+    We use the <code>PodMonitor</code> Custom Resource to define how Prometheus should scrape these endpoints.
+</p>
+
+<h3>Monitor ConfigServer Pods</h3>
+<p>
+    ConfigServers expose metrics on port <strong>19071</strong> at the path <code>/configserver-metrics</code>.
+    Apply the following configuration to scrape these metrics.
+</p>
+
+<pre>
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vespa-configserver
+  namespace: $NAMESPACE
+  labels:
+    release: prometheus # Required to be picked up by the operator
+spec:
+  selector:
+    matchLabels:
+      app: vespa-configserver
+  podMetricsEndpoints:
+    - targetPort: 19071
+      path: /configserver-metrics
+      interval: 30s
+      scheme: http
+      params:
+        format: ['prometheus']
+      relabelings:
+        # Map Kubernetes pod name to the 'pod' label
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - targetLabel: vespa_role
+          replacement: configserver
+</pre>
+
+<h3>Monitor Application Pods</h3>
+<p>
+    Container and Content Pods expose metrics on the state API port <strong>19092</strong> at <code>/prometheus/v1/values</code>.
+    The following example defines a PodMonitor for Vespa application pods.
+</p>
+
+<pre>
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vespa-application
+  namespace: default
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchExpressions:
+      # Selects pods that are part of a Vespa application (feed, query, content)
+      - key: vespa.ai/cluster-name
+        operator: Exists
+  podMetricsEndpoints:
+    - targetPort: 19092
+      path: /prometheus/v1/values
+      interval: 30s
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        # Extract the role from the pod name or labels if needed
+        - targetLabel: vespa_role
+          replacement: node
+</pre>
+
+<h2>3. Verify Metrics</h2>
+
+<p>
+    Once the <code>PodMonitors</code> are applied, verify that Prometheus is successfully scraping the targets.
+</p>
+
+<h3>Check Targets Locally</h3>
+<p>
+    Port-forward the Prometheus UI to your local machine:
+</p>
+
+<pre>
+$ kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
+</pre>
+
+<p>
+    Navigate to <a href="http://localhost:9090/targets">http://localhost:9090/targets</a>. You should see targets named <code>default/vespa-configserver</code> and <code>default/vespa-application</code> in the <strong>UP</strong> state.
+</p>
+
+<h3>Query Metrics</h3>
+<p>
+    You can verify the data using PromQL queries in the Prometheus UI or Grafana Explore:
+</p>
+
+<pre>
+# Check availability of Config Servers
+up{vespa_role="configserver"}
+
+# Retrieve average maintenance duration
+vespa_maintenance_duration_average
+
+# List all metrics coming from Vespa
+{job=~"default/vespa-.*"}
+</pre>
+
+<h2>Troubleshooting</h2>
+
+<p>
+<b>Targets show <code>No active targets</code></b>:
+</p>
+<p>
+    This indicates the <code>PodMonitor</code> selector does not match any Pods.
+    Verify the labels on your Vespa pods:
+</p>
+<pre>
+$ kubectl get pods -n $NAMESPACE --show-labels
+</pre>
+<p>
+    Ensure the <code>selector.matchLabels</code> in your <code>PodMonitor</code> YAML matches the labels shown in the output above.
+</p>
+
+<p>
+<b>Targets are in <code>DOWN</code> state</b>:
+</p>
+<p>
+    This usually means Prometheus cannot reach the metric endpoint.
+    Verify that the metrics are exposed on the expected port by running a curl command from within the cluster:
+</p>
+<pre>
+$ kubectl run curl-test -n $NAMESPACE --image=curlimages/curl -it --rm -- curl http://cfg-0.$NAMESPACE.svc.cluster.local:19071/configserver-metrics?format=prometheus
+</pre>
+
+<p>
+<b>Network Policies</b>:
+</p>
+<p>
+    If you use <code>NetworkPolicy</code> to restrict traffic, ensure you have a policy allowing ingress traffic
+    from the <code>monitoring</code> namespace to the <code>$NAMESPACE</code> namespace on ports 19071 and 19092.
+</p>
+
