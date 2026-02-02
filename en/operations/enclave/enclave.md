@@ -63,8 +63,8 @@ This happens if you deploy to new zones _before_ running the Terraform/CloudForm
 Deployment failed: Invalid application: In container cluster 'mycluster': Could not provision load balancer mytenant:myapp:myinstance:mycluster: Expected to find exactly 1 resource, but got 0 for subnet with service 'tenantelb'
 ```
 
-**Do we  need to take any actions when AWS sends us Amazon EC2 Instance Retirement, Amazon EC2 Instance Availability Issue or Amazon EC@ Maintenance notifications,?**
+**Do we  need to take any actions when AWS sends us Amazon EC2 Instance Retirement, Amazon EC2 Instance Availability Issue, or Amazon EC2 Maintenance notifications,?**
 
-Vespa Cloud will take proactive actions on maintenance operations, and replace instances that are scheduled for maintenance tasks ahead of time to reduce any impact the maintenance may incur.
+Vespa Cloud will take proactive actions on maintenance operations and replace instances that are scheduled for maintenance tasks ahead of time to reduce any impact the maintenance may incur.
 
-All EC2 instance failures are detected by our control plane, and the problematic instances are automatically replaced. The system will as part of the replacement process also ensure that the document distribution is kept in line with your application configuration.
+All EC2 instance failures are detected by our control plane, and the problematic instances are automatically replaced. The system will, as part of the replacement process, also ensure that the document distribution is kept in line with your application configuration.
