@@ -17,8 +17,7 @@ applies_to: enterprise
   additionally provide credentials for accessing the official Helm Chart, referred to as <code>$HELM_OCI_CHART_REFERENCE</code> below.
 </p>
 
-<p>
-  Our registries are located at `image.ves.pa` and `images-experimenta.ves.pa`.
+<p>.
   For production use, we recommend mirroring these images into your own OCI registry or a well-known internal repository appropriate for your infrastructure.
 </p>
 
@@ -109,6 +108,36 @@ export OCI_IMAGE_REFERENCE_OPERATOR=$MINIKUBE_REGISTRY:5000/localhost/kubernetes
 export OCI_IMAGE_TAG=$VESPA_VERSION
 </pre>
 
+<p>
+  Then, install the <a href="https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner">Local Persistent Volume</a> provisioner Helm Chart.
+  This will allow Persistent Volume's to be created in a MiniKube environment. It will automatically create a StorageClass called `local-storage`, which should be
+  used for the next steps.
+</p>
+
+<pre>
+# Clone the local persistent volume static provisioner from the Kubernetes sigs
+$ git clone git@github.com:kubernetes-sigs/sig-storage-local-static-provisioner.git
+
+# Deploy onto the Kubernetes cluster
+$ helm install -f helm/examples/baremetal-default-storage.yaml local-volume-provisioner --namespace kube-system ./helm/provisioner
+
+# Create several volumes on each Minikube node.
+$ for n in minikube minikube-m02 minikube-m03 minikube-m04 minikube-m05 minikube-m06 minikube-m07 minikube-m08; do
+  echo "==> $n"
+  minikube ssh -n "$n" -- '
+    set -e
+    for i in 1 2 3 4; do
+      sudo mkdir -p /mnt/disks/vol$i
+      if ! mountpoint -q /mnt/disks/vol$i; then
+        sudo mount --bind /mnt/disks/vol$i /mnt/disks/vol$i
+      fi
+    done
+    echo "Mounted:"
+    mount | grep -E "/mnt/disks/vol[1-4]" || true
+  '
+done
+</pre>
+
 <h2 id="install-helm-chart">Deploy Vespa Operator</h2>
 <p>
   The Helm Chart installs the Vespa Operator and the <code>Role</code>, <code>RoleBinding</code>, and <code>ServiceAccount</code> resources with the necessary permissions to operate Vespa. Optionally, the
@@ -174,6 +203,33 @@ spec:
   application:
     image: "$OCI_IMAGE_REFERENCE"
     storageClass: "gp3"
+
+  ingress:
+    endpointType: "NODE_PORT"
+</pre>
+
+<p>
+  An example for MiniKube would be as follows.
+</p>
+
+<pre>
+# VespaSet configuration for AWS EKS
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: vespaset-sample
+  namespace: vespa
+spec:
+  version: $OCI_IMAGE_TAG
+
+  configServer:
+    image: "$OCI_IMAGE_REFERENCE"
+    storageClass: "local-storage"
+    generateRbac: false
+
+  application:
+    image: "$OCI_IMAGE_REFERENCE"
+    storageClass: "local-storage"
 
   ingress:
     endpointType: "NODE_PORT"
