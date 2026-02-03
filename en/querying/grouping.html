@@ -119,7 +119,8 @@ function executeGrouping(yql, outputContainer) {
     // If using the local proxy, we need to parse the response
     .then(handleProxyRequest)
     .then(jsonData => {
-      const groupingResponses = jsonData.root.children?.[0]?.children ?? [];
+      // Each top-level child is one grouping result (one "all(...)" when using multiple "all(...) | all(...)")
+      const groupingResults = jsonData.root.children ?? [];
       outputContainer.innerHTML = '';
       outputContainer.classList.remove('loading');
 
@@ -127,8 +128,8 @@ function executeGrouping(yql, outputContainer) {
 
       let anyDataShown = false;
 
-      for (const groupResponse of groupingResponses) {
-        const groups = groupResponse?.children ?? [];
+      for (const groupingResult of groupingResults) {
+        const groups = groupingResult?.children ?? [];
 
         let rows = [];
         groups.forEach(group => {
@@ -633,13 +634,37 @@ rank-profile pricerank inherits default {
 <p>
   Use the <code>filter</code> clause to select which values to keep in a group. See the <a href="../reference/querying/grouping-language.html#filtering-groups">reference</a> for details.
 </p>
-<h3 id="filter-example">Example</h3>
+<h3 id="filter-example">Examples</h3>
 <p>
   Example: Sum the price per customer of <code>Bonn.*</code> where price was over 1000.
 </p>
 <pre>
 /search/?yql=select * from sources * where true |
              all(group(customer) filter(regex("Bonn.*", attributes{"sales_rep"}) and not range(0, 1000, price)) each(output(sum(price)) each(output(summary()))))
+</pre>
+<p>
+  With many faceted search UIs, you often have a filtering problem: if the user clicks on a facet option,
+  like a customer name, you want to still show all the customers, even though results are filtered by that customer.
+</p>
+<p>
+  Still, if there's another option from another facet (e.g., item name), you want the other facet options,
+  such as customer names, to only include results matching that item name. In other words, clicking on
+  a facet option should apply that filter to everything else (other facet options and results list),
+  but not to itself.
+</p>
+<p>
+  Here's how users expect a UI where they selected both a customer and an item:
+</p>
+<img src="/assets/img/ecommerce-facets.png" alt="Faceted search example" />
+<p>
+  To implement this, you need one grouping expression for each filter combination. In this
+  case, one for the main results list, one for the customer facet, and one for the item facet.
+</p>
+<pre>
+/search/?yql=select * from sources * where true |
+    all( group(1) filter(regex('Brown',customer) and regex('Rocker arm',item)) each(output(count())  each(output(summary())) ) ) |
+    all( group(customer) filter(regex('Rocker arm',item)) each(output(count()) ) ) |
+    all( group(item) filter(regex('Brown',customer)) each(output(count()) ) ) 
 </pre>
 
 <h2 id="global-limit">Global limit for grouping queries</h2>
