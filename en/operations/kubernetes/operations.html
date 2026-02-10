@@ -54,7 +54,141 @@ applies_to: enterprise
     </tbody>
 </table>
 
-<h3>Availability Management (PodDisruptionBudgets)</h3>
+<h3>Pod Disruption Budget</h3>
 <p>
-    Defining a <code>PodDisruptionBudget</code> (PBD) is not supported for Vespa on Kubernetes. The ConfigServer will override any PBD with its own orchestration policy, such as 2 involuntary Pod disruptions per 24 hours, and enforce it over the PDB.
+    Defining a <code>PodDisruptionBudget</code> (PBD) is not supported for Vespa on Kubernetes. The ConfigServers will override any PBD with its own orchestration policy.
 </p>
+
+<h3>Upgrades</h3>
+<p>
+    Vespa on Kubernetes supports rolling upgrades. To perform an upgrade, edit the <code>VespaSet</code> version spec to a new Vespa Version.
+</p>
+
+<p>
+    For example, to upgrade to Vespa Version <code>8.577</code>, edit the <code>VespaSet</code> like the snippet below. Ensure that the
+    image for <code>8.577</code> is already cached in a known location and that <code>$OCI_IMAGE_REFERENCE:8.577</code> is a valid image reference.
+</p>
+
+<pre>
+# VespaSet configuration for AWS EKS
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: vespaset-sample
+  namespace: $NAMESPACE
+spec:
+  <b>version: "8.577" </b>
+
+  configServer:
+    image: "$OCI_IMAGE_REFERENCE"
+    storageClass: "gp3"
+    generateRbac: false
+
+  application:
+    image: "$OCI_IMAGE_REFERENCE"
+    storageClass: "gp3"
+
+  ingress:
+    endpointType: "LOAD_BALANCER"
+</pre>
+
+<p>
+    Vespa will then begin a rolling upgrade, proceeding sequentially — first upgrading the Config Server Pods, and then the Application Pods.
+</p>
+
+<p>
+    Each Pod follows the same upgrade sequence: it is drained of traffic (or its data is flushed if it is a Content Pod), deleted, recreated with the new image, and verified healthy before the upgrade continues to the next Pod.
+</p>
+
+<p>
+    Throughout the upgrade, the <code>VespaSet</code> status is updated as each Pod progresses. To confirm that the upgrade has completed, check each Pod’s <code>Converged Version</code> in the <code>VespaSet</code> status.
+</p>
+
+<p>
+    While a Pod is being upgraded, its phase is reported as <code>UPGRADING</code>. In the example below, the Container Pod <code>default-100</code> is currently upgrading.
+</p>
+
+<pre>
+$ kubectl describe vespaset vespaset-sample -n $NAMESPACE
+Name:         vespaset-sample
+Namespace:    $NAMESPACE
+Labels:       &lt;none&gt;
+Annotations:  &lt;none&gt;
+API Version:  k8s.ai.vespa/v1
+Kind:         VespaSet
+Metadata:
+  Creation Timestamp:  2026-01-29T21:32:27Z
+  Finalizers:
+    vespasets.k8s.ai.vespa/finalizer
+  Generation:        1
+  Resource Version:  121822902
+  UID:               a70f56e9-6625-4011-acd7-9f7cad29dbc2
+Spec:
+  Application:
+    Image:          $OCI_IMAGE_REFERENCE
+    Storage Class:  gp3
+  Config Server:
+    Generate Rbac:    false
+    Image:            $OCI_IMAGE_REFERENCE
+    Storage Class:    gp3
+  Ingress:
+    Endpoint Type:  LOAD_BALANCER
+  Version:          8.577
+Status:
+  Bootstrap Status:
+    Pods:
+      cfg-0:
+        Last Updated:  2026-01-29T21:38:45Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.577
+      cfg-1:
+        Last Updated:  2026-01-29T21:38:09Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.577
+      cfg-2:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.577
+      default-100:
+        Last Updated:  2026-01-29T21:38:45Z
+        Message:       Pod is running
+        Phase:         <b>UPGRADING</b>
+        Converged Version: 8.576
+      default-101:
+        Last Updated:  2026-01-29T21:38:09Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+      documentation-102:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+      documentation-103:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+      cluster-controller-104:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+      cluster-controller-105:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+      cluster-controller-106:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+  Last Transition Time:  2026-01-29T21:33:55Z
+  Message:               All configservers running
+  Phase:                 RUNNING
+Events:                  &lt;none&gt;
+</pre>

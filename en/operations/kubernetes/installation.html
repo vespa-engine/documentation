@@ -5,26 +5,37 @@ applies_to: enterprise
 ---
 
 <p>
-  The Vespa Operator should be installed using the official Helm chart.<br/>
-  The operator depends on the installation of the <code>VespaSet</code> <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource Definition</a> (CRD), which is defined at the Kubernetes cluster scope.<br/>
+  The Vespa Operator should be installed using the official Helm chart. It depends on the installation of the <code>VespaSet</code> <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource Definition</a> (CRD), which is defined at the Kubernetes cluster scope.
   Through the Helm Chart, the installation of the CRD and the required RBAC permissions can be simplified. The required permissions are listed in the <a href="#permissions">Permissions</a> section.
 </p>
 
 <p>
-  Our container registry is located at <code>images.ves.pa</code>.<br/>
-  For accessing the required <em></em>Vespa on Kubernetes</em> container images (and helm chart) you will need to contact us through our support portal, we will provide you with a the authentication id and token.<br>
+  Our container registry is located at <code>images.ves.pa</code>. For accessing the required <em>Vespa on Kubernetes</em> container images (and helm chart) you will need to contact us through our support portal.
+  We will provide you with the authentication id and token.
+</p>
 
+<p>
   <strong>Important:</strong> For production use, we <em>require</em> mirroring these images into your own registry or a well-known internal repository appropriate for your infrastructure!
 </p>
 
 <p>
-  Our support team will provide you with the required credentials, you will have access to the following:
+  Our support team will provide you with credentials to access the following:
 </p>
-<ul>
-  <li>the <em>Vespa on Kubernetes</em> image, corresponding to <code>$OCI_IMAGE_REFERENCE</code> in this guide,</li>
-  <li>the <em>Vespa Operator</em> image, corresponding to <code>$OCI_IMAGE_REFERENCE_OPERATOR</code> in this guide,</li>
-  <li>the official <em>Vespa Helm Chart</em> OCI, referred to as <code>$HELM_OCI_CHART_REFERENCE</code> in this guide.</li>
-</ul>
+
+<pre>
+  # The Vespa on Kubernetes Image
+  export $OCI_IMAGE_REFERENCE
+</pre>
+
+<pre>
+  # The Vespa Operator Image
+  export $OCI_IMAGE_REFERENCE_OPERATOR
+</pre>
+
+<pre>
+  # The Official Helm Chart
+  export $HELM_OCI_CHART_REFERENCE
+</pre>
 
 <h2>Requirements</h2>
 
@@ -43,116 +54,29 @@ applies_to: enterprise
 </ul>
 
 <p>
-  These instructions assume that <code>kubeconfig</code> is pointing to an active Kubernetes cluster. Refer to the <a href="https://kubernetes.io/docs/setup/">Getting Started</a> guide to create a Kubernetes cluster.
+  These instructions assume that <code>kubeconfig</code> is pointing to an active Kubernetes cluster. Refer to the <a href="https://kubernetes.io/docs/setup/">Getting Started</a> guide to create a Kubernetes cluster. For instructions on creating a
+  local development deployment, refer to the <a href="#minikube-setup">MiniKube Setup</a> section.
 </p>
-
-<h2>MiniKube Setup</h2>
-
-<p>
-  MiniKube allows for simple local testing of Vespa on Kubernetes. Skip to the <a href="#install-helm-chart">Deploy Vespa Operator</a> section below to directly start installation.
-</p>
-
-<p>
-  Initialize a Minikube cluster with 8 nodes, 2CPUs and 4GiB memory each ausing the Podman driver. Enable Minikube's image registry
-  add-on to allow the Minikube nodes to access the image.
-</p>
-
-<pre>
-# Start Minikube
-minikube start --nodes 8 --cpus 2 --memory 4GiB --driver=podman
-
-# Enable Image Registry add-on
-minikube addons enable registry
-
-# Verify MiniKube cluster was created
-minikube status
-</pre>
-
-<pre>
-# Authenticate to the registry
-echo $VESPAAI_REGISTRY_TOKEN | podman login images.ves.pa \
-  -u "$VESPAAI_REGISTRY_USER" \
-  --password-stdin
-
-# Cache the images locally
-podman pull images.ves.pa/kubernetes/vespa:$VESPA_VERSION
-podman pull images.ves.pa/kubernetes/operator:$VESPA_VERSION
-</pre>
-
-<p>
-  Once the Minikube cluster is set up, push the images to the MiniKube registry, to make accessible to the MiniKube nodes. The MiniKube registry is accessible from
-  <code>$(minikube ip):5000</code>.
-</p>
-
-<pre>
-# Save the minikube registry endpoint
-$MINIKUBE_REGISTRY=$(minikube ip)
-
-# Push the kubernetes/vespa image to the registry
-podman tag  kubernetes/vespa:$VESPA_VERSION $MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa:$VESPA_VERSION
-podman push --tls-verify=false $MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa:$VESPA_VERSION
-
-# Push the kubernetes/operator image to the registry
-podman tag  kubernetes/operator:$VESPA_VERSION $MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION
-podman push --tls-verify=false $MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION
-</pre>
-
-<p>
-  The images will now be available to the Minikube nodes from <code>$MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION</code>.
-</p>
-
-<pre>
-export OCI_IMAGE_REFERENCE=$MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa
-export OCI_IMAGE_REFERENCE_OPERATOR=$MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator
-export OCI_IMAGE_TAG=$VESPA_VERSION
-</pre>
-
-<p>
-  Then, install the <a href="https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner">Local Persistent Volume</a> provisioner Helm Chart.
-  This will allow Persistent Volumes to be created in a MiniKube environment. It will automatically create a StorageClass called `local-storage`, which should be
-  used for the next steps.
-</p>
-
-<pre>
-# Clone the local persistent volume static provisioner from the Kubernetes sigs
-$ git clone git@github.com:kubernetes-sigs/sig-storage-local-static-provisioner.git
-
-# Deploy onto the Kubernetes cluster
-$ helm install -f helm/examples/baremetal-default-storage.yaml local-volume-provisioner --namespace kube-system ./helm/provisioner
-
-# Create several volumes on each Minikube node.
-$ for n in minikube minikube-m02 minikube-m03 minikube-m04 minikube-m05 minikube-m06 minikube-m07 minikube-m08; do
-  echo "==> $n"
-  minikube ssh -n "$n" -- '
-    set -e
-    for i in 1 2 3 4; do
-      sudo mkdir -p /mnt/disks/vol$i
-      if ! mountpoint -q /mnt/disks/vol$i; then
-        sudo mount --bind /mnt/disks/vol$i /mnt/disks/vol$i
-      fi
-    done
-    echo "Mounted:"
-    mount | grep -E "/mnt/disks/vol[1-4]" || true
-  '
-done
-</pre>
 
 <h2 id="install-helm-chart">Deploy Vespa Operator</h2>
 <p>
-  The Helm Chart installs the Vespa Operator and the <code>Role</code>, <code>RoleBinding</code>, and <code>ServiceAccount</code> resources with the necessary permissions to operate Vespa. Optionally, the
+  The Helm Chart installs the Vespa Operator, <code>Role</code>, <code>RoleBinding</code>, and <code>ServiceAccount</code> resources with the permissions to operate Vespa. Optionally, the
   CRD specification can be installed onto the Kubernetes cluster.
 </p>
 
 <p>
-  An installation can be performed as follows. This will deploy the Vespa Operator to the <code>vespa</code> namespace and apply
-  the <code>VespaSet</code> CRD specification to the cluster.
+  An installation can be performed as follows. This will deploy the Vespa Operator to the target namespace and apply
+  the <code>VespaSet</code> CRD specification to the Kubernetes cluster. Set `image.repository` to the Vespa On Kubernetes Image provided by our support team.
+  The `image.tag` refers to the Vespa Version to deploy.
 </p>
+
 <pre>
-$ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace vespa --create-namespace --set image.repository $OCI_IMAGE_REFERENCE_OPERATOR --set image.tag $OCI_IMAGE_TAG
+$ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace $NAMESPACE --create-namespace --set image.repository $OCI_IMAGE_REFERENCE_OPERATOR --set image.tag $OCI_IMAGE_TAG
 </pre>
+
 <p>
-  If CRDs are managed separately, the CRD installation can be disabled. However, the CRD specification must
-  be manually applied to the cluster before installing the Helm Chart. Our support team can provide this specification if necessary.
+  If CRDs are managed separately, its installation can be disabled. However, the CRD specification must
+  be manually applied to the Kubernetes cluster before installing the Helm Chart. Our support team can provide this specification if necessary.
 </p>
 
 <pre>
@@ -161,7 +85,7 @@ $ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace $NAMESPACE -
 </pre>
 
 <p>
-  Ensure that the <code>Deployment</code> resource was successfully applied and the operator <code>Pod</code> was created. It can be done
+  Ensure that the <code>Deployment</code> was successfully applied and the operator <code>Pod</code> was created. It can be done
   using the following check.
 </p>
 
@@ -181,7 +105,7 @@ $ kubectl wait --for=condition=available deployment/vespa-operator --timeout=120
 <p>
   A <code>VespaSet</code> represents a quorum of <a href="https://docs.vespa.ai/en/operations/self-managed/configuration-server.html">ConfigServers</a> that manage Vespa applications. Several examples of
   <code>VespaSet</code> specifications are provided in the Helm Chart <code>samples</code> directory.
-  A sample <code>VespaSet</code> resource for <a href="https://aws.amazon.com/eks/">Amazon Elastic Kubernetes Service</a> (EKS) is shown below.
+  A sample <code>VespaSet</code> for <a href="https://aws.amazon.com/eks/">Amazon Elastic Kubernetes Service</a> (EKS) is shown below.
 </p>
 
 <pre>
@@ -190,7 +114,7 @@ apiVersion: k8s.ai.vespa/v1
 kind: VespaSet
 metadata:
   name: vespaset-sample
-  namespace: vespa
+  namespace: $NAMESPACE
 spec:
   version: $OCI_IMAGE_TAG
 
@@ -204,20 +128,20 @@ spec:
     storageClass: "gp3"
 
   ingress:
-    endpointType: "NODE_PORT"
+    endpointType: "LOAD_BALANCER"
 </pre>
 
 <p>
-  An example for MiniKube would be as follows.
+  An example for a local deployment on MiniKube would be as follows.
 </p>
 
 <pre>
-# VespaSet configuration for AWS EKS
+# VespaSet configuration for MiniKube
 apiVersion: k8s.ai.vespa/v1
 kind: VespaSet
 metadata:
   name: vespaset-sample
-  namespace: vespa
+  namespace: $NAMESPACE
 spec:
   version: $OCI_IMAGE_TAG
 
@@ -231,7 +155,7 @@ spec:
     storageClass: "local-storage"
 
   ingress:
-    endpointType: "NODE_PORT"
+    endpointType: "NONE"
 </pre>
 
 <p>
@@ -239,7 +163,7 @@ spec:
 </p>
 
 <p>
-  Apply the <code>VespaSet</code> resource to the Kubernetes Cluster. The operator will automatically detect the <code>VespaSet</code> and create a quorum of
+  Apply the <code>VespaSet</code> to the Kubernetes Cluster. The operator will automatically detect the newly applied <code>VespaSet</code> and create a quorum of
   ConfigServers.
 </p>
 
@@ -249,9 +173,9 @@ spec:
 </p>
 
 <pre>
-$ kubectl describe vespaset vespaset-sample -n vespa
+$ kubectl describe vespaset vespaset-sample -n $NAMESPACE
 Name:         vespaset-sample
-Namespace:    vespa
+Namespace:    $NAMESPACE
 Labels:       &lt;none&gt;
 Annotations:  &lt;none&gt;
 API Version:  k8s.ai.vespa/v1
@@ -272,7 +196,7 @@ Spec:
     Image:            $OCI_IMAGE_REFERENCE
     Storage Class:    gp3
   Ingress:
-    Endpoint Type:  NODE_PORT
+    Endpoint Type:  LOAD_BALANCER
   Version:          $OCI_IMAGE_TAG
 Status:
   Bootstrap Status:
@@ -281,14 +205,17 @@ Status:
         Last Updated:  2026-01-29T21:38:45Z
         Message:       Pod is running
         Phase:         RUNNING
+        Converged Version: $OCI_IMAGE_TAG
       cfg-1:
         Last Updated:  2026-01-29T21:38:09Z
         Message:       Pod is running
         Phase:         RUNNING
+        Converged Version: $OCI_IMAGE_TAG
       cfg-2:
         Last Updated:  2026-01-29T21:36:32Z
         Message:       Pod is running
         Phase:         RUNNING
+        Converged Version: $OCI_IMAGE_TAG
   Last Transition Time:  2026-01-29T21:33:55Z
   Message:               All configservers running
   Phase:                 RUNNING
@@ -300,7 +227,7 @@ Events:                  &lt;none&gt;
 </p>
 
 <pre>
-$ kubectl get vespaset upgradetest-vespaset -n mramdenbourg-upgradetest -o json \
+$ kubectl get vespaset vespaset-sample -n $NAMESPACE -o json \
 | jq -e '
   .status.bootstrapStatus.pods as $p
   | ($p["cfg-0"].phase == "RUNNING")
@@ -310,7 +237,7 @@ $ kubectl get vespaset upgradetest-vespaset -n mramdenbourg-upgradetest -o json 
 </pre>
 
 <p>
-  The full reference guide for the VespaSet CRD can be found in the <a href="vespaset-reference.html">VespaSet Reference</a> section.
+  The full reference guide for the VespaSet can be found in the <a href="vespaset-reference.html">VespaSet Reference</a> section.
 </p>
 
 <h2>Deploy a Vespa Application</h2>
@@ -321,24 +248,24 @@ $ kubectl get vespaset upgradetest-vespaset -n mramdenbourg-upgradetest -o json 
 </p>
 
 <p>
-  Set up the Vespa CLI to download the Album Recommendation sample application to a working directory and use the local endpoints.
+  Set up the Vespa CLI to download the Album Recommendation sample application to a working directory.
 </p>
 
 <pre>
 $ vespa clone album-recommendation myapp && cd myapp
-$ vespa config set target local
 </pre>
 
 <p>
-  Enable a port-forward of the ConfigServer's ingress port to a port locally.
+  Enable port-forwarding of the ConfigServer's ingress port to a local port.
 </p>
 
 <pre>
-$ kubectl -n mramdenbourg-upgradetest port-forward pod/cfg-0 19071:19071
+$ vespa config set target local
+$ kubectl -n $NAMESPACE port-forward pod/cfg-0 19071:19071
 </pre>
 
 <p>
-  The application can be deployed using the Vespa CLI.
+  Deploy the application.
 </p>
 
 <pre>
@@ -346,13 +273,13 @@ $ vespa deploy --wait 600
 </pre>
 
 <p>
-  This will create the Container, Content, and Cluster-Controller Pods as specified in the application package. The deployment
-  is considered complete once all Pods are in phase <code>RUNNING</code> in the <code>VespaSet</code> status. This can be queried
+  The ConfigServer quorum will create the Container, Content, and Cluster-Controller Pods as specified in the application package. The deployment
+  is considered complete once all Pods show the phase <code>RUNNING</code> in the <code>VespaSet</code> status. This can be queried
   as follows.
 </p>
 
 <pre>
-$ kubectl get vespaset upgradetest-vespaset -n mramdenbourg-upgradetest -o json \
+$ kubectl get vespaset vespaset-sample -n $NAMESPACE -o json \
 | jq -e '
   .status.bootstrapStatus.pods
   | with_entries(
@@ -375,23 +302,23 @@ $ kubectl get vespaset upgradetest-vespaset -n mramdenbourg-upgradetest -o json 
 </pre>
 
 <p>
-  Note the names of the Pods may change depending on your specific Application Package configuration.
+  The names of the Pods will change depending on your specific Application Package configuration.
 </p>
 
 <p>
-  Port forwarding provides a simple way to access the application locally.
+  Port-forwarding provides a simple way to access the ingress ports locally.
   For other ingress options, see the <a href="ingress.html">Configuring the External Access Layer</a> section.
 </p>
 
 <h2>Feed Documents</h2>
 
 <p>
-  Feed documents to the Dataplane entrypoint by port-forwarding to both the Dataplane Pod and the ConfigServer Pod.
+  Feed documents to the Dataplane entrypoint by port-forwarding the Dataplane ingress port and the ConfigServer ingress port.
 </p>
 
 <pre>
-$ kubectl -n mramdenbourg-upgradetest port-forward pod/cfg-0 19071:19071
-$ kubectl -n mramdenbourg-upgradetest port-forward pod/default-100 8080:8080
+$ kubectl -n $NAMESPACE port-forward pod/cfg-0 19071:19071
+$ kubectl -n $NAMESPACE port-forward pod/default-100 8080:8080
 </pre>
 
 <p>
@@ -470,3 +397,104 @@ vespa feed dataset/A-Head-Full-of-Dreams.json
   </tr>
   </tbody>
 </table>
+
+<h2 id="minikube-setup">MiniKube Setup</h2>
+
+<p>
+  MiniKube allows for simple local testing of Vespa on Kubernetes.
+</p>
+
+<p>
+  Initialize a Minikube cluster with 8 nodes, each with 4GiB of memory and 2 CPUs. Enable Minikube's image registry
+  add-on to allow the Minikube nodes to access the image. In this example, we use `podman` as the driver, though `docker` is also valid.
+</p>
+
+<pre>
+# Start Minikube
+minikube start --nodes 8 --cpus 2 --memory 4GiB --driver=podman
+
+# Enable Image Registry add-on
+minikube addons enable registry
+
+# Verify MiniKube cluster was created
+minikube status
+</pre>
+
+<p>
+  Cache the images provided by our support team locally.
+</p>
+
+<pre>
+# Authenticate to the registry
+echo $VESPAAI_REGISTRY_TOKEN | podman login images.ves.pa \
+  -u "$VESPAAI_REGISTRY_USER" \
+  --password-stdin
+
+# Cache the images locally
+podman pull images.ves.pa/kubernetes/vespa:$VESPA_VERSION
+podman pull images.ves.pa/kubernetes/operator:$VESPA_VERSION
+</pre>
+
+<p>
+  Then, push the images to the MiniKube registry. The MiniKube registry is accessible from
+  <code>$(minikube ip):5000</code> on a standard setup.
+</p>
+
+<pre>
+# Save the minikube registry endpoint
+$MINIKUBE_REGISTRY=$(minikube ip)
+
+# Push the kubernetes/vespa image to the registry
+podman tag  kubernetes/vespa:$VESPA_VERSION $MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa:$VESPA_VERSION
+podman push --tls-verify=false $MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa:$VESPA_VERSION
+
+# Push the kubernetes/operator image to the registry
+podman tag  kubernetes/operator:$VESPA_VERSION $MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION
+podman push --tls-verify=false $MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION
+</pre>
+
+<p>
+  The images will now be available to the Minikube nodes from <code>$MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION</code>.
+</p>
+
+<pre>
+export OCI_IMAGE_REFERENCE=$MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa
+export OCI_IMAGE_REFERENCE_OPERATOR=$MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator
+export OCI_IMAGE_TAG=$VESPA_VERSION
+</pre>
+
+<p>
+  Install the <a href="https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner">Local Persistent Volume</a> provisioner Helm Chart.
+  This will allow Persistent Volumes to be created in a MiniKube environment. The installation will automatically create a StorageClass called `local-storage`, which should be
+  used as the `StorageClass` for subsequent steps.
+</p>
+
+<pre>
+# Clone the local persistent volume static provisioner from the Kubernetes sigs
+$ git clone git@github.com:kubernetes-sigs/sig-storage-local-static-provisioner.git
+
+# Deploy onto the Kubernetes cluster
+$ helm install -f helm/examples/baremetal-default-storage.yaml local-volume-provisioner --namespace kube-system ./helm/provisioner
+</pre>
+
+<p>
+  Create several usable volumes on each MiniKube Node. We recommend at least 4 per node for a smooth deployment.
+</p>
+
+<pre>
+# Create several volumes on each Minikube node.
+$ for n in minikube minikube-m02 minikube-m03 minikube-m04 minikube-m05 minikube-m06 minikube-m07 minikube-m08; do
+  echo "==> $n"
+  minikube ssh -n "$n" -- '
+    set -e
+    for i in 1 2 3 4; do
+      sudo mkdir -p /mnt/disks/vol$i
+      if ! mountpoint -q /mnt/disks/vol$i; then
+        sudo mount --bind /mnt/disks/vol$i /mnt/disks/vol$i
+      fi
+    done
+    echo "Mounted:"
+    mount | grep -E "/mnt/disks/vol[1-4]" || true
+  '
+done
+</pre>
