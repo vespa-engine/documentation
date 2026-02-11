@@ -15,10 +15,7 @@ All Vespa features must be documented - this document explains how to add to the
 
 ## Practical information
 
-Vespa documentation is served using
-[GitHub Project pages](https://help.github.com/categories/github-pages-basics/)
-with
-[Jekyll](https://help.github.com/en/github/working-with-github-pages/about-github-pages-and-jekyll).
+Vespa documentation is served using [AWS Amplify](https://aws.amazon.com/amplify/) with [Jekyll](https://jekyllrb.com/).
 To edit documentation, check out and work off the master branch in this repository.
 
 Documentation is written in HTML or Markdown.
