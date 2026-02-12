@@ -212,6 +212,27 @@ Format of this in JSON:
 }
 ```
 
+##### CONTAINS with text()
+YQL: `where title contains ({language:'en'}text('hello world'))`.
+
+Format of this [text() operator with annotations](yql.html#text) in JSON:
+
+```json
+"where" : {
+  "contains" : [
+    "title",
+    { 
+      "text" : { 
+        "query" : "hello world",
+        "attributes" : {
+          "language" : "en"
+        }
+      }
+    }
+  ]
+}
+```
+
 ##### Numeric Operators
 YQL: `where date >= 10`.
 
