@@ -188,6 +188,8 @@ but this is less relevant as the `HNSW` index search first reduces the document 
 * **targetHits**:
 The [targetHits](../reference/querying/yql.html#targethits)
 specifies how many hits one wants to expose to [ranking](../basics/ranking.html) *per content node*.
+Approximate search exposes exactly `targetHits` hits to `first-phase` ranking on every content node
+as long as `targetHits` hits are actually found and not filtered out afterwards.
 Nearest neighbor search is typically used as an efficient retriever in a [phased ranking](../ranking/phased-ranking.html)
 pipeline. See [performance sizing](../performance/sizing-search.html). 
 

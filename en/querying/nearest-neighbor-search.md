@@ -358,8 +358,9 @@ The [targetHits](../reference/querying/yql.html#targethits)
 query annotation specifies the number of results to expose to `first-phase`
 ranking per content node involved in the query.
 `targetHits` is a required parameter and the query will fail if not specified.
-The `targetHits` is a lower bound per content node,
-and with exact search more hits than `targetHits` are exposed to `first-phase` ranking.
+With exact search, `targetHits` is a lower bound per content node:
+At least but possibly more than `targetHits` hits are exposed to `first-phase` ranking on every content node
+as long as `targetHits` hits are actually found and not filtered out afterwards.
 
 The query tensor is sent as a query input
 and the query tensor name is referenced in the second argument of the `nearestNeighbor` operator.

@@ -1137,16 +1137,17 @@ $ vespa query \
 This query example restricts the search to tracks by `Bonnie Tyler` with `popularity > 20`.
 
 ### Strict filters and distant neighbors 
-When combining nearest neighbor search with strict filters which matches less than 5 percentage of the total number of documents, 
+When combining nearest neighbor search with strict filters that match less than 2 percent of the total number of documents,
 Vespa will instead of searching the HNSW graph, constrained by the filter, fall back to using exact nearest neighbor search.
 See [Controlling filter behavior](#controlling-filter-behavior) for how to adjust the threshold for which strategy that is used.
-When falling back to exact search users will observe that `totalCount` increases and is higher than `targetHits`.
-As seen from previous examples, more hits are exposed to the `first-phase` ranking expression when using 
-exact search. When using exact search with filters, the search can also use multiple threads to evaluate the query, which
-helps reduce the latency impact. 
+Since exact search may expose more than `targetHits` hits to the `first-phase` ranking expression,
+users will observe that `totalCount` increases and is higher than `targetHits` when falling back to exact search.
+This can be seen in the previous examples.
+When using exact search with filters, the search can also use multiple threads to evaluate the query, which
+helps reduce the latency impact.
 
-With strict filters that removes many hits, the hits (nearest neighbors) might not be *near* in the embedding space, but *far*,
-or *distant* neighbors. Technically, all document vectors are a neighbor of the query vector, 
+With strict filters that remove many hits, the hits (nearest neighbors) might not be *near* in the embedding space, but *far*,
+or *distant* neighbors. Technically, all document vectors are a neighbor of the query vector,
 but with a varying distance.
 
 With restrictive filters, the neighbors that are returned might be of low quality (far distance). 
@@ -2006,7 +2007,7 @@ The following query examples explore the two query-time parameters
 which can be used to control the filtering behavior. The parameters are
 
 - [ranking.matching.postFilterThreshold](../reference/api/query.html#ranking.matching) default 1.0 
-- [ranking.matching.approximateThreshold](../reference/api/query.html#ranking.matching) default 0.05
+- [ranking.matching.approximateThreshold](../reference/api/query.html#ranking.matching) default 0.02
 
 These parameters can be used per query or configured in the rank-profile in the 
 [document schema](../reference/schemas/schemas.html#post-filter-threshold). 
