@@ -59,11 +59,15 @@ This sets up a client component that can be used in a
 
 Vespa provides several options to configure the API key used by the client.
 
-1. Using the [Vespa Cloud secret store](../security/secret-store) to store the API key. 
-2. This is done by setting the `apiKeySecretRef` configuration parameter to the name of the secret 
-3. in the secret store. This is the recommended way for Vespa Cloud users.
-2. Providing the API key in the `X-LLM-API-KEY` HTTP header of the Vespa query. 
-3. It is also possible to configure the API key in a custom component. For example, [this](https://github.com/vespa-engine/system-test/tree/master/tests/docproc/generate_field_openai) system-test shows how to retrieve the API key from a local file deployed with your Vespa application. Please note that this is NOT recommended for production use, as it is less secure than using the secret store, but it can be modified to suit your needs.
+1. Using the [Vespa Cloud secret store](../security/secret-store) to store the API key.
+   This is done by setting the `apiKeySecretRef` configuration parameter to the name of the secret
+   in the secret store. This is the recommended way for Vespa Cloud users.
+2. For self-managed Vespa, you can provide secrets via environment variables.
+   Set the `apiKeySecretRef` configuration parameter and expose the secret as an environment variable
+   named `VESPA_SECRET_<SECRET_REF>`, where `<SECRET_REF>` is the secret reference name converted to
+   upper snake case. For example, if `apiKeySecretRef` is set to `myApiKey`, the environment variable
+   should be named `VESPA_SECRET_MY_API_KEY`.
+3. Providing the API key in the `X-LLM-API-KEY` HTTP header of the Vespa query.
 
 You can set up multiple connections with different settings. For instance, you
 might want to run different LLMs for different tasks. To distinguish between the

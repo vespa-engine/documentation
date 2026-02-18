@@ -45,12 +45,12 @@ Mac
 
     $ docker run -ti --rm --name doc \
       --publish 4000:4000 -e JEKYLL_UID=$UID -v $(pwd):/srv/jekyll \
-      jekyll/jekyll jekyll serve
+      jekyll/jekyll jekyll serve --incremental --force_polling
 
 or RHEL 8
 
     $ podman run -it --rm --name doc -p 4000:4000 -e JEKYLL_ROOTLESS=true \
-      -v "$PWD":/srv/jekyll:Z docker.io/jekyll/jekyll jekyll serve
+      -v "$PWD":/srv/jekyll:Z docker.io/jekyll/jekyll jekyll serve --incremental --force_polling
 
 The Jekyll server should normally rebuild HTML files automatically
 when a source files changes. If this does not happen, you can use

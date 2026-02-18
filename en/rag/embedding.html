@@ -496,6 +496,174 @@ telling the splade embedder the name of the tensor dimension to use for the chun
 </p>
 
 
+{% include chip-cloud.html %}
+<h3 id="voyageai-embedder">VoyageAI Embedder</h3>
+
+<p>An embedder that uses the <a href="https://www.voyageai.com/">VoyageAI</a> embedding API
+to generate high-quality embeddings for semantic search. This embedder calls the VoyageAI API service
+and does not require local model files or ONNX inference. All embeddings returned by VoyageAI are normalized
+to unit length, making them suitable for cosine similarity and
+<a href="../reference/schemas/schemas.html#prenormalized-angular">prenormalized-angular</a> distance metrics
+(see <a href="https://docs.voyageai.com/docs/faq#which-similarity-function-should-i-use">VoyageAI FAQ</a>).</p>
+
+<pre>{% highlight xml %}
+<container version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4</model>
+        <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
+        <dimensions>1024</dimensions>
+    </component>
+</container>
+{% endhighlight %}</pre>
+
+<ul>
+    <li>
+        The <code>model</code> specifies which VoyageAI model to use.
+    </li>
+    <li>
+        The <code>api-key-secret-ref</code> references a secret in Vespa's
+        <a href="/en/cloud/security/secret-store.html">secret store</a> containing your VoyageAI API key.
+        This is required for authentication.
+    </li>
+</ul>
+
+<p>See the <a href="../reference/rag/embedding.html#voyageai-embedder-reference-config">reference</a>
+for all configuration parameters.</p>
+
+<h4 id="voyageai-embedder-models">VoyageAI embedder models</h4>
+<p>For the complete list of available models and their specifications, see:</p>
+<ul>
+    <li><a href="https://docs.voyageai.com/docs/embeddings">VoyageAI Embeddings Documentation</a> - General-purpose and specialized models</li>
+    <li><a href="https://docs.voyageai.com/docs/contextualized-chunk-embeddings">Contextualized Chunk Embeddings</a> - Models for embedding document chunks with surrounding context. See <a href="../rag/working-with-chunks.html">Working with chunks</a>.</li>
+    <li><a href="https://docs.voyageai.com/docs/multimodal-embeddings">Multimodal Embeddings</a> - Multimodal models for text, images, and video</li>
+</ul>
+
+<h4 id="voyageai-contextualized-embeddings">Contextualized chunk embeddings</h4>
+<p>To use <a href="https://docs.voyageai.com/docs/contextualized-chunk-embeddings">contextualized chunk embeddings</a>,
+configure the VoyageAI embedder with a <code>voyage-context-*</code> model and use it to embed an
+<code>array&lt;string&gt;</code> field containing your document chunks:</p>
+
+<pre>
+schema doc {
+    document doc {
+        field chunks type array&lt;string&gt; {
+            indexing: index | summary
+        }
+    }
+    field embeddings type tensor&lt;float&gt;(chunk{}, x[1024]) {
+        indexing: input chunks | embed voyage | attribute | index
+        attribute {
+            distance-metric: prenormalized-angular
+        }
+    }
+}
+</pre>
+
+<p>
+    When embedding array fields with a contextualized chunk embedding model, Vespa sends all chunks from a document in a single API request,
+    allowing Voyage to encode each chunk with context from the other chunks.
+    Be aware that the combined size of all chunks in a document must fit within the VoyageAI API's input token limit.
+    See <a href="working-with-chunks.html">Working with chunks</a> for chunking strategies.
+</p>
+
+<h4 id="voyageai-input-types">Input type detection</h4>
+<p>VoyageAI models distinguish between query and document embeddings for improved retrieval quality.
+The embedder automatically detects the context and sets the appropriate input type based on whether
+the embedding is performed during feed (indexing) or query processing in Vespa.</p>
+
+<p>For advanced use cases where you need to control the input type programmatically,
+you can use the <code>destination</code> property of the
+<a href="https://javadoc.io/static/com.yahoo.vespa/linguistics/8.620.35/com/yahoo/language/process/Embedder.Context.html">Embedder.Context</a>
+when calling the embedder from Java code.</p>
+
+<h4 id="voyageai-best-practices">Best practices</h4>
+<p>For production deployments, we recommend configuring <strong>separate embedder components for feed and search operations</strong>.
+This architectural pattern provides two key benefits - cost optimization and rate limit isolation.
+In Vespa Cloud, it's best practice to configure these embedders in separate container clusters for feed and search.</p>
+
+<pre>{% highlight xml %}
+<container id="feed" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-large</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_feed_api_key</api-key-secret-ref>
+    </component>
+    <document-api/>
+</container>
+
+<container id="search" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-lite</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_search_api_key</api-key-secret-ref>
+    </component>
+    <search/>
+</container>
+{% endhighlight %}</pre>
+
+<h5 id="voyageai-cost-optimization">Cost optimization with model variants</h5>
+<p>The <a href="https://blog.voyageai.com/2026/01/15/voyage-4/">Voyage 4 model family</a> features a shared embedding space
+across different model sizes. This enables a cost-effective strategy where you can use a more powerful (and expensive) model
+for document embeddings, while using a smaller, cheaper model for query embeddings.
+Since document embedding happens once during indexing but query embedding occurs on every search request,
+this approach can significantly reduce operational costs while maintaining quality.</p>
+
+<p>The <a href="model-hub.html#voyage-4-nano">voyage-4-nano</a>
+    model is available as an ONNX model for use with the
+    <a href="#huggingface-embedder">Hugging Face embedder</a>.
+    Since it shares the same embedding space as the larger Voyage 4 models,
+    it can be used for query embeddings with local inference, trading some accuracy for lower cost
+    by eliminating API usage for queries entirely.</p>
+
+<h5 id="voyageai-rate-limit-isolation">Rate limit isolation</h5>
+<p>Separating feed and search operations is particularly important for managing VoyageAI API rate limits.
+Bursty document feeding operations can consume significant API quota, potentially causing rate limit errors
+that affect search queries. By using <strong>separate API keys</strong> for feed and search embedders,
+you ensure that feeding bursts don't negatively impact search.</p>
+
+<h5 id="voyageai-document-processing-concurrency">Thread pool tuning</h5>
+<p>When using the VoyageAI embedder, container feed throughput is primarily limited by VoyageAI API latency
+    combined with the document processing thread pool size, not by CPU. Each document being fed blocks a thread
+    while waiting for the VoyageAI API response. To improve throughput, you likely have to increase the
+    <a href="../reference/applications/services/docproc.html#threadpool">document processing thread pool size</a>,
+    assuming the content cluster is not the bottleneck.</p>
+
+<p>For example, consider a container cluster with 2 nodes, each with 8 vCPUs. With the default document processing
+    thread pool size of 1 thread per vCPU, you have 16 total threads. If the average VoyageAI API latency is 200ms,
+    the maximum throughput is approximately 16 / 0.2 = 80 documents/second.
+    See <a href="../performance/container-tuning.html#docproc">container tuning</a> for more on container tuning.</p>
+
+<p>Note that the effective throughput can never exceed the rate limit of your VoyageAI API key.
+    Use the <a href="https://docs.vespa.ai/en/reference/operations/metrics/container.html">embedder metrics</a>
+    to determine embedder latency and throughput.
+    For additional throughput improvements, consider enabling <a href="#voyageai-dynamic-batching">dynamic batching</a>.</p>
+
+<h5 id="voyageai-dynamic-batching">Dynamic batching</h5>
+<p>Dynamic batching combines multiple concurrent embedding requests into a single VoyageAI API call.
+    This is useful when throughput is constrained by VoyageAI's
+    <a href="https://docs.voyageai.com/docs/rate-limits">RPM (requests per minute) limit</a>
+    rather than the TPM (tokens per minute) limit.
+    Batching reduces RPM usage by combining requests; TPM usage is unaffected.</p>
+
+<pre>{% highlight xml %}
+<container id="feed" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-large</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_feed_api_key</api-key-secret-ref>
+        <batching max-size="16" max-delay="200ms"/>
+    </component>
+    <document-api/>
+</container>
+{% endhighlight %}</pre>
+
+<p>The <code>max-size</code> attribute sets the maximum number of requests in a single batch,
+    and <code>max-delay</code> sets the maximum time to wait for a full batch before sending a partial one.
+    Batching is disabled by default.</p>
+
+<p>The <a href="../reference/applications/services/docproc.html#threadpool">document processing thread pool size</a>
+    should be at least <code>max-size</code>, since each thread contributes one request to the batch.</p>
+
 <h2 id="embedder-performance">Embedder performance</h2>
 
 <p>Embedding inference can be resource-intensive for larger embedding models. Factors that impact performance:</p>
