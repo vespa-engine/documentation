@@ -67,6 +67,7 @@ $ vespa feed graph-vectors.jsonl
 $ vespa feed if-vectors.jsonl
 </pre>
 
+This will take some minutes.
 
 ## Recall Evaluation
 Download the query vectors and the ground truth for the 10M first vectors:
@@ -95,14 +96,13 @@ $ python3 app/src/main/python/recall.py \
   --endpoint ${ENDPOINT}search/ \
   --query_file query.i8bin \
   --query_gt_file spacev10m_gt100.i8bin \
-  --certificate $PWD/.vespa/vespa-team/autotest/data-plane-public-cert.pem \
-  --key $PWD/.vespa/vespa-team/autotest/data-plane-private-key.pem
+  --certificate $PWD/.vespa/vespa-team.autotest.default/data-plane-public-cert.pem \
+  --key         $PWD/.vespa/vespa-team.autotest.default/data-plane-private-key.pem
 </pre>
 
 
 
 ## Local test with OCI image
-
 
 {% include pre-req.html memory="4 GB" extra-reqs='
 <li><a href="https://openjdk.org/projects/jdk/17/" data-proofer-ignore>Java 17</a>.</li>
