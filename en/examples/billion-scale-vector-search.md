@@ -161,6 +161,10 @@ $ python3 app/src/main/python/recall.py   --endpoint $(vespa status --format=pla
 
 
 ## Shutdown and remove the Docker container:
-<pre data-test="after">
+<pre>
 $ docker rm -f vespa
+</pre>
+
+<pre data-test="after" style="display:none">
+$ vespa destroy --force
 </pre>
