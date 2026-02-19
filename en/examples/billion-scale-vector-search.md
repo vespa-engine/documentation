@@ -121,7 +121,7 @@ $ vespa status --wait 300
 
 Test basic functionality:
 <pre data-test="exec" data-test-assert-contains="Success">
-$ vespa test src/test/application/tests/system-test/feed-and-search-test.json
+$ vespa test app/src/test/application/tests/system-test/feed-and-search-test.json
 </pre>
 
 The _graph_ vectors must be feed before the _if_ vectors:
