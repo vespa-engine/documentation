@@ -66,16 +66,18 @@ $ vespa feed graph-vectors.jsonl
 $ vespa feed if-vectors.jsonl
 </pre>
 
-This will take some minutes - now is a good time to open the Vespa Cloud Dashboard to track progress:
+Now is a good time to open the Vespa Cloud Dashboard to track progress:
 [metrics](https://console.vespa-cloud.com/link/application/autotest/dev/instance/default?default.dev.aws-us-east-1c=metrics)
-
 Refer to [&lt;resources&gt;](https://github.com/vespa-engine/sample-apps/blob/master/billion-scale-vector-search/app/src/main/application/services.xml)
 configuration to manage the feeding speed - more CPU is better, e.g.:
 ```
 <resources vcpu="8" memory="16Gb" disk="50Gb"/>
 ```
 Use the [instance type reference](https://cloud.vespa.ai/en/reference/aws-flavors.html) to find good combinations.
+Run time for a 2 VCPU deployment vs. 8 VCPU:
 
+![duration 2vcpu](assets/billion-vector-2vcpu.png)
+![duration 8vcpu](assets/billion-vector-8vcpu.png)
 
 
 ## Recall Evaluation
@@ -165,7 +167,6 @@ $ vespa clone billion-scale-vector-search myapp && cd myapp
 $ docker rm -f vespa
 </pre>
 
-<!--pre data-test="after" style="display:none">
+<pre data-test="after" style="display:none">
 $ vespa destroy --force
-</pre-->
-testing
+</pre>
