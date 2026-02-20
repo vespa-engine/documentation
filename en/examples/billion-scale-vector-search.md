@@ -48,7 +48,7 @@ $ mvn clean package -U -f app
 
 Deploy the application:
 <pre data-test="exec" data-test-assert-contains="Success">
-$ vespa deploy --wait 300 ./app
+$ vespa deploy --wait 900 ./app
 </pre>
 
 Wait for the application endpoint to become available:
@@ -67,7 +67,9 @@ $ vespa feed graph-vectors.jsonl
 $ vespa feed if-vectors.jsonl
 </pre>
 
-This will take some minutes.
+This will take some minutes:
+* Now is a good time to open the Vespa Cloud Dashboard to track progress
+  [](https://console.vespa-cloud.com/link/application/autotest/dev/instance/default?default.dev.aws-us-east-1c=metrics)
 
 ## Recall Evaluation
 Download the query vectors and the ground truth for the 10M first vectors:
