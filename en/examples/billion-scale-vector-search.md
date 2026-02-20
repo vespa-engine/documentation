@@ -158,6 +158,7 @@ $ vespa clone billion-scale-vector-search myapp && cd myapp
 $ docker rm -f vespa
 </pre>
 
-<pre data-test="after" style="display:none">
+<!--pre data-test="after" style="display:none">
 $ vespa destroy --force
-</pre>
+</pre-->
+testing
