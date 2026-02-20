@@ -52,7 +52,7 @@ $ vespa deploy --wait 900 ./app
 </pre>
 
 Wait for the application endpoint to become available:
-<pre data-test="exec">
+<pre>
 $ vespa status --wait 300
 </pre>
 
