@@ -9,8 +9,7 @@ The *SPANN* approach for approximate nearest neighbor search is described in
 
 SPANN uses a hybrid combination of graph and inverted index methods for approximate nearest neighbor search.
 See [Billion-scale vector search using hybrid HNSW-IF](https://blog.vespa.ai/vespa-hybrid-billion-scale-vector-search/)
-for details on how `SPANN` is represented with Vespa.
-
+for details on how SPANN is represented with Vespa.
 These reproducing steps demonstrates the functionality using a smaller subset of the 1B vector dataset.
 
 {% include setup.html appname='billion-scale-vector-search' %}
@@ -67,9 +66,17 @@ $ vespa feed graph-vectors.jsonl
 $ vespa feed if-vectors.jsonl
 </pre>
 
-This will take some minutes:
-* Now is a good time to open the Vespa Cloud Dashboard to track progress
-  [](https://console.vespa-cloud.com/link/application/autotest/dev/instance/default?default.dev.aws-us-east-1c=metrics)
+This will take some minutes - now is a good time to open the Vespa Cloud Dashboard to track progress:
+[metrics](https://console.vespa-cloud.com/link/application/autotest/dev/instance/default?default.dev.aws-us-east-1c=metrics)
+
+Refer to [&lt;resources&gt;](https://github.com/vespa-engine/sample-apps/blob/master/billion-scale-vector-search/app/src/main/application/services.xml)
+configuration to manage the feeding speed - more CPU is better, e.g.:
+```
+<resources vcpu="8" memory="16Gb" disk="50Gb"/>
+```
+Use the [instance type reference](https://cloud.vespa.ai/en/reference/aws-flavors.html) to find good combinations.
+
+
 
 ## Recall Evaluation
 Download the query vectors and the ground truth for the 10M first vectors:
@@ -98,8 +105,8 @@ $ python3 app/src/main/python/recall.py \
   --endpoint ${ENDPOINT}search/ \
   --query_file query.i8bin \
   --query_gt_file spacev10m_gt100.i8bin \
-  --certificate $PWD/.vespa/vespa-team.autotest.default/data-plane-public-cert.pem \
-  --key         $PWD/.vespa/vespa-team.autotest.default/data-plane-private-key.pem
+  --certificate $PWD/../.vespa/vespa-team.autotest.default/data-plane-public-cert.pem \
+  --key         $PWD/../.vespa/vespa-team.autotest.default/data-plane-private-key.pem
 </pre>
 
 
