@@ -148,6 +148,7 @@ Find the path to the credentials from the `vespa auth cert` step above, like
 /Users/username/.vespa/tenant_name.autotest.default/data-plane-public-cert.pem
 </pre>
 Replace the two filenames in the command below.
+(This is not needed when running a [local test](#local-test-with-oci-image))
 
 Run first 1K queries and evaluate recall@10. A higher number of clusters gives higher recall:
 <div class="pre-parent">
