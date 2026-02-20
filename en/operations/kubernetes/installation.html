@@ -19,22 +19,36 @@ applies_to: enterprise
 </p>
 
 <p>
-  Our support team will provide you with credentials to access the following:
+  Our support team will provide you with credentials to access the Vespa on Kubernetes image, Vespa Operator image, and the Helm Chart. They will be referred to as shown below throughout the installation steps.
 </p>
 
 <pre>
-  # The Vespa on Kubernetes Image
-  export $OCI_IMAGE_REFERENCE
+# The Vespa on Kubernetes Image
+export $OCI_IMAGE_REFERENCE=images.ves.pa/kubernetes/vespa
+
+# The Vespa Operator Image
+export $OCI_IMAGE_REFERENCE_OPERATOR=images.ves.pa/kubernetes/operator
+
+# The Official Helm Chart
+export $HELM_OCI_CHART_REFERENCE=oci://images.ves.pa/helm/vespa-operator
 </pre>
 
-<pre>
-  # The Vespa Operator Image
-  export $OCI_IMAGE_REFERENCE_OPERATOR
-</pre>
+<p>
+  The Vespa Operator uses the <a href="https://docs.vespa.ai/en/learn/releases.html">Vespa Version</a> release semantics. We encourage to use the latest release during installation.
+</p>
 
 <pre>
-  # The Official Helm Chart
-  export $HELM_OCI_CHART_REFERENCE
+# Vespa Version
+export VESPA_VESRION=$VESPA_VERSION
+</pre>
+
+<p>
+  Additionally, the Vespa Operator and all Vespa components are completely scoped to a namespace. We encourage choosing one to your liking.
+</p>
+
+<pre>
+# Set the namespace
+export NAMESPACE=test
 </pre>
 
 <h2>Requirements</h2>
@@ -44,16 +58,16 @@ applies_to: enterprise
 </p>
 
 <ul>
-  <li><a href="https://helm.sh/docs/intro/install/">Helm CLI</a></li>
-  <li>Kubernetes Command Line Tool (<a href="https://kubernetes.io/docs/reference/kubectl/">kubectl</a>)</li>
+  <li><a href="https://helm.sh/docs/intro/install/">Helm</a></li>
+  <li><a href="https://kubernetes.io/docs/reference/kubectl/">kubectl</a></li>
   <li><a href="https://docs.vespa.ai/en/clients/vespa-cli.html">Vespa CLI</a></li>
   <li><a href="https://minikube.sigs.k8s.io/docs/">MiniKube (Optional)</a></li>
-  <li>Podman or Docker</li>
+  <li>Podman or Docker (Optional)</li>
 </ul>
 
 <p>
-  These instructions assume that <code>kubeconfig</code> is pointing to an active Kubernetes cluster. Refer to the <a href="https://kubernetes.io/docs/setup/">Getting Started</a> guide to create a Kubernetes cluster. For instructions on creating a
-  local development deployment, refer to the <a href="#minikube-setup">MiniKube Setup</a> section.
+  These instructions assume that your <code>kubeconfig</code> is pointing to an active Kubernetes cluster. Refer to the <a href="https://kubernetes.io/docs/setup/">Getting Started</a> guide to create a Kubernetes cluster. For instructions on creating a
+  local development environment, refer to the <a href="#minikube-setup">MiniKube Setup</a> section.
 </p>
 
 <h2 id="install-helm-chart">Deploy Vespa Operator</h2>
@@ -63,13 +77,21 @@ applies_to: enterprise
 </p>
 
 <p>
-  An installation can be performed as follows. This will deploy the Vespa Operator to the target namespace and apply
+  First, authenticate to the Helm Chart OCI registry. The credentials will be provided by our support team.
+</p>
+
+<pre>
+helm registry login images.ves.pa -u $USER-p $TOKEN
+</pre>
+
+<p>
+  Now, an installation can be performed as follows. This will deploy the Vespa Operator to the target namespace and apply
   the <code>VespaSet</code> CRD specification to the Kubernetes cluster. Set <code>image.repository</code> to the Vespa On Kubernetes Image provided by our support team.
   The <code>image.tag</code> refers to the Vespa Version to deploy.
 </p>
 
 <pre>
-$ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace $NAMESPACE --create-namespace --set image.repository $OCI_IMAGE_REFERENCE_OPERATOR --set image.tag $OCI_IMAGE_TAG
+$ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace $NAMESPACE --create-namespace --set image.repository=$OCI_IMAGE_REFERENCE_OPERATOR --set image.tag=$VESPA_VERSION
 </pre>
 
 <p>
@@ -79,7 +101,7 @@ $ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace $NAMESPACE -
 
 <pre>
 $ kubectl apply vespasets.k8s.ai.vespa-v1.yaml
-$ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace $NAMESPACE --create-namespace --skip-crds --set image.repository $OCI_IMAGE_REFERENCE_OPERATOR --set image.tag $OCI_IMAGE_TAG
+$ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace $NAMESPACE --create-namespace --skip-crds --set image.repository $OCI_IMAGE_REFERENCE_OPERATOR --set image.tag $VESPA_VERSION
 </pre>
 
 <p>
@@ -92,10 +114,6 @@ $ kubectl wait --for=condition=available deployment/vespa-operator --timeout=120
 && kubectl get pods -l app=vespa-operator -o wide -n $NAMESPACE
 </pre>
 
-<p>
-  The full reference guide for the Helm Chart can be found in the <a href="helm-reference.html">Helm Reference</a> section.
-</p>
-
 <h2>
   Deploy a VespaSet
 </h2>
@@ -107,26 +125,30 @@ $ kubectl wait --for=condition=available deployment/vespa-operator --timeout=120
 </p>
 
 <pre>
-# VespaSet configuration for AWS EKS
+# vespaset sample for EKS
+$ cat &gt; vespaset.yaml &lt;&lt;EOF
 apiVersion: k8s.ai.vespa/v1
 kind: VespaSet
 metadata:
   name: vespaset-sample
-  namespace: $NAMESPACE
+  namespace: ${NAMESPACE}
 spec:
-  version: $OCI_IMAGE_TAG
+  version: "${VESPA_VERSION}"
 
   configServer:
-    image: "$OCI_IMAGE_REFERENCE"
+    image: "${OCI_IMAGE_REFERENCE}"
     storageClass: "gp3"
     generateRbac: false
 
   application:
-    image: "$OCI_IMAGE_REFERENCE"
+    image: "${OCI_IMAGE_REFERENCE}"
     storageClass: "gp3"
 
   ingress:
     endpointType: "LOAD_BALANCER"
+EOF
+
+$ kubectl apply -f vespaset.yaml
 </pre>
 
 <p>
@@ -134,26 +156,30 @@ spec:
 </p>
 
 <pre>
-# VespaSet configuration for MiniKube
+# vespaset sample for MiniKube
+$ cat &gt; vespaset.yaml &lt;&lt;EOF
 apiVersion: k8s.ai.vespa/v1
 kind: VespaSet
 metadata:
   name: vespaset-sample
-  namespace: $NAMESPACE
+  namespace: ${NAMESPACE}
 spec:
-  version: $OCI_IMAGE_TAG
+  version: "${VESPA_VERSION}"
 
   configServer:
-    image: "$OCI_IMAGE_REFERENCE"
+    image: "${OCI_IMAGE_REFERENCE}"
     storageClass: "local-storage"
     generateRbac: false
 
   application:
-    image: "$OCI_IMAGE_REFERENCE"
+    image: "${OCI_IMAGE_REFERENCE}"
     storageClass: "local-storage"
 
   ingress:
     endpointType: "NONE"
+EOF
+
+$ kubectl apply -f vespaset.yaml
 </pre>
 
 <p>
@@ -161,7 +187,7 @@ spec:
 </p>
 
 <p>
-  Apply the <code>VespaSet</code> to the Kubernetes Cluster. The operator will automatically detect the newly applied <code>VespaSet</code> and create a quorum of
+  Once the <code>VespaSet</code> is applied, the operator will automatically detect the newly applied <code>VespaSet</code> and create a quorum of
   ConfigServers.
 </p>
 
@@ -174,28 +200,19 @@ spec:
 $ kubectl describe vespaset vespaset-sample -n $NAMESPACE
 Name:         vespaset-sample
 Namespace:    $NAMESPACE
-Labels:       &lt;none&gt;
-Annotations:  &lt;none&gt;
 API Version:  k8s.ai.vespa/v1
 Kind:         VespaSet
-Metadata:
-  Creation Timestamp:  2026-01-29T21:32:27Z
-  Finalizers:
-    vespasets.k8s.ai.vespa/finalizer
-  Generation:        1
-  Resource Version:  121822902
-  UID:               a70f56e9-6625-4011-acd7-9f7cad29dbc2
 Spec:
   Application:
-    Image:          $OCI_IMAGE_REFERENCE
+    Image:          192.168.49.2:5000/localhost/vespaai/kubernetes
     Storage Class:  gp3
   Config Server:
     Generate Rbac:    false
-    Image:            $OCI_IMAGE_REFERENCE
+    Image:            192.168.49.2:5000/localhost/vespaai/kubernetes
     Storage Class:    gp3
   Ingress:
-    Endpoint Type:  LOAD_BALANCER
-  Version:          $OCI_IMAGE_TAG
+    Endpoint Type:  NONE
+  Version:          8.643.16
 Status:
   Bootstrap Status:
     Pods:
@@ -203,40 +220,22 @@ Status:
         Last Updated:  2026-01-29T21:38:45Z
         Message:       Pod is running
         Phase:         RUNNING
-        Converged Version: $OCI_IMAGE_TAG
+        Converged Version: 8.643.16
       cfg-1:
         Last Updated:  2026-01-29T21:38:09Z
         Message:       Pod is running
         Phase:         RUNNING
-        Converged Version: $OCI_IMAGE_TAG
+        Converged Version: 8.643.16
       cfg-2:
         Last Updated:  2026-01-29T21:36:32Z
         Message:       Pod is running
         Phase:         RUNNING
-        Converged Version: $OCI_IMAGE_TAG
+        Converged Version: 8.643.16
   Last Transition Time:  2026-01-29T21:33:55Z
   Message:               All configservers running
   Phase:                 RUNNING
 Events:                  &lt;none&gt;
 </pre>
-
-<p>
-  The status of the bootstrap process can be easily queried as follows.
-</p>
-
-<pre>
-$ kubectl get vespaset vespaset-sample -n $NAMESPACE -o json \
-| jq -e '
-  .status.bootstrapStatus.pods as $p
-  | ($p["cfg-0"].phase == "RUNNING")
-  and ($p["cfg-1"].phase == "RUNNING")
-  and ($p["cfg-2"].phase == "RUNNING")
-'
-</pre>
-
-<p>
-  The full reference guide for the VespaSet can be found in the <a href="vespaset-reference.html">VespaSet Reference</a> section.
-</p>
 
 <h2>Deploy a Vespa Application</h2>
 
@@ -254,7 +253,37 @@ $ vespa clone album-recommendation myapp && cd myapp
 </pre>
 
 <p>
-  Enable port-forwarding of the ConfigServer's ingress port to a local port.
+  Modify the sample application package with resource specifications and ensure the correct Pod count, as shown below:
+</p>
+
+<pre>
+&lt;?xml version="1.0" encoding="utf-8" ?&gt;
+&lt;services version="1.0" xmlns:deploy="vespa" xmlns:preprocess="properties"&gt;
+
+    &lt;container id="default" version="1.0"&gt;
+        &lt;document-api/&gt;
+        &lt;search/&gt;
+
+        &lt;nodes count="2"&gt;
+            &lt;resources vcpu="2" memory="2Gb" disk="20Gb" /&gt;
+        &lt;/nodes&gt;
+    &lt;/container&gt;
+
+    &lt;content id="music" version="1.0"&gt;
+        &lt;min-redundancy&gt;2&lt;/min-redundancy&gt;
+        &lt;documents&gt;
+            &lt;document type="music" mode="index" /&gt;
+        &lt;/documents&gt;
+        &lt;nodes count="2"&gt;
+            &lt;resources vcpu="2" memory="2Gb" disk="20Gb" /&gt;
+        &lt;/nodes&gt;
+    &lt;/content&gt;
+
+&lt;/services&gt;
+</pre>
+
+<p>
+  Enable port-forwarding from the ConfigServer's ingress port <code>19071</code> to your local port <code>19071</code>.
 </p>
 
 <pre>
@@ -263,44 +292,17 @@ $ kubectl -n $NAMESPACE port-forward pod/cfg-0 19071:19071
 </pre>
 
 <p>
-  Deploy the application.
+  Deploy and activate the application using the sequence below.
 </p>
 
 <pre>
-$ vespa deploy --wait 600
+$ vespa prepare --target local
+$ while not vespa --target local activate
 </pre>
 
 <p>
   The ConfigServer quorum will create the Container, Content, and Cluster-Controller Pods as specified in the application package. The deployment
-  is considered complete once all Pods show the phase <code>RUNNING</code> in the <code>VespaSet</code> status. This can be queried
-  as follows.
-</p>
-
-<pre>
-$ kubectl get vespaset vespaset-sample -n $NAMESPACE -o json \
-| jq -e '
-  .status.bootstrapStatus.pods
-  | with_entries(
-      select(
-        .key as $k
-        | [
-            "cluster-controllers-104",
-            "cluster-controllers-105",
-            "cluster-controllers-106",
-            "default-100",
-            "default-101",
-            "documentation-102",
-            "documentation-103"
-          ]
-        | index($k) | not
-      )
-    )
-  | all(.phase == "RUNNING")
-'
-</pre>
-
-<p>
-  The names of the Pods will change depending on your specific Application Package configuration.
+  is considered complete once all Pods show the phase <code>RUNNING</code> in the <code>VespaSet</code> status.
 </p>
 
 <p>
@@ -315,12 +317,15 @@ $ kubectl get vespaset vespaset-sample -n $NAMESPACE -o json \
 </p>
 
 <pre>
+# Ensure the port-forward to 19071 is still active
 $ kubectl -n $NAMESPACE port-forward pod/cfg-0 19071:19071
+
+# Port-forward to the dataplane ingress port
 $ kubectl -n $NAMESPACE port-forward pod/default-100 8080:8080
 </pre>
 
 <p>
-  Then, use the Vespa CLI to feed a document.
+  Then, use the Vespa CLI to feed a document. In our same <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation">Album Recommendation</a> sample:
 </p>
 
 <pre>
@@ -411,7 +416,7 @@ vespa feed dataset/A-Head-Full-of-Dreams.json
 # Start Minikube using an insecure registry. This is not recommended for production.
 minikube start --nodes 8 --cpus 2 --memory 4GiB --driver=podman --insecure-registry="192.168.49.0/24"
 
-# Enable Image Registry add-on
+# Enable the Image Registry add-on
 minikube addons enable registry
 
 # Verify MiniKube cluster was created
@@ -419,11 +424,11 @@ minikube status
 </pre>
 
 <p>
-  Cache the images provided by our support team locally.
+  Cache the images provided by our support team into the MiniKube registry.
 </p>
 
 <pre>
-# Authenticate to the registry
+# Authenticate to our registry
 echo $VESPAAI_REGISTRY_TOKEN | podman login images.ves.pa \
   -u "$VESPAAI_REGISTRY_USER" \
   --password-stdin
@@ -434,13 +439,13 @@ podman pull images.ves.pa/kubernetes/operator:$VESPA_VERSION
 </pre>
 
 <p>
-  Then, push the images to the MiniKube registry. The MiniKube registry is accessible from
+  Then, push the images to the MiniKube registry. It will be accessible from
   <code>$(minikube ip):5000</code> on a standard setup.
 </p>
 
 <pre>
 # Save the minikube registry endpoint
-$MINIKUBE_REGISTRY=$(minikube ip)
+export MINIKUBE_REGISTRY=$(minikube ip)
 
 # Push the kubernetes/vespa image to the registry
 podman tag  kubernetes/vespa:$VESPA_VERSION $MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa:$VESPA_VERSION
@@ -452,18 +457,18 @@ podman push --tls-verify=false $MINIKUBE_REGISTRY:5000/localhost/kubernetes/oper
 </pre>
 
 <p>
-  The images will now be available to the Minikube nodes from <code>$MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION</code>.
+  The images will now be available to the Minikube nodes at <code>$MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION</code>. We encourage
+  saving the new image locations below.
 </p>
 
 <pre>
 export OCI_IMAGE_REFERENCE=$MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa
 export OCI_IMAGE_REFERENCE_OPERATOR=$MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator
-export OCI_IMAGE_TAG=$VESPA_VERSION
 </pre>
 
 <p>
-  Install the <a href="https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner">Local Persistent Volume</a> provisioner Helm Chart.
-  This will allow Persistent Volumes to be created in a MiniKube environment. The installation will automatically create a StorageClass called <code>local-storage</code>, which should be
+  Then, install the <a href="https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner">Local Persistent Volume</a> Helm Chart.
+  This will allow Persistent Volumes which are required by Vespa to be created in a MiniKube environment. Helm will automatically create a StorageClass called <code>local-storage</code>, which should be
   used as the <code>StorageClass</code> for subsequent steps.
 </p>
 
@@ -471,7 +476,8 @@ export OCI_IMAGE_TAG=$VESPA_VERSION
 # Clone the local persistent volume static provisioner from the Kubernetes sigs
 $ git clone git@github.com:kubernetes-sigs/sig-storage-local-static-provisioner.git
 
-# Deploy onto the Kubernetes cluster
+# Install the Helm Chart onto the cluster globally
+$ cd sig-storage-local-static-provisioner
 $ helm install -f helm/examples/baremetal-default-storage.yaml local-volume-provisioner --namespace kube-system ./helm/provisioner
 </pre>
 
@@ -495,4 +501,142 @@ $ for n in minikube minikube-m02 minikube-m03 minikube-m04 minikube-m05 minikube
     mount | grep -E "/mnt/disks/vol[1-4]" || true
   '
 done
+</pre>
+<h2 id="delete">Delete a VespaSet</h2>
+
+<p>
+  Use the following helper script to delete all resources in a VespaSet. This will tear down all resources and should be used with caution.
+</p>
+
+<pre>
+  #!/bin/bash
+# cleanup-k8s-resources.sh
+# Usage:
+#   ./cleanup-k8s-resources.sh <namespace> [--delete-operator] [--delete-namespace]
+#   ./cleanup-k8s-resources.sh -n <namespace> [--delete-operator] [--delete-namespace]
+#   ./cleanup-k8s-resources.sh --namespace <namespace> [--delete-operator] [--delete-namespace]
+#
+# Prompts for confirmation before proceeding. Use --dry-run to simulate.
+
+set -euo pipefail
+
+usage() {
+  echo "Usage: $0 <namespace> [--dry-run] [--delete-operator] [--delete-namespace]"
+  echo "       $0 -n <namespace> [--dry-run] [--delete-operator] [--delete-namespace]"
+  echo "       $0 --namespace <namespace> [--dry-run] [--delete-operator] [--delete-namespace]"
+  echo
+  echo "Options:"
+  echo "  -n, --namespace     Kubernetes namespace to target"
+  echo "      --dry-run       Show what would be deleted without making changes"
+  echo "      --delete-operator  Also delete vespa-operator deployment and pods"
+  echo "      --delete-namespace Delete the entire namespace (takes precedence)"
+  echo "  -h, --help          Show this help"
+}
+
+NAMESPACE=""
+DELETE_OPERATOR=0
+DELETE_NAMESPACE=0
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -n|--namespace)
+      [[ $# -ge 2 ]] || { echo "Error: $1 requires a value"; usage; exit 1; }
+      NAMESPACE="$2"
+      shift 2
+      ;;
+    --delete-operator)
+      DELETE_OPERATOR=1
+      shift
+      ;;
+    --delete-namespace)
+      DELETE_NAMESPACE=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -*)
+      echo "Unknown option: $1"
+      usage
+      exit 1
+      ;;
+    *)
+      if [[ -z "${NAMESPACE}" ]]; then
+        NAMESPACE="$1"
+        shift
+      else
+        echo "Unexpected argument: $1"
+        usage
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if [[ -z "${NAMESPACE}" ]]; then
+  echo "Error: namespace is required."
+  usage
+  exit 1
+fi
+
+echo "Target namespace: ${NAMESPACE}"
+echo "This will operate on:"
+if [[ $DELETE_NAMESPACE -eq 1 ]]; then
+  echo "- Entire namespace (all resources will be deleted)"
+else
+  echo "- VespaSet resources"
+  if [[ $DELETE_OPERATOR -eq 1 ]]; then
+    echo "- Deployment vespa-operator"
+    echo "- All Pods (including vespa-operator)"
+  else
+    echo "- Pods (excluding those with label app=vespa-operator)"
+  fi
+  echo "- Services (including cfg)"
+  echo "- PersistentVolumeClaims"
+fi
+
+# Confirmation
+if [[ $DELETE_NAMESPACE -eq 1 ]]; then
+  read -r -p "The namespace '${NAMESPACE}' and all its resources will be deleted. Are you sure? [y/N]: " CONFIRM
+elif [[ $DELETE_OPERATOR -eq 1 ]]; then
+  read -r -p "Your resources (including vespa-operator deployment and pods) will be deleted. Are you sure? [y/N]: " CONFIRM
+else
+  read -r -p "Your resources will be deleted (operator pods are excluded). Are you sure? [y/N]: " CONFIRM
+fi
+
+case "$CONFIRM" in
+  [yY]|[yY][eE][sS]) ;;
+  *) echo "Aborted."; exit 0 ;;
+esac
+
+# Do not delete the operator, to ensure that the VespaSet finalizer completes
+echo "Deleting Pods (excluding app=vespa-operator) in namespace: $NAMESPACE"
+kubectl delete pods --grace-period=0  -l 'app!=vespa-operator' -n "$NAMESPACE" --ignore-not-found
+
+echo "Deleting VespaSet resources in namespace: $NAMESPACE"
+kubectl delete vespaset --all -n "$NAMESPACE" --ignore-not-found
+
+echo "Deleting Services in namespace: $NAMESPACE"
+kubectl delete svc -l 'app!=vespa-operator' -n "$NAMESPACE" --ignore-not-found
+kubectl delete svc cfg -n "$NAMESPACE" --ignore-not-found
+
+echo "Deleting PVCs in namespace: $NAMESPACE"
+kubectl delete pvc  -l 'app!=vespa-operator' -n "$NAMESPACE" --ignore-not-found
+
+# Delete Deployment if requested
+if [[ $DELETE_OPERATOR -eq 1 ]]; then
+  echo "Deleting Deployment 'vespa-operator' in namespace: $NAMESPACE"
+  kubectl delete deployment vespa-operator -n "$NAMESPACE" --ignore-not-found
+fi
+
+if [[ $DELETE_NAMESPACE -eq 1 ]]; then
+  echo "Deleting namespace: $NAMESPACE"
+  kubectl delete namespace "$NAMESPACE" --ignore-not-found
+  echo "✅ Cleanup complete: namespace deleted"
+  exit 0
+fi
+
+echo "✅ Cleanup complete in namespace: $NAMESPACE"
 </pre>
