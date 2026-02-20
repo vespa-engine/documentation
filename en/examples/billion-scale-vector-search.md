@@ -3,14 +3,15 @@
 title: "SPANN Billion Scale Vector Search"
 ---
 
-This sample application demonstrates how to represent *SPANN* (Space Partitioned ANN) using Vespa.
-The *SPANN* approach for approximate nearest neighbor search is described in
-[SPANN: Highly-efficient Billion-scale Approximate Nearest Neighbor Search](https://arxiv.org/abs/2111.08566).
 
+The SPANN (Space Partitioned ANN) approach for approximate nearest neighbor search is described in
+[SPANN: Highly-efficient Billion-scale Approximate Nearest Neighbor Search](https://arxiv.org/abs/2111.08566).
 SPANN uses a hybrid combination of graph and inverted index methods for approximate nearest neighbor search.
 See [Billion-scale vector search using hybrid HNSW-IF](https://blog.vespa.ai/vespa-hybrid-billion-scale-vector-search/)
-for details on how SPANN is represented with Vespa.
-These reproducing steps demonstrates the functionality using a smaller subset of the 1B vector dataset.
+for details on how SPANN is implemented using Vespa.
+
+This sample application demonstrates how to represent SPANN using Vespa.
+These steps demonstrates the functionality, using a smaller subset of the 1B vector dataset.
 
 {% include setup.html appname='billion-scale-vector-search' %}
 
@@ -24,19 +25,16 @@ $ curl -L -o spacev10m_base.i8bin \
   https://data.vespa-cloud.com/sample-apps-data/spacev10m_base.i8bin
 </pre>
 
-Generate the feed file for the first 10M vectors from the 100M sample.
-This step creates two feed files:
-
-* `graph-vectors.jsonl`
-* `if-vectors.jsonl`
-
-Install dependencies and create the feed data:
+Install dependencies and create the feed files for the first 10M vectors from the 100M sample:
 <pre data-test="exec">
 $ pip3 install numpy requests tqdm
 </pre>
 <pre data-test="exec">
 $ python3 app/src/main/python/create-vespa-feed.py spacev10m_base.i8bin
 </pre>
+Output:
+* `graph-vectors.jsonl`
+* `if-vectors.jsonl`
 
 
 ## Build and deploy Vespa app
@@ -51,7 +49,7 @@ $ vespa deploy --wait 900 ./app
 </pre>
 
 Wait for the application endpoint to become available:
-<pre>
+<pre data-test="exec" >
 $ vespa status --wait 300
 </pre>
 
@@ -60,6 +58,8 @@ Test basic functionality:
 $ vespa test app/src/test/application/tests/system-test/feed-and-search-test.json
 </pre>
 
+
+## Feed data
 The _graph_ vectors must be feed before the _if_ vectors:
 <pre data-test="exec">
 $ vespa feed graph-vectors.jsonl
@@ -168,5 +168,6 @@ $ docker rm -f vespa
 </pre>
 
 <pre data-test="after" style="display:none">
+$ sleep 600
 $ vespa destroy --force
 </pre>
