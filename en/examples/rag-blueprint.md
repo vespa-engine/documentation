@@ -27,7 +27,7 @@ or try out the [Python notebook](https://vespa-engine.github.io/pyvespa/examples
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Success">
-$ vespa deploy ./app
+$ vespa deploy --wait 900 ./app
 </pre>
 </div>
 
