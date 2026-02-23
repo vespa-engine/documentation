@@ -64,8 +64,7 @@ of queries per second, while delivering state-of-the-art quality.
 What do you want to do next?
 
 - To learn what this application can do, look at the files in your app/ dir.
-- [Run your application locally using Docker](deploy-locally.md)
-- [Using query profiles to define behavior for different use cases](query-profiles.md)
-- [Evaluate and improve relevance of the data returned](relevance.md)
-- [Do LLM generation inside the application](generation.md)
-
+- [Run your application locally using Docker](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/deploy-locally.md)
+- [Using query profiles to define behavior for different use cases](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/query-profiles.md)
+- [Evaluate and improve relevance of the data returned](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/relevance.md)
+- [Do LLM generation inside the application](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/relevance.md)
