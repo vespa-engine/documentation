@@ -24,14 +24,16 @@ vespa status [flags]
 $ vespa status
 $ vespa status --cluster mycluster
 $ vespa status --cluster mycluster --wait 600
-$ vepsa status --format plain --cluster mycluster
+$ vespa status --format plain --cluster mycluster
+$ vespa status --no-verify
 ```
 
 ### Options
 
 ```
-      --format string   Output format. Must be 'human' (human-readable) or 'plain' (cluster URL only) (default "human")
+      --format string   Output format. Must be 'human' (human-readable), 'plain' (cluster URL only), or 'json' (default "human")
   -h, --help            help for status
+      --no-verify       Skip checking service status (control plane only)
   -w, --wait int        Number of seconds to wait for service(s) to become ready. 0 to disable (default 0)
 ```
 
@@ -52,4 +54,5 @@ $ vepsa status --format plain --cluster mycluster
 * [vespa](vespa.html)	 - The command-line tool for Vespa.ai
 * [vespa status deploy](vespa_status_deploy.html)	 - Show status of the Vespa deploy service
 * [vespa status deployment](vespa_status_deployment.html)	 - Show status of a Vespa deployment
+* [vespa status endpoint](vespa_status_endpoint.html)	 - Show Vespa endpoints without checking their status
 
