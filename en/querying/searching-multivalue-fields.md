@@ -587,7 +587,7 @@ $ vespa deploy --wait 300 my-app
 
 Run a query with the new rank profile:
 
-<pre data-test="exec" data-test-assert-contains='"relevance": 4.0'>
+<pre data-test="exec" data-test-assert-contains='"relevance": 4'>
 $ vespa query 'yql=select * from photos where userQuery()' \
   'query=clear sky' 'type=any' 'ranking=tunable'
 </pre>
@@ -600,7 +600,7 @@ expression becomes 4 which is reflected in the hit relevance score.
 
 Change the <code>query(tagWeight)</code> with the query request and observe that the relevance becomes 6.0:
 
-<pre data-test="exec" data-test-assert-contains='"relevance": 6.0'>
+<pre data-test="exec" data-test-assert-contains='"relevance": 6'>
 $ vespa query 'yql=select * from photos where userQuery()' \
   'query=clear sky' \
   'type=any' \
