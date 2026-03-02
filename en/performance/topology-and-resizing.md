@@ -150,12 +150,15 @@ In this case, the application has a redundancy of 2 - it must be the same as the
   </div>
 </div>
 
-This is a configuration most applications do not use:
-When a node stops (and it does daily for Vespa upgrades),
+By default, when a node stops (and it does daily for Vespa upgrades),
 the full row stops serving, which is 50% of the capacity out.
 
-{% include important.html content="Use this topology with care -
-  it has few/no benefits over the alternatives, and is included here for completeness."%}
+When using this topology,
+we recommend setting [min-active-docs-coverage](../reference/applications/services/content.html#min-active-docs-coverage)
+to a lower number than the default 97%.
+E.g., if there are three nodes in a group, each node is 33.3%, and a node loss gives 66.7% coverage.
+Setting min-active-docs-coverage to 65 means that _more than one node_ must stop for the group (row) to stop serving,
+which is normally what one would want in this topology.
 
 
 
