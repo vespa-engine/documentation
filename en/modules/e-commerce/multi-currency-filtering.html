@@ -567,14 +567,65 @@ rank-profile price_ranking {
 }
 {% endhighlight %}</pre>
 
+<h4 id="filter-params-vs-ranking-inputs">Filter Parameters vs Ranking Inputs</h4>
 <p>
-  This rank profile requires passing one-hot encoded tensors for the buyer's currency and market as query parameters:
+  There are two distinct types of query parameters used together, and they must not be confused:
+</p>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Prefix</th>
+      <th>Format</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Filter parameters</td>
+      <td><code>ecommerce.multicurrency.*</code></td>
+      <td>Plain string or number</td>
+      <td>Tells the searcher which market, currency, and price range to filter on. Consumed server-side — never reach the rank profile.</td>
+    </tr>
+    <tr>
+      <td>Ranking inputs</td>
+      <td><code>ranking.features.query(...)</code></td>
+      <td>One-hot tensor</td>
+      <td>Passed directly to the rank profile to drive scoring expressions. The searcher does not read or modify these.</td>
+    </tr>
+  </tbody>
+</table>
+
+{% include note.html content='The only exception is <code>enrich=true</code>, which causes the searcher to inject <code>query(forexRates)</code> from its in-memory cache — because the client cannot know the current rates. <code>buyer_currency</code> and <code>buyer_market</code> are already known to the client so they are passed directly as ranking inputs, not via the searcher.' %}
+
+<h4 id="one-hot-tensor-format">One-Hot Tensor Format</h4>
+<p>
+  Ranking inputs use one-hot encoded tensors. The format is <code>{% raw %}{{dimension:value}:1}{% endraw %}</code>
+  where <code>dimension</code> is the named dimension defined in the rank profile <code>inputs</code> block,
+  and <code>value</code> is the label to select:
+</p>
+<ul>
+  <li><code>query(buyer_currency)</code> has dimension <code>to</code> — pass <code>{% raw %}{{to:NOK}:1}{% endraw %}</code></li>
+  <li><code>query(buyer_market)</code> has dimension <code>market</code> — pass <code>{% raw %}{{market:NO}:1}{% endraw %}</code></li>
+</ul>
+<p>
+  Both tensors are required by the example rank profile above. Omitting either causes its ranking expressions to produce zero for all documents.
+</p>
+
+<h4 id="complete-ranking-query">Complete Query with Filtering and Ranking</h4>
+<p>
+  The following example uses the <code>price_ranking</code> profile defined above with price filtering and both ranking input tensors:
 </p>
 <pre>{% highlight sh %}
 $ vespa query \
     'yql=select * from product where true' \
     'searchChain=multi-currency-filter' \
+    'ecommerce.multicurrency.market=NO' \
+    'ecommerce.multicurrency.currency=NOK' \
+    'ecommerce.multicurrency.price-min=1000' \
+    'ecommerce.multicurrency.price-max=1500' \
     'ecommerce.multicurrency.enrich=true' \
+    'ranking.profile=price_ranking' \
     'ranking.features.query(buyer_currency)={% raw %}{{to:NOK}:1}{% endraw %}' \
     'ranking.features.query(buyer_market)={% raw %}{{market:NO}:1}{% endraw %}'
 {% endhighlight %}</pre>
