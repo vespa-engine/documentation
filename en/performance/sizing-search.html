@@ -493,17 +493,48 @@ This can be overridden to a lower value in
 so that different query use cases can use different number of threads per search.
 Using multiple threads per search allows better utilization of
 multicore cpu architectures for low query volume applications.
-The persearch number in services should always be equal to the highest num-threads-per-search in your rank profiles.
-Setting it higher leaves threads unused.
+The <code>persearch</code> number in services should always be equal to the highest
+<code>num-threads-per-search</code> in your rank profiles.
+Setting it higher reduces the maximum number of concurrent queries without any latency benefit.
 </p>
 
 <h4 id="thread-configuration">Thread configuration</h4>
+<p>
+  The <code>search</code> and <code>persearch</code> settings together determine
+  the maximum number of queries that can execute concurrently on a content node:
+</p>
+<pre>
+max concurrent queries = search / persearch
+</pre>
+<p>
+  For example, with <code>search=64</code> (the default) and <code>persearch=8</code>,
+  only 8 queries can execute simultaneously.
+  Queries arriving when all slots are busy are queued in the match engine,
+  adding latency without any backpressure to the caller.
+  This can significantly reduce throughput even when CPU cores are available.
+</p>
 <p>
   To get started, set <code>search</code> to be 2x number of CPU cores.
   <code>persearch</code> should never be more than number of cores.
   <code>summary</code> should be equal to number of cores.
   Start with the default value of 1 for <code>persearch</code> and only increase it for lower query latency,
   as it will reduce throughput and efficiency.
+</p>
+<p>
+  If you increase <code>persearch</code>, consider increasing <code>search</code> proportionally
+  to maintain enough concurrent query slots.
+  For example, if you need <code>persearch=8</code> on a 16-core machine,
+  setting <code>search=128</code> gives 16 concurrent query slots &mdash;
+  enough that queries using fewer threads (via per-rank-profile
+  <a href="../reference/schemas/schemas.html#num-threads-per-search">num-threads-per-search</a>
+  overrides) are not starved of executor slots.
+</p>
+<p>
+  Monitor <code>content.proton.executor.match.utilization</code> to detect when
+  the match engine is saturated &mdash; a sustained value at or near 1.0 indicates
+  all executor slots are busy and queries are queuing.
+  A high <code>content.proton.executor.match.queuesize.max</code> relative to
+  <code>search / persearch</code> confirms the bottleneck.
 </p>
 
 <h2 id="scaling-retrieval-size">Scaling the size of the retrievable unit</h2>
