@@ -124,7 +124,7 @@ The application owner will model the flow in own tool, and orchestrate deploymen
 The important point is, these are two _separate_ deploy commands to Vespa Cloud:
 
 ```shell
-$ vespa config set application kkraunetenant1.canaryapp
+$ vespa config set application tenant1.canaryapp
 $ vespa prod deploy app
 ```
 ```xml
@@ -138,7 +138,7 @@ $ vespa prod deploy app
 ```
 
 ```shell
-$ vespa config set application kkraunetenant1.prodapp
+$ vespa config set application tenant1.prodapp
 $ vespa prod deploy app
 ```
 ```xml
