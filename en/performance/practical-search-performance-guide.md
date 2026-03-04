@@ -1734,11 +1734,16 @@ $ vespa query \
 Now, the content node(s) will parallelize the matching and ranking 
 using multiple search threads and `querytime` drops to about 15 ms. 
 
-The setting in `services.xml` sets the global *persearch* value, 
-It is possible to tune down the number of threads used for a query with 
+The setting in `services.xml` sets the global *persearch* value,
+It is possible to tune down the number of threads used for a query with
 `rank-profile` overrides using [num-threads-per-search](../reference/schemas/schemas.html#num-threads-per-search).
 Note that the per rank-profile setting can only be used to tune the number of threads
-to a lower number than the global default. 
+to a lower number than the global default.
+
+Note that increasing `persearch` reduces the maximum number of queries that can execute concurrently,
+since the match engine executor has `search / persearch` slots.
+See [thread configuration](sizing-search.html#thread-configuration) for details on sizing
+the thread pool to avoid this bottleneck.
 
 This adds a new `rank-profile` `similar-t2` using `num-threads-per-search: 2` instead
 of the global 4 setting. It's also possible to set the number of threads in the query request
