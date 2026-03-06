@@ -391,6 +391,39 @@ Format of this in JSON:
 ```
 
 
+##### Equals
+YQL: `where my_number = 42`.
+
+Format of this in JSON:
+
+```json
+"where" : {
+  "equals" : { "field": "my_number", "value": 42 }
+}
+```
+
+Short form using an array — `[field, value]` is shorthand for `{ "field": field, "value": value }`:
+
+```json
+"where" : {
+  "equals" : ["my_number", 42]
+}
+```
+
+The `equals` operator supports boolean and integer values.
+
+To match at a specific element index in a multivalue field, add the `index` parameter.
+Only a single index is supported:
+
+YQL: `where my_numbers[2] = 42`.
+
+```json
+"where" : {
+  "equals" : { "field": "my_numbers", "index": 2, "value": 42 }
+}
+```
+
+
 ##### Search within same struct element
 YQL: `where persons contains sameElement(first_name contains 'Joe', last_name contains 'Smith', year_of_birth < 1940)`.
 
