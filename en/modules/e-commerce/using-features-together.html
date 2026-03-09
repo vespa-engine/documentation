@@ -1,0 +1,317 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Using Features Together
+applies_to: enterprise
+---
+
+<p>
+  The e-commerce features are designed as standalone components that can be composed together.
+  This page covers the configuration needed
+  when features interact at feed time or query time.
+  Read the individual feature pages before this one:
+</p>
+<ul>
+  <li><a href="multi-currency-filtering.html">Multi-Currency Pricing</a></li>
+  <li><a href="saved-search.html">Saved Search Notifications</a></li>
+</ul>
+
+<p>
+  The schemas, services configuration, and other examples on this page are illustrative.
+  Adapt field names, document types, and configuration values to match your application.
+</p>
+
+
+<h2 id="saved-search-with-multi-currency">Saved Search with Multi-Currency</h2>
+
+<p>
+  When <a href="saved-search.html">saved search notifications</a> and
+  <a href="multi-currency-filtering.html">multi-currency pricing</a> are used together,
+  the saved search document processor generates per-currency price features at feed time.
+  This enables saved searches with price filters to match products
+  regardless of the seller's currency.
+</p>
+
+<h3 id="how-it-works">How It Works</h3>
+
+<p>
+  Without multi-currency, a saved search like <code>price in [100..200]</code> matches against the product's
+  single <code>price</code> field. With multi-currency enabled, the document processor:
+</p>
+<ol>
+  <li>Reads the product's <code>per_market_price</code> entries and <code>seller_currency</code></li>
+  <li>Converts each price to every known currency using the forex rates</li>
+  <li>Scales the converted prices to integers by multiplying with <code>priceScaleFactor</code>
+      (e.g., a factor of 100 preserves two decimal places).
+      Predicate ranges require integer values, so this step is needed to retain precision.</li>
+  <li>Generates predicate range features named <code>{featurePrefix}_{currency}_{market}</code>
+      (e.g., <code>price_NOK_DEFAULT</code>, <code>price_EUR_NO</code>)</li>
+  <li>Feeds these features alongside the regular attributes into the predicate query</li>
+</ol>
+
+<p>
+  A saved search filtering on NOK prices can then use <code>price_NOK_DEFAULT in [1000..1500]</code>
+  as its predicate expression, and it will match products originally priced in any currency.
+</p>
+
+<h3 id="predicate-upper-bound">Predicate Upper Bound</h3>
+
+<p>
+  The predicate field's <code>upper-bound</code> in the saved search schema must be large enough
+  to cover the highest possible scaled converted price.
+  Because prices are both currency-converted and scaled by <code>priceScaleFactor</code>,
+  the resulting values can be significantly larger than the original prices.
+</p>
+
+{% include warning.html content='If any single range feature in a predicate query exceeds the
+<code>upper-bound</code>, Vespa rejects the <strong>entire</strong> predicate query for that document,
+not just the out-of-range feature. This means the product will not match any saved searches at all.' %}
+
+<p>
+  For example, with a scale factor of 100 and a EUR-to-SEK rate of ~11.76:
+  a product priced at 200 EUR produces <code>price_SEK_DEFAULT = 200 &times; 11.76 &times; 100 = 235,294</code>.
+  The <code>upper-bound</code> must be at least 235,294 for this to work.
+</p>
+
+<p>
+  Choose an upper bound that covers your highest-priced products converted to
+  the weakest target currency, multiplied by the scale factor.
+  A generous margin is recommended to accommodate price and exchange rate fluctuations.
+</p>
+
+
+<h3 id="schema-setup">Schema Setup</h3>
+
+<p>
+  The following are minimal examples showing the fields required from each feature.
+  Your schemas will likely have additional fields and configuration.
+</p>
+
+<h4 id="product-schema">Product Schema</h4>
+<p>
+  The product schema must include fields from both features:
+  the saved search attributes (<code>price</code>, <code>category</code>, etc.)
+  and the multi-currency fields (<code>seller_currency</code>, <code>per_market_price</code>).
+</p>
+
+<pre>{% highlight xml %}
+schema product {
+    document product {
+
+        # Saved search attributes
+        field price type int {
+            indexing: attribute
+        }
+
+        field category type string {
+            indexing: attribute
+        }
+
+        # Multi-currency fields
+        field seller_currency type string {
+            indexing: summary | attribute
+        }
+
+        struct market_price {
+            field market type string {}
+            field price type double {}
+        }
+
+        field per_market_price type array<market_price> {
+            indexing: summary
+            summary: matched-elements-only
+            struct-field market {
+                indexing: attribute
+            }
+            struct-field price {
+                indexing: attribute
+            }
+        }
+    }
+}
+{% endhighlight %}</pre>
+
+<h4 id="saved-search-schema">Saved Search Schema</h4>
+<p>
+  Set the <code>upper-bound</code> high enough to cover scaled converted prices.
+  See <a href="#predicate-upper-bound">Predicate Upper Bound</a> above.
+</p>
+
+<pre>{% highlight xml %}
+schema saved_search {
+    document saved_search {
+        field filters type predicate {
+            indexing: attribute
+            index {
+                arity: 2
+                lower-bound: 3
+                upper-bound: 250000
+
+                dense-posting-list-threshold: 0.25
+            }
+        }
+    }
+}
+{% endhighlight %}</pre>
+
+
+<h3 id="services-configuration">Services Configuration</h3>
+
+<p>
+  Both features are configured in the same container cluster.
+  The example below shows a combined setup — the key addition is the <code>multicurrency</code> block inside the
+  <code>ecommerce-schema-wiring</code> config of the document processor:
+</p>
+
+<pre>{% highlight xml %}
+<services version="1.0">
+    <container id="default" version="1.0">
+        <search>
+            <chain id="multi-currency-filter" inherits="vespa">
+                <searcher id="ai.vespa.ecommerce.multicurrency.MultiCurrencyFilterSearcher"
+                          bundle="ecommerce-multi-currency" />
+            </chain>
+            <chain id="forex-cache" inherits="vespa" />
+        </search>
+        <document-api />
+
+        <!-- Multi-currency components -->
+        <component id="ai.vespa.ecommerce.common.ForexRateService"
+                   class="ai.vespa.ecommerce.multicurrency.CachedForexRateService"
+                   bundle="ecommerce-multi-currency" />
+        <component id="ai.vespa.ecommerce.multicurrency.ForexRateRetriever"
+                   bundle="ecommerce-multi-currency" />
+
+        <!-- Saved search document processing -->
+        <document-processing>
+            <chain id="notification">
+                <documentprocessor id="ai.vespa.ecommerce.savedsearch.SavedSearchDocumentProcessor"
+                                   bundle="ecommerce-saved-search" />
+                <config name="ai.vespa.ecommerce.common.ecommerce-schema-wiring">
+                    <notification>
+                        <kind>WEBHOOK</kind>
+                        <webhook>
+                            <URL>http://my-webhook-endpoint:8000/notification</URL>
+                        </webhook>
+                    </notification>
+
+                    <productFields>
+                        <sellerCurrency>seller_currency</sellerCurrency>
+                        <perMarketPriceArrayStruct>per_market_price</perMarketPriceArrayStruct>
+                        <marketStructField>market</marketStructField>
+                        <priceStructField>price</priceStructField>
+                    </productFields>
+
+                    <itemDocumentType>product</itemDocumentType>
+                    <savedSearchDocumentType>saved_search</savedSearchDocumentType>
+                    <predicateFieldName>filters</predicateFieldName>
+
+                    <regularAttributes>
+                        <item>
+                            <predicateName>category</predicateName>
+                            <fieldPath>category</fieldPath>
+                            <required>false</required>
+                        </item>
+                    </regularAttributes>
+                    <rangeAttributes>
+                        <item>
+                            <predicateName>price</predicateName>
+                            <fieldPath>price</fieldPath>
+                            <required>false</required>
+                        </item>
+                    </rangeAttributes>
+
+                    <!-- Enable multi-currency price features -->
+                    <multicurrency>
+                        <enabled>true</enabled>
+                        <featurePrefix>price</featurePrefix>
+                        <priceScaleFactor>100</priceScaleFactor>
+                    </multicurrency>
+                </config>
+            </chain>
+        </document-processing>
+    </container>
+
+    <content id="content" version="1.0">
+        <documents>
+            <document type="saved_search" mode="index" />
+            <document type="product" mode="index" />
+            <document type="forex" mode="index" global="true" />
+        </documents>
+    </content>
+
+    <routing version="1.0">
+        <routingtable protocol="document">
+            <route name="notification-route" hops="forkhop" />
+            <hop name="forkhop" selector="[DocumentRouteSelector]">
+                <recipient session="default/chain.notification" />
+                <recipient session="content" />
+            </hop>
+        </routingtable>
+    </routing>
+</services>
+{% endhighlight %}</pre>
+
+
+<h3 id="multicurrency-config">Multi-currency Configuration Reference</h3>
+
+<p>
+  These parameters are part of the <code>ecommerce-schema-wiring</code> config
+  and only apply when the saved search document processor is used together with multi-currency:
+</p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>multicurrency.enabled</code></td>
+      <td>Enable generation of per-currency price features at feed time.</td>
+      <td><code>bool</code></td>
+      <td><code>false</code></td>
+    </tr>
+    <tr>
+      <td><code>multicurrency.featurePrefix</code></td>
+      <td>Prefix for the generated predicate range features. A feature is named <code>{prefix}_{currency}_{market}</code>.</td>
+      <td><code>string</code></td>
+      <td><code>price</code></td>
+    </tr>
+    <tr>
+      <td><code>multicurrency.priceScaleFactor</code></td>
+      <td>Integer multiplier applied to converted prices before feeding as predicate range features. Predicate ranges require integer values, so this preserves decimal precision. A factor of 100 preserves two decimal places.</td>
+      <td><code>int</code></td>
+      <td><code>100</code></td>
+    </tr>
+  </tbody>
+</table>
+
+{% include note.html content='The <code>productFields</code> config block is shared between both features. When combining, use the same field names in the searcher and document processor configurations.' %}
+
+
+<h3 id="feeding-workflow">Feeding Workflow</h3>
+
+<p>
+  When both features are active, the feeding workflow is:
+</p>
+<ol>
+  <li>Feed the forex document (<code>id:forex:forex::forex</code>) and wait for the <code>CachedForexRateService</code> to reach <code>READY</code> state</li>
+  <li>Feed saved search documents to the content cluster</li>
+  <li>Feed products to the <code>notification-route</code> — the document processor will generate multi-currency predicate features and match against saved searches</li>
+</ol>
+
+{% include warning.html content='The forex rates must be loaded before feeding products to the notification route.
+If the <code>ForexRateService</code> is not ready, the document processor cannot generate currency-converted price features.' %}
+
+
+<h2 id="see-also">See Also</h2>
+<ul>
+  <li><a href="saved-search.html">Saved Search Notifications</a></li>
+  <li><a href="multi-currency-filtering.html">Multi-Currency Pricing</a></li>
+  <li><a href="../../schemas/predicate-fields.html">Predicate Fields</a></li>
+  <li><a href="../../applications/configuring-components.html">Configuring Components</a></li>
+</ul>
