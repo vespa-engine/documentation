@@ -402,7 +402,7 @@ Format of this in JSON:
 }
 ```
 
-Short form using an array — `[field, value]` is shorthand for `{ "field": field, "value": value }`:
+This can also be expressed using the following shorthand form:
 
 ```json
 "where" : {
@@ -412,7 +412,7 @@ Short form using an array — `[field, value]` is shorthand for `{ "field": fiel
 
 The `equals` operator supports boolean and integer values.
 
-To match at a specific element index in a multivalue field, add the `index` parameter.
+To match at a specific element index in an array field, add the `index` parameter.
 Only a single index is supported:
 
 YQL: `where my_numbers[2] = 42`.
