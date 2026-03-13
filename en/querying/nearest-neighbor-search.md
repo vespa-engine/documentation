@@ -275,7 +275,7 @@ rank-profile image_similarity_with_reranking {
         expression: closeness(field, image_embeddings)
     } 
     second-phase {
-        rerank-count: 1000
+        total-rerank-count: 1000
         expression: closeness(field, image_embeddings) * attribute(popularity)
     }
 }
