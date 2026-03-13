@@ -293,7 +293,7 @@ Let's try the same query again, with a two-phase rank-profile that also does an 
 <pre>
 rank-profile inlinks_twophase inherits inlinks_age {
     first-phase {
-        keep-rank-count       : 50
+        total-keep-rank-count : 50
         rank-score-drop-limit : 10
         expression            : num_inlinks
     }
@@ -316,7 +316,7 @@ Here, `num_inlinks` and `rank_score` are defined in a rank profile we used earli
 
 In the results, observe that no document has a _rankingExpression(num_inlinks)_ less than or equal to 10.0,
 meaning all such documents were purged in the first ranking phase due to the `rank-score-drop-limit`.
-Normally, the `rank-score-drop-limit` is not used, as the `keep-rank-count` is most important.
+Normally, the `rank-score-drop-limit` is not used, as the `total-keep-rank-count` is most important.
 Read more in the [reference](../reference/schemas/schemas.html#rank-score-drop-limit).
 
 For a dynamic limit, pass a ranking feature like `query(threshold)`
