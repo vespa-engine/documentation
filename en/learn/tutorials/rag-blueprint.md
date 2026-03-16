@@ -570,8 +570,8 @@ not the case for most real-world RAG applications, so this is cruical to have in
 
 ![phased ranking overview](/assets/img/phased-ranking-rag.png)
 
-That the stateless container nodes can 
-also be [scaled independently](../../performance/sizing-search.html) to handle increased query load.
+The stateless container nodes can 
+be [scaled independently](../../performance/sizing-search.html) to handle increased query load.
 
 ## Configuring match-phase (retrieval)
 
