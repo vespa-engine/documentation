@@ -745,7 +745,7 @@ performing a maximum inner product search over the `tags` weightedset field.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="The Rose">
 $ vespa query \
-    'yql=select track_id, title, artist from track where {targetHits:10}wand(tags, @userProfile)' \
+    'yql=select track_id, title, artist from track where {totalTargetHits:10}wand(tags, @userProfile)' \
     'userProfile={"pop":1, "love songs":1,"romantic":10, "80s":20 }' \
     'hits=2' \
     'ranking=tags'
@@ -822,7 +822,7 @@ and Vespa embed functionality:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 $ vespa query \
-    'yql=select title, artist from track where {approximate:false,targetHits:10}nearestNeighbor(embedding,q)' \
+    'yql=select title, artist from track where {approximate:false,totalTargetHits:10}nearestNeighbor(embedding,q)' \
     'hits=1' \
     'ranking=closeness' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
@@ -831,13 +831,13 @@ $ vespa query \
 
 Query breakdown:
 
-- Search for ten (`targetHits:10`) nearest neighbors of the `query(q)` query tensor over the `embedding`
+- Search for a ten (`totalTargetHits:10`) nearest neighbors of the `query(q)` query tensor over the `embedding`
 document tensor field. 
 - The annotation `approximate:false` tells Vespa to perform exact search.
 - The `hits` parameter controls how many results are returned in the response. Number of `hits`
-requested does not impact `targetHits`. Notice that `targetHits` is per content node involved in the query. 
+requested does not impact `totalTargetHits`. 
 - `ranking=closeness` tells Vespa which [rank-profile](../basics/ranking.html) to score documents. One must 
-specify how to *rank* the `targetHits` documents retrieved and exposed to `first-phase` ranking expression
+specify how to *rank* the `totalTargetHits` documents retrieved and exposed to `first-phase` ranking expression
 in the `rank-profile`.
 - `input.query(q)` is the query vector produced by the [embedder](../rag/embedding.html#embedding-a-query-text).
 
@@ -898,7 +898,7 @@ Changing the rank-profile to `closeness-t4` makes Vespa use four threads per que
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Bonnie Tyler">
 $ vespa query \
-    'yql=select title, artist from track where {approximate:false,targetHits:10}nearestNeighbor(embedding,q)' \
+    'yql=select title, artist from track where {approximate:false,totalTargetHits:10}nearestNeighbor(embedding,q)' \
     'hits=1' \
     'ranking=closeness-t4' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
@@ -932,7 +932,7 @@ field has `index`:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec"  data-test-assert-contains="Bonnie Tyler">
 $ vespa query \
-    'yql=select title, artist from track where {targetHits:10,hnsw.exploreAdditionalHits:20}nearestNeighbor(embedding,q)' \
+    'yql=select title, artist from track where {totalTargetHits:10,hnsw.exploreAdditionalHits:20}nearestNeighbor(embedding,q)' \
     'hits=1' \
     'ranking=closeness' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
@@ -1010,7 +1010,7 @@ In this query example the `title` field must contain the term `heart`:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="of the Heart">
 $ vespa query \
-    'yql=select title, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and title contains "heart"' \
+    'yql=select title, artist from track where {totalTargetHits:10}nearestNeighbor(embedding,q) and title contains "heart"' \
     'hits=2' \
     'ranking=closeness' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
@@ -1109,7 +1109,7 @@ the matching against the `title` field can use the most efficient posting list r
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="of the Heart">
 $ vespa query \
-    'yql=select title, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and title contains ({ranked:false}"heart")' \
+    'yql=select title, artist from track where {totalTargetHits:10}nearestNeighbor(embedding,q) and title contains ({ranked:false}"heart")' \
     'hits=2' \
     'ranking=closeness' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
@@ -1127,7 +1127,7 @@ with any other Vespa query operator.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"popularity": 100'>
 $ vespa query \
-    'yql=select title, popularity, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and popularity > 20 and artist contains "Bonnie Tyler"' \
+    'yql=select title, popularity, artist from track where {totalTargetHits:10}nearestNeighbor(embedding,q) and popularity > 20 and artist contains "Bonnie Tyler"' \
     'hits=2' \
     'ranking=closeness' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
@@ -1140,8 +1140,8 @@ This query example restricts the search to tracks by `Bonnie Tyler` with `popula
 When combining nearest neighbor search with strict filters that match less than 2 percent of the total number of documents,
 Vespa will instead of searching the HNSW graph, constrained by the filter, fall back to using exact nearest neighbor search.
 See [Controlling filter behavior](#controlling-filter-behavior) for how to adjust the threshold for which strategy that is used.
-Since exact search may expose more than `targetHits` hits to the `first-phase` ranking expression,
-users will observe that `totalCount` increases and is higher than `targetHits` when falling back to exact search.
+Since exact search may expose more than `totalTargetHits` hits to the `first-phase` ranking expression,
+users will observe that `totalCount` increases and is higher than `totalTargetHits` when falling back to exact search.
 This can be seen in the previous examples.
 When using exact search with filters, the search can also use multiple threads to evaluate the query, which
 helps reduce the latency impact.
@@ -1170,7 +1170,7 @@ The following query with a restrictive filter on popularity is used for illustra
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, popularity, artist from track where {targetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
+    'yql=select title, popularity, artist from track where {totalTargetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
     'hits=2' \
     'ranking=closeness-t4' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
@@ -1239,7 +1239,7 @@ because it's `distance(field, embedding)` is close to 0.5.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query \
-    'yql=select title, popularity, artist from track where {distanceThreshold:0.2,targetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
+    'yql=select title, popularity, artist from track where {distanceThreshold:0.2,totalTargetHits:00}nearestNeighbor(embedding,q) and popularity > 80' \
     'hits=2' \
     'ranking=closeness' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
@@ -1312,7 +1312,7 @@ both based on semantic (vector distance) and traditional sparse (exact) matching
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, artist from track where {targetHits:100}nearestNeighbor(embedding,q) or userQuery()' \
+    'yql=select title, artist from track where {totalTargetHits:100}nearestNeighbor(embedding,q) or userQuery()' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1428,7 +1428,7 @@ In the below query, we lower the weight of the popularity factor by adjusting `q
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, artist from track where {targetHits:100}nearestNeighbor(embedding,q) or userQuery()' \
+    'yql=select title, artist from track where {totalTargetHits:100}nearestNeighbor(embedding,q) or userQuery()' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1513,7 +1513,7 @@ Which can be used with the `wand` query operator to retrieve personalized hits f
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Straight From The Heart'>
 $ vespa query \
-    'yql=select title, artist from track where {targetHits:100}nearestNeighbor(embedding,q) or userQuery() or ({targetHits:10}wand(tags, @userProfile))' \
+    'yql=select title, artist from track where {totalTargetHits:100}nearestNeighbor(embedding,q) or userQuery() or ({totalTargetHits:10}wand(tags, @userProfile))' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1597,7 +1597,7 @@ the query terms in the `weakAnd`.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, artist from track where {targetHits:100}nearestNeighbor(embedding,q) and userQuery()' \
+    'yql=select title, artist from track where {totalTargetHits:100}nearestNeighbor(embedding,q) and userQuery()' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1613,7 +1613,7 @@ It is also possible to combine hybrid search with filters, this filters both the
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse'>
 $ vespa query \
-    'yql=select title, artist from track where {targetHits:100}nearestNeighbor(embedding,q) and userQuery() and popularity < 75' \
+    'yql=select title, artist from track where {totalTargetHits:100}nearestNeighbor(embedding,q) and userQuery() and popularity < 75' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1631,7 +1631,7 @@ rank features for those hits retrieved by the first operand.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, artist from track where rank({targetHits:100}nearestNeighbor(embedding,q), userQuery())' \
+    'yql=select title, artist from track where rank({totalTargetHits:100}nearestNeighbor(embedding,q), userQuery())' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1714,7 +1714,7 @@ retrieved by the sparse query representation.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, artist from track where rank(userQuery(),{targetHits:100}nearestNeighbor(embedding,q))' \
+    'yql=select title, artist from track where rank(userQuery(),{totalTargetHits:100}nearestNeighbor(embedding,q))' \
     'query=total eclipse of the heart' \
     'type=weakAnd' \
     'hits=2' \
@@ -1735,7 +1735,7 @@ One can also use the `rank` operator to first retrieve by some filter logic, and
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title, popularity, artist from track where rank(popularity>99,{targetHits:10}nearestNeighbor(embedding,q))' \
+    'yql=select title, popularity, artist from track where rank(popularity>99,{totalTargetHits:10}nearestNeighbor(embedding,q))' \
     'hits=2' \
     'ranking=closeness' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")' 
@@ -1758,7 +1758,7 @@ query tensor inputs:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title from track where ({targetHits:10}nearestNeighbor(embedding,q)) or ({targetHits:10}nearestNeighbor(embedding,q1))' \
+    'yql=select title from track where ({totalTargetHits:10}nearestNeighbor(embedding,q)) or ({totalTargetHits:10}nearestNeighbor(embedding,q1))' \
     'hits=2' \
     'ranking=closeness' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'  \
@@ -1835,7 +1835,7 @@ rank-profile closeness-label inherits closeness {
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Total Eclipse Of The Heart'>
 $ vespa query \
-    'yql=select title from track where ({ label:"q", targetHits:10}nearestNeighbor(embedding,q)) or ({label:"q1",targetHits:10}nearestNeighbor(embedding,q1))' \
+    'yql=select title from track where ({ label:"q", totalTargetHits:10}nearestNeighbor(embedding,q)) or ({label:"q1",totalTargetHits:10}nearestNeighbor(embedding,q1))' \
     'hits=2' \
     'ranking=closeness-label' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'  \
@@ -1897,14 +1897,14 @@ The above query annotates the two `nearestNeighbor` query operators using
 }{% endhighlight %}</pre>
 
 Note that the previous examples used `or` to combine the two operators. Using `and` instead, requires 
-that there are documents that is in both the top-k results. Increasing `targetHits` to 500,  
+that there are documents that is in both the top-k results. Increasing `totalTargetHits` to 500,  
 finds a few tracks that overlap. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='matchfeatures'>
 $ vespa query \
-    'yql=select title from track where ({label:"q", targetHits:500}nearestNeighbor(embedding,q)) and ({label:"q1",targetHits:500}nearestNeighbor(embedding,q1))' \
+    'yql=select title from track where ({label:"q", totalTargetHits:500}nearestNeighbor(embedding,q)) and ({label:"q1",totalTargetHits:500}nearestNeighbor(embedding,q1))' \
     'hits=2' \
     'ranking=closeness-label' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'  \
@@ -2019,7 +2019,7 @@ do not perform post-filtering, use *pre-filtering* strategy:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"totalCount": 10'>
 $ vespa query \
-  'yql=select title, artist, tags from track where {targetHits:10}nearestNeighbor(embedding,q) and tags contains "rock"' \
+  'yql=select title, artist, tags from track where {totalTargetHits:10}nearestNeighbor(embedding,q) and tags contains "rock"' \
   'hits=2' \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=1.0' \
@@ -2028,14 +2028,14 @@ $ vespa query \
 </pre>
 </div>
 
-The query exposes `targetHits` to ranking as seen from the `totalCount`. Now, repeating the query, but
+The query exposes `totalTargetHits` to ranking as seen from the `totalCount`. Now, repeating the query, but
 forcing *post-filtering* instead by setting *ranking.matching.postFilterThreshold=0.0*:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query \
-  'yql=select title, artist, tags from track where {targetHits:10}nearestNeighbor(embedding,q) and tags contains "rock"' \
+  'yql=select title, artist, tags from track where {totalTargetHits:10}nearestNeighbor(embedding,q) and tags contains "rock"' \
   'hits=2' \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=0.0' \
@@ -2045,21 +2045,21 @@ $ vespa query \
 </div>
 
 In this case, Vespa will estimate how many documents the filter matches and auto-adjust `targethits` internally to a
-higher number, attempting to expose the `targetHits` to first phase ranking:
+higher number, attempting to expose the `totalTargetHits` to first phase ranking:
 
 The query exposes 16 documents to ranking as can be seen from `totalCount`. There are `8420` documents in the collection
 that are tagged with the `rock` tag, so roughly 8%. 
 
-Auto adjusting `targetHits` upwards for post-filtering is not always what you want, because it is slower than just retrieving
+Auto adjusting `totalTargetHits` upwards for post-filtering is not always what you want, because it is slower than just retrieving
 from the HNSW index without constraints. We can change the 
-`targetHits` adjustment factor with the [ranking.matching.targetHitsMaxAdjustmentFactor](../reference/api/query.html#ranking.matching) parameter.
-In this case, we set it to 1, which disables adjusting the `targetHits` upwards. 
+`totalTargetHits` adjustment factor with the [ranking.matching.targetHitsMaxAdjustmentFactor](../reference/api/query.html#ranking.matching) parameter.
+In this case, we set it to 1, which disables adjusting the `totalTargetHits` upwards. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='totalCount":'>
 $ vespa query \
-  'yql=select title, artist, tags from track where {targetHits:10}nearestNeighbor(embedding,q) and tags contains "rock"' \
+  'yql=select title, artist, tags from track where {totalTargetHits:10}nearestNeighbor(embedding,q) and tags contains "rock"' \
   'hits=2' \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=0.0' \
@@ -2068,7 +2068,7 @@ $ vespa query \
   'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'
 </pre>
 </div>
-Since we are post-filtering without upward adjusting the targetHits, we end up with fewer hits. 
+Since we are post-filtering without upward adjusting totalTargetHits, we end up with fewer hits. 
 
 Changing the query to limit to a tag which is less frequent, for example, `90s`, which
 matches 1,695 documents or roughly 1.7%, will cause Vespa to fall back to exact search as the estimated filter hit count
@@ -2078,7 +2078,7 @@ is less than the `approximateThreshold`.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='Bonnie Tyler'>
 $ vespa query \
-  'yql=select title, artist, tags from track where {targetHits:10}nearestNeighbor(embedding,q) and tags contains "90s"' \
+  'yql=select title, artist, tags from track where {totalTargetHits:10}nearestNeighbor(embedding,q) and tags contains "90s"' \
   'hits=2' \
   'ranking=closeness' \
   'ranking.matching.postFilterThreshold=0.0' \
@@ -2087,7 +2087,7 @@ $ vespa query \
 </pre>
 </div>
 
-The fallback to exact search will expose more than `targetHits` documents to ranking. 
+The fallback to exact search will expose more than `totalTargetHits` documents to ranking. 
 Read more about combining filters with nearest neighbor search in 
 the [Query Time Constrained Approximate Nearest Neighbor Search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/) 
 blog post. 

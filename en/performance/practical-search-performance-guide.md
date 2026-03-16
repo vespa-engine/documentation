@@ -1122,7 +1122,7 @@ Repeating the query from above, replacing `dotProduct` with `wand`:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Vastarannan valssi">
 $ vespa query \
-    'yql=select track_id, title, artist, tags from track where {targetHits:10}wand(tags, @userProfile)' \
+    'yql=select track_id, title, artist, tags from track where {totalTargetHits:10}wand(tags, @userProfile)' \
     'userProfile={"hard rock":1, "rock":1,"metal":1, "finnish metal":1}' \
     'hits=1' \
     'ranking=personalized'

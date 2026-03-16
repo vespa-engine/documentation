@@ -134,7 +134,7 @@ or exact (brute-force) search by using the [approximate query annotation](../ref
 
 <pre>
 {
-  "yql": "select * from doc where {targetHits: 100, approximate:false}nearestNeighbor(image_embeddings,query_image_embedding)",
+  "yql": "select * from doc where {totalTargetHits: 10, approximate:false}nearestNeighbor(image_embeddings,query_image_embedding)",
   "hits": 10
   "input.query(query_image_embedding)": [0.21,0.12,....],
   "ranking.profile": "image_similarity" 
@@ -150,9 +150,9 @@ Note that exact searches over a large vector volume require adjustment of the
 The default [query timeout](../reference/api/query.html#timeout) is 500ms,
 which will be too low for an exact search over many vectors.
 
-In addition to [targetHits](../reference/querying/yql.html#targethits), 
+In addition to [totalTargetHits](../reference/querying/yql.html#totaltargethits), 
 there is a [hnsw.exploreAdditionalHits](../reference/querying/yql.html#hnsw-exploreadditionalhits) parameter
-which controls how many extra nodes in the graph (in addition to `targetHits`)
+which controls how many extra nodes in the graph (in addition to `totalTargetHits`)
 that are explored during the graph search. This parameter is used to tune accuracy quality versus query performance. 
 
 ## Combining approximate nearest neighbor search with filters 
@@ -174,22 +174,23 @@ Note that when using `pre-filtering` the following query operators are not inclu
 * [predicate](../reference/querying/yql.html#predicate)
 
 These are instead evaluated after the approximate nearest neighbors are retrieved, more like a `post-filter`.
-This might cause the search to expose fewer hits to ranking than the wanted `targetHits`.
+This might cause the search to expose fewer hits to ranking than the wanted `totalTargetHits`.
 
 Since {% include version.html version="8.78" %} the `pre-filter` can be evaluated using
 [multiple threads per query](../performance/practical-search-performance-guide.html#multithreaded-search-and-ranking).
 This can be used to reduce query latency for larger vector datasets where the cost of evaluating the `pre-filter` is significant.
 Note that searching the `HNSW` index is always single-threaded per query.
 Multithreaded evaluation when using `post-filtering` has always been supported,
-but this is less relevant as the `HNSW` index search first reduces the document candidate set based on `targetHits`.
+but this is less relevant as the `HNSW` index search first reduces the document candidate set based on `totalTargetHits`.
 
 ## Nearest Neighbor Search Considerations
 
-* **targetHits**:
-The [targetHits](../reference/querying/yql.html#targethits)
-specifies how many hits one wants to expose to [ranking](../basics/ranking.html) *per content node*.
-Approximate search exposes exactly `targetHits` hits to `first-phase` ranking on every content node
-as long as `targetHits` hits are actually found and not filtered out afterwards.
+* **totalTargetHits**:
+The [totalTargetHits](../reference/querying/yql.html#totaltargethits) parameter
+specifies how many hits one wants to expose to [ranking](../basics/ranking.html) in total over the content nodes
+participating in the query (you can also set this per node using [targetHits](../reference/querying/yql.html#targethits)).
+Approximate search exposes exactly `totalTargetHits` hits to `first-phase` ranking over the content nodes
+as long as `totalTargetHits` hits are actually found and not filtered out.
 Nearest neighbor search is typically used as an efficient retriever in a [phased ranking](../ranking/phased-ranking.html)
 pipeline. See [performance sizing](../performance/sizing-search.html). 
 

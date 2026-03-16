@@ -365,7 +365,7 @@ As the point of [weakAnd](../reference/querying/yql.html#weakand) is to early di
 _totalCount_ is an approximation:
 
 <a class="querystring-x">yql=select * from doc where
-{scoreThreshold: 0, targetHits: 10}weakAnd(
+{scoreThreshold: 0, totalTargetHits: 10}weakAnd(
 default contains "vespa",
 default contains "documents",
 default contains "about",
