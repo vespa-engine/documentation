@@ -61,7 +61,7 @@ will let you know when a new release is available.
 #### Cloudformation
 
 Vespa also supports Cloudformation if you prefer the AWS-native solution.
-Download the Cloudformation stacks in our [github repository](https://github.com/vespa-cloud/cloudformation-aws-enclave) and
+Download the Cloudformation stacks in our [GitHub repository](https://github.com/vespa-cloud/cloudformation-aws-enclave) and
 refer to the README for stack-specific instructions.
 
 ### 4. Deploy a Vespa application

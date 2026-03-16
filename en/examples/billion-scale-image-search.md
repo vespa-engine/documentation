@@ -88,14 +88,14 @@ or self-hosted on-premise.
 ## Stateless Components
 The app contains several [container components](../applications/components.html):
 
-- [RankingSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/src/main/java/ai/vespa/examples/searcher/RankingSearcher.java) implements the last stage ranking using
+- [RankingSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/searcher/RankingSearcher.java) implements the last stage ranking using
 full-precision vectors using an ONNX model for accelerated inference.
-- [DedupingSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/src/main/java/ai/vespa/examples/searcher/DeDupingSearcher.java) implements run-time de-duping after Ranking, using
+- [DedupingSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/searcher/DeDupingSearcher.java) implements run-time de-duping after Ranking, using
 document to document similarity matrix, using an ONNX model for accelerated inference.
-- [DimensionReducer](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/src/main/java/ai/vespa/examples/DimensionReducer.java) PCA dimension reducing vectors from 768-dims to 128-dims.
-- [AssignCentroidsDocProc](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/src/main/java/ai/vespa/examples/docproc/AssignCentroidsDocProc.java) searches the HNSW graph content cluster
+- [DimensionReducer](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/DimensionReducer.java) PCA dimension reducing vectors from 768-dims to 128-dims.
+- [AssignCentroidsDocProc](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/docproc/AssignCentroidsDocProc.java) searches the HNSW graph content cluster
 during ingestion to find the nearest centroids of the incoming vector.
-- [SPANNSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/src/main/java/ai/vespa/examples/searcher/SPANNSearcher.java)
+- [SPANNSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/searcher/SPANNSearcher.java)
 
 ## Deploying this app
 These reproducing steps, demonstrates the app using a smaller subset of the LAION-5B vector dataset, suitable
@@ -233,8 +233,8 @@ $ vespa deploy --wait 300 ./app
 It is possible to deploy this app to
 [Vespa Cloud](../basics/deploy-an-application-java.html).
 For Vespa cloud deployments to the [dev env](../operations/zones.html)
-replace the [src/main/application/services.xml](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/src/main/application/services.xml) with
-[src/main/application/services-cloud.xml](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/src/main/application/services-cloud.xml) -
+replace the [src/main/application/services.xml](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/qpp/src/main/application/services.xml) with
+[src/main/application/services-cloud.xml](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/application/services-cloud.xml) -
 the cloud deployment uses dedicated clusters for `feed` and `query`.
 
 Wait for the application endpoint to become available:
@@ -276,13 +276,13 @@ $ vespa document get \
 
 The response contains all fields, including the full vector representation and the
 reduced vector, plus all the metadata. Everything represented in the same
-[schema](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/src/main/application/schemas/image.sd).
+[schema](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/application/schemas/image.sd).
 
 
 ## Query the data
 The following provides a few query examples,
 `prompt` is a run-time query parameter which is used by the
-[CLIPEmbeddingSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/src/main/java/ai/vespa/examples/searcher/CLIPEmbeddingSearcher.java)
+[CLIPEmbeddingSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/searcher/CLIPEmbeddingSearcher.java)
 which will encode the prompt text into a CLIP vector representation using the embedded CLIP model:
 
 <pre data-test="exec" data-test-assert-contains="documentid">
