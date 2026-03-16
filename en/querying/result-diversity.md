@@ -101,7 +101,7 @@ rank-profile diverse_example {
 
     match-phase {
         attribute: popularity
-        max-hits: 100
+        total-max-hits: 1000
         max-filter-coverage: 1.0
     }
 
