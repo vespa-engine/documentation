@@ -570,9 +570,8 @@ not the case for most real-world RAG applications, so this is cruical to have in
 
 ![phased ranking overview](/assets/img/phased-ranking-rag.png)
 
-It is worth noting that parameters such as `targetHits` (for the match phase) and `rerank-count` 
-(for first and second phase) are applied **per content node**. Also note that the stateless container nodes can 
-also be [scaled independently](../../performance/sizing-search.html) to handle increased query load.
+The stateless container nodes can 
+be [scaled independently](../../performance/sizing-search.html) to handle increased query load.
 
 ## Configuring match-phase (retrieval)
 
@@ -1380,8 +1379,8 @@ We run the evaluation script on a set of unseen test queries, and get the follow
 ```
 
 For the first phase ranking, we care most about recall, as we just want to make sure that the candidate documents are 
-ranked high enough to be included in the second-phase ranking. (the default number of documents that will be exposed to 
-second-phase is 10 000, but can be controlled by the `rerank-count` parameter).
+ranked high enough to be included in the second-phase ranking. The number of documents to be reranked in second-phase
+in total over all content nodes is controlled by the `total-rerank-count` parameter.
 
 We can see that our results are already very good. This is of course due to the fact that we have a small,synthetic dataset. 
 In reality, you should align the metric expectations with your dataset and test queries.
@@ -1392,7 +1391,7 @@ within your latency budget, as you want some headroom for second-phase ranking.
 ## Second-phase ranking
 
 For the second-phase ranking, we can afford to use a more expensive ranking expression, since we will only run it 
-on the top-k documents from the first-phase ranking (defined by the `rerank-count` parameter, which defaults to 10,000 documents).
+on the top-k documents from the first-phase ranking (decided by the `total-rerank-count` parameter).
 
 This is where we can significantly improve ranking quality by using more sophisticated models and features that would 
 be too expensive to compute for all matched documents.
@@ -1589,7 +1588,7 @@ vespa query \
 **Performance monitoring:**
 
 * Monitor latency impact of second-phase ranking
-* Adjust `rerank-count` based on quality vs. performance trade-offs
+* Adjust `total-rerank-count` based on quality vs. performance trade-offs
 * Consider using different models for different query types or use cases
 
 The second-phase ranking represents a crucial step in building high-quality RAG applications, 
@@ -1598,7 +1597,7 @@ providing the precision needed for effective LLM context while maintaining reaso
 ## (Optional) Global-phase ranking
 
 We also have the option of configuring [global-phase](../../reference/schemas/schemas.html#globalphase-rank) ranking, which can rerank the top k 
-(as set by `rerank-count` parameter) documents from the second-phase ranking.
+(as set by `total-rerank-count` parameter) documents from the second-phase ranking.
 
 Common options for global-phase are [cross-encoders](../../ranking/cross-encoders.html) or another GBDT model, trained for 
 better separating top ranked documents on objectives such as [LambdaMart](https://xgboost.readthedocs.io/en/latest/tutorials/learning_to_rank.html). For RAG applications, 

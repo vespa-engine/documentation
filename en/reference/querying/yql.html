@@ -599,6 +599,7 @@ yql=select * from sources * where ({grammar.syntax:'none',grammar.tokenization:'
             only the following annotations are applied:</p>
             <ul>
               <li><a href="#defaultindex">defaultIndex</a></li>
+              <li><a href="#totaltargethits">totalTargetHits</a></li> (for weakAnd)
               <li><a href="#targethits">targetHits</a></li> (for weakAnd)
               <li><a href="#distance">distance</a></li> (for near/oNear)
               <li><a href="#ranked">ranked</a></li>
@@ -964,13 +965,19 @@ where wand(description, [[11,1], [37,2]])
         <td>Minimum rank score for hits to include.</td>
       </tr>
       <tr>
+        <td><a href="#totaltargethits">totalTargetHits</a></td>
+        <td>Wanted number of hits exposed to the first-phase ranking function in total over the content nodes
+          evaluating the query.</td>
+      </tr>
+      <tr>
         <td><a href="#targethits">targetHits</a></td>
-        <td>Wanted number of hits exposed to the real first-phase ranking function per content node.</td>
+        <td>Wanted number of hits exposed to the first-phase ranking function per content node.
+        Prefer using <a href="#totaltargethits">totalTargetHits</a> over this.</td>
       </tr>
       </tbody>
     </table>
 <pre>
-where ({scoreThreshold: 0.13, targetHits: 7}wand(description, {"a":1, "b":2}))
+where ({scoreThreshold: 0.13, totalTargetHits: 7}wand(description, {"a":1, "b":2}))
 </pre>
     <p>
       Refer to <a href="../../ranking/wand.html">using wand</a> for introduction to the WAND
@@ -1040,13 +1047,18 @@ where weakAnd(a contains "A", b contains "B")
         </thead>
         <tbody>
         <tr>
+          <td><a href="#totaltargethits">totalTargetHits</a></td>
+          <td>Wanted number of hits exposed to the first-phase ranking function in total over the content nodes evaluating the query.</td>
+        </tr>
+        <tr>
           <td><a href="#targethits">targetHits</a></td>
-          <td>Wanted number of hits exposed to the real first-phase ranking function per content node.</td>
+          <td>Wanted number of hits exposed to the first-phase ranking function per content node.
+          Prefer using <a href="#totaltargethits">totalTargetHits</a> over this.</td>
         </tr>
         </tbody>
       </table>
 <pre>
-where ({targetHits: 7}weakAnd(a contains "A", b contains "B"))
+where ({totaltargetHits: 7}weakAnd(a contains "A", b contains "B"))
 </pre>
       <p>
         Unlike <a href="#wand">wand</a>, <code>weakAnd</code> can be used
@@ -1280,12 +1292,12 @@ where geoBoundingBox(myfieldname, -23.12, -43.85, -22.59, -42.89)
         the <span style="text-decoration: underline">approximate</span> nearest neighbors are returned. Example:
       </p>
 <pre>
-where ({targetHits: 10}nearestNeighbor(doc_vector, query_vector))&amp;input.query(query_vector)=[3,5,7]&ranking=semantic
+where ({totaltargetHits: 10}nearestNeighbor(doc_vector, query_vector))&amp;input.query(query_vector)=[3,5,7]&ranking=semantic
 </pre>
       <p>
         In this example we search for the top 10 nearest neighbors in a 3-dimensional vector space.
-        <em>targetHits</em> specifies the top-k nearest neighbors to expose to a user defined <code>semantic</code>
-        <a href="../../basics/ranking.html">rank profile</a>. The <a href="#targethits">targetHits</a> annotation is required.
+        <em>totalTargetHits</em> specifies the top-k nearest neighbors to expose to a user defined <code>semantic</code>
+        <a href="../../basics/ranking.html">rank profile</a>. The <a href="#totaltargethits">totalTargetHits</a> annotation is required.
         The first parameter of <em>nearestNeighbor</em> is the name of the tensor field attribute
         containing the document vectors (<em>doc_vector</em>).
       </p>
@@ -1332,12 +1344,19 @@ field doc_vector type tensor&lt;float&gt;(x[3]) {
         </thead>
         <tbody>
         <tr>
+          <td><a href="#totaltargethits">totalTargetHits</a></td>
+          <td>
+            Specifies the number of hits nearestNeighbor
+            should expose to <a href="../../basics/ranking.html">ranking</a> in total over the content
+            nodes evaluating the query. Note that more or less hits may actually be produced.
+            Setting target hits is required.
+          </td>
+        </tr>
+        <tr>
           <td><a href="#targethits">targetHits</a></td>
           <td>
-            This annotation is required, and specifies the number of hits nearestNeighbor
-            should expose to <a href="../../basics/ranking.html">ranking</a>.
-            Note that more or less hits might actually be produced. <em>targetHits</em> is per node
-            involved in the query.
+            Specifies the target hits <i>per node</i>.
+            Prefer using <a href="#totaltargethits">totalTargetHits</a> over this.
           </td>
         </tr>
         <tr>
@@ -1356,7 +1375,7 @@ field doc_vector type tensor&lt;float&gt;(x[3]) {
         <tr>
           <td><a href="#hnsw-exploreadditionalhits">hnsw.exploreAdditionalHits</a></td>
           <td>
-            Tune how many extra nodes in the HNSW graph (in addition to <code>targetHits</code>)
+            Tune how many extra nodes in the HNSW graph (in addition to <code>totalTargetHits</code>)
             that should be explored before selecting the best hits. Default is <code>0</code>. Increasing
             this parameter increases the accuracy of the approximate search, at the cost of more distance computations.
           </td>
@@ -1818,7 +1837,7 @@ where my_numbers contains ({elementFilter:[0, 2, 5]}sameElement("42"))
       The <code>distanceThreshold</code> annotation may be used to filter away hits
       with a higher distance than the given threshold from the results.
       Note that one will never get more hits with <code>distanceThreshold</code> than you would get without it -
-      to get more hits, increase <a href="#targethits">targetHits</a>, too.
+      to get more hits, increase <a href="#totaltargethits">totalTargetHits</a>, too.
       The units for the threshold depends on the
       <a href="../schemas/schemas.html#distance-metric">distance metric</a> used.
       </p>
@@ -1991,7 +2010,7 @@ where myUrlField.hostname contains ({startAnchor: true}uri("vespa.ai"))
       Used in <a href="#nearestneighbor">nearestNeighbor</a>.
       When using an <a href="../schemas/schemas.html#index-hnsw">HNSW index</a>,
       the optional <code>hnsw.exploreAdditionalHits</code> annotation can be used to
-      tune how many extra nodes in the graph (in addition to <code>targetHits</code>)
+      tune how many extra nodes in the graph (in addition to <code>totalTargetHits</code>)
       should be explored before selecting the best hits.
       Using a greater number here gives better quality, but worse performance.
       </p>
@@ -2182,23 +2201,32 @@ where myUrlField.hostname contains ({startAnchor: true}uri("vespa.ai"))
     <td><p id="suffix">Do <em>suffix matching</em> for this term, e.g. search for "*word".</p></td>
   </tr>
   <tr>
+    <td>totalTargetHits</td>
+    <td>100</td>
+    <td>int</td>
+    <td>
+      <p id="totaltargethits">
+        Used by <a href="#wand">wand</a> and <a href="#weakand">weakAnd</a>, where the default is 100,
+        and with <a href="#nearestneighbor">nearestNeighbor</a>,
+        where it has no default.
+        This sets the wanted number of hits exposed to the first-phase ranking function in total
+        over the content nodes evaluating the query (a <i>group</i>).
+        If additional second phase ranking is used,
+        do not set <code>totalTargetHits</code> less than the configured rank-profile's
+        <a href="../schemas/schemas.html#secondphase-total-rerank-count">total-rerank-count</a>.
+      </p>
+      <p>
+        See examples in <a href="../../querying/nearest-neighbor-search">nearest neighbor search</a>.
+      </p>
+    </td>
+  </tr>
+  <tr>
     <td>targetHits</td>
     <td>100</td>
     <td>int</td>
     <td>
       <p id="targethits">
-        Used by <a href="#wand">wand</a> and <a href="#weakand">weakAnd</a>, where the default is 100.
-      </p>
-      <p>
-        It is also used with <a href="#nearestneighbor">nearestNeighbor</a>,
-        where it has no default - it must always be set,
-        see examples in <a href="../../querying/nearest-neighbor-search">nearest neighbor search</a>.
-      </p>
-      <p>
-        It sets the wanted number of hits exposed to the real first-phase ranking function per content node.
-        If additional second phase ranking with rerank-count is used,
-        do not set <code>targetHits</code> less than the configured rank-profile's
-        <a href="../schemas/schemas.html#secondphase-rerank-count">rerank-count</a>.
+      Sets target hits per node. Prefer using <a href="#totaltargethits">totalTargetHits</a> over this.
       </p>
     </td>
   </tr>

@@ -301,7 +301,7 @@ Assuming a query using the doc_embedding field:
 
 ```
 $ vespa query \
-    'yql=select * from doc where {targetHits:5}nearestNeighbor(doc_embedding, q)' \
+    'yql=select * from doc where {totalTargetHits:5}nearestNeighbor(doc_embedding, q)' \
     'input.query(q)=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]' \
     'ranking=app_ranking'
 ```
@@ -310,7 +310,7 @@ The same query, with a binarized query vector, to the binarized field:
 
 ```
 $ vespa query \
-    'yql=select * from doc where {targetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
+    'yql=select * from doc where {totalTargetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
     'input.query(q_bin)=[-119]' \
     'ranking=app_ranking_bin'
 ```
@@ -370,7 +370,7 @@ rank-profile app_ranking {
 Query:
 ```
 $ vespa query \
-    'yql=select * from doc where {targetHits:5}nearestNeighbor(doc_embedding, q)' \
+    'yql=select * from doc where {totalTargetHits:5}nearestNeighbor(doc_embedding, q)' \
     'input.query(q)=[2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]' \
     'ranking=app_ranking'
 ```
@@ -397,7 +397,7 @@ Query:
 
 ```
 $ vespa query \
-    'yql=select * from doc where {targetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
+    'yql=select * from doc where {totalTargetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
     'input.query(q_bin)=[-119]' \
     'ranking=app_ranking_bin'
 ```
@@ -440,7 +440,7 @@ Notes:
 Note the differences when using full values in the query tensor, see the relevance score for the results:
 ```
 $ vespa query \
-    'yql=select * from music where {targetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
+    'yql=select * from music where {totalTargetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
     'input.query(q)=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]' \
     'input.query(q_bin)=[-119]' \
     'ranking=app_ranking_bin_full'
@@ -452,7 +452,7 @@ $ vespa query \
 
 ```
 $ vespa query \
-    'yql=select * from music where {targetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
+    'yql=select * from music where {totalTargetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
     'input.query(q)=[2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]' \
     'input.query(q_bin)=[-119]' \
     'ranking=app_ranking_bin_full'

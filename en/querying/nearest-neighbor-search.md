@@ -275,7 +275,7 @@ rank-profile image_similarity_with_reranking {
         expression: closeness(field, image_embeddings)
     } 
     second-phase {
-        rerank-count: 1000
+        total-rerank-count: 1000
         expression: closeness(field, image_embeddings) * attribute(popularity)
     }
 }
@@ -376,7 +376,7 @@ using the [Query API](query-api.html#http):
 
 ```json
 {
-    "yql": "select * from product where {targetHits: 100}nearestNeighbor(image_embeddings, image_query_embedding) and in_stock = true",
+    "yql": "select * from product where {totalTargetHits: 100}nearestNeighbor(image_embeddings, image_query_embedding) and in_stock = true",
     "input.query(image_query_embedding)": [
         0.22507139604882176,
         0.11696498718517367,
