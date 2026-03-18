@@ -231,7 +231,7 @@ model = xgb.train(param, dtrain, num_boost_round=100)
 model.save_model("my_model.ubj")
 {% endhighlight %}</pre>
 
-In the Vespa schema, store integer-encoded categoricals as `double` attributes
+In the Vespa schema, store integer-encoded categoricals as `int` attributes
 and map them via rank profile functions like any other numerical feature.
 
 Note: Vespa's [LightGBM](lightgbm.html) importer does support native categorical splits.
