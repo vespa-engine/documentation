@@ -346,9 +346,6 @@ See the [XGBoost System Test](https://github.com/vespa-engine/system-test/tree/m
   that features from offline training matches the online Vespa computed features.
   Dumping features can also help debug any differences by zooming into specific query,document pairs
   using [recall](../reference/api/query.html#recall) parameter.
-* It's also important to use the highest possible precision
-  when reading Vespa features for training as Vespa outputs features using `double` precision.
-  If the training routine rounds features to `float` or other more compact floating number representations, feature split decisions might differ in Vespa versus XGBoost.
 * In a distributed setting when multiple nodes use the model, text matching features such as `nativeRank`, `nativeFieldMatch`, `bm25` and `fieldMatch`
   might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](../reference/ranking/rank-features.html#query-features), which is computed from the locally indexed corpus. The `term(n).significance` feature
   is related to *Inverse Document Frequency (IDF)*. The `term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.
