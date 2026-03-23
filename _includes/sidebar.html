@@ -1,25 +1,77 @@
 <!-- Copyright Vespa.ai. All rights reserved. -->
 <style>
-  details > summary {
-    display: list-item;
-    cursor: pointer;
+  #sidebar {
+    font-size: 1.4rem;
+    padding-top: 8px;
+    position: sticky;
+    top: var(--navbar-height, 60px);
+    max-height: calc(100vh - var(--navbar-height, 60px));
+    overflow-y: auto;
   }
-  ul.top {
-    padding-top: 12px;
-  }
-  ul.top, ul.child {
+  #sidebar ul.top,
+  #sidebar ul.child {
     list-style-type: none;
+    margin: 0;
   }
-  ul.top {
-    padding-left: 17px;
+  #sidebar ul.top {
+    padding: 8px 0 8px 12px;
   }
-  ul.child {
-    padding-top: 2px;
-    padding-left: 27px;
+  #sidebar ul.child {
+    padding: 2px 0 4px 14px;
   }
-  li.top {
-    padding-top: 5px;
-    padding-bottom: 2px;
+  #sidebar li.top {
+    padding: 2px 0;
+  }
+  #sidebar details > summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 4px 4px;
+    border-radius: 4px;
+    font-weight: 600;
+    color: #2E2F27;
+    user-select: none;
+  }
+  #sidebar details > summary::-webkit-details-marker {
+    display: none;
+  }
+  #sidebar details > summary::before {
+    content: "▶";
+    font-size: 0.7em;
+    color: #888;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+    width: 1em;
+    text-align: center;
+  }
+  #sidebar details[open] > summary::before {
+    transform: rotate(90deg);
+  }
+  #sidebar details > summary:hover {
+    background-color: rgba(78, 78, 78, 0.08);
+    color: #000;
+  }
+  #sidebar a {
+    display: block;
+    padding: 3px 8px 3px 4px;
+    border-radius: 4px;
+    color: #0246C9;
+    text-decoration: none;
+    line-height: 1.4;
+  }
+  #sidebar a:hover {
+    background-color: rgba(2, 70, 201, 0.08);
+    color: #003aaa;
+    text-decoration: none;
+  }
+  #sidebar a.sidebar-current {
+    font-weight: 600;
+    color: #0246C9;
+    background-color: rgba(2, 70, 201, 0.1);
+    border-left: 3px solid #0246C9;
+    padding-left: calc(4px + 3px); /* original 4px padding + 3px to visually offset the border */
   }
 </style>
 
@@ -77,14 +129,14 @@
                           <ul class="child">
                             {% for subsubchild in subchild.sub %}
                             <li>
-                              <a href="{{subsubchild.url}}" {% if page.url == subsubchild.url %}style="font-weight:bold"{% endif %}>{{subsubchild.page}}</a>
+                              <a href="{{subsubchild.url}}"{% if page.url == subsubchild.url %} class="sidebar-current" aria-current="page"{% endif %}>{{subsubchild.page}}</a>
                             </li>
                             {% endfor %}
                           </ul>
                         </details>
                         <!-- sub-submenu end-->
                         {% else %}
-                          <a href="{{subchild.url}}" {% if page.url == subchild.url %}style="font-weight:bold"{% endif %}>{{subchild.page}}</a>
+                          <a href="{{subchild.url}}"{% if page.url == subchild.url %} class="sidebar-current" aria-current="page"{% endif %}>{{subchild.page}}</a>
                         {% endif %}
                       </li>
                     {% endfor %}
@@ -92,7 +144,7 @@
                 </details>
                 <!-- submenu end-->
               {% else %}
-                <a href="{{child.url}}" {% if page.url == child.url %}style="font-weight:bold"{% endif %}>{{child.page}}</a>
+                <a href="{{child.url}}"{% if page.url == child.url %} class="sidebar-current" aria-current="page"{% endif %}>{{child.page}}</a>
               {% endif %}
             </li>
           {% endfor %}
@@ -103,16 +155,32 @@
     {% endfor %}
   </ul>
 </div>
-  
+
 <script type="application/javascript">
-    const saved = new Set(JSON.parse(localStorage.getItem('expanded') || '[]'));
+    const saved = new Set(JSON.parse(sessionStorage.getItem('expanded') || '[]'));
 
     document.querySelectorAll('details[data-id]').forEach(d => {
         if (saved.has(d.dataset.id)) d.open = true;
         d.addEventListener('toggle', () => {
             if (d.open) saved.add(d.dataset.id); else saved.delete(d.dataset.id);
-            localStorage.setItem('expanded', JSON.stringify([...saved]));
+            sessionStorage.setItem('expanded', JSON.stringify([...saved]));
         });
     });
+
+    const sidebar = document.getElementById('sidebar');
+    const current = sidebar && sidebar.querySelector('.sidebar-current');
+    if (sidebar && current) {
+        const sidebarRect = sidebar.getBoundingClientRect();
+        const currentRect = current.getBoundingClientRect();
+        const offset = currentRect.top - sidebarRect.top + sidebar.scrollTop;
+        sidebar.scrollTop = offset - sidebar.clientHeight / 2 + currentRect.height / 2;
+    }
+
+    function setNavbarHeight() {
+        const nav = document.querySelector('nav.sticky-top');
+        if (nav) document.documentElement.style.setProperty('--navbar-height', nav.offsetHeight + 'px');
+    }
+    setNavbarHeight();
+    window.addEventListener('resize', setNavbarHeight);
 </script>
   
