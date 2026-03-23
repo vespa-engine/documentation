@@ -4,10 +4,18 @@
 
 
 <nav class="toc {% if page.title == 'FAQ - frequently asked questions'%} faq-toc {% endif %}" aria-labelledby="on-this-page-heading" style="position: fixed; align-self: flex-start;">
-    <h3 id="on-this-page-heading"  style="pointer-events: none;">On this page:</h3>
+    <div class="toc-header">
+        <h3 id="on-this-page-heading">On this page:</h3>
+        <a href="#" class="toc-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;" title="Back to top">&#8593;</a>
+    </div>
     {% assign headings = content | split: '<' %}
     
     <ul>
+          {% unless page.skipheading %}
+          <li class="toc-level-0" data-toc-id="page-title">
+            <a href="#page-title">{{ page.title }}</a>
+          </li>
+          {% endunless %}
           {% for tag in headings %}
           {% assign trimmed_tag = tag | strip %}
           {% assign tag_slice = trimmed_tag | slice: 0, 3 %}
@@ -42,7 +50,7 @@
               {% assign heading_text = parts[1] | strip | lstrip %}
   
               {% if heading_text != "" %}
-              <li class="toc-level-{{toc_level | minus: 1 }}">
+              <li class="toc-level-{{toc_level | minus: 1 }}" data-toc-id="{{ heading_id }}">
                 <a href="#{{ heading_id }}">{{ heading_text }}</a>
               </li>
               {% endif %}
@@ -50,6 +58,113 @@
           {% endfor %}
   
     </ul>
-  </div>
-  
+</nav>
+
+<script>
+(function () {
+  var tocList = document.querySelector('.toc ul');
+
+  /* Pair each TOC item with its heading element up front so IDs and elements
+     can never get out of sync (avoids index drift from filter(Boolean)). */
+  var headings = Array.from(document.querySelectorAll('.toc [data-toc-id]'))
+    .map(function (li) {
+      return { id: li.getAttribute('data-toc-id'), el: document.getElementById(li.getAttribute('data-toc-id')), li: li };
+    })
+    .filter(function (h) { return h.el; });
+
+  if (!headings.length) return;
+
+  var activeId = null;
+  var rafPending = false;
+  var scrollEndTimer = 0;
+  var userClicked = false;
+
+  function setActive(id) {
+    if (id === activeId) return;
+    activeId = id;
+
+    var activeEl = null;
+    headings.forEach(function (h) {
+      if (h.id === id) {
+        h.li.classList.add('toc-active');
+        activeEl = h.li;
+      } else {
+        h.li.classList.remove('toc-active');
+      }
+    });
+
+    /* Scroll the TOC panel so the active item stays visible. */
+    if (activeEl && tocList) {
+      var listRect = tocList.getBoundingClientRect();
+      var itemRect = activeEl.getBoundingClientRect();
+      var relTop    = itemRect.top    - listRect.top;
+      var relBottom = itemRect.bottom - listRect.top;
+      var margin    = 40;
+
+      if (relTop < margin) {
+        tocList.scrollBy({ top: relTop - margin, behavior: 'smooth' });
+      } else if (relBottom > tocList.clientHeight - margin) {
+        tocList.scrollBy({ top: relBottom - tocList.clientHeight + margin, behavior: 'smooth' });
+      }
+    }
+  }
+
+  /* Click: activate immediately and hold off scroll-based updates until the
+     browser finishes scrolling (scrollend) or 200 ms of scroll silence. */
+  headings.forEach(function (h) {
+    h.li.querySelector('a').addEventListener('click', function () {
+      setActive(h.id);
+      userClicked = true;
+    });
+  });
+
+  function onScrollEnd() {
+    userClicked = false;
+    updateActive();
+  }
+
+  function updateActive() {
+    if (userClicked) return;
+
+    var distanceFromBottom = document.documentElement.scrollHeight
+                             - window.scrollY - window.innerHeight;
+
+    /* At the very bottom of the page, force the last heading active so short
+       final sections can always get focus regardless of their content height. */
+    if (distanceFromBottom <= 2) {
+      setActive(headings[headings.length - 1].id);
+      return;
+    }
+
+    var threshold = window.innerHeight * 0.2;
+    var active = headings[0].id;
+    for (var i = 0; i < headings.length; i++) {
+      if (headings[i].el.getBoundingClientRect().top <= threshold) {
+        active = headings[i].id;
+      }
+    }
+    setActive(active);
+  }
+
+  function onScroll() {
+    /* Throttle via rAF — avoids running at 120 Hz on high-refresh screens. */
+    if (!rafPending) {
+      rafPending = true;
+      requestAnimationFrame(function () {
+        rafPending = false;
+        updateActive();
+      });
+    }
+
+    /* Scroll-end detection: native event where available, debounce fallback. */
+    clearTimeout(scrollEndTimer);
+    scrollEndTimer = setTimeout(onScrollEnd, 200);
+  }
+
+  window.addEventListener('scrollend', onScrollEnd);
+  window.addEventListener('scroll', onScroll, { passive: true });
+  updateActive();
+})();
+</script>
+
 {% endif %}
