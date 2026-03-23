@@ -6,14 +6,14 @@
 <nav class="toc {% if page.title == 'FAQ - frequently asked questions'%} faq-toc {% endif %}" aria-labelledby="on-this-page-heading" style="position: fixed; align-self: flex-start;">
     <div class="toc-header">
         <h3 id="on-this-page-heading">On this page:</h3>
-        <a href="#" class="toc-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;" title="Back to top">&#8593;</a>
+        <a href="#page-title" class="toc-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'});" title="Back to top" aria-label="Back to top">&#8593;</a>
     </div>
     {% assign headings = content | split: '<' %}
     
     <ul>
           {% unless page.skipheading %}
           <li class="toc-level-0" data-toc-id="page-title">
-            <a href="#page-title">{{ page.title }}</a>
+            <a href="#page-title">{{ page.title | escape }}</a>
           </li>
           {% endunless %}
           {% for tag in headings %}
@@ -64,6 +64,22 @@
 (function () {
   var tocList = document.querySelector('.toc ul');
 
+  /* Detect smooth scrollBy (options-object form) support once.
+     Some older Safari/embedded webviews throw on it — use window to avoid
+     mutating tocList position during detection. */
+  var smoothScrollSupported = (function () {
+    try { window.scrollBy({ top: 0 }); return true; }
+    catch (e) { return false; }
+  }());
+
+  function scrollToc(delta) {
+    if (smoothScrollSupported && tocList.scrollBy) {
+      tocList.scrollBy({ top: delta, behavior: 'smooth' });
+    } else {
+      tocList.scrollTop += delta;
+    }
+  }
+
   /* Pair each TOC item with its heading element up front so IDs and elements
      can never get out of sync (avoids index drift from filter(Boolean)). */
   var headings = Array.from(document.querySelectorAll('.toc [data-toc-id]'))
@@ -102,9 +118,9 @@
       var margin    = 40;
 
       if (relTop < margin) {
-        tocList.scrollBy({ top: relTop - margin, behavior: 'smooth' });
+        scrollToc(relTop - margin);
       } else if (relBottom > tocList.clientHeight - margin) {
-        tocList.scrollBy({ top: relBottom - tocList.clientHeight + margin, behavior: 'smooth' });
+        scrollToc(relBottom - tocList.clientHeight + margin);
       }
     }
   }
