@@ -22,6 +22,10 @@ redirect_from:
 <p>The Java library is available as a
 <a href="https://search.maven.org/search?q=g:com.yahoo.vespa%20a:vespa-feed-client">Maven JAR artifact</a>
 at Maven Central. It requires minimum JDK17.</p>
+<p>
+  Find an example application using this client at
+  <a href="https://github.com/vespa-engine/sample-apps/blob/master/examples/clients/client-java/README.md">client-java</a>.
+</p>
 
 
 <h3 id="command-line-client">Command line client</h3>
@@ -137,3 +141,55 @@ $ vespa-feed-client \
   --file /path/to/json/file \
   --endpoint http://container-endpoint:8080/
 </pre>
+
+
+<h2 id="configuration-example">Configuration example</h2>
+<p>
+  A common pattern is feeding from an <a href="https://beam.apache.org/">Apache Beam</a> topology
+  (e.g., <a href="https://docs.cloud.google.com/dataflow/docs/overview">Google Cloud Dataflow</a>).
+  It is important to balance the number of workers and the connection settings.
+</p>
+<p>
+  As each of the workers initializes its own <code>FeedClient</code> instance,
+  the default settings can create too many connections.
+  In this example we assume 128 workers and 10 Vespa Container nodes.
+  With defaults (8 connections per endpoint, 128 max streams per connection),
+  128 workers opens 1,024 connections — each requiring a TLS handshake to the endpoint —
+  which is a major source of container CPU overhead.
+</p>
+<p>Recommended configuration per worker:</p>
+<pre>{% highlight java %}
+FeedClient client = FeedClientBuilder.create(endpoint)
+    .setConnectionsPerEndpoint(1)
+    .setMaxStreamPerConnection(maxStreams)
+    .setInitialInflightFactor(factor)
+    .build();
+{% endhighlight %}</pre>
+<ul>
+  <li>
+    <code>setConnectionsPerEndpoint(1)</code>:
+    One connection per worker gives 128 total, which is more than sufficient for 10 container nodes.
+  </li>
+  <li>
+    <code>setMaxStreamPerConnection(maxStreams)</code>:
+    Calculate based on the target feed rate and total number of workers.
+    For example, if the target is 50k docs/sec across 128 workers, each worker needs ~390 docs/sec.
+    With typical per-document latency of 5–10 ms, each worker needs ~2–4 concurrent streams.
+  </li>
+  <li>
+    <code>setInitialInflightFactor(factor)</code>:
+    The dynamic throttler starts at a low inflight count and slowly ramps up via random walk.
+    If you observe slow ramp-up at the start of a feed job,
+    set this to a higher value (e.g., 4–8) to start closer to the optimal inflight level.
+    The factor multiplies the minimum inflight (2 × connectionsPerEndpoint × endpoints),
+    so with 1 connection and factor 8, you'd start at 16 inflight instead of 2.
+  </li>
+</ul>
+
+  {% include important.html content="
+  Each worker should create a single <code>FeedClient</code> instance and reuse it for the lifetime of the worker.
+  Creating new instances per batch or per document group defeats connection reuse and prevents the throttler from converging." %}
+<p>
+  Also, use vespa-feed-client 8.657 or later,
+  for the latest improvements to connection handling and stability.
+</p>
