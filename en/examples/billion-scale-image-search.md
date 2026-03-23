@@ -19,10 +19,9 @@ This sample app use the [LAION-5B](https://laion.ai/blog/laion-5b/) dataset,
 > consisting of 5,85B CLIP-filtered image-text pairs. 2,3B contain English language,
 > 2,2B samples from 100+ other languages and 1B samples have texts that do not allow a certain language assignment (e.g. names ).
 
-The LAION-5B dataset was used to train the popular text-to-image
-generative [StableDiffusion](https://stability.ai/blog/stable-diffusion-public-release) model.
+The LAION-5B dataset was used to train the popular text-to-image generative StableDiffusion model.
 
-Note the following about the LAION 5B dataset
+Note the following about the LAION 5B dataset:
 
 > Be aware that this large-scale dataset is un-curated.
 > Keep in mind that the un-curated nature of the dataset means that collected
