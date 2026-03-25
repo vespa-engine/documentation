@@ -310,15 +310,15 @@ API request.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select * from msmarco where userInput(@user-query)' \
+  'yql=select * from msmarco where default contains text(@user-query)' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en'
 </pre>
 </div>
 
-This query combines YQL [userInput()](../../reference/querying/yql.html#userinput), a robust
-way to combine free text queries from users with application logic. Similar to `set_language` in indexing, we specify
+This query combines YQL [text()](../../reference/querying/yql.html#text), a robust
+way to combine free text from users or models with application logic. Similar to `set_language` in indexing, we specify
 the language of the query using the [language](../../linguistics/linguistics.html#querying-with-language) API parameter. This ensures
 symmetric linguistic processing of both the query and the document text. Automatic language detection is inaccurate
 for short query strings and might lead to asymmetric processing of queries and document texts. 
@@ -375,14 +375,14 @@ rank-profile default {
 }
 </pre>
 
-We can use query operator annotations for the [userInput](../../reference/querying/yql.html#userinput) to control various
-matching aspects. The following uses the `defaultIndex` to specify which field (or fieldset) to search.
+We can use query operator annotations for the [text](../../reference/querying/yql.html#text) operator to control various
+matching aspects, for example to set the number of hits to produce in the text operator:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select * from msmarco where {defaultIndex:"title"}userInput(@user-query)' \
+  'yql=select * from msmarco where title contains ({targetHits:100}text(@user-query))' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en'
@@ -396,7 +396,7 @@ In the following example, we use `grammar:"all"` to specify that we only want to
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select * from msmarco where {defaultIndex:"title", grammar:"all"}userInput(@user-query)' \
+  'yql=select * from msmarco where title contains ({grammar:"all"}text(@user-query))' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en'
@@ -405,13 +405,13 @@ $ vespa query \
 This query, using `all`, matches only one document. Notice how the relevance of the hit is the same as in the above example. The difference
 between the two types of queries is in the matching specification.
 
-We can use `userInput` to build a query that searches multiple fields (or fieldsets):
+We can use `text` to build a query that searches multiple fields (or fieldsets):
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select * from msmarco where ({defaultIndex:"title", grammar:"all"}userInput(@user-query)) or ({defaultIndex:"url", grammar:"all"}userInput(@user-query))' \
+  'yql=select * from msmarco where title contains ({grammar:"all"}text(@user-query)) or url contains ({grammar:"all"}text(@user-query))' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en'
@@ -428,7 +428,7 @@ It is important to note that the following approach for query time term boosting
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="http://www.answers.com">
 $ vespa query \
-  'yql=select * from msmarco where rank(userInput(@user-query), url contains ({weight:1000, significance:1.0}"www.answers.com"))' \
+  'yql=select * from msmarco where rank(default contains text(@user-query), url contains ({weight:1000, significance:1.0}"www.answers.com"))' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en'
@@ -439,8 +439,8 @@ change the *retrieval* or *matching* as the number of documents exposed to ranki
 `rank` operator can be used to implement a variety of use case around boosting. 
 
 #### Combine free text with filters
-Now, we can combine the `userInput` with application logic.  We add an application-specific query filter on the `url` field 
-to demonstrate how to combine `userInput` with other query time constraints. 
+We can combine the `text` operator with application logic.  We add an application-specific query filter on the `url` field 
+to demonstrate how to combine `text` with other query time constraints. 
 We add `ranked:false` to tell Vespa that this
 specific term should not contribute to the relevance calculation and `filter`:true` to ensure that the term is not
 used for [bolding/highlighting or dynamic snippeting](../../querying/document-summaries.html#dynamic-snippets).
@@ -449,7 +449,7 @@ used for [bolding/highlighting or dynamic snippeting](../../querying/document-su
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select * from msmarco where userInput(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
+  'yql=select * from msmarco where default contains text(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en'
@@ -463,7 +463,7 @@ Let us see what is going on by adding [query tracing](../../querying/query-api.h
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select * from msmarco where userInput(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
+  'yql=select * from msmarco where default contains text(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
   'user-query=what is dad bod' \
   'trace.level=3' \
   'language=en'
@@ -475,11 +475,32 @@ We can notice the following in the trace output:
 query=[AND (WEAKAND(100) default:what default:is default:dad default:bod) |url:'huffingtonpost co uk']
 </pre>
 
-Notice that the `userInput` part is converted to a [weakAnd](../../ranking/wand.html) query operator and that this operator is 
+Notice that the `text` part is converted to a [weakAnd](../../ranking/wand.html) query operator and that this operator is 
 AND'ed with a phrase search ('huffingtonpost co uk') in the `url` field. Notice also the field scoping where the query terms are
 prefixed with `default`. Notice also that punctuation characters (.) are removed as part of the tokenization. 
 Suppose this is a common pattern where we want to filter on specific strings. 
 In that case, we should create a separate field to avoid phrase matching, phrase matching is more expensive than a single token search. 
+
+
+### Supporting end user query syntax
+In some applications, you'd like end users or models to be able to search specific fields, match phrases etc.
+To do that, you can use the `userInput` YQL operator instead of `text`:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
+$ vespa query \
+  'yql=select * from msmarco where userInput(@user-query)' \
+  'user-query=title:"dad bod"' \
+  'hits=3' \
+  'language=en'
+</pre>
+</div>
+
+Notice that since the string given to userInput may specify the fields to search, there is no "field contains" part
+that specifies the field on the YQL side. See the  [userInput() documentation](../../reference/querying/yql.html#userInput)
+on the various end user query languages supported and other parameters that can be set.
+
 
 
 ### Debugging token string matching
@@ -609,7 +630,7 @@ $ vespa query \
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select * from msmarco where userInput(@user-query)' \
+  'yql=select * from msmarco where default contains text(@user-query)' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en' \
@@ -706,7 +727,7 @@ Run a query with the new rank-profile:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select * from msmarco where userInput(@user-query)' \
+  'yql=select * from msmarco where default contains text(@user-query)' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en' \
@@ -762,7 +783,7 @@ Now consider the following where we limit matching to the title field:
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="What Is A  Dad Bod">
 $ vespa query \
-  'yql=select * from msmarco where {defaultIndex:"title"}userInput(@user-query)' \
+  'yql=select * from msmarco where title contains text(@user-query)' \
   'user-query=what is dad bod' \
   'hits=3' \
   'language=en' \
@@ -776,7 +797,7 @@ Now, we do not get features for `body` or `url`, because they were not matched b
 Check out the [Improving Text Search through ML](text-search-ml.html).
 
 ## Cleanup
-If do not want to proceed with the [Improving Text Search through ML](text-search-ml.html) guide, you can 
+If you do not want to proceed with the [Improving Text Search through ML](text-search-ml.html) guide, you can 
 stop and remove the container (and data):
 
 <div class="pre-parent">

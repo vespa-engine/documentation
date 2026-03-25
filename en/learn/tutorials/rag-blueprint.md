@@ -420,7 +420,7 @@ vespa query \
     --header="X-LLM-API-KEY:<your-api-key>" \
     yql='select *
     from doc
-    where userInput(@query) or
+    where default contains text(@query) or
     ({label:"title_label", targetHits:100}nearestNeighbor(title_embedding, embedding)) or
     ({label:"chunks_label", targetHits:100}nearestNeighbor(chunk_embeddings, embedding))' \
     query="Summarize the key architectural decisions documented for SynapseFlow's v0.2 release." \
@@ -492,7 +492,7 @@ Our other query profiles will inherit this one (but may override some fields).
     <field name="yql">
         select *
         from %{schema}
-        where userInput(@query) or
+        where default contains text(@query) or
         ({label:"title_label", targetHits:100}nearestNeighbor(title_embedding, embedding)) or
         ({label:"chunks_label", targetHits:100}nearestNeighbor(chunk_embeddings, embedding))
     </field>
@@ -526,7 +526,7 @@ We will also increase number of hits to be returned, and increase the timeout to
   <field name="yql">
     select *
     from %{schema}
-    where userInput(@query) or
+    where default contains text(@query) or
     ({label:"title_label", targetHits:10000}nearestNeighbor(title_embedding, embedding)) or
     ({label:"chunks_label", targetHits:10000}nearestNeighbor(chunk_embeddings, embedding))
   </field>
@@ -595,7 +595,7 @@ Our recommendation is to default to hybrid retrieval:
 ```sql
 select *
         from doc
-        where userInput(@query) or
+        where default contains text(@query) or
         ({label:"title_label", targetHits:1000}nearestNeighbor(title_embedding, embedding)) or
         ({label:"chunks_label", targetHits:1000}nearestNeighbor(chunk_embeddings, embedding))
 ```
@@ -605,7 +605,7 @@ In generic domains, or if you have fine-tuned an embedding model for your specif
 ```sql
 select *
         from doc
-        where rank({targetHits:10000}nearestNeighbor(embeddings_field, query_embedding, userInput(@query)))
+        where rank({targetHits:10000}nearestNeighbor(embeddings_field, query_embedding), default contains text(@query))
 ```
 
 Notice that only the first argument of the [rank](../../reference/querying/yql.html#rank)-operator 
@@ -621,7 +621,7 @@ while also allowing us to return the most relevant chunks of the documents.
 ```sql
 select *
         from doc
-        where userInput(@query) or
+        where default contains text(@query) or
         ({targetHits:100}nearestNeighbor(title_embedding, embedding)) or
         ({targetHits:100}nearestNeighbor(chunk_embeddings, embedding))
 ```
@@ -1335,7 +1335,7 @@ coefficients as query parameters to a new query profile.
     <field name="yql">
         select *
         from %{schema}
-        where userInput(@query) or
+        where default contains text(@query) or
         ({label:"title_label", targetHits:100}nearestNeighbor(title_embedding, embedding)) or
         ({label:"chunks_label", targetHits:100}nearestNeighbor(chunk_embeddings, embedding))
     </field>

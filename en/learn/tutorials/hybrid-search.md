@@ -369,15 +369,15 @@ Here, `PLAIN-2` is the query id of the first test query. We'll use this test que
 
 ### Lexical search with BM25 scoring
 
-The following query uses [weakAnd](../../ranking/wand.html) and where `targetHits` is a hint 
+The following query uses [weakAnd](../../ranking/wand.html) and where `totalTargetHits` is a hint 
 of how many documents we want to expose to configurable [ranking phases](../../ranking/phased-ranking.html). Refer
-to [text search tutorial](text-search.html#querying-the-data) for more on querying with `userInput`. 
+to [text search tutorial](text-search.html#querying-the-data) for more on querying with `text`. 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="MED-10">
 $ vespa query \
-  'yql=select * from doc where {targetHits:10}userInput(@user-query)' \
+  'yql=select * from doc where default contains ({targetHits:10}text(@user-query))' \
   'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
   'hits=1' \
   'language=en' \
@@ -432,7 +432,7 @@ In the example below, we change the grammar from the default `weakAnd` to `any`,
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="MED-10">
 $ vespa query \
-  'yql=select * from doc where {targetHits:10, grammar:"any"}userInput(@user-query)' \
+  'yql=select * from doc where default contains ({targetHits:100, grammar:'any'}text(@user-query))' \
   'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
   'hits=1' \
   'language=en' \
@@ -596,11 +596,11 @@ def parse_vespa_response(response:dict, qid:str) -> List[ScoredDoc]:
 
 def search(query:str, qid:str, ranking:str, 
            hits=10, language="en", mode=RModel.SPARSE) -> List[ScoredDoc]:
-    yql = "select doc_id from doc where ({targetHits:100}userInput(@user-query))"
+    yql = "select doc_id from doc where default contains ({targetHits:100}text(@user-query))"
     if mode == RModel.DENSE:
         yql = "select doc_id from doc where ({targetHits:10}nearestNeighbor(embedding, e))"
     elif mode == RModel.HYBRID:
-        yql = "select doc_id from doc where ({targetHits:100}userInput(@user-query)) OR ({targetHits:10}nearestNeighbor(embedding, e))"
+        yql = "select doc_id from doc where default contains ({targetHits:100}text(@user-query)) OR ({targetHits:10}nearestNeighbor(embedding, e))"
     query_request = {
         'yql': yql,
         'user-query': query, 
@@ -701,7 +701,7 @@ search, the following Vespa top-k query operators are relevant:
 
 - YQL `{targetHits:k}nearestNeighbor()` for dense representations (text embeddings) using 
 a configured [distance-metric](../../reference/schemas/schemas.html#distance-metric) as the scoring function. 
-- YQL `{targetHits:k}userInput(@user-query)` which by default uses [weakAnd](../../ranking/wand.html) for sparse representations.
+- YQL `myField contains ({targetHits:k}text(@user-query))` which by default uses [weakAnd](../../ranking/wand.html) for sparse representations.
 
 
 We can combine these operators using boolean query operators like AND/OR/RANK to express a hybrid search query. Then, there is a wild number of
@@ -794,7 +794,7 @@ The following query exposes documents to ranking that match the query using *eit
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="MED-10">
 $ vespa query \
-  'yql=select * from doc where ({targetHits:10}userInput(@user-query)) or ({targetHits:10}nearestNeighbor(embedding,e))' \
+  'yql=select * from doc where default contains ({targetHits:10}text(@user-query)) or ({targetHits:10}nearestNeighbor(embedding,e))' \
   'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
   'input.query(e)=embed(@user-query)' \
   'hits=1' \
@@ -857,7 +857,7 @@ The following combines the two top-k operators using AND, meaning that the retri
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="MED-10">
 $ vespa query \
-  'yql=select * from doc where ({targetHits:10}userInput(@user-query)) and ({targetHits:10}nearestNeighbor(embedding,e))' \
+  'yql=select * from doc where default contains ({targetHits:10}text(@user-query)) and ({targetHits:10}nearestNeighbor(embedding,e))' \
   'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
   'input.query(e)=embed(@user-query)' \
   'hits=1' \
@@ -880,7 +880,7 @@ is usually the most resource-effective way to combine the two representations.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="MED-10">
 $ vespa query \
-  'yql=select * from doc where rank(({targetHits:10}nearestNeighbor(embedding,e)), ({targetHits:10}userInput(@user-query)))' \
+  'yql=select * from doc where rank(({targetHits:10}nearestNeighbor(embedding,e)), default contains ({targetHits:10}text(@user-query)))' \
   'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
   'input.query(e)=embed(@user-query)' \
   'hits=1' \
@@ -896,7 +896,7 @@ to build HNSW indexes (adds memory and slows down indexing), but still be able t
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="MED-10">
 $ vespa query \
-  'yql=select * from doc where rank(({targetHits:10}userInput(@user-query)),({targetHits:10}nearestNeighbor(embedding,e)))' \
+  'yql=select * from doc where rank(default contains ({targetHits:10}text(@user-query)), ({targetHits:10}nearestNeighbor(embedding,e)))' \
   'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
   'input.query(e)=embed(@user-query)' \
   'hits=1' \
