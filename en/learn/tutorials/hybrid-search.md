@@ -918,7 +918,7 @@ the effectiveness of the hybrid rank profile that combines the two retrieval str
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="0.32">
+<pre data-test="exec" data-test-assert-contains="0.33">
 $ python3 evaluate_ranking.py --ranking hybrid --mode hybrid
 </pre>
 </div>
@@ -926,7 +926,7 @@ $ python3 evaluate_ranking.py --ranking hybrid --mode hybrid
 Which outputs
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid: 0.3287
+Ranking metric NDCG@10 for rank profile hybrid: 0.3330
 </pre>
 
 The `nDCG@10` score is slightly higher than the profiles that only use one of the ranking strategies.  
