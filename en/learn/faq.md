@@ -278,10 +278,10 @@ when fields with conflicting tokenization are put in the same
 [fieldset](../reference/schemas/schemas.html#fieldset).
 This is because a given query item searching one fieldset is tokenized just once,
 so there's no right choice of tokenization in this case.
-If you have user input that you want to apply to multiple fields with different tokenization,
-include the userInput multiple times in the query:
+If you have text that you want to apply to multiple fields with different tokenization,
+include the text multiple times in the query:
 ```
-select * from sources * where ({defaultIndex: 'fieldsetOrField1'}userInput(@query)) or ({defaultIndex: 'fieldsetOrField2'}userInput(@query))
+select * from sources * where fieldsetOrField1 contains text(@query) or fieldsetOrField2 contains text(@query)
 ```
 More details on [stack overflow](https://stackoverflow.com/questions/72784136/why-vepsa-easily-warning-me-this-may-lead-to-recall-and-ranking-issues).
 

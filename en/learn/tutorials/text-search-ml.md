@@ -297,7 +297,7 @@ which specify how many documents we should sample from the matched set.
 The body of the request is given by
 <pre>{% highlight python %}
 body = {
-    "yql": "select id, rankfeatures from sources * where (userInput(@userQuery))",
+    "yql": "select id, rankfeatures from sources * where default contains text(@userQuery)",
     "userQuery": query,
     "hits": number_random_sample,
     "ranking": {"profile": collect_features, "listFeatures": "true"},
