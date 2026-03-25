@@ -432,7 +432,7 @@ In the example below, we change the grammar from the default `weakAnd` to `any`,
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="MED-10">
 $ vespa query \
-  'yql=select * from doc where default contains ({targetHits:100, grammar:'any'}text(@user-query))' \
+  'yql=select * from doc where default contains ({targetHits:100, grammar:"any"}text(@user-query))' \
   'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
   'hits=1' \
   'language=en' \
