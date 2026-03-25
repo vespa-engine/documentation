@@ -173,19 +173,22 @@ $ curl -X DELETE \
       "documentCount":1016
   }
 </pre>
-<p>In case of a large result set, a continuation token might be returned in the response, too:</p>
-<pre>
-"continuation": "AAAAEAAAA"
-</pre>
-<p>If so, add the token and redo the request:</p>
-<pre>
-$ curl -X DELETE \
-  "http://localhost:8080/document/v1/mynamespace/vector/docid?selection=id.hash%28%29.abs%28%29+%25+100+%3D%3D+0&cluster=vectors&continuation=AAAAEAAAA"
-</pre>
 <p>
-  Repeat as long as there are tokens in the output.
-  The token changes in every response.
+  In case of a large result set, a <code>continuation</code> token is returned in the response.
+  Loop until no more tokens are returned:
 </p>
+<pre>
+$ ENDPOINT="http://localhost:8080"
+$ URI="/document/v1/mynamespace/vector/docid?selection=id.hash%28%29.abs%28%29+%25+100+%3D%3D+0&cluster=vectors"
+$ CONTINUATION=""
+$ while true; do
+    RESPONSE=$(curl -s -X DELETE "${ENDPOINT}${URI}${CONTINUATION}")
+    echo "$RESPONSE"
+    TOKEN=$(echo "$RESPONSE" | jq -r '.continuation // empty')
+    if [ -z "$TOKEN" ]; then break; fi
+    CONTINUATION="&continuation=${TOKEN}"
+  done
+</pre>
 
 
 <h3 id="validate">Validate</h3>
