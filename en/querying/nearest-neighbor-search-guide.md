@@ -1239,7 +1239,7 @@ because it's `distance(field, embedding)` is close to 0.5.
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"totalCount": 1'>
 $ vespa query \
-    'yql=select title, popularity, artist from track where {distanceThreshold:0.2,totalTargetHits:00}nearestNeighbor(embedding,q) and popularity > 80' \
+    'yql=select title, popularity, artist from track where {distanceThreshold:0.2,totalTargetHits:10}nearestNeighbor(embedding,q) and popularity > 80' \
     'hits=2' \
     'ranking=closeness' \
     'input.query(q)=embed(e5, "Total Eclipse Of The Heart")'

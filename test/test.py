@@ -311,7 +311,7 @@ def run_config(config_file):
                 failed.append(url)
 
     if len(failed) > 0:
-        raise RuntimeError("One or more files failed: " + ", ".join(failed))
+        raise RuntimeError("Tests in " + ", ".join(failed) + " failed")
 
 
 def run_file(file_name):
