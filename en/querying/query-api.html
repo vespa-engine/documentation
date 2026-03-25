@@ -32,10 +32,10 @@ $ vespa query "select * from music where year > 2001" \
 
 <h2 id="input">Input</h2>
 <p>
-  Input data is both structured data and unstructured data:
+  Input data is both structured data and unstructured text:
 </p>
 <pre>{% raw %}
-$ vespa query "select * from music where artist contains \"coldplay\" and userInput(@q)" \
+$ vespa query "select * from music where artist contains \"coldplay\" and default contains text(@q)" \
   "q=head"
 {% endraw %}</pre>
 <p>
@@ -55,7 +55,7 @@ $ vespa query "select * from music where artist contains \"coldplay\" and userIn
   here the query feature is called <em>user_profile</em>:
 </p>
 <pre>{% raw %}
-$ vespa query "select * from music where artist contains \"coldplay\" and userInput(@q)" \
+$ vespa query "select * from music where artist contains \"coldplay\" and default contains text(@q)" \
   "q=head" \
   "ranking=rank_albums" \
   "input.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
@@ -67,12 +67,12 @@ $ vespa query "select * from music where artist contains \"coldplay\" and userIn
 
 <h3 id="input-examples">Input examples</h3>
 <pre>
-$ vespa query "select * from sources * where userInput(@animal)" \
+$ vespa query "select * from sources * where default contains text(@animal)" \
   "animal=panda"
 </pre>
 <p>
-  The userInput() function will access the query property "animal",
-  and parse the property value as a <a href="../reference/querying/yql.html#grammar">weakAnd</a> query,
+  The text() operator will access the query property "animal",
+  and tokenize the property value into a <a href="../reference/querying/yql.html#grammar">weakAnd</a> query,
   resulting in:
 </p>
 <p>
@@ -83,7 +83,7 @@ select * from sources * where weakAnd(default contains "panda")
 <hr/>
 <p>Changing the value of "animal" without changing the rest of the expression:</p>
 <pre>
-$ vespa query "select * from sources * where userInput(@animal)" \
+$ vespa query "select * from sources * where default contains text(@animal)" \
   "animal=panda smokey"
 </pre>
 <p>The result is:</p>
@@ -95,7 +95,7 @@ select * from sources * where weakAnd(default contains "panda", default contains
 <hr/>
 <p>Combining multiple query properties, and having a more complex expression:</p>
 <pre>
-$ vespa query "select * from sources * where range(year, 1963, 2014) and (userInput(@animal) or userInput(@teddy))" \
+$ vespa query "select * from sources * where range(year, 1963, 2014) and (default contains text(@animal) or default contains text(@teddy))" \
   "animal=panda" \
   "teddy=bear roosevelt"
 </pre>
@@ -105,46 +105,6 @@ $ vespa query "select * from sources * where range(year, 1963, 2014) and (userIn
 select * from sources * where range(year, 1963, 2014) and (weakAnd(default contains "panda") or weakAnd(default contains "bear", default contains "roosevelt"))
 </code>
 </p>
-<hr/>
-<p>
-  Now, consider we do not want the "teddy" field to be treated as its own query segment,
-  it should only be segmented with the linguistic libraries to get recall.
-  Do this by adding a <a href="../reference/querying/yql.html#grammar">grammar</a>-annotation
-  to the userInput() call:
-</p>
-<pre>
-$ vespa query "select * from sources * where range(year, 1963, 2014) and (userInput(@animal) or ({grammar: "segment"}userInput(@teddy)))" \
-  "animal=panda" \
-  "teddy=bear roosevelt"
-</pre>
-<p>Then, the linguistic library will split on space, and the resulting expression is:</p>
-<p>
-<code>
-select * from sources * where range(year, 1963, 2014) and (weakAnd(default contains "panda") or default contains phrase("bear", "roosevelt"))
-</code>
-</p>
-
-
-<h3 id="using-a-fieldset">Using a fieldset</h3>
-<p>
-  Above, the userInput() is run on the <em>default</em> index, as it is not specified.
-  Use a <a href="../reference/querying/yql.html#defaultindex">query annotation</a>
-  to use another index:
-</p>
-<pre>
-$ vespa query "select * from sources * where {defaultIndex: 'myindex'}userInput(@q)" \
-  q=panda
-</pre>
-<p>
-  <code>myindex</code> is here a <a href="../basics/schemas.html#document-fields">field</a>
-  or <a href="../reference/schemas/schemas.html#fieldset">fieldset</a> in the schema.
-  With userQuery(), use <a href="../reference/api/query.html#model.defaultindex">model.defaultIndex</a>:
-</p>
-<pre>
-$ vespa query "select * from music where userQuery()" \
-  query=panda \
-  model.defaultIndex=myindex
-</pre>
 
 
 <h3 id="query-profiles">Query Profiles</h3>
@@ -184,11 +144,11 @@ $ vespa query "select * from music where userQuery()" \
 </ul>
 <p>
   In its simplest form,
-  use <a href="../reference/querying/yql.html#userinput">userInput()</a> for strings:
+  use <a href="../reference/querying/yql.html#text">text()</a> for strings:
 </p>
 
 <pre>
-... where userInput(@user_input)&user_input=free+text
+... where default contains text(@user_input)&user_input=free+text
 </pre>
 <p>Lists, maps and arrays can also be used - examples:</p>
 <pre>

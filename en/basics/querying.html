@@ -73,41 +73,41 @@ the profile in the request, see <a href="../querying/query-profiles.html">query 
 
 <h2 id="querying-with-text">Querying with text</h2>
 
-<p>You often want to send text directly from users or language models to Vespa to retrieve/rank by full-text match.
-Such text can be inserted into a YQL query using the <code>userInput</code> parameter. This will process the text
-and (by default) search it using the <a href="../ranking/wand.html#weakand">WeakAnd</a> text search operator.</p>
+<p>You can use the <code>text</code> YQL operator to retrieve or rank using raw text.
+This will process the text and (by default) search it with the
+<a href="../ranking/wand.html#weakand">WeakAnd</a> text search operator.</p>
 
 <p>You can pass the text directly, or refer to a separate request parameter (using <code>@parameter</code>):</p>
 
 <pre>{% raw %}
-$ vespa query "select * from sources * where myNumber > 10.0 and userInput(@query)" \
-  "query=Some text, from a user/llm"
+$ vespa query "select * from sources * where title contains text(@query)" \
+  "query=Any text, from a human/llm"
 {% endraw %}</pre>
 
-<p>You can set options controlling how the user input is to be parsed and executed, see
-the <a href="../reference/querying/yql.html#userinput">userInput reference documentation</a>.
+<p>You can set options controlling how the text is to be parsed and matched, see
+the <a href="../reference/querying/yql.html#text">text() reference documentation</a>.
 
 
 <h2 id="querying-with-vectors">Querying with vectors</h2>
 
-<p>Querying by vectors is done using the nearestNeighbor YQL operator, which takes a document and query vector:</p>
+<p>Querying by vectors is done using the <code>nearestNeighbor</code> YQL operator, which takes a document and query vector:</p>
 
 <pre>{% raw %}
-$ vespa query 'select * from sources *  where {targetHits: 10}nearestNeighbor(my_vector_field, my_query_vector)' \
+$ vespa query 'select * from sources *  where {targetHits: 100}nearestNeighbor(my_vector_field, my_query_vector)' \
   ranking=my_rank_profile \
   'input.query(my_query_vector)'='[1,2,3]'
 {% endraw %}</pre>
 
 <p>Read more in <a href="../querying/nearest-neighbor-search">nearest neighbor search</a>.</p>
 
-<p>You can combine multiple nearestNeighbor, userInput and other parameters in any way:</p>
+<p>You can combine multiple nearestNeighbor, text and other operators in any way:</p>
 
 <pre>{% raw %}
-$ vespa query "select * from sources * where (({targetHits: 10}nearestNeighbor(my_title_embedding, my_query_vector)) \
-                                              or ({targetHits: 10}nearestNeighbor(my_body_embeddings, my_query_vector)) \
-                                              or userInput(@query) or ({defaultIndex:'ngramFields'}userInput(@query))) \
+$ vespa query "select * from sources * where (({targetHits: 300}nearestNeighbor(my_title_embedding, my_query_vector)) \
+                                              or ({targetHits: 150}nearestNeighbor(my_body_embeddings, my_query_vector)) \
+                                              or title contains text(@query) or body contains text(@query)) \
                                              and range(title, 0.0, 500.0) and category in ('c1', 'c2') \
-                                             and ! blacklisted=true" \
+                                             and !(blacklisted=true)" \
   "input.query(my_query_vector)=embed(@query)" \
   "query=Hello, world! "
 
