@@ -1094,13 +1094,13 @@ Ranking metric NDCG@10 for rank profile hybrid-rrf: 0.3233
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec" data-test-assert-contains="0.33">
+<pre data-test="exec" data-test-assert-contains="0.34">
 $ python3 evaluate_ranking.py --ranking hybrid-linear-normalize --mode hybrid
 </pre>
 </div>
 
 <pre>
-Ranking metric NDCG@10 for rank profile hybrid-linear-normalize: 0.3387
+Ranking metric NDCG@10 for rank profile hybrid-linear-normalize: 0.3423
 </pre>
 
 On this particular dataset, the `hybrid-normalize-bm25-with-atan` rank profile performs the best, but the difference is small. This also demonstrates that hybrid search 
