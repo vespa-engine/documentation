@@ -1,0 +1,101 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Deploy Vespa Locally
+applies_to: enterprise
+---
+
+<p>
+  Vespa on Kubernetes can be deployed locally using MiniKube for development and experimental use-cases.
+</p>
+
+<p>
+  <b>Note:</b> This setup is not recommended for production.
+</p>
+
+<p>
+  Initialize a Minikube cluster with 8 nodes, each with 4GiB of memory and 2 CPUs. Enable Minikube's image registry
+  add-on to allow the Minikube nodes to access the Vespa images. In this example, we use <code>podman</code> as the driver.
+</p>
+
+<pre>
+minikube start --nodes 8 --cpus 2 --memory 4GiB --driver=podman --insecure-registry="192.168.49.0/24"
+minikube addons enable registry
+</pre>
+
+<p>
+  Cache the images provided by our support team into the MiniKube registry.
+</p>
+
+<pre>
+echo $VESPAAI_REGISTRY_TOKEN | podman login images.ves.pa \
+  -u "$VESPAAI_REGISTRY_USER" \
+  --password-stdin
+
+podman pull images.ves.pa/kubernetes/vespa:$VESPA_VERSION
+podman pull images.ves.pa/kubernetes/operator:$VESPA_VERSION
+</pre>
+
+<p>
+  Then, push the images to the MiniKube registry. The images will then be accessible from
+  <code>$(minikube ip):5000</code>.
+</p>
+
+<pre>
+export MINIKUBE_REGISTRY=$(minikube ip)
+
+podman tag  kubernetes/vespa:$VESPA_VERSION $MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa:$VESPA_VERSION
+podman push --tls-verify=false $MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa:$VESPA_VERSION
+
+podman tag  kubernetes/operator:$VESPA_VERSION $MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION
+podman push --tls-verify=false $MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator:$VESPA_VERSION
+</pre>
+
+<p>
+  We will now use the following environment variables for the rest of the guide to refer to the images.
+</p>
+
+<pre>
+export VESPA_IMAGE=$MINIKUBE_REGISTRY:5000/localhost/kubernetes/vespa
+export VESPA_OPERATOR_IMAGE=$MINIKUBE_REGISTRY:5000/localhost/kubernetes/operator
+</pre>
+
+<p>
+  Then, install the <a href="https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner">Local Persistent Volume</a> Helm Chart.
+  This will allow provisioning Persistent Volumes locally, which is required to run Vespa on Kubernetes. Helm will automatically create a StorageClass called <code>local-storage</code>, which should be
+  used as the <code>StorageClass</code> for subsequent steps.
+</p>
+
+<pre>
+$ git clone git@github.com:kubernetes-sigs/sig-storage-local-static-provisioner.git
+
+# Install the Helm Chart onto the cluster globally
+$ cd sig-storage-local-static-provisioner
+$ helm install -f helm/examples/baremetal-default-storage.yaml local-volume-provisioner --namespace kube-system ./helm/provisioner
+</pre>
+
+<p>
+  Create several usable volumes on each MiniKube Node. We recommend at least 4 per node for a smooth deployment.
+</p>
+
+<pre>
+# Create several volumes on each Minikube node.
+$ for n in minikube minikube-m02 minikube-m03 minikube-m04 minikube-m05 minikube-m06 minikube-m07 minikube-m08; do
+  echo "==> $n"
+  minikube ssh -n "$n" -- '
+    set -e
+    for i in 1 2 3 4; do
+      sudo mkdir -p /mnt/disks/vol$i
+      if ! mountpoint -q /mnt/disks/vol$i; then
+        sudo mount --bind /mnt/disks/vol$i /mnt/disks/vol$i
+      fi
+    done
+    echo "Mounted:"
+    mount | grep -E "/mnt/disks/vol[1-4]" || true
+  '
+done
+</pre>
+
+<p>
+  Once the images are available in the MiniKube registry, proceed to the <a href="installation.html">Installation</a> guide,
+  using <code>local-storage</code> as the <code>storageClass</code> and <code>NONE</code> as the <code>endpointType</code>.
+</p>

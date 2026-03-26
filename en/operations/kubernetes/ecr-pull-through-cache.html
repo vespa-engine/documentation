@@ -1,0 +1,95 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Setup Amazon ECR Pull-Through Cache
+applies_to: enterprise
+---
+
+<p>
+  For production, we recommend mirroring the upstream artifacts into your own registry. This section shows how to create an
+  <a href="https://docs.aws.amazon.com/AmazonECR/latest/userguide/pull-through-cache.html">Amazon ECR pull-through cache</a>
+  for the images referenced in the <a href="installation.html">Installation</a> guide.
+</p>
+
+<h2>AWS Console Steps</h2>
+<ol>
+  <li>Open AWS Console -&gt; <strong>Amazon ECR</strong> -&gt; <strong>Private registry</strong> -&gt; <strong>Pull through cache rules</strong>.</li>
+  <li>Choose <strong>Create rule</strong>.</li>
+  <li>Set <strong>ECR repository prefix</strong> to <code>vespa-cache</code>.</li>
+  <li>Set <strong>Upstream registry URL</strong> to <code>images.ves.pa</code>.</li>
+  <li>Create or select a Secrets Manager credential with your support-provided upstream username/token.</li>
+  <li>Create the rule, then optionally pull one tag of each artifact to warm the cache.</li>
+</ol>
+
+<h2>AWS CLI Steps</h2>
+
+<p>
+  Set the AWS account, region, and ECR registry variables, along with the upstream credentials provided by Vespa support.
+</p>
+
+<pre>
+export AWS_ACCOUNT_ID=123456789012
+export AWS_REGION=us-east-1
+export ECR_REGISTRY=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+export ECR_CACHE_PREFIX=vespa-cache
+
+export VESPAAI_REGISTRY_USER=&lt;support-provided-user&gt;
+export VESPAAI_REGISTRY_TOKEN=&lt;support-provided-token&gt;
+</pre>
+
+<p>
+  Create a Secrets Manager secret to store the upstream registry credentials.
+</p>
+
+<pre>
+aws secretsmanager create-secret \
+  --name vespa-registry-creds \
+  --secret-string "{\"username\":\"${VESPAAI_REGISTRY_USER}\",\"password\":\"${VESPAAI_REGISTRY_TOKEN}\"}" \
+  --region ${AWS_REGION} || \
+aws secretsmanager put-secret-value \
+  --secret-id vespa-registry-creds \
+  --secret-string "{\"username\":\"${VESPAAI_REGISTRY_USER}\",\"password\":\"${VESPAAI_REGISTRY_TOKEN}\"}" \
+  --region ${AWS_REGION}
+</pre>
+
+<p>
+  Create the pull-through cache rule. A single rule covers all repositories under the <code>images.ves.pa</code> host.
+</p>
+
+<pre>
+aws ecr create-pull-through-cache-rule \
+  --ecr-repository-prefix ${ECR_CACHE_PREFIX} \
+  --upstream-registry-url images.ves.pa \
+  --credential-arn arn:aws:secretsmanager:${AWS_REGION}:${AWS_ACCOUNT_ID}:secret:vespa-registry-creds \
+  --region ${AWS_REGION}
+</pre>
+
+<p>
+  Authenticate your local tooling to the ECR registry.
+</p>
+
+<pre>
+aws ecr get-login-password --region ${AWS_REGION} | \
+  docker login --username AWS --password-stdin ${ECR_REGISTRY}
+aws ecr get-login-password --region ${AWS_REGION} | \
+  helm registry login --username AWS --password-stdin ${ECR_REGISTRY}
+</pre>
+
+<p>
+  Warm the cache by pulling the Vespa images and the Helm chart artifact.
+</p>
+
+<pre>
+podman pull ${ECR_REGISTRY}/${ECR_CACHE_PREFIX}/kubernetes/vespa:${VESPA_VERSION}
+podman pull ${ECR_REGISTRY}/${ECR_CACHE_PREFIX}/kubernetes/operator:${VESPA_VERSION}
+helm pull oci://${ECR_REGISTRY}/${ECR_CACHE_PREFIX}/helm/vespa-operator --version ${VESPA_VERSION}
+</pre>
+
+<p>
+  Point the installation variables to ECR.
+</p>
+
+<pre>
+export VESPA_IMAGE=${ECR_REGISTRY}/${ECR_CACHE_PREFIX}/kubernetes/vespa
+export VESPA_OPERATOR_IMAGE=${ECR_REGISTRY}/${ECR_CACHE_PREFIX}/kubernetes/operator
+export HELM_CHART_REF=oci://${ECR_REGISTRY}/${ECR_CACHE_PREFIX}/helm/vespa-operator
+</pre>
