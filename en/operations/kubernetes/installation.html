@@ -5,107 +5,95 @@ applies_to: enterprise
 ---
 
 <p>
-  The Vespa Operator should be installed using the official Helm chart. It depends on the installation of the <code>VespaSet</code> <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource Definition</a> (CRD), which is defined at the Kubernetes cluster scope.
-  Through the Helm Chart, the installation of the CRD and the required RBAC permissions can be simplified. The required permissions are listed in the <a href="#permissions">Permissions</a> section.
+  These steps walk through deploying Vespa using the official Helm chart.
 </p>
 
-<p>
-  Our container registry is located at <code>images.ves.pa</code>. For accessing the required <em>Vespa on Kubernetes</em> container images (and helm chart) you will need to contact us through our support portal.
-  We will provide you with the authentication id and token.
-</p>
-
-<p>
-  <strong>Important:</strong> For production use, we <em>require</em> mirroring these images into your own registry or a well-known internal repository appropriate for your infrastructure!
-</p>
-
-<p>
-  Our support team will provide you with credentials to access the Vespa on Kubernetes image, Vespa Operator image, and the Helm Chart. They will be referred to as shown below throughout the installation steps.
-</p>
-
-<pre>
-# The Vespa on Kubernetes Image
-export $OCI_IMAGE_REFERENCE=images.ves.pa/kubernetes/vespa
-
-# The Vespa Operator Image
-export $OCI_IMAGE_REFERENCE_OPERATOR=images.ves.pa/kubernetes/operator
-
-# The Official Helm Chart
-export $HELM_OCI_CHART_REFERENCE=oci://images.ves.pa/helm/vespa-operator
-</pre>
-
-<p>
-  The Vespa Operator uses the <a href="https://docs.vespa.ai/en/learn/releases.html">Vespa Version</a> release semantics. We encourage to use the latest release during installation.
-</p>
-
-<pre>
-# Vespa Version
-export VESPA_VESRION=$VESPA_VERSION
-</pre>
-
-<p>
-  Additionally, the Vespa Operator and all Vespa components are completely scoped to a namespace. We encourage choosing one to your liking.
-</p>
-
-<pre>
-# Set the namespace
-export NAMESPACE=test
-</pre>
 
 <h2>Requirements</h2>
 
 <p>
-  The following tools are encouraged for a smooth deployment.
+  We recommend the following tools for a smooth deployment.
 </p>
 
 <ul>
   <li><a href="https://helm.sh/docs/intro/install/">Helm</a></li>
   <li><a href="https://kubernetes.io/docs/reference/kubectl/">kubectl</a></li>
   <li><a href="https://docs.vespa.ai/en/clients/vespa-cli.html">Vespa CLI</a></li>
-  <li><a href="https://minikube.sigs.k8s.io/docs/">MiniKube (Optional)</a></li>
-  <li>Podman or Docker (Optional)</li>
 </ul>
 
 <p>
-  These instructions assume that your <code>kubeconfig</code> is pointing to an active Kubernetes cluster. Refer to the <a href="https://kubernetes.io/docs/setup/">Getting Started</a> guide to create a Kubernetes cluster. For instructions on creating a
-  local development environment, refer to the <a href="#minikube-setup">MiniKube Setup</a> section.
-</p>
-
-<h2 id="install-helm-chart">Deploy Vespa Operator</h2>
-<p>
-  The Helm Chart installs the Vespa Operator, <code>Role</code>, <code>RoleBinding</code>, and <code>ServiceAccount</code> resources with the permissions to operate Vespa. Optionally, the
-  CRD specification can be installed onto the Kubernetes cluster.
+  These instructions assume that your <code>kubeconfig</code> is pointing to an active Kubernetes cluster. Refer to the <a href="https://kubernetes.io/docs/setup/">Getting Started</a> guide to create a Kubernetes cluster. For instructions on deploying Vespa
+  locally, refer to the <a href="local-deployment.html">Deploy Vespa Locally</a> guide.
 </p>
 
 <p>
-  First, authenticate to the Helm Chart OCI registry. The credentials will be provided by our support team.
+  Vespa on Kubernetes uses a <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/">Custom Resource Definition</a> (CRD) Custom Resource Definition called a <code>VespaSet</code>. Users intending to manage
+  the CRD definition themselves should apply it to the cluster before installation.
+</p>
+
+<p>
+  The RBAC permissions that are needed to run Vespa are listed on the <a href="permissions.html">Permissions</a> page. The Helm Chart
+  will automatically apply a default set of RBAC resources onto the cluster.
+</p>
+
+<h2>Setup Registry Access</h2>
+
+<p>
+  <b>Note</b>: Vespa on Kubernetes is an enterprise feature. You will need access to the images below to successfully deploy Vespa.
+  Contact us through our support portal to receive an authentication ID and token. For production use, we recommend mirroring
+  these images into your own registry or a well-known internal repository appropriate for your infrastructure.
+</p>
+
+<ul>
+  <li><code>VESPA_IMAGE=images.ves.pa/kubernetes/vespa</code></li>
+  <li><code>VESPA_OPERATOR_IMAGE=images.ves.pa/kubernetes/operator</code></li>
+  <li><code>HELM_CHART_REF=oci://images.ves.pa/helm/vespa-operator</code></li>
+</ul>
+
+<p>
+  We will use this naming convention throughout this guide. The tag for all three images conform to the <a href="https://docs.vespa.ai/en/learn/releases.html">Vespa Version</a> release semantics.
+  We recommend using the latest Vespa release as the default. We will refer to it as <code>VESPA_VERSION</code>.
+</p>
+
+<p>
+  The Vespa Operator and all Vespa components are local to a namespace. We will refer to the namespace as <code>NAMESPACE</code>.
+</p>
+
+<h2 id="install-helm-chart">Deploy the Vespa Operator</h2>
+<p>
+  Authenticate to the Helm Chart OCI registry. The credentials will be provided by our support team.
 </p>
 
 <pre>
-helm registry login images.ves.pa -u $USER-p $TOKEN
+$ helm registry login images.ves.pa -u $USER -p $TOKEN
 </pre>
 
 <p>
-  Now, an installation can be performed as follows. This will deploy the Vespa Operator to the target namespace and apply
-  the <code>VespaSet</code> CRD specification to the Kubernetes cluster. Set <code>image.repository</code> to the Vespa On Kubernetes Image provided by our support team.
-  The <code>image.tag</code> refers to the Vespa Version to deploy.
+  Now, install the Helm Chart onto the target namespace. This will deploy the Vespa Operator and apply
+  the <code>VespaSet</code> resource. Set <code>image.repository</code> to the <code>VESPA_OPERATOR_IMAGE</code> image provided by our support team.
+  The <code>image.tag</code> refers to the <code>VESPA_VERSION</code> to deploy.
 </p>
 
 <pre>
-$ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace $NAMESPACE --create-namespace --set image.repository=$OCI_IMAGE_REFERENCE_OPERATOR --set image.tag=$VESPA_VERSION
+$ helm install vespa-operator $HELM_CHART_REF --namespace $NAMESPACE --create-namespace --set image.repository=$VESPA_OPERATOR_IMAGE --set image.tag=$VESPA_VERSION
 </pre>
 
 <p>
-  If CRDs are managed separately, its installation can be disabled. However, the CRD specification must
+  The CRD definition lifecycle can be managed separately. However, the CRD specification must
   be manually applied to the Kubernetes cluster before installing the Helm Chart. Our support team can provide this specification if necessary.
+</p>
+
+<p>
+  Use the <code>--skip-crds</code> option to skip CRD definition installation.
 </p>
 
 <pre>
 $ kubectl apply vespasets.k8s.ai.vespa-v1.yaml
-$ helm install vespa-operator $HELM_OCI_CHART_REFERENCE --namespace $NAMESPACE --create-namespace --skip-crds --set image.repository $OCI_IMAGE_REFERENCE_OPERATOR --set image.tag $VESPA_VERSION
+$ helm install vespa-operator $HELM_CHART_REF --namespace $NAMESPACE --create-namespace --skip-crds --set image.repository $VESPA_OPERATOR_IMAGE --set image.tag $VESPA_VERSION
 </pre>
 
 <p>
-  Ensure that the <code>Deployment</code> was successfully applied and the operator <code>Pod</code> was created. It can be done
+  Ensure that the <code>Deployment</code> was successfully created with the <code>Vespa Operator</code> Pod. It can be done
   using the following check.
 </p>
 
@@ -136,12 +124,12 @@ spec:
   version: "${VESPA_VERSION}"
 
   configServer:
-    image: "${OCI_IMAGE_REFERENCE}"
+    image: "${VESPA_OPERATOR_IMAGE}"
     storageClass: "gp3"
     generateRbac: false
 
   application:
-    image: "${OCI_IMAGE_REFERENCE}"
+    image: "${VESPA_IMAGE}"
     storageClass: "gp3"
 
   ingress:
@@ -167,12 +155,12 @@ spec:
   version: "${VESPA_VERSION}"
 
   configServer:
-    image: "${OCI_IMAGE_REFERENCE}"
+    image: "${VESPA_OPERATOR_IMAGE}"
     storageClass: "local-storage"
     generateRbac: false
 
   application:
-    image: "${OCI_IMAGE_REFERENCE}"
+    image: "${VESPA_IMAGE}"
     storageClass: "local-storage"
 
   ingress:
@@ -183,17 +171,13 @@ $ kubectl apply -f vespaset.yaml
 </pre>
 
 <p>
-  Note that the <code>$OCI_IMAGE_REFERENCE</code> is shared between the ConfigServer and the Vespa Application Pods.
-</p>
-
-<p>
-  Once the <code>VespaSet</code> is applied, the operator will automatically detect the newly applied <code>VespaSet</code> and create a quorum of
+  Once the <code>VespaSet</code> is applied, the operator will automatically detect the newly created <code>VespaSet</code> resource and create a quorum of
   ConfigServers.
 </p>
 
 <p>
-  The ConfigServers will then bootstrap the Vespa infrastructure. This process takes roughly a minute. The bootstrap process is completed once
-  the <code>VespaSet</code> shows the status as <code>RUNNING</code> for all ConfigServer Pods.
+  The ConfigServers will then bootstrap themselves and ensure a quorum. This process takes roughly a minute. The bootstrap process is complete once
+  the <code>VespaSet</code> shows the status as <code>RUNNING</code> for all ConfigServer Pods. For example:
 </p>
 
 <pre>
@@ -240,12 +224,12 @@ Events:                  &lt;none&gt;
 <h2>Deploy a Vespa Application</h2>
 
 <p>
-  A Vespa application can be deployed once the bootstrap process has completed. Refer to the <a href="https://github.com/vespa-engine/sample-apps">Vespa Sample Applications</a>
+  A Vespa application can be deployed through the ConfigServers once bootstrap has completed. Refer to the <a href="https://github.com/vespa-engine/sample-apps">Vespa Sample Applications</a>
   to get started. In the following example, we will use the <a href="https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation">Album Recommendation</a> sample.
 </p>
 
 <p>
-  Set up the Vespa CLI to download the Album Recommendation sample application to a working directory.
+  Set up the Vespa CLI to download the Album Recommendation sample to a directory.
 </p>
 
 <pre>
@@ -253,7 +237,7 @@ $ vespa clone album-recommendation myapp && cd myapp
 </pre>
 
 <p>
-  Modify the sample application package with resource specifications and ensure the correct Pod count, as shown below:
+  Modify the application package with resource specifications to ensure the correct Pod count, as shown below:
 </p>
 
 <pre>
@@ -292,7 +276,7 @@ $ kubectl -n $NAMESPACE port-forward pod/cfg-0 19071:19071
 </pre>
 
 <p>
-  Deploy and activate the application using the sequence below.
+  Deploy and activate the application.
 </p>
 
 <pre>
@@ -301,7 +285,7 @@ $ while not vespa --target local activate
 </pre>
 
 <p>
-  The ConfigServer quorum will create the Container, Content, and Cluster-Controller Pods as specified in the application package. The deployment
+  The ConfigServers will create the Container, Content, and Cluster-Controller Pods as specified in the application package. The deployment
   is considered complete once all Pods show the phase <code>RUNNING</code> in the <code>VespaSet</code> status.
 </p>
 
@@ -329,6 +313,7 @@ $ kubectl -n $NAMESPACE port-forward pod/default-100 8080:8080
 </p>
 
 <pre>
+<<<<<<< Updated upstream
 vespa feed dataset/A-Head-Full-of-Dreams.json
 </pre>
 
@@ -576,4 +561,7 @@ helm pull oci://${ECR_REGISTRY}/${ECR_CACHE_PREFIX}/helm/vespa-operator --versio
 export OCI_IMAGE_REFERENCE=${ECR_REGISTRY}/${ECR_CACHE_PREFIX}/kubernetes/vespa
 export OCI_IMAGE_REFERENCE_OPERATOR=${ECR_REGISTRY}/${ECR_CACHE_PREFIX}/kubernetes/operator
 export HELM_OCI_CHART_REFERENCE=oci://${ECR_REGISTRY}/${ECR_CACHE_PREFIX}/helm/vespa-operator
+=======
+$ vespa feed dataset/A-Head-Full-of-Dreams.json
+>>>>>>> Stashed changes
 </pre>
