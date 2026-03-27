@@ -1,0 +1,115 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Setup Dev Environment
+applies_to: enterprise
+---
+
+<p>
+  The steps to enable the <code>dev</code> environment for Vespa on Kubernetes are described in this guide.
+  This is a one-time irreversible operation. Once a <code>VespaSet</code> has been deployed in the <code>dev</code> environment
+  configuration, it cannot be reserved.
+</p>
+
+{% include important.html content='The <code>dev</code> environment is intended for local development, integration testing, and experimentation — not
+for production serving.' %}
+
+<h2 id="what-is-a-dev-cluster">Dev Environment</h2>
+
+<p>
+  Contrary to Vespa Cloud, the <code>dev</code> environment must additionally be configured at the <code>VespaSet</code> resource level.
+  Once this is enabled, any Vespa Cluster that is reconciled through this <code>VespaSet</code> will have a <code>min-availability</code> in their
+  <code>contenet</code> cluster and <code>node</code> count of 1 for all cluster types.
+</p>
+
+<p>
+  As such, HA (high-availability) of Vespa Pods is not guaranteed, and availability will be reduced
+  during upgrades. The only exception is the ConfigServer Pods, which must always maintain a replica count of 3 to ensure a quorum.
+
+</p>
+
+<p>
+  For more information on Environments, refer to the <a href="../../environments.html#dev">Vespa Cloud</a> documentation.
+</p>
+
+<h2 id="enabling-dev-mode">Enable Dev Environment</h2>
+
+<p>
+  The <code>dev</code> environment is activated by adding the following annotation to the <code>VespaSet</code> resource:
+</p>
+
+<table class="table">
+  <thead>
+  <tr>
+    <th>Annotation</th>
+    <th>Value</th>
+    <th>Effect</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td><code>internal.vespa.ai/environment</code></td>
+    <td><code>dev</code></td>
+    <td>
+      Signals to the ConfigServer that this is a <code>dev</code> environment.
+    </td>
+  </tr>
+  </tbody>
+</table>
+
+<pre>
+$ cat &gt; vespaset-dev.yaml &lt;&lt;EOF
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: vespaset-dev
+  namespace: ${NAMESPACE}
+  annotations:
+    internal.vespa.ai/environment: "dev"
+spec:
+  version: "${VESPA_VERSION}"
+
+  configServer:
+    image: "${VESPA_OPERATOR_IMAGE}"
+    storageClass: "local-storage"
+    generateRbac: false
+
+  application:
+    image: "${VESPA_IMAGE}"
+    storageClass: "local-storage"
+
+  ingress:
+    endpointType: "NONE"
+EOF
+
+$ kubectl apply -f vespaset-dev.yaml
+</pre>
+
+<p>
+  It is then possible to deploy a Vespa Application with minimal resources. An example is shown below.
+</p>
+
+<pre>
+&lt;?xml version="1.0" encoding="utf-8" ?&gt;
+&lt;services version="1.0" xmlns:deploy="vespa" xmlns:preprocess="properties"&gt;
+
+    &lt;container id="default" version="1.0"&gt;
+        &lt;document-api/&gt;
+        &lt;search/&gt;
+
+        &lt;nodes count="1"&gt;
+            &lt;resources vcpu="2" memory="2Gb" disk="20Gb" /&gt;
+        &lt;/nodes&gt;
+    &lt;/container&gt;
+
+    &lt;content id="music" version="1.0"&gt;
+        &lt;min-redundancy&gt;1&lt;/min-redundancy&gt;
+        &lt;documents&gt;
+            &lt;document type="music" mode="index" /&gt;
+        &lt;/documents&gt;
+        &lt;nodes count="1"&gt;
+            &lt;resources vcpu="2" memory="2Gb" disk="20Gb" /&gt;
+        &lt;/nodes&gt;
+    &lt;/content&gt;
+
+&lt;/services&gt;
+</pre>
