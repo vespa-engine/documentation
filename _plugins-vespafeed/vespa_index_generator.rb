@@ -31,7 +31,7 @@ module Jekyll
                 )
 
                 # "index" front matter flag controls inclusion in the Vespa site search index only,
-                # not external search engine indexing (use "noindex: true" in front matter for that).
+                # not external search engine indexing (use "meta_robots_noindex: true" in front matter for that).
                 if page.data["index"] == true
                     puts "::debug::Processing page: #{page.url}"
                     url = page.url
