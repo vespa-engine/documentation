@@ -6,6 +6,11 @@ redirect_from:
 - /en/cloud/archive-guide-gcp
 ---
 
+{% include note.html content="This guide is for tenants using Vespa Cloud.
+If your tenant uses **Enclave**, the archive buckets are in your own cloud account
+and you can access them directly — see the
+[Enclave archive guide](/en/operations/enclave/archive.html) instead." %}
+
 Vespa Cloud exports log data, heap dumps, and Java Flight Recorder sessions to
 buckets in Google Cloud Storage. This guide explains how to access this data.
 Access to the data is through a GCP project controlled by the tenant.
@@ -16,22 +21,25 @@ These resources are needed to get started:
 * A Google user account
 * The [gcloud command line interface](https://cloud.google.com/sdk/docs/install)
 
-Access is configured through the Vespa Cloud Console in the tenant account screen.  Choose
-the "archive" tab, then "GCP" tab to see the settings below.
+Access is configured through the Vespa Cloud Console in the tenant account screen.
+Choose the "archive" tab, then expand the **GCP** section.
 
 ## Register IAM principal
-![Register IAM  principal](/assets/img/archive-1-gcp.png)
+<!-- TODO: Add screenshot of the GCP accordion expanded, showing the "Configure access to your cloud archive" button -->
 
-First, a principal must be granted access to the Cloud Storage bucket in Vespa Cloud.
-This is done by entering a [principal](https://cloud.google.com/iam/docs/overview) with a supported prefix.
-See the accepted format in the description below the input field. 
+Click **Configure access to your cloud archive** to open the configuration dialog.
+
+Enter a [principal](https://cloud.google.com/iam/docs/overview) with a supported prefix
+(e.g. `user:email@example.com`, `serviceAccount:...`, `group:...`, or `domain:...`)
+and click **Save**.
+Vespa Cloud will then grant access to that principal on the Cloud Storage buckets.
 
 ## Access files using Gcloud CLI
-![Download files](/assets/img/archive-2-gcp.png)
+<!-- TODO: Add screenshot of the download logs section showing the GCS URI table and gsutil command -->
 
-Once permissions have been granted, the GPC member can access the contents of the archive
+Once permissions have been granted, the GCP member can access the contents of the archive
 buckets.  Any Cloud Storage client will work, but the `gsutil` command line
-client is an easy tool to use.  The settings page will list all buckets where
+client is an easy tool to use.  The archive page will list all buckets where
 data is stored, typically one bucket per zone the tenant has applications.
 
 The `-u user-project` parameter is mandatory to make sure network traffic is

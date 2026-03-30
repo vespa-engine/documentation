@@ -6,6 +6,11 @@ redirect_from:
 - /en/cloud/archive-guide-aws
 ---
 
+{% include note.html content="This guide is for tenants using Vespa Cloud.
+If your tenant uses **Enclave**, the archive buckets are in your own cloud account
+and you can access them directly — see the
+[Enclave archive guide](/en/operations/enclave/archive.html) instead." %}
+
 Vespa Cloud exports log data, heap dumps, and Java Flight Recorder sessions to buckets in AWS S3.
 This guide explains how to access this data.  Access to the data must happen through an AWS account
 controlled by the tenant.  Data traffic to access this data is charged to this AWS account.
@@ -15,31 +20,34 @@ These resources are needed to get started:
 * An IAM Role in that AWS account
 * The [AWS command line client](https://aws.amazon.com/cli/)
 
-Access is configured through the Vespa Cloud Console in the tenant account screen.  Choose
-the "archive" tab to see the settings below.
+Access is configured through the Vespa Cloud Console in the tenant account screen.
+Choose the "archive" tab, then expand the **AWS** section.
 
 ## Register IAM Role
-![Authorize IAM Role](/assets/img/archive-1-aws.png)
+<!-- TODO: Add screenshot of the AWS accordion expanded, showing the "Configure access to your cloud archive" button -->
 
-First, the IAM Role must be granted access to the S3 buckets in Vespa Cloud.  This is done by
-entering the IAM Role in the setting seen above.  Vespa Cloud will then grant access to that
-role to the S3 buckets.
+Click **Configure access to your cloud archive** to open the configuration dialog.
+
+In **Step 1**, enter the ARN of the IAM Role that should have access to the S3 buckets
+(e.g. `arn:aws:iam::123456789012:role/my-iam-role`) and click **Save**.
+Vespa Cloud will then grant access to that role on the S3 buckets.
 
 ## Grant access to Vespa Cloud resources
-![Allow access to IAM Role](/assets/img/archive-2-aws.png)
+<!-- TODO: Add screenshot of the configure access modal showing Step 1 (IAM role input) and Step 2 (generated IAM policy) -->
 
-Second, the IAM Role must be granted access to resources inside Vespa Cloud.  AWS requires
-both permissions to be registered in both Vespa Cloud's AWS account (step 1) and the
-tenant's AWS account (step 2).  Copy the policy from the user interface and attach it to
-the IAM Role - or make your own equivalent policy should you have other requirements.
+In **Step 2** of the same dialog, a policy is generated that must be attached to your IAM Role.
+Copy the policy and attach it to the IAM Role in your AWS account.
+AWS requires permissions to be registered in both Vespa Cloud's AWS account (step 1)
+and the tenant's AWS account (step 2).
+Make your own equivalent policy should you have other requirements.
 For more information, see the [AWS documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_manage-attach-detach.html).
 
 ## Access files using AWS CLI
-![Download files](/assets/img/archive-3-aws.png)
+<!-- TODO: Add screenshot of the download logs section showing the S3 URI table and CLI command -->
 
 Once permissions have been granted, the IAM Role can access the contents of the archive
 buckets.  Any AWS S3 client will work, but the AWS command line client is an easy tool
-to use.  The settings page will list all buckets where data is stored, typically one
+to use.  The archive page will list all buckets where data is stored, typically one
 bucket per zone the tenant has applications.
 
 The `--request-payer=requester` parameter is mandatory to make sure network traffic

@@ -14,6 +14,7 @@ zones, and Cloud Storage will be used in the GCP zones.
 How to access and use the storage buckets is found in the documentation for the respective cloud providers:
 
  * [AWS S3](archive-guide-aws)
+ * [Azure Blob Storage](archive-guide-azure)
  * [Google Cloud Storage](archive-guide-gcp)
 
 
