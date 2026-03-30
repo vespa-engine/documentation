@@ -58,12 +58,6 @@ features you must re-apply your terraform templates with the latest release.
 The [notification system](../notifications)
 will let you know when a new release is available.
 
-#### Cloudformation
-
-Vespa also supports Cloudformation if you prefer the AWS-native solution.
-Download the Cloudformation stacks in our [GitHub repository](https://github.com/vespa-cloud/cloudformation-aws-enclave) and
-refer to the README for stack-specific instructions.
-
 ### 4. Deploy a Vespa application
 
 By default, all applications are deployed on resources in Vespa Cloud accounts.
