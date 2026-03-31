@@ -12,6 +12,12 @@ After Vespa Cloud Enclave is established in your cloud provider account using Te
 the module will have created a storage bucket per Vespa Cloud zone you configured in your enclave.
 These storage buckets are used to archive logs from the machines that run Vespa inside your account.
 
+Since the buckets are in your own cloud account, you do not need to register an IAM role
+or configure access through the Vespa Cloud Console — you can access the archive buckets
+directly using your existing cloud credentials.
+
+![Enclave archive view](/assets/img/archive-aws-enclave.png)
+
 There will be one storage bucket per Vespa Cloud Zone that is configured in the enclave.
 The name of the bucket will depend on the cloud provider you are setting up the enclave in.
 
