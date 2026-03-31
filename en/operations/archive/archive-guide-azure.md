@@ -2,6 +2,8 @@
 # Copyright Vespa.ai. All rights reserved.
 title: Azure Archive guide
 applies_to: cloud
+index: false # TODO: Remove index: false and meta_robots_noindex when Azure non-Enclave archive is publicly available
+meta_robots_noindex: true
 ---
 
 {% include note.html content="This guide is for tenants using Vespa Cloud.
