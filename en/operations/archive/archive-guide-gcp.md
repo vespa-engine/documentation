@@ -25,17 +25,24 @@ Access is configured through the Vespa Cloud Console in the tenant account scree
 Choose the "archive" tab, then expand the **GCP** section.
 
 ## Register IAM principal
-<!-- TODO: Add screenshot of the GCP accordion expanded, showing the "Configure access to your cloud archive" button -->
+![GCP archive accordion](/assets/img/archive-gcp-expanded-dropdown.png)
 
 Click **Configure access to your cloud archive** to open the configuration dialog.
 
+## Grant access to Vespa Cloud resources
+![GCP configure access](/assets/img/archive-gcp-configure-access.png)
+
 Enter a [principal](https://cloud.google.com/iam/docs/overview) with a supported prefix
-(e.g. `user:email@example.com`, `serviceAccount:...`, `group:...`, or `domain:...`)
-and click **Save**.
-Vespa Cloud will then grant access to that principal on the Cloud Storage buckets.
+and click **Save**.  Vespa Cloud will then grant access to that principal on the Cloud Storage buckets.
+
+Supported principal prefixes:
+* `user:` — Google Account, e.g. `user:email@example.com`
+* `serviceAccount:` — Service account, e.g. `serviceAccount:my-app@project.iam.gserviceaccount.com`
+* `group:` — Google group, e.g. `group:admins@example.com`
+* `domain:` — Google Workspace or Cloud Identity domain, e.g. `domain:example.com`
 
 ## Access files using Gcloud CLI
-<!-- TODO: Add screenshot of the download logs section showing the GCS URI table and gsutil command -->
+![GCP download logs](/assets/img/archive-gcp-access-logs.png)
 
 Once permissions have been granted, the GCP member can access the contents of the archive
 buckets.  Any Cloud Storage client will work, but the `gsutil` command line

@@ -22,23 +22,23 @@ Access is configured through the Vespa Cloud Console in the tenant account scree
 Choose the "archive" tab, then expand the **Azure** section.
 
 ## Register Azure principal
-<!-- TODO: Add screenshot of the Azure accordion expanded, showing the "Configure access to your cloud archive" button -->
+![Azure archive accordion](/assets/img/archive-azure-expanded-dropdown.png)
 
 Click **Configure access to your cloud archive** to open the configuration dialog.
+
+## Configure access
+![Azure configure access](/assets/img/archive-azure-configure-access.png)
 
 In **Step 1**, enter the email address or principal that should have access to the
 blob storage containers (e.g. `email@example.com`) and click **Save**.
 Vespa Cloud will then grant access to that principal on the storage containers.
-
-## Accept the Vespa.ai tenant invitation
-<!-- TODO: Add screenshot of the configure access modal showing Step 1 (principal input) and Step 2 (invitation instructions) -->
 
 In **Step 2**, you will receive an email from Microsoft inviting you to join the Vespa.ai tenant.
 Open that email and follow the instructions to accept the invitation.
 This is required in order to have the necessary permissions to access and download the logs.
 
 ## Access files using AzCopy
-<!-- TODO: Add screenshot of the download logs section showing the container URI table and AzCopy command -->
+![Azure download logs](/assets/img/archive-azure-access-logs.png)
 
 Once permissions have been granted, the Azure principal can access the contents of the archive
 containers.  Any Azure Blob Storage client will work, but

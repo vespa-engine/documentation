@@ -16,6 +16,8 @@ Since the buckets are in your own cloud account, you do not need to register an 
 or configure access through the Vespa Cloud Console — you can access the archive buckets
 directly using your existing cloud credentials.
 
+![Enclave archive view](/assets/img/archive-aws-enclave.png)
+
 There will be one storage bucket per Vespa Cloud Zone that is configured in the enclave.
 The name of the bucket will depend on the cloud provider you are setting up the enclave in.
 
