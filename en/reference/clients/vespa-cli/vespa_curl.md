@@ -12,6 +12,7 @@ Access Vespa directly using curl
 Access Vespa directly using curl.
 
 Execute curl with the appropriate URL, certificate and private key for your application.
+Assumes MTLS authentication.
 
 For a more high-level interface to query and feeding, see the 'query' and 'document' commands.
 
