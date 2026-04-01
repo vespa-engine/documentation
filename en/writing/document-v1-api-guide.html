@@ -179,17 +179,41 @@ $ curl -X PUT -H "Content-Type:application/json" --data '
   <li>Otherwise (i.e. the document does not exist or the newest document version is a tombstone),
       the condition is <em>ignored</em> and the operation is applied as if no condition was provided.</li>
 </ul>
-<p>Support for conditional puts with create was added in Vespa 8.178.</p>
+<p>
+  You can use conditional puts to handle out-of-order writes. Say you have a <code>version</code> field 
+  in your source-of-truth system. You can use it to only write a document if it doesn't exist or if the
+  version is older than the one you're trying to write:
+</p>
 <pre>
 $ curl -X POST -H "Content-Type:application/json" --data '
   {
-      "fields": {
-          "artist": {
-              "assign": "Coldplay"
-          }
-      }
+    "condition": "music.version < 42",
+    "create": true,
+    "fields": {
+      "version": 42,
+      "artist": "Coldplay"
+    }
   }' \
-  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-thoughts?create=true&amp;condition=music.title%3D%3D%27best+of%27
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-thoughts
+</pre>
+<p>
+  Similarly, updates can depend on the version being older. Add <code>create=true</code> to make them upserts.
+</p>
+<pre>
+  $ curl -X PUT -H "Content-Type:application/json" --data '
+  {
+    "condition": "music.version < 43",
+    "create": true,
+    "fields": {
+      "version": {
+        "assign": 43
+      },
+      "artist": {
+        "assign": "Warmplay"
+      }
+    }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-thoughts
 </pre>
 <!-- ToDo: rewrite this / move to elasticity details ...
            What does it mean that a document is "missing"?
