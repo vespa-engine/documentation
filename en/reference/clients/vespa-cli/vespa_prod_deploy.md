@@ -43,6 +43,7 @@ $ vespa prod deploy
   -h, --help                  help for deploy
       --risk int              The risk score of source code being deployed. 0 to ignore (default 0)
       --source-url string     URL which points to the source code being deployed. For example the build job running the submission
+      --wait int              Seconds to wait for the build to complete before returning (0 to return immediately)
 ```
 
 ### Options inherited from parent commands
