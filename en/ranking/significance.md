@@ -22,7 +22,7 @@ We distinguish between *local and global* significance models.
 A local model is node-specific and a global model is shared across nodes.
 
 
-# Local significance model
+## Local significance model
 
 For `string` fields indexed with [bm25](bm25.html) or [nativeRank](nativerank.html),
 Vespa creates a local significance model on each content node from the documents it contains.
@@ -44,7 +44,7 @@ The lack of significance values may degrade the ranking quality.
 
 A global significance model addresses these issues.
 
-# Global significance model
+## Global significance model
 
 In a *global significance model*, significance values are shared across nodes and don’t change when new documents are added. There are two ways to provide a global model:
 
@@ -52,7 +52,7 @@ In a *global significance model*, significance values are shared across nodes an
 2. Set [significance values in a searcher](#significance-values-in-a-searcher).
 3. Specify [models in services.xml](#significance-models-in-servicesxml).
 
-## Significance values in a query
+### Significance values in a query
 
 Document frequency and document count can be specified in YQL, e.g.:
 ```sql
@@ -64,7 +64,7 @@ Alternatively, significance values can be specified in YQL directly and used ins
 select * from example where content contains ({significance:0.9}"neurotransmitter")
 ```
 
-## Significance values in a searcher
+### Significance values in a searcher
 
 Document frequency and significance values can be also set in a [custom searcher](../applications/searchers.html#writing-a-searcher):
 
@@ -81,7 +81,7 @@ private void setSignificance(WordItem item, float significance) {
 ```
 
 
-## Significance models in services.xml
+### Significance models in services.xml
 
 [`significance` element in services.xml](../reference/applications/services/search.html#significance) specifies one or more models:
 
@@ -126,7 +126,7 @@ The model will be applied to all query terms except those that already have sign
 
 Specifying significance models in services.xml is available in Vespa as of version 8.426.8.
 
-### Significance model file
+#### Significance model file
 
 The significance model file is a JSON file that contains term document frequencies and document count for one or more languages, e.g.
 
@@ -165,7 +165,7 @@ Vespa provides a <a href="../reference/operations/self-managed/tools.html#vespa-
 The tool uses the same <a href="../linguistics/linguistics.html">linguistic module</a> as query processing to extract tokens and their document frequencies.
 The CLI can also export local significance models from content nodes to an intermediate file format and merge these intermediate files into a single file, which can then be converted into a global significance model file.
 
-### Model resolution
+#### Model resolution
 
 Model resolution selects a model from the models specified in [services.xml](#significance-models-in-servicesxml) based on the language of the query.
 The language can be either [explicitly tagged](../reference/api/query.html#model.language) or [implicitly detected](../linguistics/linguistics.html#query-language-detection).
