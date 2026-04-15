@@ -498,7 +498,7 @@ $ vespa query \
 </div>
 
 Notice that since the string given to userInput may specify the fields to search, there is no "field contains" part
-that specifies the field on the YQL side. See the  [userInput() documentation](../../reference/querying/yql.html#userInput)
+that specifies the field on the YQL side. See the  [userInput() documentation](../../reference/querying/yql.html#userinput)
 on the various end user query languages supported and other parameters that can be set.
 
 
