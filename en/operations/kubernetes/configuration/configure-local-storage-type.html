@@ -1,0 +1,250 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Configure Local Storage Type
+applies_to: enterprise
+---
+
+<p>
+    We recommend configuring node-local storage for the <a href="https://docs.vespa.ai/en/content/proton.html">content cluster</a> (i.e. the search core) to maximize
+    performance by avoiding network I/O on the data path. In a standard Vespa deployment, this is controlled through
+    the <code>storage-type</code> attribute under the <a href="https://docs.vespa.ai/en/reference/applications/services/services.html#resources">resources</a> tag in the <a href="https://docs.vespa.ai/en/basics/applications.html">application package</a>.
+    However, that attribute has no effect when running Vespa on Kubernetes. Instead, local storage should be configured through the <code>spec.application.storageClass</code> field in the
+    <code>VespaSet</code>. Vespa on Kubernetes abstracts away the concept of storage and will
+    consume whatever is provided by the referenced storage class.
+</p>
+
+<p>
+    For ConfigServer pods, storage performance is less critical; therefore, selecting a more cost-efficient network-attached storage class, such as <code>gp3</code> EBS volumes on Amazon EKS, is generally an appropriate tradeoff.
+</p>
+
+<p>
+    To provision node-local storage, we recommend using Kubernetes <a href="https://kubernetes.io/blog/2019/04/04/kubernetes-1.14-local-persistent-volumes-ga/">Local Persistent Volumes</a>. These volumes expose
+    <code>NodeAffinity</code> constraints to the Kubernetes scheduler, ensuring that Pods consuming them are scheduled
+    onto nodes where the underlying storage is available. This avoids the need to manually manage NodeAffinity rules on per Pod.
+</p>
+
+<p>
+    In addition, the Kubernetes Special Interest Groups (SIGs) provide an external
+    <a href="https://kubernetes.io/blog/2019/04/04/kubernetes-1.14-local-persistent-volumes-ga/">Local Persistent Volume</a>
+    static provisioner. This provisioner automatically discovers local disks mounted on each node and creates corresponding
+    <code>PersistentVolumes</code>, while managing their lifecycle, including cleanup and reuse as Pods are deleted. We recommend using this
+    component in production deployments.
+</p>
+
+<p>
+    This guide walks through setting up local NVMe instance storage on EKS nodes using the <a href="https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner">Kubernetes Local Volume Static Provisioner</a>.
+    This exposes the physical NVMe disks available on instances as a <code>local-nvme</code> StorageClass that Application Pods can claim.
+    While this guide specifically targets an Amazon EKS setup, the concept is similar across different environments - refer to the <a href="https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner/tree/master/helm/examples">project</a> for several other examples.
+</p>
+
+<h2>
+    Setup Local Storage on Amazon EKS
+</h2>
+
+<p>
+    This guide assumes that your EKS cluster has a Node Group configured with an instance type that supports local NVMe instance storage,
+    such as <code>m7gd.xlarge</code>. These instance types typically contain the <code>d</code> suffix to designate themselves as specialized for workloads that require local instance storage.
+    Refer to the <a href="https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html">AWS EKS Node Groups</a> documentation for further information on configuring Node Groups.
+</p>
+
+<p>
+    This guide specifically targets Bottlerocket-based EKS Nodes. These Nodes do not execute the standard EKS bootstrap
+    script responsible for preparing NVMe instance storage.
+    Disk formatting and mounting is therefore handled by an init container, after which the static provisioner scans for
+    available volumes and registers them as <code>PersistentVolumes</code>.
+</p>
+
+<p>
+    Add the Helm repository for the Local Volume Static Provisioner.
+</p>
+
+<pre>
+$ helm repo add sig-storage-local-static-provisioner https://kubernetes-sigs.github.io/sig-storage-local-static-provisioner
+$ helm repo update
+</pre>
+
+<p>
+    Create an EKS NVMe instance storage configuration. The example below will run an <a href="https://kubernetes.io/docs/concepts/workloads/pods/init-containers/">initContainer</a>
+    that will scan for NVMe instance store disks and format them as <code>ext4</code> under <code>/mnt/disks</code>, which the static provisioner will detect.
+</p>
+
+<pre>
+cat <<'EOF' > local-nvme-values.yaml
+# EKS Bottlerocket NVMe instance storage configuration.
+classes:
+  - name: local-nvme
+    hostDir: /mnt/disks
+    mountDir: /mnt/disks
+    volumeMode: Filesystem
+    fsType: ext4
+    accessMode: ReadWriteOnce
+    storageClass:
+      reclaimPolicy: Delete
+      isDefaultClass: false
+
+nodeSelector:
+  eks.amazonaws.com/nodegroup: test-node-group
+
+priorityClassName: system-node-critical
+mountDevVolume: true
+
+initContainers:
+  - name: nvme-disk-setup
+    image: registry.k8s.io/sig-storage/local-volume-provisioner:v2.8.0
+    securityContext:
+      privileged: true
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+
+        DISKS_PATH=/mnt/disks
+
+        disks=$(ls /dev/nvme*n1 2>/dev/null | grep -v '/dev/nvme0n1' || true)
+
+        if [ -z "${disks}" ]; then
+          echo "No NVMe instance-store disks found, nothing to do"
+          exit 0
+        fi
+
+        for disk in ${disks}; do
+          echo "Processing ${disk}..."
+
+          model=$(cat /sys/block/$(basename ${disk})/device/model 2>/dev/null || true)
+          if ! echo "${model}" | grep -q "Amazon EC2 NVMe Instance Storage"; then
+            echo "${disk} is not an instance store disk (model: ${model}), skipping"
+            continue
+          fi
+
+          if grep -q "^${disk} " /proc/mounts; then
+            echo "${disk} is already mounted, skipping"
+            continue
+          fi
+
+          if ! blkid "${disk}" >/dev/null 2>&1; then
+            echo "No filesystem on ${disk}, formatting as ext4..."
+            mkfs.ext4 -F "${disk}"
+          fi
+
+          uuid=$(blkid -s UUID -o value "${disk}")
+          if [ -z "${uuid}" ]; then
+            echo "Could not determine UUID for ${disk}, skipping"
+            continue
+          fi
+
+          mount_point="${DISKS_PATH}/${uuid}"
+          mkdir -p "${mount_point}"
+          echo "Mounting ${disk} (UUID=${uuid}) at ${mount_point}"
+          mount "${disk}" "${mount_point}"
+        done
+
+        echo "Setup complete. Disks mounted under ${DISKS_PATH}:"
+        grep "${DISKS_PATH}" /proc/mounts || echo "  (none found)"
+    volumeMounts:
+      - name: provisioner-dev
+        mountPath: /dev
+      - name: local-nvme
+        mountPath: /mnt/disks
+        mountPropagation: Bidirectional
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+EOF
+
+$ helm install local-volume-provisioner \
+  sig-storage-local-static-provisioner/local-static-provisioner \
+  --namespace kube-system \
+  --values local-nvme-values.yaml
+</pre>
+
+<p>
+    <code>mountPropagation: Bidirectional</code> will ensure that the volume mount is propagated back to the host, and <code>priorityClassName: system-node-critical</code>
+    ensures the provisioner Pod will not be evicted in the case of Node pressure.
+</p>
+
+<p>
+    After installing the static provisioner, a <code>StorageClass</code> type of <code>local-nvme</code> will be created. This
+    should be used in the <code>spec.application.storageClass</code> attribute of the <code>VespaSet</code>.
+</p>
+
+<pre>
+$ kubectl get storageclasses
+NAME         PROVISIONER                    RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+local-nvme   kubernetes.io/no-provisioner   Delete          WaitForFirstConsumer   false                  12h
+</pre>
+
+<p>
+    Ensure that the <code>VolumeBindingMode</code> is <code>WaitForFirstConsumer</code> to delay
+    <code>PersistentVolume</code> binding until a Pod is scheduled, allowing the scheduler to place the Pod on a Node where the
+    storage physically resides.
+</p>
+
+<p>
+    After the <code>initContainer</code> has completed, the static provisioner will provision <code>PersistentVolumes</code>.
+</p>
+
+<pre>
+$ kubectl get persistentvolumes
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+local-pv-201c66f3                          216Gi      RWO            Delete           Available           local-nvme     &lt;unset&gt;                          12h
+local-pv-2942e993                          216Gi      RWO            Delete           Available           local-nvme     &lt;unset&gt;                          12h
+local-pv-2fea7934                          216Gi      RWO            Delete           Available           local-nvme     &lt;unset&gt;                          12h
+local-pv-335a2831                          216Gi      RWO            Delete           Available           local-nvme     &lt;unset&gt;                          12h
+local-pv-3499cebf                          216Gi      RWO            Delete           Available           local-nvme     &lt;unset&gt;                          12h
+local-pv-36dc72b5                          216Gi      RWO            Delete           Available           local-nvme     &lt;unset&gt;                          12h
+local-pv-37928b3d                          216Gi      RWO            Delete           Available           local-nvme     &lt;unset&gt;                          12h
+local-pv-5e09d438                          216Gi      RWO            Delete           Available           local-nvme     &lt;unset&gt;                          12h
+local-pv-6e9849a9                          216Gi      RWO            Delete           Available           local-nvme     &lt;unset&gt;                          12h
+</pre>
+
+<p>
+    Configure the <code>VespaSet</code> to use the newly created <code>StorageClass</code>. For example:
+</p>
+
+<pre>
+# vespaset sample for EKS with local storage configured
+$ cat &gt; vespaset.yaml &lt;&lt;EOF
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: vespaset-sample
+  namespace: ${NAMESPACE}
+spec:
+  version: "${VESPA_VERSION}"
+
+  configServer:
+    image: "${VESPA_OPERATOR_IMAGE}"
+    storageClass: "gp3"
+    generateRbac: false
+
+  application:
+    image: "${VESPA_IMAGE}"
+    storageClass: "local-nvme"
+
+  ingress:
+    endpointType: "LOAD_BALANCER"
+EOF
+
+$ kubectl apply -f vespaset.yaml
+</pre>
+
+<h2>
+    Other Provisioners
+</h2>
+
+<p>
+    Several other local storage provisioners, such as <a href="https://github.com/openebs/dynamic-localpv-provisioner">OpenEBS Dynamic LocalPV Provisioner</a> and <a href="https://github.com/topolvm/topolvm">TopoLVM</a>
+    may be used as alternatives. These provisioners offer dynamic volume provisioning, creating PersistentVolumes on demand rather than pre-provisioning them,
+    which may be preferable in environments where disk availability changes frequently.
+
+    However, some provisioners may require manual configuration of <code>NodeAffinity</code> rules to ensure pods are scheduled on nodes where the storage physically resides.
+    In these cases, refer to the <a href="../custom-overrides-podtemplate.html">PodTemplates</a> section on configuring custom <code>NodeAffinity</code> rules for ConfigServer and Application Pods.
+</p>
+
+
