@@ -576,93 +576,77 @@ you can use the <code>destination</code> property of the
 <a href="https://javadoc.io/static/com.yahoo.vespa/linguistics/8.620.35/com/yahoo/language/process/Embedder.Context.html">Embedder.Context</a>
 when calling the embedder from Java code.</p>
 
-<h4 id="voyageai-best-practices">Best practices</h4>
-<p>For production deployments, we recommend configuring <strong>separate embedder components for feed and search operations</strong>.
-This architectural pattern provides two key benefits - cost optimization and rate limit isolation.
-In Vespa Cloud, it's best practice to configure these embedders in separate container clusters for feed and search.</p>
-
-<pre>{% highlight xml %}
-<container id="feed" version="1.0">
-    <component id="voyage" type="voyage-ai-embedder">
-        <model>voyage-4-large</model>
-        <dimensions>1024</dimensions>
-        <api-key-secret-ref>voyage_feed_api_key</api-key-secret-ref>
-    </component>
-    <document-api/>
-</container>
-
-<container id="search" version="1.0">
-    <component id="voyage" type="voyage-ai-embedder">
-        <model>voyage-4-lite</model>
-        <dimensions>1024</dimensions>
-        <api-key-secret-ref>voyage_search_api_key</api-key-secret-ref>
-    </component>
-    <search/>
-</container>
-{% endhighlight %}</pre>
-
-<h5 id="voyageai-cost-optimization">Cost optimization with model variants</h5>
-<p>The <a href="https://blog.voyageai.com/2026/01/15/voyage-4/">Voyage 4 model family</a> features a shared embedding space
-across different model sizes. This enables a cost-effective strategy where you can use a more powerful (and expensive) model
-for document embeddings, while using a smaller, cheaper model for query embeddings.
-Since document embedding happens once during indexing but query embedding occurs on every search request,
-this approach can significantly reduce operational costs while maintaining quality.</p>
-
+<h4 id="voyageai-local-query-inference">Using voyage-4-nano for local query inference</h4>
 <p>The <a href="model-hub.html#voyage-4-nano">voyage-4-nano</a>
     model is available as an ONNX model for use with the
     <a href="#huggingface-embedder">Hugging Face embedder</a>.
-    Since it shares the same embedding space as the larger Voyage 4 models,
-    it can be used for query embeddings with local inference, trading some accuracy for lower cost
+    Since it shares the same embedding space as the larger
+    <a href="https://blog.voyageai.com/2026/01/15/voyage-4/">Voyage 4</a> models,
+    it can be used for query embeddings with local inference — trading some accuracy for lower cost
     by eliminating API usage for queries entirely.</p>
 
-<h5 id="voyageai-rate-limit-isolation">Rate limit isolation</h5>
-<p>Separating feed and search operations is particularly important for managing VoyageAI API rate limits.
-Bursty document feeding operations can consume significant API quota, potentially causing rate limit errors
-that affect search queries. By using <strong>separate API keys</strong> for feed and search embedders,
-you ensure that feeding bursts don't negatively impact search.</p>
+<h3 id="openai-embedder">OpenAI Embedder</h3>
 
-<h5 id="voyageai-document-processing-concurrency">Thread pool tuning</h5>
-<p>When using the VoyageAI embedder, container feed throughput is primarily limited by VoyageAI API latency
-    combined with the document processing thread pool size, not by CPU. Each document being fed blocks a thread
-    while waiting for the VoyageAI API response. To improve throughput, you likely have to increase the
-    <a href="../reference/applications/services/docproc.html#threadpool">document processing thread pool size</a>,
-    assuming the content cluster is not the bottleneck.</p>
+<p>Available since {% include version.html version="8.678" %}</p>
 
-<p>For example, consider a container cluster with 2 nodes, each with 8 vCPUs. With the default document processing
-    thread pool size of 1 thread per vCPU, you have 16 total threads. If the average VoyageAI API latency is 200ms,
-    the maximum throughput is approximately 16 / 0.2 = 80 documents/second.
-    See <a href="../performance/container-tuning.html">container tuning</a> for more on container tuning.</p>
-
-<p>Note that the effective throughput can never exceed the rate limit of your VoyageAI API key.
-    Use the <a href="https://docs.vespa.ai/en/reference/operations/metrics/container.html">embedder metrics</a>
-    to determine embedder latency and throughput.
-    For additional throughput improvements, consider enabling <a href="#voyageai-dynamic-batching">dynamic batching</a>.</p>
-
-<h5 id="voyageai-dynamic-batching">Dynamic batching</h5>
-<p>Dynamic batching combines multiple concurrent embedding requests into a single VoyageAI API call.
-    This is useful when throughput is constrained by VoyageAI's
-    <a href="https://docs.voyageai.com/docs/rate-limits">RPM (requests per minute) limit</a>
-    rather than the TPM (tokens per minute) limit.
-    Batching reduces RPM usage by combining requests; TPM usage is unaffected.</p>
+<p>An embedder that uses the <a href="https://platform.openai.com/docs/guides/embeddings">OpenAI</a> embeddings API
+to generate embeddings for semantic search. The embedder can target any OpenAI-compatible API.</p>
 
 <pre>{% highlight xml %}
-<container id="feed" version="1.0">
-    <component id="voyage" type="voyage-ai-embedder">
-        <model>voyage-4-large</model>
-        <dimensions>1024</dimensions>
-        <api-key-secret-ref>voyage_feed_api_key</api-key-secret-ref>
-        <batching max-size="16" max-delay="200ms"/>
+<container version="1.0">
+    <component id="openai" type="openai-embedder">
+        <model>text-embedding-3-small</model>
+        <api-key-secret-ref>openai_api_key</api-key-secret-ref>
+        <dimensions>1536</dimensions>
     </component>
-    <document-api/>
 </container>
 {% endhighlight %}</pre>
 
-<p>The <code>max-size</code> attribute sets the maximum number of requests in a single batch,
-    and <code>max-delay</code> sets the maximum time to wait for a full batch before sending a partial one.
-    Batching is disabled by default.</p>
+<ul>
+    <li>
+        The <code>model</code> specifies which OpenAI model to use.
+    </li>
+    <li>
+        The <code>api-key-secret-ref</code> references a secret in Vespa's
+        <a href="/en/cloud/security/secret-store.html">secret store</a> containing your OpenAI API key.
+        For self-hosted OpenAI-compatible endpoints that do not require authentication, this element can be omitted.
+    </li>
+</ul>
 
-<p>The <a href="../reference/applications/services/docproc.html#threadpool">document processing thread pool size</a>
-    should be at least <code>max-size</code>, since each thread contributes one request to the batch.</p>
+<p>See the <a href="../reference/rag/embedding.html#openai-embedder-reference-config">reference</a>
+for all configuration parameters.</p>
+
+<h3 id="mistral-embedder">Mistral Embedder</h3>
+
+<p>Available since {% include version.html version="8.678" %}</p>
+
+<p>An embedder that uses the <a href="https://docs.mistral.ai/capabilities/embeddings/overview/">Mistral</a>
+embeddings API to generate embeddings for semantic search.</p>
+
+<pre>{% highlight xml %}
+<container version="1.0">
+    <component id="mistral" type="mistral-embedder">
+        <model>mistral-embed</model>
+        <api-key-secret-ref>mistral_api_key</api-key-secret-ref>
+        <dimensions>1024</dimensions>
+    </component>
+</container>
+{% endhighlight %}</pre>
+
+<ul>
+    <li>
+        The <code>model</code> specifies which Mistral model to use.
+    </li>
+    <li>
+        The <code>api-key-secret-ref</code> references a secret in Vespa's
+        <a href="/en/cloud/security/secret-store.html">secret store</a> containing your Mistral API key.
+        This is required for authentication.
+    </li>
+</ul>
+
+<p>Mistral supports output quantization on models that offer it, such as <code>codestral-embed</code>.
+    See the <a href="../reference/rag/embedding.html#mistral-embedder-reference-config">reference</a>
+    for all configuration parameters.</p>
 
 <h2 id="embedder-performance">Embedder performance</h2>
 
@@ -675,14 +659,21 @@ you ensure that feeding bursts don't negatively impact search.</p>
   </li>
   <li>
     The number of inputs to the <code>embed</code> call. When encoding arrays, consider how many inputs a single document can have.
-    For CPU inference, increasing <a href="../reference/api/document-v1.html#timeout">feed timeout</a> settings
+    For local CPU inference, increasing <a href="../reference/api/document-v1.html#timeout">feed timeout</a> settings
     might be required when documents have many <code>embed</code>inputs.
   </li>
 </ul>
-<p>Using <a href="../reference/rag/embedding.html#embedder-onnx-reference-config">GPU</a>, especially for longer sequence lengths (documents),
+<p>For local ONNX-based embedders (such as the <a href="#huggingface-embedder">Hugging Face</a>,
+<a href="#bert-embedder">Bert</a>, <a href="#colbert-embedder">ColBERT</a>, and <a href="#splade-embedder">SPLADE</a> embedders),
+using <a href="../reference/rag/embedding.html#embedder-onnx-reference-config">GPU</a>, especially for longer sequence lengths (documents),
 can dramatically improve performance and reduce cost.
 See the blog post on <a href="https://blog.vespa.ai/gpu-accelerated-ml-inference-in-vespa-cloud/">GPU-accelerated ML inference in Vespa Cloud</a>.
 With GPU-accelerated instances, using fp16 models instead of fp32 can increase throughput by as much as 3x compared to fp32.</p>
+<p>For cloud embedders that call an external API
+(<a href="#voyageai-embedder">VoyageAI</a>, <a href="#openai-embedder">OpenAI</a>, <a href="#mistral-embedder">Mistral</a>),
+throughput is bound by API latency and rate limits rather than local hardware.
+See <a href="#thread-pool-tuning">Thread pool tuning for cloud embedders</a> and
+<a href="#dynamic-batching">dynamic batching</a> for tuning guidance.</p>
 <p>
   Refer to <a href="../rag/binarizing-vectors">binarizing vectors</a> for how to reduce vector size.
 </p>
@@ -842,6 +833,99 @@ schema doc {
 </pre>
 <p>See <a href="../writing/indexing.html#execution-value-example">Indexing language execution value</a>for details.</p>
 
+
+<h3 id="separate-feed-and-search-embedders">Separate feed and search embedders</h3>
+
+<p>In Vespa Cloud, it is general practice to configure separate container clusters for feed and search, so that
+bursty feed load cannot affect query latency. When using HTTP-based cloud embedders
+(<a href="#voyageai-embedder">VoyageAI</a>, <a href="#openai-embedder">OpenAI</a>, <a href="#mistral-embedder">Mistral</a>),
+configure a separate embedder component in each cluster. This lets you pick different models and API keys per workload,
+and gives two additional benefits: <strong>cost optimization</strong> (via model variants) and
+<strong>rate limit isolation</strong>.</p>
+
+<pre>{% highlight xml %}
+<container id="feed" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-large</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_feed_api_key</api-key-secret-ref>
+    </component>
+    <document-api/>
+</container>
+
+<container id="search" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-lite</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_search_api_key</api-key-secret-ref>
+    </component>
+    <search/>
+</container>
+{% endhighlight %}</pre>
+
+<h4 id="cost-optimization-with-model-variants">Cost optimization with model variants</h4>
+<p>When a provider offers multiple model sizes that share the same embedding space, you can use a more powerful
+    (and more expensive) model for document embeddings while using a smaller, cheaper model for query embeddings.
+    Since document embedding happens once during indexing but query embedding occurs on every search request,
+    this can significantly reduce operational costs while maintaining retrieval quality.</p>
+
+<p>For example, the <a href="https://blog.voyageai.com/2026/01/15/voyage-4/">Voyage 4 model family</a> shares a
+    vector space across sizes, making it a natural fit for this pattern:
+    use <code>voyage-4-large</code> in the feed cluster and <code>voyage-4-lite</code> in the search cluster as shown above.
+    See also <a href="#voyageai-local-query-inference">Using voyage-4-nano for local query inference</a>
+    for an even more cost-effective query-side option.</p>
+
+<h4 id="rate-limit-isolation">Rate limit isolation</h4>
+<p>Separating feed and search operations is particularly important for managing API rate limits.
+    Bursty document feeding operations can consume significant API quota, potentially causing rate limit errors
+    that affect search queries. By using <strong>separate API keys</strong> for feed and search embedders,
+    you ensure that feeding bursts don't negatively impact search.</p>
+
+<h3 id="thread-pool-tuning">Thread pool tuning for cloud embedders</h3>
+<p>When using an HTTP-based cloud embedder (VoyageAI, OpenAI, Mistral), container feed throughput is primarily
+    limited by embedding API latency combined with the document processing thread pool size, not by CPU.
+    Each document being fed blocks a thread while waiting for the embedding API response. To improve throughput,
+    you likely have to increase the
+    <a href="../reference/applications/services/docproc.html#threadpool">document processing thread pool size</a>,
+    assuming the content cluster is not the bottleneck.</p>
+
+<p>For example, consider a container cluster with 2 nodes, each with 8 vCPUs. With the default document processing
+    thread pool size of 1 thread per vCPU, you have 16 total threads. If the average embedding API latency is 200ms,
+    the maximum throughput is approximately 16 / 0.2 = 80 documents/second.
+    See <a href="../performance/container-tuning.html">container tuning</a> for more on container tuning.</p>
+
+<p>Note that the effective throughput can never exceed the rate limit of your API key.
+    Use the <a href="../reference/operations/metrics/container.html">embedder metrics</a>
+    to determine embedder latency and throughput.
+    For additional throughput improvements, consider enabling <a href="#dynamic-batching">dynamic batching</a>.</p>
+
+<h3 id="dynamic-batching">Dynamic batching</h3>
+<p>Dynamic batching combines multiple concurrent embedding requests into a single embedding invocation.
+    This is useful when throughput is constrained by the provider's
+    requests-per-minute (RPM) limit rather than the tokens-per-minute (TPM) limit.
+    Batching reduces RPM usage by combining requests; TPM usage is unaffected.</p>
+
+<p>Dynamic batching is supported by the <a href="#voyageai-embedder">VoyageAI</a>,
+    <a href="#openai-embedder">OpenAI</a>, and <a href="#mistral-embedder">Mistral</a> embedders.</p>
+
+<pre>{% highlight xml %}
+<container id="feed" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-large</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_feed_api_key</api-key-secret-ref>
+        <batching max-size="16" max-delay="200ms"/>
+    </component>
+    <document-api/>
+</container>
+{% endhighlight %}</pre>
+
+<p>The <code>max-size</code> attribute sets the maximum number of requests in a single batch,
+    and <code>max-delay</code> sets the maximum time to wait for a full batch before sending a partial one.
+    Batching is disabled by default.</p>
+
+<p>The <a href="../reference/applications/services/docproc.html#threadpool">document processing thread pool size</a>
+    should be at least <code>max-size</code>, since each thread contributes one request to the batch.</p>
 
 
 <h2 id="troubleshooting">Troubleshooting</h2>
