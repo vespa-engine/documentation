@@ -311,6 +311,98 @@ and before <code>&lt;prod&gt;</code>.
 
 
 
+<h2 id="resource-tags">resource-tags</h2>
+<p>
+In <code>&lt;deployment&gt;</code>, <strong>or</strong> <code>&lt;instance&gt;</code>.
+Specifies custom tags to apply to cloud resources (virtual machines and attached disks) provisioned
+in the tenant cloud account. Only available for
+<a href="../../operations/enclave/enclave">Vespa Cloud Enclave</a> deployments, where a
+<code>cloud-account</code> is set. Commonly used for cost tracking and resource management.
+</p>
+<p>
+Tags declared at the <code>&lt;deployment&gt;</code> level apply to all instances. Tags at the
+<code>&lt;instance&gt;</code> level are merged with deployment-level tags; on key conflict, the
+instance-level value wins.
+</p>
+<pre>{% highlight xml %}
+<deployment version="1.0" cloud-account="aws:123456789012">
+    <resource-tags>
+        <tag key="cost-center" value="engineering"/>
+        <tag key="env" value="${environment}"/>
+    </resource-tags>
+
+    <instance id="prod">
+        <resource-tags>
+            <tag key="cost-center" value="search-team"/>
+        </resource-tags>
+        <prod>
+            <region>aws-us-east-1c</region>
+        </prod>
+    </instance>
+</deployment>
+{% endhighlight %}</pre>
+<p>
+  The <code>&lt;resource-tags&gt;</code> element contains one or more <code>&lt;tag&gt;</code> children.
+  Each <code>&lt;tag&gt;</code> has two mandatory attributes:
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th style="width:150px">Attribute</th>
+    <th style="width:100px">Mandatory</th>
+    <th>Values</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>key</td>
+    <td>Yes</td>
+    <td>
+      The tag key. Must start with a lowercase letter and contain only the characters
+      <code>[a-z0-9_-]</code>. At most 63 characters. The <code>vai_</code> prefix is reserved
+      for internal use.
+    </td>
+  </tr>
+  <tr>
+    <td>value</td>
+    <td>Yes</td>
+    <td>
+      The tag value. May contain <a href="#resource-tags-template-variables">template variables</a>.
+      After template resolution, must be non-empty and contain only the characters
+      <code>[a-z0-9_-]</code>. At most 63 characters.
+    </td>
+  </tr>
+  </tbody>
+</table>
+<p>
+  Up to 20 tags are allowed per instance (after merging deployment-level and instance-level tags).
+  The key and value constraints apply to AWS tags, Azure tags, and GCP labels; the lowercase and
+  length restrictions are the strictest of the three and apply uniformly.
+</p>
+
+<p id="resource-tags-template-variables"><strong>Template variables.</strong>
+Tag values may reference the following template variables, which are resolved at deployment time:</p>
+<ul>
+  <li><code>${tenant}</code></li>
+  <li><code>${application}</code></li>
+  <li><code>${instance}</code></li>
+  <li><code>${environment}</code></li>
+  <li><code>${region}</code></li>
+</ul>
+<p>
+  Resolved values are lowercased to match the label constraints above. Referencing an unknown
+  variable causes the deployment to fail.
+</p>
+
+<p><strong>Reconciliation.</strong>
+Tags are applied to virtual machines and attached disks. When tags are changed, added, or removed
+in <em>deployment.xml</em>, the existing resources are updated by a background reconciliation
+process. Tags that were previously applied by Vespa Cloud but are no longer listed are removed
+from the resources. Tags added manually by the tenant in the cloud console are preserved.
+</p>
+
+
+
 <h2 id="upgrade">upgrade</h2>
 <p>
 In <code>&lt;deployment&gt;</code>, or <code>&lt;instance&gt;</code>.
