@@ -23,6 +23,14 @@ application to operate properly. If network access is restricted the Vespa
 application might stop working.
 
 
+## Custom resource tags
+
+Custom tags can be applied to the cloud resources (virtual machines and disks) that Vespa Cloud
+provisions inside the tenant's cloud account. Tags are declared in _deployment.xml_ via the
+[`<resource-tags>`](../../reference/applications/deployment.html#resource-tags) element and are
+commonly used for cost tracking and resource management. This is supported on AWS, Azure, and GCP.
+
+
 ## Quota
 Make sure your organization's AWS or GCP quotas are set high enough to support common Vespa Cloud use cases.
 A common use case is migrating to new instance types,
