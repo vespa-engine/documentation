@@ -103,7 +103,7 @@ $ vespa feed if-vectors.jsonl
 </div>
 
 Now is a good time to open the
-[Vespa Cloud Dashboard](https://console.vespa-cloud.com/link/application/autotest/dev/instance/default?default.dev.aws-us-east-1c=metrics)
+<a href="https://console.vespa-cloud.com/link/application/autotest/dev/instance/default?default.dev.aws-us-east-1c=metrics" data-proofer-ignore>Vespa Cloud Dashboard</a>
 to track progress.
 
 Refer to [&lt;resources&gt;](https://github.com/vespa-engine/sample-apps/blob/master/billion-scale-vector-search/app/src/main/application/services.xml)
