@@ -155,7 +155,7 @@ Token authentication must be explicitly enabled when used in combination with
 Tokens are identified by a name, and can contain multiple versions to easily support token rotation. 
 
 To create a new token:
-1. In the [console](https://console.vespa.ai) tenant view, open **Account > Tokens**
+1. In the [console](https://console.vespa.ai) tenant view, open [**Account > Tokens**](https://console.vespa-cloud.com/link/tenant/account/tokens)
 1. Click **Add token**
 1. Enter a name you'll reference in the application later and click **Add**. Remember to copy the token value and store it securely.
 
