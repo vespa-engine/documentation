@@ -778,7 +778,7 @@ It can not be renamed.
 
 ### How to create a company tenant?
 If the tenant is already created, add more users to it.
-Click the "account" button in the Vespa Cloud Console (top right in the tenant view), then "users".
+In the Vespa Cloud Console, open [**Account > Users**](https://console.vespa-cloud.com/link/tenant/account/users).
 From this view you can manage users in the tenant, and their roles -
 from here, you can add/set tenant admins.
 
@@ -787,7 +787,7 @@ When starting the free trial, you are asked to accept Terms of Service.
 For paid plans, this is covered by the contract.
 
 ### How do I switch from free trial to a paid plan?
-Click "account", then "billing" in the console to enter information required for billing.
+In the console, open [**Account > Billing**](https://console.vespa-cloud.com/link/tenant/account/billing) to enter information required for billing.
 Use [Vespa Support](https://vespa.ai/support/) if you need to provide this information without console login.
 
 ### Does Vespa Cloud support Single Sign-On (SSO)?
