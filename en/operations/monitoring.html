@@ -17,6 +17,544 @@ redirect_from:
 
 
 
+<h2 id="vespa-cloud-dashboard">The Vespa Cloud metrics dashboard</h2>
+<p>
+  The Vespa Cloud metrics dashboard (the METRICS tab in the application zone view)
+  is organized around a <em>symptom &rarr; layer &rarr; resource</em> workflow,
+  so an investigation that starts from "latency is up" can land on "this specific
+  layer is the bottleneck" without scanning every chart.
+</p>
+
+
+<h3 id="dashboard-tabs">Tabs and filters</h3>
+<img src="/assets/img/monitoring-dashboard-tabs.png" alt="Dashboard tab bar">
+<p>The dashboard is organized into seven tabs:</p>
+<table class="table">
+  <thead>
+    <tr><th>Tab</th><th>What it shows</th><th>When to use it</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Overview</strong></td>
+        <td>Health indicators, request rates, QoS, latency summary, HTTP status codes, resource utilization</td>
+        <td>Daily health check, first stop during incidents</td></tr>
+    <tr><td><strong>Query</strong></td>
+        <td>Container- and content-node query latency, per-rank-profile breakdown, match/docsum executors</td>
+        <td>Investigating read latency, query quality issues</td></tr>
+    <tr><td><strong>Feed</strong></td>
+        <td>Feed operation rates and latency at each layer, feed blocking</td>
+        <td>Investigating write latency or throughput issues</td></tr>
+    <tr><td><strong>Nearest Neighbor Search</strong></td>
+        <td>NNS distance computations, visit efficiency</td>
+        <td>Tuning HNSW parameters (hidden when not in use)</td></tr>
+    <tr><td><strong>Content Node</strong></td>
+        <td>Document counts, Proton resource usage, executor utilization, maintenance jobs</td>
+        <td>Deep investigation of search engine internals</td></tr>
+    <tr><td><strong>Resources</strong></td>
+        <td>CPU, memory, disk, GPU, JVM, thread pools</td>
+        <td>Sizing and scaling decisions</td></tr>
+    <tr><td><strong>Health</strong></td>
+        <td>Cluster state, data consistency, restarts, reindexing, resource limits</td>
+        <td>Stability monitoring, post-incident review</td></tr>
+  </tbody>
+</table>
+<p>Filters at the top apply across all tabs:</p>
+<ul>
+  <li><strong>Cluster</strong> &mdash; limit metrics to specific clusters</li>
+  <li><strong>Per host metrics</strong> &mdash; toggle between aggregated cluster view and per-node breakdown</li>
+  <li><strong>Rank Profile</strong> &mdash; filter per-rank-profile panels on the Query tab (defaults to "All")</li>
+</ul>
+<p>
+  Query, Feed, Content Node, Resources, and Health tabs group metrics per cluster &mdash;
+  you see all metrics for one cluster before scrolling to the next.
+  Container metrics are grouped per container cluster, content metrics per content cluster.
+</p>
+
+
+<h3 id="dashboard-annotations">Annotations</h3>
+<img src="/assets/img/monitoring-annotations-example.png" alt="Latency chart with Service restart and Core dump annotations">
+<p>
+  Annotations are vertical lines drawn on every chart that mark operational events.
+  When a latency or throughput anomaly lines up with an annotation, you get
+  the context for the change without having to infer it from the graph alone.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Annotation</th><th>Triggered by</th><th>Why it matters</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Feed blocked in cluster</strong></td>
+        <td>A content node crosses its disk/memory feed-block limit</td>
+        <td>Writes are paused cluster-wide until remediated</td></tr>
+    <tr><td><strong>Vespa upgrade</strong></td>
+        <td>A new Vespa version is rolled out</td>
+        <td>Brief rolling-restart latency spikes are expected around this marker</td></tr>
+    <tr><td><strong>Data migration</strong></td>
+        <td>Bucket merges pending exceed a threshold</td>
+        <td>Explains elevated CPU/IO and latency during redistribution</td></tr>
+    <tr><td><strong>Document re-indexing</strong></td>
+        <td>A reindexing job is running</td>
+        <td>Explains elevated CPU and search-side load</td></tr>
+    <tr><td><strong>Auto-scaling</strong></td>
+        <td>The autoscaler changed the cluster shape</td>
+        <td>Brief capacity drop during reshuffle</td></tr>
+    <tr><td><strong>Service restart</strong></td>
+        <td><code>delta(sentinel_totalRestarts[10m]) &gt; 0</code> &mdash; a Vespa service process restarted on one or more nodes</td>
+        <td>Unexpected restarts usually indicate a crash, OOM, or forced stop; outside of planned upgrades these are always worth investigating</td></tr>
+    <tr><td><strong>Core dump</strong></td>
+        <td><code>delta(coredumps_processed[1h]) &gt; 0</code> &mdash; a process core-dumped</td>
+        <td>Signals a crash; cross-reference with Service restart. Should be extremely rare</td></tr>
+  </tbody>
+</table>
+
+
+<h3 id="overview-tab">Overview tab</h3>
+<p>
+  The Overview tab is the fastest place to answer "is anything obviously broken?"
+  and provides everything needed for daily monitoring at a glance.
+</p>
+
+<h4 id="health-indicators">Health Indicators</h4>
+<img src="/assets/img/monitoring-health-indicators.png" alt="Overview tab Health Indicators row">
+<p>
+  The Overview tab opens with a dedicated <strong>Health Indicators</strong> row &mdash;
+  five stat panels designed to surface stability issues in a single glance.
+  A row of green zeros is the signal to stop; a non-zero value tells you which tab to visit next.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Indicator</th><th>What it counts</th><th>Healthy value</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Core Dumps (1h)</strong></td>
+        <td>Core dumps processed across all clusters in the last hour</td>
+        <td>0 &mdash; any non-zero value is a crash to investigate</td></tr>
+    <tr><td><strong>Restarts (1h)</strong></td>
+        <td>Vespa service restarts across all clusters in the last hour</td>
+        <td>0 during steady state; brief spikes are normal during upgrades</td></tr>
+    <tr><td><strong>Feed Blocked</strong></td>
+        <td>Nodes currently above a feed-block resource limit</td>
+        <td>0 &mdash; non-zero means writes are being rejected cluster-wide</td></tr>
+    <tr><td><strong>Content: Groups/Nodes Down</strong></td>
+        <td>Content groups with at least one node down</td>
+        <td>0 during steady state. 1 group down is normal during rolling restarts or maintenance; 2 or more should be investigated</td></tr>
+    <tr><td><strong>Container: Services Down</strong></td>
+        <td>Active container nodes where some service isn't running</td>
+        <td>0 during steady state; brief spikes during deployments are expected</td></tr>
+  </tbody>
+</table>
+
+<h4 id="qos-and-latency">QoS and latency overview</h4>
+<p>
+  <strong>QoS (Quality of Service)</strong> shows the percentage of successful requests.
+  Read and write QoS are shown separately; a healthy application should be above 99.9%.
+  If QoS drops, consult the HTTP Response Code Reference row (collapsed by default)
+  for a table explaining every observed status code and its meaning in Vespa context.
+  4xx responses are client errors; 5xx responses are server errors and should be
+  investigated immediately.
+</p>
+<p>
+  <strong>Latency summary</strong> separates query and feed latency into read and write rows.
+  Compare averages with p99 &mdash; a large gap indicates tail latency that won't show up
+  in averages. As a rule of thumb, if p99 is more than 5&times; the average, investigate the tail.
+</p>
+
+<h4 id="overview-resource-utilization">Resource utilization</h4>
+<p>
+  The bottom row gives a quick view of CPU, memory, and disk across all clusters.
+  Any resource consistently above 80% warrants attention.
+</p>
+
+
+<h3 id="query-tab">Query tab</h3>
+<p>
+  When query latency increases, the Query tab helps find the cause layer-by-layer.
+  Metrics are grouped per container cluster (for container-level metrics) and
+  per content cluster (for content-node metrics).
+</p>
+<p>A query flows through multiple layers, each with its own latency metric:</p>
+<pre>
+Client
+  &rarr; HTTP Read Latency             (end-to-end including network I/O)
+    &rarr; Query Container Latency     (time in the container itself)
+      &rarr; Query Latency             (container-observed total, excluding HTTP overhead)
+        &rarr; Search Protocol Latency (time on each content node)
+          &rarr; Rank Profile Latency  (per rank-profile breakdown)
+</pre>
+
+<h4 id="query-container-level">Container-level metrics</h4>
+<p>Start with the <em>Query Rate &amp; Latency</em> row:</p>
+<ul>
+  <li>Did QPS increase? More queries means more load.</li>
+  <li>Which latency metric increased?
+    <ul>
+      <li><strong>Query Latency</strong> &mdash; container level, includes dispatch to content nodes</li>
+      <li><strong>HTTP Read Latency</strong> &mdash; includes HTTP I/O overhead</li>
+      <li><strong>Search Protocol Latency</strong> &mdash; content node execution only</li>
+    </ul>
+  </li>
+</ul>
+<p>
+  If HTTP latency is much higher than query latency, the bottleneck is network or payload size.
+  If search protocol latency dominates, the bottleneck is on the content nodes.
+</p>
+<p>The <em>Query Quality</em> row shows:</p>
+<ul>
+  <li><strong>Failed queries</strong> &mdash; actual errors. Should be near zero.</li>
+  <li><strong>Degraded queries</strong> &mdash; queries that were
+    <a href="../performance/graceful-degradation.html">soft-doomed</a> (ran out of time during matching).
+    These return partial results.</li>
+  <li><strong>Empty results</strong> &mdash; queries returning zero hits.
+    A sudden increase may indicate an indexing problem or a query change.</li>
+</ul>
+
+<h4 id="rank-profile-metrics">Rank profile metrics</h4>
+<img src="/assets/img/monitoring-rank-profile-rows.png" alt="Query tab rank profile sub-rows">
+<p>
+  The Query tab groups per-rank-profile metrics into four sub-rows, all filterable by
+  the Rank Profile dropdown:
+</p>
+<ul>
+  <li><strong>Rank Profile &mdash; Latency &amp; Volume</strong> &mdash;
+    query latency (avg and max), QPS per profile, and raw docs matched per profile</li>
+  <li><strong>Rank Profile &mdash; Time Breakdown</strong> &mdash;
+    setup time, rerank time, and grouping time, each shown as avg plus peak
+    so you can tell whether a profile has steady-state cost or occasional cost spikes</li>
+  <li><strong>Rank Profile &mdash; Quality</strong> &mdash;
+    docs matched per query, soft-doom factor, and soft-doomed queries.
+    These tell you when a profile is
+    <a href="../performance/graceful-degradation.html">overrunning its time budget</a>.</li>
+  <li><strong>Rank Profile &mdash; Query Distribution</strong> &mdash;
+    QPS split by content group, which helps spot uneven routing</li>
+</ul>
+<p>Things to look for:</p>
+<ul>
+  <li>Which rank profile has the highest latency?</li>
+  <li>Are soft-doomed queries concentrated on a specific rank profile?</li>
+  <li>Is the peak for rerank or grouping time much higher than the average?
+    That often points to a specific second-phase or grouping expression that's expensive
+    only on some queries.</li>
+  <li>Did docs matched per query grow? More documents matched means more ranking work.</li>
+</ul>
+<p>
+  See <a href="#latency-tracking">Latency tracking</a> below for a worked example,
+  and the
+  <a href="../basics/ranking.html#rank-profiles">rank profiles</a> documentation for background.
+</p>
+
+<h4 id="match-docsum-executor">Match and Docsum executor panels</h4>
+<p>
+  The Query tab also includes <em>Match Executor</em> and <em>Docsum Executor</em> sub-rows
+  (queue size + accepted rate) so you can see whether the content-node thread pools
+  feeding the query and summary paths are saturated. These are not attributable to a
+  rank profile, but often explain tail-latency spikes that aren't visible in rank-profile metrics.
+</p>
+
+
+<h3 id="feed-tab">Feed tab</h3>
+<p>When feed latency increases or throughput drops, the Feed tab shows where in the write path
+  the slowdown occurs. A write operation flows through:</p>
+<pre>
+Client
+  &rarr; HTTP Write Latency            (end-to-end)
+    &rarr; Container Feed Latency      (document processing chains, embedders)
+      &rarr; Distributor Latency       (routing based on bucket distribution)
+        &rarr; Content: Storage Latency(persistence, per document replica)
+          &rarr; Commit Latency        (transaction log)
+</pre>
+<p>Start from the top and find where latency increases.
+  If container feed latency is normal but HTTP write latency is high, the bottleneck is network/payload.
+  If distributor latency is high, check for node state issues in the Health tab.
+  If storage latency is high, check disk I/O in the Resources tab.</p>
+
+<h4 id="feed-healthy-values">Typical healthy values</h4>
+<ul>
+  <li>Feed latency: 1&ndash;50&nbsp;ms for puts/updates is typical; spikes during maintenance are normal</li>
+  <li>Distributor failures: zero &mdash; non-zero indicates node state issues</li>
+  <li>HTTP API failures: near zero</li>
+  <li>Feed blocked: always zero</li>
+</ul>
+
+<h4 id="feed-blocked">Feed blocked</h4>
+<p>
+  <strong>Feed Blocked</strong> is the most critical feed metric. When a content node exceeds its
+  disk or memory <a href="../writing/feed-block.html">resource limit</a>, feeding is paused for
+  the entire cluster. HTTP clients receive <code>507 Insufficient Storage</code>.
+</p>
+<p>If feed is being blocked:</p>
+<ol>
+  <li>Check <em>Health &gt; Feed Resource Limits</em> for which resource is near the limit.</li>
+  <li>Check the Resources tab for the specific nodes causing pressure.</li>
+  <li>Add nodes to the content cluster (always add, don't resize &mdash;
+    data <a href="../content/elasticity.html">auto-redistributes</a>).</li>
+</ol>
+<p>
+  The Health tab includes a Resource Limits Reference panel explaining the default limits,
+  the blocking mechanism, and how to remediate.
+</p>
+
+
+<h3 id="nns-tab">Nearest Neighbor Search tab</h3>
+<p>
+  This tab only appears when the application uses
+  <a href="../querying/approximate-nn-hnsw.html">approximate nearest neighbor search</a> &mdash;
+  it is automatically hidden when no NNS distance computations are detected.
+</p>
+<p>Vespa supports two NNS modes:</p>
+<ul>
+  <li><strong>Approximate NNS</strong> &mdash; uses an HNSW graph index to find neighbors efficiently
+    without scanning every document. Fast, but may miss some true nearest neighbors.</li>
+  <li><strong>Exact NNS</strong> &mdash; brute-force scan computing distance to every document.
+    Accurate but expensive. Vespa falls back to this when the filter hit ratio is below the
+    <code>approximate-threshold</code> (default 0.02).</li>
+</ul>
+<p>Key metrics:</p>
+<ul>
+  <li><strong>Exact NNS Ratio</strong> &mdash; fraction of queries using brute-force search.
+    Should be below 0.05 (5%). High values mean many queries fall back to exact search,
+    significantly increasing cost.</li>
+  <li><strong>Approx NNS Visit Efficiency</strong> &mdash; ratio of graph nodes visited to
+    distances computed. Values of 1.0&ndash;3.0 are typical; much higher suggests the HNSW index
+    could be tuned.</li>
+  <li><strong>Distances Computed / Nodes Visited</strong> &mdash; rate metrics showing the raw
+    NNS workload.</li>
+</ul>
+<p>
+  Tuning parameters (set per
+  <a href="../basics/ranking.html#rank-profiles">rank profile</a>):
+  <code>approximate-threshold</code>, <code>filter-first-threshold</code>,
+  <code>target-hits-max-adjustment-factor</code>, <code>exploration-slack</code>.
+  If the exact NNS ratio is high, consider increasing <code>approximate-threshold</code>
+  or restructuring filters to be less restrictive.
+</p>
+
+
+<h3 id="content-node-tab">Content Node tab</h3>
+<p>The Content Node tab shows internals of the
+  <a href="../content/proton.html">Proton</a> search engine running on each content node.
+  All metrics are grouped per content cluster.</p>
+
+<h4 id="content-documents">Documents</h4>
+<ul>
+  <li><strong>Total</strong> &mdash; all documents in the database (including removed)</li>
+  <li><strong>Ready</strong> &mdash; documents available for search</li>
+  <li><strong>Active</strong> &mdash; primary copies that should be searchable on this node</li>
+  <li><strong>Removed</strong> &mdash; tombstones pending garbage collection</li>
+</ul>
+
+<h4 id="proton-resource-usage">Proton resource usage</h4>
+<p>
+  Disk and memory usage from Proton's internal accounting. This is distinct from node-level
+  metrics in the Resources tab &mdash; these are the values Vespa uses for
+  <a href="../writing/feed-block.html">feed-blocking</a> decisions.
+</p>
+
+<h4 id="content-executors">Executor utilization</h4>
+<p>Proton uses several thread pools (executors):</p>
+<ul>
+  <li><strong>Match</strong> &mdash; executes queries. Directly impacts query latency.</li>
+  <li><strong>Shared</strong> &mdash; handles background tasks like flush and compaction.</li>
+  <li><strong>Proton</strong> &mdash; internal coordination tasks.</li>
+  <li><strong>Field writer</strong> &mdash; writes attribute and index data during feeding.
+    Saturation directly impacts feed throughput.</li>
+</ul>
+<p>Typical healthy values:</p>
+<ul>
+  <li>Utilization below 0.8 (80%) &mdash; sustained values above this are a bottleneck</li>
+  <li>Field writer saturation well below 1.0</li>
+  <li>Queue sizes near zero during steady state</li>
+</ul>
+<p>
+  The dashboard renders avg as a solid green line and max as a dashed yellow line,
+  making it easy to spot whether the maximum tracks the average or has concerning spikes.
+</p>
+
+<h4 id="maintenance-jobs">Maintenance jobs</h4>
+<p>
+  Proton runs background
+  <a href="../content/proton.html#proton-maintenance-jobs">maintenance jobs</a>
+  that manage data structures. The dashboard includes a reference panel (collapsed)
+  explaining each job and its resource impact:
+</p>
+<table class="table">
+  <thead><tr><th>Job</th><th>Resource impact</th></tr></thead>
+  <tbody>
+    <tr><td>Attribute Flush</td><td>Low</td></tr>
+    <tr><td>Memory Index Flush</td><td>Moderate</td></tr>
+    <tr><td>Disk Index Fusion</td><td>High &mdash; temporary 2&times; disk usage</td></tr>
+    <tr><td>Document Store Compaction</td><td>High &mdash; holds file in memory</td></tr>
+    <tr><td>Bucket Move</td><td>High &mdash; competes with feeding</td></tr>
+    <tr><td>LID-Space Compaction</td><td>Moderate</td></tr>
+  </tbody>
+</table>
+<p>
+  Latency spikes that correlate with active maintenance are expected but may indicate
+  the cluster needs more headroom.
+</p>
+
+
+<h3 id="resources-tab">Resources tab</h3>
+<p>
+  The Resources tab is the primary tool for sizing decisions. Node-level resources
+  (CPU, memory, disk) are grouped per cluster. Container-specific metrics
+  (JVM, thread pools, GPU, network) are grouped per container cluster.
+</p>
+
+<h4 id="resources-healthy-values">Typical healthy values</h4>
+<table class="table">
+  <thead>
+    <tr><th>Resource</th><th>Healthy</th><th>Concerning</th><th>Action needed</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>CPU</strong></td><td>&lt; 70%</td><td>70&ndash;85%</td><td>&gt; 85% sustained</td></tr>
+    <tr><td><strong>CPU IOWait</strong></td><td>&lt; 5%</td><td>5&ndash;10%</td><td>&gt; 10% (I/O bottleneck)</td></tr>
+    <tr><td><strong>Memory</strong></td><td>&lt; 70%</td><td>70&ndash;80%</td><td>Approaching feed-block limit</td></tr>
+    <tr><td><strong>Disk</strong></td><td>&lt; 70%</td><td>70&ndash;80%</td><td>Approaching feed-block limit</td></tr>
+    <tr><td><strong>JVM GC Overhead</strong></td><td>&lt; 5%</td><td>5&ndash;15%</td><td>&gt; 15% (severe latency impact)</td></tr>
+    <tr><td><strong>Threadpool utilization</strong></td><td>&lt; 70%</td><td>70&ndash;90%</td><td>Rejected tasks = requests dropped</td></tr>
+  </tbody>
+</table>
+<p>
+  Content nodes need extra headroom because
+  <a href="../content/proton.html#proton-maintenance-jobs">maintenance jobs</a>
+  (especially disk index fusion) temporarily increase resource usage.
+</p>
+
+<h4 id="container-thread-pools">Container thread pools</h4>
+<img src="/assets/img/monitoring-container-thread-pools.png" alt="Container thread pools row with per-pool avg/max panels">
+<p>Which thread pools exist on a container depends on which elements are configured
+  in <code>services.xml</code>:</p>
+<table class="table">
+  <thead><tr><th>Thread pool</th><th>Present when</th></tr></thead>
+  <tbody>
+    <tr><td><code>default-handler-common</code></td><td>Always (handler executor used by anything without its own pool)</td></tr>
+    <tr><td><code>search-handler</code></td><td><code>&lt;search&gt;</code> element is present</td></tr>
+    <tr><td><code>feedapi-handler</code></td><td><code>&lt;document-api&gt;</code> element is present</td></tr>
+  </tbody>
+</table>
+<p>
+  To keep the dashboard free of empty panels, the Resources tab contains three
+  threadpool rows &mdash; one per container configuration case &mdash; and each row
+  repeats per container cluster that falls into that case:
+</p>
+<ul>
+  <li><strong>Container Thread Pools (search + document-api)</strong> &mdash; clusters with both pools</li>
+  <li><strong>Container Thread Pools (search only)</strong> &mdash; clusters with <code>&lt;search&gt;</code> but no feed API</li>
+  <li><strong>Container Thread Pools (document-api only)</strong> &mdash; feed-only clusters</li>
+</ul>
+<p>
+  Classification is automatic: hidden variables derive the cluster list per case,
+  so only relevant rows render for a given deployment.
+  Each pool gets three panels &mdash; <strong>Utilization</strong>,
+  <strong>Work Queue Size</strong>, <strong>Work Queue Utilization</strong> &mdash;
+  with avg as a solid green line and max as a dashed yellow line.
+</p>
+<ul>
+  <li><strong>Utilization</strong> &mdash; active threads as percentage of pool size</li>
+  <li><strong>Work queue size</strong> &mdash; tasks waiting for a thread.
+    The default pool uses a synchronous queue (capacity 0), so there is no buffering &mdash;
+    if no thread is available, the task is rejected.</li>
+  <li><strong>Queue utilization</strong> &mdash; percentage of configured queue capacity used
+    (only meaningful for thread pools with bounded queues)</li>
+</ul>
+
+<h4 id="jvm-memory">JVM memory breakdown</h4>
+<img src="/assets/img/monitoring-jvm-memory.png" alt="JVM memory breakdown: heap, direct, native, GC">
+<p>The Resources tab's JVM row separates the three layers of container memory:</p>
+<ul>
+  <li><strong>JVM Heap Usage</strong> &mdash; Java objects (searchers, document processors, caches)</li>
+  <li><strong>JVM Direct Memory</strong> &mdash; NIO buffers, Netty pools</li>
+  <li><strong>JVM Native Memory</strong> &mdash; JNI allocations, including ONNX embedder working
+    memory and &mdash; if configured &mdash; a local LLM's KV cache and compute buffers</li>
+</ul>
+<p>
+  When overall node memory is high but heap and direct look normal, the native layer
+  is usually the answer. This is common on container nodes running embedder or local-LLM
+  components: model weights are memory-mapped and only partially resident, but KV cache
+  and compute buffers are allocated upfront as native memory.
+</p>
+
+
+<h3 id="health-tab">Health tab</h3>
+<p>The Health tab tracks cluster stability and data consistency, grouped per content cluster.</p>
+
+<h4 id="cluster-state">Cluster state</h4>
+<p>
+  Nodes are distributed across states: <strong>up</strong> (serving),
+  <strong>down</strong> (unreachable), <strong>initializing</strong> (starting up),
+  <strong>maintenance</strong> (temporarily out), <strong>retired</strong> (being removed).
+  During normal operation: all up, zero down.
+  See <a href="../content/content-nodes.html">content node states</a>.
+</p>
+
+<h4 id="data-consistency">Data consistency</h4>
+<ul>
+  <li><strong>Buckets Out of Sync</strong> &mdash; percentage of
+    <a href="../content/buckets.html">data buckets</a> not yet replicated/consistent.
+    Should be 0% during steady state; non-zero during scaling, restarts, or failures.</li>
+  <li><strong>Merge Pending</strong> &mdash; bucket merge operations queued.
+    High during data redistribution.</li>
+</ul>
+<p>
+  After scaling events, expect buckets out of sync and pending merges.
+  These should converge back to zero. If they don't, investigate.
+</p>
+
+<h4 id="stability">Stability</h4>
+<ul>
+  <li><strong>Service Restarts</strong> &mdash; cumulative restarts per cluster.
+    An increase indicates a process crash.</li>
+  <li><strong>Core Dumps</strong> &mdash; should always be zero.</li>
+</ul>
+<p>
+  Both signals surface in three complementary ways: as per-cluster time series on this tab
+  (for historical context), as at-a-glance counters in the
+  <a href="#health-indicators">Health Indicators row</a> on the Overview tab,
+  and as <em>Service restart</em>/<em>Core dump</em>
+  <a href="#dashboard-annotations">annotations</a> drawn as vertical lines on every chart.
+</p>
+
+<h4 id="feed-resource-limits">Feed Resource Limits</h4>
+<p>
+  Shows memory and disk utilization vs. configured limits. When utilization exceeds the limit,
+  <a href="../writing/feed-block.html">feeding is blocked</a>.
+  The dashboard includes a Resource Limits Reference panel (collapsed) explaining the
+  default limits (disk 80%, memory 80%), the blocking mechanism, and what to do about it.
+</p>
+
+
+<h3 id="dashboard-workflows">Common workflows</h3>
+
+<h4>"Our query latency increased"</h4>
+<ol>
+  <li>Overview: confirm the latency increase, check if QPS also changed.</li>
+  <li>Query: which percentile increased most? (avg vs p95 vs p99)</li>
+  <li>Query &rarr; Rank Profile: is it one query type or all?</li>
+  <li>Resources: CPU, JVM GC overhead.</li>
+  <li>Content Node: match executor utilization, queue sizes growing?</li>
+</ol>
+
+<h4>"Feed is slow / feed is blocked"</h4>
+<ol>
+  <li>Overview: check feed latency and feed operation rate.</li>
+  <li>Feed: which layer shows increased latency?</li>
+  <li>Health: is feed blocked? Check resource limits.</li>
+  <li>Resources: disk and memory utilization, CPU IOWait.</li>
+  <li>Content Node: field writer saturation, filestor queue, active maintenance jobs.</li>
+</ol>
+
+<h4>"Should we scale up?"</h4>
+<ol>
+  <li>Resources: identify the bottleneck resource.</li>
+  <li>Content Node: check executor utilization (are we compute-bound?).</li>
+  <li>Per host view: is load evenly distributed?</li>
+  <li>Enable <a href="autoscaling.html">autoscaling</a> or adjust resources in
+    <code>services.xml</code>.</li>
+  <li>See the <a href="../performance/benchmarking.html">benchmarking guide</a>
+    for systematic capacity testing.</li>
+</ol>
+
+
+
 <h2 id="latency-tracking">Latency tracking</h2>
 <p>
   When monitoring latency in clusters with mixed loads,
