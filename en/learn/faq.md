@@ -285,6 +285,54 @@ select * from sources * where fieldsetOrField1 contains text(@query) or fieldset
 ```
 More details on [stack overflow](https://stackoverflow.com/questions/72784136/why-vepsa-easily-warning-me-this-may-lead-to-recall-and-ranking-issues).
 
+### Why can common words like "the" hurt recall and collapse significance across a fieldset?
+Symptoms — can appear when a term's DF differs substantially between member fields:
+- Poor recall for queries mixing a common term with a rare one (e.g. `"the cure"`, `"the X"`).
+  [weakAnd](../ranking/wand.html) may drop the common term, so good matches never surface.
+- `term(n).significance` and `fieldMatch(field).significance` read identical across member fields
+  in rank-feature dumps — even in fields where the term is actually rare.
+
+Cause: when a term matches a [fieldset](../reference/schemas/schemas.html#fieldset)
+(including the implicit `default` used by [userQuery()](../reference/querying/yql.html#userquery)),
+Vespa aggregates the document frequency across all member fields.
+
+If the DF differs substantially between members, the high-DF field dominates
+and pulls the term's significance down for the whole fieldset.
+
+**Example:**
+
+With `fieldset default { fields: title, artist }`, `"the"` is common in `title`
+(countless _"The Watcher"_, _"The Best Of the ..."_) but rare in `artist`.
+
+Its aggregated significance is pulled down toward the `title` DF,
+so searching for the artist `"The Cure"` loses the signal from `"the"`.
+
+The same aggregated DF drives every DF/IDF feature: [bm25](../ranking/bm25.html),
+[nativeRank](../ranking/nativerank.html), `term(n).significance`, `fieldMatch.significance`.
+
+Matches that survive retrieval are scored using the aggregated DF rather than per-field statistics.
+
+Fix: rewrite as OR'd [userInput](../reference/querying/yql.html#userinput) clauses
+with a [defaultIndex](../reference/querying/yql.html#defaultindex) annotation per field.
+Each field then uses its own DF:
+
+*Combined-fieldset DF:*
+
+```bash
+vespa query 'select * from sources * where userQuery()' \
+  query='the cure'
+```
+
+*Per-field DF:*
+
+```bash
+vespa query 'select * from sources * where ({defaultIndex:"title"}userInput(@q)) or ({defaultIndex:"artist"}userInput(@q))' \
+  q='the cure'
+```
+
+{% include important.html content="BM25 and significance feature values shift scale when switching to per-field DF.
+Retrain any learned ranker on features collected with the new query formulation."%}
+
 ### How is the query timeout computed?
 Find query timeout details in the [Query API Guide](../querying/query-api.html#timeout)
 and the [Query API Reference](../reference/api/query.html#timeout).
