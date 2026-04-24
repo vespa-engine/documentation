@@ -232,7 +232,7 @@ $ vespa deploy --wait 300 ./app
 It is possible to deploy this app to
 [Vespa Cloud](../basics/deploy-an-application-java.html).
 For Vespa cloud deployments to the [dev env](../operations/zones.html)
-replace the [src/main/application/services.xml](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/qpp/src/main/application/services.xml) with
+replace the [src/main/application/services.xml](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/application/services.xml) with
 [src/main/application/services-cloud.xml](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/application/services-cloud.xml) -
 the cloud deployment uses dedicated clusters for `feed` and `query`.
 
