@@ -98,7 +98,7 @@ see the [pin results example](../ranking/multivalue-query-operators.html#pin-res
 ## Documents
 
 ### What limits apply to document size?
-There is a [maximum document size](../reference/applications/services/content.html#max-document-size) of 128 MiB,
+There is a [maximum document size](../reference/applications/services/container.html#document-api) of 100 MiB,
 which is configurable per content cluster in services.xml.
 
 ### Is there any size limitation for multivalued fields?
