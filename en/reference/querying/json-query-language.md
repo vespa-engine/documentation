@@ -16,7 +16,8 @@ The query has JSON syntax, and can be used with queries that are executed with H
 ```json
 "select" : {
   "where" : {...},
-  "grouping" : {...}
+  "grouping" : {...},
+  "fields" : [...]
 }
 ```
 
@@ -89,6 +90,32 @@ The tree above can be written with the 'where' parameter, like this:
 ```
 which is equivalent with the YQL.
 
+
+
+### Fields
+
+The `fields` parameter restricts which
+[summary fields](../../querying/document-summaries.html#selecting-summary-fields-in-yql)
+are included in each hit. It is a JSON array of field names, and is equivalent
+to the field list in a YQL `select` clause.
+
+YQL: `select id, title from sources * where title contains 'madonna'`.
+
+Equivalent JSON:
+
+```json
+{
+  "select": {
+    "fields": ["id", "title"],
+    "where": {
+      "contains": ["title", "madonna"]
+    }
+  }
+}
+```
+
+If `fields` is omitted or empty, all fields of the chosen
+[document summary class](../../querying/document-summaries.html) are returned.
 
 
 ### Grouping
