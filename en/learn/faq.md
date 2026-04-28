@@ -81,13 +81,39 @@ The additional filters are applied as a post filtering
 step over the hits from the capped range query. *match-phase* on the other hand, is safe to use with filters or other query terms,
 and also supports diversification which the capped range query term does not support.
 
-### What could cause the relevance field to be -Infinity
-The returned [relevance](../reference/querying/default-result-format.html#relevance) for a hit can become "-Infinity" instead
-of a double. This can happen in two cases:
+### What could cause the relevance field to be -Infinity?
+If a ranking profile produces NaNs or Infinities -
+which are impossible to represent as a number in JSON -
+the strings "Infinity" or "-Infinity", (NaN becomes "-Infinity") are returned in result sets,
+and client libraries might handle that by default (e.g., Golang).
 
-- The [ranking](../basics/ranking.html) expression used a feature which became `NaN` (Not a Number). For example, `log(0)` would produce
--Infinity. One can use [isNan](../reference/ranking/ranking-expressions.html#isnan-x) to guard against this.
-- Surfacing low scoring hits using [grouping](../querying/grouping.html), that is, rendering low ranking hits with `each(output(summary()))` that are outside what Vespa computed and caches on a heap. This is controlled by the [total-keep-rank-count](../reference/schemas/schemas.html#total-keep-rank-count) parameter.
+The returned [relevance](../reference/querying/default-result-format.html#relevance)
+for a hit can become "-Infinity" instead of a double:
+
+- The [ranking](../basics/ranking.html) expression used a feature which became `NaN` (Not a Number).
+  For example, `log(0)` would produce `-Infinity`.
+  Use [isNan](../reference/ranking/ranking-expressions.html#isnan-x) to guard against this.
+- Surfacing low scoring hits using [grouping](../querying/grouping.html), that is,
+  rendering low ranking hits with `each(output(summary()))` that are outside what Vespa computed and caches on a heap.
+  This is controlled by the [total-keep-rank-count](../reference/schemas/schemas.html#total-keep-rank-count) parameter.
+- Using unset fields in the ranking function 
+
+Resolve this by one or more of:
+
+- Extend the client code to specifically handle these strings
+- Make sure the field is set to some value for all documents
+- Add a default value for the field when accessing it in your rank profile:
+  `if (isNan(attribute(last_update)), 0, attribute(last_update))`
+- Add a final guard in the ranking expressions coercing to some small number,
+  making non-finite scores sink to the bottom while remaining a valid number:
+    ```
+function finite_or_sentinel(x) {
+      expression: if (isNan(x - x), -1e9, x)
+}
+    ```
+- Use CBOR instead of JSON - using a binary format can represent NaNs and Infinities without issues,
+  and it can also be faster/more efficient
+
 
 ### How to pin query results?
 To hard-code documents to positions in the result set,
