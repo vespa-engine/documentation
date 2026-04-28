@@ -94,6 +94,8 @@ which is equivalent with the YQL.
 
 ### Fields
 
+Available since {% include version.html version="8.680.18" %}.
+
 The `fields` parameter restricts which
 [summary fields](../../querying/document-summaries.html#selecting-summary-fields-in-yql)
 are included in each hit. It is a JSON array of field names, and is equivalent
