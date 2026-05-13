@@ -172,10 +172,24 @@ equivalent JSON `grouping`-argument:
 ]
 ```
 
+### Other query parameters
+
+[Query parameters](../api/query.html) not specific to the Select or YQL syntax will work as well. For example, to search for everything (`"where": true`) in the `music` document type:
+
+```json
+{
+  "select": {
+    "where": true
+  },
+  "model": {
+    "restrict": "judgment"
+  }
+}
+```
 
 ### Complete examples
 
-Query everything (`"where": true`), create one bucket for all documents (`"group": "\"all\""`) and output overall price statistics (`"avg(price)"` and `"sum(price)"`):
+Create one bucket for all documents (`"group": "\"all\""`) and output overall price statistics (`"avg(price)"` and `"sum(price)"`):
 
 ```json
 {
