@@ -156,7 +156,7 @@ schema news {
 </div>
 
 The field `category_ctr_ref` is a field of type `reference` of a `category_ctr` document type.
-When feeding this field, Vespa expects the fully qualified document id.
+When feeding this field, Vespa expects the fully qualified document ID.
 For instance, if our global CTR document has the id `id:category_ctr:category_ctr::global`,
 that is what this field must be set to.
 Usually, there are many parent documents that children can reference,
