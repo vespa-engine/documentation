@@ -106,7 +106,7 @@ def get_indexed_docids(endpoint, namespace, doc_type):
         if documents is not None:
             ids = [ find(document, "id") for document in documents ]
             for id in ids:
-                # The document id might contain chars that needs to be escaped for the delete/put operation to work
+                # The document ID might contain chars that needs to be escaped for the delete/put operation to work
                 # also for comparison with what is in the feed
                 docid = get_document_id(id) # return the last part
                 encoded = urllib.parse.quote(docid) #escape
@@ -149,7 +149,7 @@ def update_endpoint(endpoint, config):
     endpoint_url = endpoint_url[:-1] if endpoint_url.endswith("/") else endpoint_url
     endpoint_indexes = endpoint["indexes"]
 
-    print_header("Retrieving already indexed document ids for endpoint {0}".format(endpoint_url))
+    print_header("Retrieving already indexed document IDs for endpoint {0}".format(endpoint_url))
     docids_in_index = get_indexed_docids(endpoint_url, namespace, doc_type)
     print("{0} documents found.".format(len(docids_in_index)))
 
@@ -160,7 +160,7 @@ def update_endpoint(endpoint, config):
 
     if do_feed:
         docids_in_feed = set()
-        print_header("Parsing feed file(s) for document ids")
+        print_header("Parsing feed file(s) for document IDs")
         for index in endpoint_indexes:
             assert os.path.exists(index)
             docids_in_feed = docids_in_feed.union(get_feed_docids(index, namespace, doc_type))

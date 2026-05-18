@@ -270,7 +270,7 @@ public class ConfigCacheRefresher extends AbstractComponent {
 }
 {% endhighlight %}</pre>
 
-### Is it possible to query Vespa using a list of document ids?
+### Is it possible to query Vespa using a list of document IDs?
 Yes, using the [in query operator](../reference/querying/yql.html#in). Example:
 ```
 select * from data where user_id in (10, 20, 30)

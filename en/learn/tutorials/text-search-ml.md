@@ -183,7 +183,7 @@ $ vespa deploy --wait 300 app
 
 The [MS MARCO](https://microsoft.github.io/msmarco/) dataset described in [the previous tutorial](text-search.html)
 provides us with more than 300 000 training queries,
-each of which is associated with a specific document id that is relevant to the query.
+each of which is associated with a specific document ID that is relevant to the query.
 In this section we want to combine the information contained in the pairs `(query, relevant_id)`
 with the information available in the Vespa ranking features
 to create a dataset that can be used to train ML models to improve the ranking function of our msmarco text app.
@@ -247,7 +247,7 @@ In other words, the dataset we collect is conditional on our match criteria.
 The first Vespa request is contained in the function call `get_relevant_hit(query, rank_profile, relevant_id)`
 where the `query` parameter contains the desired query string,
 `rank_profile` is set to the `collect_rank_features` defined earlier
-and `relevant_id` is the document id that is said to be relevant to that specific query.
+and `relevant_id` is the document ID that is said to be relevant to that specific query.
 
 The body of the request is given by:
 <pre>{% highlight python %}

@@ -9,8 +9,8 @@ Removes a document from Vespa
 
 ### Synopsis
 
-Removes the document specified either as a document id or given in the json file.
-If the document id is specified both as an argument and in the file the argument takes precedence.
+Removes the document specified either as a document ID or given in the json file.
+If the document ID is specified both as an argument and in the file the argument takes precedence.
 
 ```
 vespa document remove id | json-file [flags]
