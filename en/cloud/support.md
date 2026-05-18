@@ -9,7 +9,8 @@ are found at [Vespa Support](https://vespa.ai/support/).
 
 
 ## Create a support case
-Open a support case using [support.vespa.ai](https://support.vespa.ai/).
+Open a support case using the support portal at [support.vespa.ai](https://support.vespa.ai/).
+
 Use this for:
 
 * Production support (reads and writes)
@@ -17,15 +18,13 @@ Use this for:
 * Technical support (general, including user access)
 * Feature requests
 
-The Vespa.ai support portal is JIRA-based.
-Use this portal to track your support cases.
+Use the support portal to track your ongoing cases.
 
 In case of any problems with the support portal itself, mail [support@vespa.ai](mailto:support@vespa.ai).
 
-You must be a [registered user](https://console.vespa-cloud.com/link/tenant/account/users)
-in the Vespa Console to create a support case.
-
-
+You must be a [registered user](https://console.vespa-cloud.com/link/tenant/account/users) in your
+organization's [tenant](https://docs.vespa.ai/en/learn/tenant-apps-instances.html) in the Vespa Console
+to create a support case.
 
 ## Escalate a support case
 Support response times are defined for the different [support levels](https://cloud.vespa.ai/price-calculator).
@@ -40,19 +39,16 @@ Note that non-escalated cases will be handled during regular business hours.
 
 Depending on support level, your organization might have a shared Slack channel with the Vespa Team.
 Such a channel does not have an SLA, and does not replace the need to create a support ticket.
-The Slack channel is used on a best-effort bases, and can be a useful tool in the support-case process.
-
+The Slack channel is used on a best-effort basis and can be a useful tool in the support case process.
 
 
 ## Incident management
-Based on a support case's severity, an incident might be created by the Vespa Team.
+Depending on the severity of a support case, the Vespa Team might create an incident.
 
 A customer can request the incident process to be initiated in a support case.  
 
-
 ### Incident process
-An incident creation triggers the incident process which includes a root cause analysis (RCA),
-as well a future improvements.
+An incident creation triggers the incident process. When the incident is resolved, a root cause analysis (RCA) is performed.
 
 During an incident, the support case is updated with relevant status at regular intervals:
 * The teams can mutually agree to use a shared Slack-channel for status and coordinated work -
@@ -62,7 +58,7 @@ During an incident, the support case is updated with relevant status at regular 
 
 ### Post-mortem
 The incident process includes a post-mortem event.
-Post-mortems are held weekly, on cases that are closed minimum two days before the post-mortem,
+Post-mortems are held weekly, on cases that are closed at least two days before the post-mortem,
 and all relevant information for the post-mortem is made available.
 
 Post-mortems are internal to Vespa.ai.
