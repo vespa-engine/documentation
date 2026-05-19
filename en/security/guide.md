@@ -60,10 +60,93 @@ The certificate is placed inside the application package in
 `clients.pem` is placed correctly if the certificate is created with OpenSSL,
 while the Vespa CLI will handle this automatically.
 
+### Rotating mTLS certificates
+
+This section provides a guide on how to rotate the certificate used for mTLS.
+This is useful if you want to change certificates on a Vespa deployment without downtime.
+
 `security/clients.pem` files can contain multiple PEM encoded certificates by
 concatenating them. This allows you to have multiple clients with separate
 private keys, making it possible to rotate to a new certificate without any
 downtime.
+
+#### Rotate mTLS with Vespa CLI
+
+**Step 1: Generate a new certificate and private key**
+
+```bash
+$ vespa auth cert --append --application scoober.albums.default
+```
+
+**Step 2: Deploy the updated application package**
+
+Both old and new certificates are now accepted, so existing clients continue to work without interruption.
+Deploy the application.
+
+**Step 3: Migrate clients to the new certificate**
+
+Test that everything works with the new key and update all clients to use the new private key.
+
+**Step 4: Remove old certificates**
+
+Once all clients use the new key, remove the old certificates:
+
+```bash
+$ vespa auth cert --prune --application scoober.albums.default
+```
+
+Deploy again to complete the rotation. Any clients still using the old certificate will lose access once the old certificate is removed and deployed.
+
+#### Rotate mTLS with OpenSSL
+
+**Step 1: Generate a new certificate and private key**
+
+```bash
+$ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout new-key.pem -out new-cert.pem
+```
+
+**Step 2: Add the new certificate to `security/clients.pem`**
+
+Concatenate the existing and new certificates into a single `clients.pem`.
+Both certificates will be trusted simultaneously:
+
+```bash
+$ cat new-cert.pem security/clients.pem > security/clients-combined.pem
+$ mv security/clients-combined.pem security/clients.pem
+```
+
+The resulting `clients.pem` will look like:
+
+```
+-----BEGIN CERTIFICATE-----
+<new certificate data>
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+<existing certificate data>
+-----END CERTIFICATE-----
+```
+
+**Step 3: Deploy the updated application package**
+
+Deploy the application with the combined `clients.pem`. Both old and new
+certificates are now accepted, so existing clients continue to work without
+interruption or downtime.
+
+**Step 4: Migrate clients to the new certificate**
+
+Update all clients to use the new private key. Once all clients use the new
+certificate, the old certificate can be removed.
+
+**Step 5: Remove the old certificate**
+
+Remove the old certificate from `security/clients.pem`, leaving only the new one:
+
+```
+$ cp new-cert.pem security/clients.pem
+```
+
+Deploy again to complete the rotation. The old certificate is no longer trusted.
+
 
 
 ### Permissions
