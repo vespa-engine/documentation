@@ -10,7 +10,7 @@ Modifies some fields of an existing document
 ### Synopsis
 
 Updates the values of the fields given in a json file as specified in the file.
-If the document ID is specified both as an argument and in the file the argument takes precedence.
+If the document id is specified both as an argument and in the file the argument takes precedence.
 
 ```
 vespa document update [id] json-file [flags]
