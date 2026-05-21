@@ -38,5 +38,23 @@ We also provide [llms-full.txt](../../llms-full.txt) which contains the _full_ c
 This file is relatively large (almost 0.5M words as of Oct 2025), so use accordingly.
 
 ## MCP Server
+### Public Vespa MCP server
+We don't provide any official [MCP](https://modelcontextprotocol.io/) server at this time, but will update this page as soon as we do.
 
-We don't provide any official MCP server at this time, but will update this page as soon as we do.
+### Personal MCP server
+Users can enable MCP server capablities in their own Vespa apps.
+This can be done by adding `McpRequestHandler` to `services.xml` with one or more `McpSpecProvider` components. 
+
+A pre-built `McpSearchSpecProvider` already exists, and a usage example can be found in [this sample app](https://github.com/vespa-engine/sample-apps/tree/master/examples/mcp-server-app).
+This exposes Vespa search to LLMs via the `/mcp/` endpoint.
+
+Users can add more tools by implementing `McpSpecProvider` and adding the components in `services.xml`.
+
+#### Example MCP config
+Add this to `services.xml`
+```xml
+<component id="com.yahoo.search.mcp.McpSearchSpecProvider" bundle="container-search-and-docproc"/>
+<handler id="ai.vespa.mcp.McpRequestHandler" bundle="container-disc">
+    <binding>http://*/mcp/*</binding>
+</handler>
+```
