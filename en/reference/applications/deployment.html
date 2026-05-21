@@ -365,33 +365,82 @@ instance-level value wins.
     <td>key</td>
     <td>Yes</td>
     <td>
-      The tag key. Must start with a lowercase letter and contain only the characters
-      <code>[a-z0-9_-]</code>. At most 63 characters. The <code>vai_</code> prefix is reserved
-      for internal use.
+      The tag key. Must be non-empty. Allowed characters and maximum length depend on the
+      target cloud; see <a href="#resource-tags-per-cloud-rules">per-cloud rules</a> below.
+      The <code>vai_</code> prefix is reserved for internal use.
     </td>
   </tr>
   <tr>
     <td>value</td>
     <td>Yes</td>
     <td>
-      The tag value. May contain <a href="#resource-tags-template-variables">template variables</a>.
-      After template resolution, must be non-empty and contain only the characters
-      <code>[A-Za-z0-9_-]</code>. At most 63 characters.
-      Uppercase letters are <strong>not</strong> allowed when the deployment targets a GCP zone,
-      since GCP labels are lowercase-only.
+      The tag value. Must be non-empty. May contain
+      <a href="#resource-tags-template-variables">template variables</a>.
+      Allowed characters and maximum length depend on the target cloud;
+      see <a href="#resource-tags-per-cloud-rules">per-cloud rules</a> below.
     </td>
   </tr>
   </tbody>
 </table>
 <p>
-  Up to 20 tags are allowed per instance (after merging deployment-level and instance-level tags).
-  Keys must be lowercase to satisfy the strictest cloud (GCP). Values may use uppercase on AWS and
-  Azure, but must remain lowercase on GCP.
+  The maximum number of tags per instance (after merging deployment-level and instance-level tags)
+  depends on the cloud; see <a href="#resource-tags-per-cloud-rules">per-cloud rules</a> below.
 </p>
+
+<p id="resource-tags-per-cloud-rules"><strong>Per-cloud rules.</strong>
+  Allowed characters and length limits vary by cloud provider.
+  A single deployment can span multiple clouds, so tags are validated against the rules of each
+  target cloud at deploy time. If a tag is valid for AWS but not for GCP, the deployment will
+  succeed in AWS regions but fail in GCP regions.
+</p>
+<table class="table">
+  <thead>
+  <tr>
+    <th>Constraint</th>
+    <th>AWS</th>
+    <th>Azure</th>
+    <th>GCP</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>Key characters</td>
+    <td><code>[a-zA-Z0-9 +-=._:/@]</code></td>
+    <td>Unicode, except <code>&lt; &gt; % &amp; \ ? /</code></td>
+    <td><code>[a-z][a-z0-9_-]*</code> (must start with lowercase letter)</td>
+  </tr>
+  <tr>
+    <td>Value characters</td>
+    <td><code>[a-zA-Z0-9 +-=._:/@]</code></td>
+    <td>No restrictions</td>
+    <td><code>[a-z0-9_-]*</code></td>
+  </tr>
+  <tr>
+    <td>Key max length</td>
+    <td>128</td>
+    <td>512</td>
+    <td>63</td>
+  </tr>
+  <tr>
+    <td>Value max length</td>
+    <td>256</td>
+    <td>256</td>
+    <td>63</td>
+  </tr>
+  <tr>
+    <td>Max tags</td>
+    <td>50</td>
+    <td>50</td>
+    <td>64</td>
+  </tr>
+  </tbody>
+</table>
 
 <p id="resource-tags-template-variables"><strong>Template variables.</strong>
 Tag values may reference the following template variables.
-Resolved values are lowercased to match the label constraints above.
+Resolved values are always lowercased regardless of cloud.
+Template-variable placeholders are excluded when checking per-cloud character rules,
+so only the literal parts of the value are validated.
 Referencing an unknown variable causes the deployment to fail.
 Variables can be combined, e.g. <code>value="${environment}-${clustertype}"</code>.</p>
 <table class="table">
