@@ -36,11 +36,6 @@ applies_to: enterprise
         <td>Provision the cloud-native (AWS, GCP, Azure) load-balancer.</td>
     </tr>
     <tr>
-        <td><code>NODE_PORT</code></td>
-        <td><code>NodePort</code></td>
-        <td>Expose a static port across every worker node, allowing external traffic to access the cluster from any node's IP.</td>
-    </tr>
-    <tr>
         <td><code>CLUSTER_IP</code></td>
         <td><code>ClusterIP</code></td>
         <td>Each Container Pod will expose an internal IP address. Should not be used for production use-cases.</td>
@@ -73,88 +68,6 @@ ingress:
     On AWS, the ConfigServer automatically applies the annotation <code>service.beta.kubernetes.io/aws-load-balancer-internal: "true"</code> to all Container pods.
     This provisions an <strong>internal</strong> Network Load Balancer (NLB) accessible only within the VPC where the EKS cluster nodes reside.
 </p>
-
-<h2>NODE_PORT</h2>
-
-<p>
-    The <code>NODE_PORT</code> type exposes the Vespa container cluster on a specific port (range 30000-32767) across all Kubernetes worker nodes.
-</p>
-
-<p>
-    <strong>Configuration:</strong>
-</p>
-<pre>
-ingress:
-  endpointType: NODE_PORT
-</pre>
-
-<p>
-    When this option is set, Kubernetes opens a static port on every worker node. External traffic can reach the application via <code>&lt;NodeIP&gt;:&lt;NodePort&gt;</code>.
-    Note that unlike <code>LOAD_BALANCER</code>, this does not provide health checks at the entry point level. If a worker node with a connection crashes, the connection will simply
-    time out or fail. This additionally requires all worker nodes to expose an External IP.
-</p>
-
-<p>
-    To use the <code>NODE_PORT</code> service, find the assigned port.
-</p>
-
-<pre>
-$ kubectl get service lb-default -n $NAMESPACE
-
-NAME         TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
-lb-default   NodePort   10.100.150.25   &lt;none&gt;        <b>80:31942/TCP</b>     5m
-</pre>
-
-<p>
-    Get the list of nodes and look for their External IP addresses.
-</p>
-
-<pre>
-$ kubectl get nodes -o wide
-
-NAME                                       STATUS   ROLES    AGE   VERSION               INTERNAL-IP    EXTERNAL-IP      OS-IMAGE         KERNEL-VERSION
-ip-192-168-3-50.us-east-2.compute.internal Ready    &lt;none&gt;   10d   v1.27.3-eks-a5565ad   192.168.3.50   <b>18.221.100.45</b>    Amazon Linux 2   5.10.184-175.731.amzn2.x86_64
-ip-192-168-3-51.us-east-2.compute.internal Ready    &lt;none&gt;   10d   v1.27.3-eks-a5565ad   192.168.3.51   <b>3.142.200.10</b>     Amazon Linux 2   5.10.184-175.731.amzn2.x86_64
-</pre>
-
-<p>
-    Choose any External IP and combine the IP and port to access the service.
-</p>
-
-<pre>
-$ curl http://18.221.100.45:31942/state/v1/health
-
-{
-  "time" : 1769981985754,
-  "status" : {
-    "code" : "up"
-  },
-  "metrics" : {
-    "snapshot" : {
-      "from" : 1.769981924895E9,
-      "to" : 1.769981984895E9
-    },
-    "values" : [ {
-      "name" : "requestsPerSecond",
-      "values" : {
-        "count" : 19,
-        "rate" : 0.31666666666666665
-      }
-    }, {
-      "name" : "latencySeconds",
-      "values" : {
-        "average" : 0.009578947368421053,
-        "sum" : 0.182,
-        "count" : 19,
-        "last" : 0.003,
-        "max" : 0.057,
-        "min" : 0.0,
-        "rate" : 0.31666666666666665
-      }
-    } ]
-  }
-}
-</pre>
 
 <h2>CLUSTER_IP</h2>
 
