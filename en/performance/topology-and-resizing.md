@@ -18,9 +18,6 @@ E.g., query latency can dictate the maximum number of documents per node and hen
 if query latency is at the maximum tolerated for 1M documents,
 6 nodes are needed in a group for a 6M index.
 
-{% include note.html content="Vespa Cloud supports a one-level grouped topology -
-a group of groups is hence not supported."%}
-
 Content nodes are stateful, holding replicas of the documents to be queried.
 Content nodes can be deployed in different topologies - example using 6 nodes:
 
