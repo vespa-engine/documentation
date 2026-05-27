@@ -10,9 +10,9 @@ redirect_from:
 Setting up Vespa Cloud Enclave requires:
 
 1. Registration at [Vespa Cloud](https://console.vespa-cloud.com), or use a pre-existing tenant.
-2. Registration of the AWS account ID in Vespa Cloud
-3. Running a [Terraform](https://www.terraform.io/) configuration to provision AWS resources in the account.
+2. Running a [Terraform](https://www.terraform.io/) configuration to provision AWS resources in the account.
    Go through the [AWS tutorial](https://developer.hashicorp.com/terraform/tutorials/aws-get-started) as needed.
+3. Registration of the AWS account ID in Vespa Cloud.
 4. Deployment of a Vespa application.
 
 ### 1. Vespa Cloud Tenant setup
@@ -20,20 +20,14 @@ Setting up Vespa Cloud Enclave requires:
 Register at [Vespa Cloud](https://console.vespa-cloud.com) or use an existing tenant.
 Note that the tenant must be on a [paid plan](https://vespa.ai/pricing/).
 
-### 2. Onboarding
-
-Contact [support@vespa.ai](mailto:support@vespa.ai) stating which tenant should be on-boarded to use Vespa Cloud Enclave.
-Also include the [AWS account ID](https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-identifiers.html#FindAccountId)
-to associate with the tenant.
+### 2. Configure AWS Account
 
 {% include note.html content='We recommend using a _dedicated_ account for your Vespa Cloud Enclave.
 Vespa Cloud will manage resources in the Enclave VPCs created in the AWS resource provisioning step. Primarily EC2 instances, load balancers and service endpoints.' %}
 
 One account can host all your Vespa applications, there is no need for multiple tenants or accounts.
 
-### 3. Configure AWS Account
-
-The same AWS account used in step two must be prepared for deploying Vespa applications using either *Terraform* or *Cloudformation*.
+The AWS account you intend to use for Vespa Cloud Enclave must be prepared for deploying Vespa applications using either *Terraform* or *Cloudformation*.
 
 #### Terraform
 Use [Terraform](https://www.terraform.io/) to set up the necessary resources using the
@@ -58,11 +52,19 @@ features you must re-apply your terraform templates with the latest release.
 The [notification system](../notifications)
 will let you know when a new release is available.
 
+### 3. Onboarding
+
+Once the AWS account is configured, contact [support@vespa.ai](mailto:support@vespa.ai) stating which tenant should be on-boarded to use Vespa Cloud Enclave.
+Also include the [AWS account ID](https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-identifiers.html#FindAccountId)
+to associate with the tenant.
+
+{% include note.html content='Wait for confirmation from the Vespa team that onboarding is complete before deploying an application in the next step.' %}
+
 ### 4. Deploy a Vespa application
 
 By default, all applications are deployed on resources in Vespa Cloud accounts.
 To deploy in your enclave account,
-update [deployment.xml](../../reference/applications/deployment.html) to reference the account used in step two:
+update [deployment.xml](../../reference/applications/deployment.html) to reference the AWS account you onboarded:
 
 ```xml
 <deployment version="1.0" cloud-account="aws:123456789012">
