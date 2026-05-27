@@ -10,8 +10,8 @@ redirect_from:
 Setting up Vespa Cloud Enclave requires:
 
 1. Registration at [Vespa Cloud](https://console.vespa-cloud.com), or use a pre-existing tenant.
-2. Registration of the GCP project in Vespa Cloud.
-3. Running a [Terraform](https://www.terraform.io/) configuration to provision necessary GCP resources in the project.
+2. Running a [Terraform](https://www.terraform.io/) configuration to provision necessary GCP resources in the project.
+3. Registration of the GCP project in Vespa Cloud.
 4. Deployment of a Vespa application.
 
 
@@ -21,21 +21,14 @@ Register at [Vespa Cloud](https://console.vespa-cloud.com) or use an existing te
 Note that the tenant must be on a [paid plan](https://vespa.ai/pricing/).
 
 
-### 2. Onboarding
-
-Contact [support@vespa.ai](mailto:support@vespa.ai) stating which tenant should be on-boarded to use Vespa Cloud Enclave.
-Also include the [GCP Project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects#identifying_projects)
-to associate with the tenant.
+### 2. Configure GCP Project
 
 {% include note.html content='We recommend using a _dedicated_ project for your Vespa Cloud Enclave.
 Resources in this project will be fully managed by Vespa Cloud.' %}
 
 One project can host all your Vespa applications, there is no need for multiple tenants or projects.
 
-
-### 3. Configure GCP Project
-
-The same project used in step two must be prepared for deploying Vespa applications.
+The project you intend to use for Vespa Cloud Enclave must be prepared for deploying Vespa applications.
 Use [Terraform](https://www.terraform.io/) to set up the necessary resources using the
 [modules](https://registry.terraform.io/modules/vespa-cloud/enclave/google/latest)
 published by the Vespa team.
@@ -60,11 +53,20 @@ The [notification system](../notifications.html)
 will let you know when a new release is available.
 
 
+### 3. Onboarding
+
+Once the GCP project is configured, contact [support@vespa.ai](mailto:support@vespa.ai) stating which tenant should be on-boarded to use Vespa Cloud Enclave.
+Also include the [GCP Project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects#identifying_projects)
+to associate with the tenant.
+
+{% include note.html content='Wait for confirmation from the Vespa team that onboarding is complete before deploying an application in the next step.' %}
+
+
 ### 4. Deploy a Vespa application
 
 By default, all applications are deployed on resources in Vespa Cloud accounts.
 To deploy in your enclave account,
-update [deployment.xml](../../reference/applications/deployment.html) to reference the account used in step 1:
+update [deployment.xml](../../reference/applications/deployment.html) to reference the GCP project you onboarded:
 
 ```xml
 <deployment version="1.0" cloud-account="gcp:a-project-id">
