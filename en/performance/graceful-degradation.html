@@ -40,6 +40,12 @@ redirect_from:
     Soft timeout might also be considered as an <em>early termination</em> technique, and is enabled by default.
     Refer to <a href="../reference/api/query.html#ranking.softtimeout.enable">ranking.softtimeout.enable</a>.
   </li>
+  <li>
+    <strong>ANN Timeout</strong>: The ANN timeout allows approximate nearest neighbor searches
+    to terminate early in order to leave enough time for the actual matching process.
+    See <a href="#early-termination-of-approximate-nearest-neighbor-search">Early termination of approximate nearest neighbor search</a>
+    for more details.
+  </li>
 </ul>
 
 
@@ -47,8 +53,7 @@ redirect_from:
 <h2 id="detection">Detection</h2>
 <p>
 The default JSON renderer template will always render a <em>coverage</em> element below the root element,
-which has a <em>degraded</em> element if the query execution was degraded in some way
-and the <em>coverage</em> field will be less than 100.
+which has a <em>degraded</em> element if the query execution was degraded in some way.
 Example request with a query timeout of 200 ms and <em>ranking.softtimeout.enable=true</em>:
 </p>
 <pre>
@@ -63,7 +68,8 @@ Example request with a query timeout of 200 ms and <em>ranking.softtimeout.enabl
                 "adaptive-timeout": false,
                 "match-phase": false,
                 "non-ideal-state": false,
-                "timeout": true
+                "timeout": true,
+                "anntimeout": false
             },
             "documents": 167006201,
             "full": false,
@@ -94,12 +100,14 @@ The <em>degraded</em> field contains the following fields which explains why the
     </li>
   <li><em>non-ideal-state</em> is true in cases where the system is not in
     <a href="../content/idealstate.html">ideal state</a>. This case is extremely rare.</li>
-  <li><em>timeout</em> is true if softtimeout was enabled, and not all documents could be matched and ranked
+  <li><em>timeout</em> is true if the soft timeout was enabled, and not all documents could be matched and ranked
       within the query timeout.</li>
+  <li><em>anntimeout</em> is true if the ANN timeout was enabled and an ANN search terminated early
+      due to reaching the timeout, cf. <a href="#early-termination-of-approximate-nearest-neighbor-search">Early termination of approximate nearest neighbor search</a></li>
 </ul>
 <p>
 Note that the degraded reasons are not mutually exclusive.
-In the example, the softtimeout was triggered
+In the example, the soft timeout was triggered
 and only 99% of the documents where queried before the time budget ran out.
 
 One could imagine scenarios where 10 out of 11 nodes involved in the query execution were healthy
@@ -167,6 +175,70 @@ get the coverage information programmatically:
 
 
 
+<h2 id="early-termination-of-approximate-nearest-neighbor-search">Early termination of approximate nearest neighbor search</h2>
+<p>
+  <a href="../querying/approximate-nn-hnsw.html">Approximate nearest neighbor search</a>
+  in Vespa using <a href="../reference/schemas/schemas.html#index-hnsw">HNSW</a>
+  happens before the actual matching process.
+  This means that a soft timeout
+  during an ANN search leaves no time for the actual matching process
+  and results in no hits being returned at all.
+  However, the way HNSW works makes it possible to terminate the search early:
+  It maintains a queue of the best results found so far,
+  which it returns once it stops finding better results.
+  Instead of waiting for the algorithm to terminate,
+  the search can also be terminated early by returning the queue
+  in its current state.
+</p>
+<p>
+  Early termination of HNSW in Vespa can be triggered by
+  an explicitly specified time budget or by the ANN timeout.
+  These two concepts work independently, and the former is intended to be used for tweaking purposes,
+  while the latter is intended as a rescue mechanism in case a query is in danger of timing out.
+  <ul>
+    <li>
+      An ANN time budget can be configured with the
+      <a href="../reference/api/query.html#ranking.matching.anntimebudget">ranking.matching.anntimebudget</a>
+      parameter.
+      It is intended to be used for performance tweaking: For example, instead of fine-tuning
+      ANN parameters like
+      <a href="../reference/querying/yql.html#targethits">targetHits</a>
+      or
+      <a href="../reference/api/query.html#ranking.matching.filterFirstExploration">ranking.matching.filterFirstExploration</a>
+      to obtain the optimal balance of latency and recall,
+      you increase these parameters and then specify an ANN time budget
+      to limit the time of ANN searches to the time budget you have in mind.
+      This way, you ideally would get the best recall possible within your specified time budget.
+    </li>
+    <li>
+      The ANN timeout can be configured with the
+      <a href="../reference/api/query.html#ranking.matching.anntimeout.enable">ranking.matching.anntimeout.enable</a>
+      and
+      <a href="../reference/api/query.html#ranking.matching.anntimeout.factor">ranking.matching.anntimeout.factor</a>
+      parameters.
+      Enabling the ANN timeout makes ANN searches terminate early if they
+      reach a configured point in time before the soft timeout.
+      This avoids the situation described above, where a soft timeout during an ANN search
+      results in no hits at all being returned:
+      it makes it possible to still have enough time left for the actual matching process,
+      possibly even without hitting the soft timeout there.
+      To this end, the factor might need tweaking for the specific use case:
+      A large factor is well suited for
+      <a href="../querying/nearest-neighbor-search-guide#combining-approximate-nearest-neighbor-search-with-query-filters">approximate nearest neighbor search with filtering</a>,
+      where only the hits found by ANN have to be considered in matching, which usually
+      only takes very little time.
+      For
+      <a href="../learn/tutorials/hybrid-search.html">hybrid search</a>,
+      a lower value might be required to leave enough time
+      for the text search.
+    </li>
+  </ul>
+  Note that only early termination by hitting the ANN timeout is considered a failure and, thus,
+  reported via the
+  <a href="../reference/querying/default-result-format.html#anntimeout">anntimeout</a>
+  element in the query response.
+</p>
+
 <h2 id="match-phase-degradation">Match phase degradation</h2>
 <p>
   Refer to the <a href="../reference/schemas/schemas.html#match-phase">match-phase reference</a>.
@@ -198,7 +270,7 @@ and total-hit-count since it actually limits, so the query gets fewer hits.
 Also note that it doesn't really make sense to use this
 feature together with a <a href="../ranking/wand.html">WAND operator</a> that also limit hits,
 since they both operate in the same manner,
-and you would get interference between them that could cause unpredictable results.
+
 The graph shows possible hits versus actual hits in a corpus with 100 000 documents,
 where <code>total-max-hits</code> is configured to 10 000 per node.
 The corpus is a synthetic (slightly randomized) data set,
