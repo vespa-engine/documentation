@@ -111,9 +111,12 @@ with **zero manual interventions**.
 This keeps the total cost in check, and performance tracking advances in hardware.  
 
 Find a list of supported instance types at
-[AWS](https://cloud.vespa.ai/en/reference/aws-flavors.html),
-[GCP](https://cloud.vespa.ai/en/reference/gcp-flavors.html), and
-[Azure](https://cloud.vespa.ai/en/reference/azure-flavors.html) instance types.
+[AWS](instance-types/aws-instance-types.html),
+[GCP](instance-types/gcp-instance-types.html), and
+[Azure](instance-types/azure-instance-types.html) instance types.
+
+
+### Instance type equivalence
 
 
 
