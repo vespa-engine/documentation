@@ -117,6 +117,26 @@ Find a list of supported instance types at
 
 
 ### Instance type equivalence
+Instance types come with variations -
+example from the [GCP Instance Type Reference](instance-types/gcp-instance-types.html):
+
+    arm64	32.0	256
+    x86_64	32.0	252
+    x86_64	32.0	256
+
+Observe variations in both architecture and memory capacity.
+CPU architectures have different load profiles,
+but not setting the architecture increases likelihood of successfully provisioning the node during shortages.
+
+Also, a 256G RAM node has more memory than a 252G RAM node.
+The same argument applies, so Vespa Cloud allows a 2% variation in order to select from more options:
+
+    <resources vcpu="32" memory="252Gb">
+
+This variation in one-way - a node can have 2% _more_ resources, not less -
+the example above matches all three types, whereas the below matches the two 256Gb types:
+
+    <resources vcpu="32" memory="256Gb">
 
 
 
