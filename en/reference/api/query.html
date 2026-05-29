@@ -745,7 +745,7 @@ These parameters are defined in the <code>native</code> query profile type.
         To return no hits at timeout instead, set <code>ranking.softtimeout.enable=false</code>.
       </p>
       <p>
-        Softtimeout uses <code>ranking.softtimeout.factor</code> of the <a href="#timeout">timeout</a>, default 70%.
+        The soft timeout uses <code>ranking.softtimeout.factor</code> of the <a href="#timeout">timeout</a>, default 70%.
         The rest of the time budget is spent on later ranking phases.
       </p>
       <p>
@@ -1166,6 +1166,126 @@ These parameters are defined in the <code>native</code> query profile type.
         <a href="../querying/yql.html#totaltargethits">totalTargetHits</a> used when evaluating an approximate
         <a href="../querying/yql.html#nearestneighbor">nearestNeighbor</a>
         operator with post-filtering.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <th>ranking.matching<br/>.anntimebudget</th>
+    <td></td>
+    <td>String</td>
+    <td></td>
+    <td>
+      <p id="ranking.matching.anntimebudget">
+        This parameter limits the time spent on a single ANN search.
+        That is, if an ANN search did not terminate within the specified
+        time, it terminates early and returns the best results found so far.
+        This parameter is specified as a positive floating point number with an optional unit, cf.
+        <a href="#timeout">timeout</a>.
+      </p>
+      <p>
+        When a single query contains multiple nearestNeighbor operators,
+        every operator gets the specified time budget, i.e., the total time that
+        can be spent on ANN searches for that query is bounded by
+        the number of nearestNeighbor operators times the specified time budget.
+      </p>
+      <p>
+        An early termination caused
+        by this parameter is not considered a failure and not reported
+        as a degraded search result.
+      </p>
+      <p>
+        Example: To specify a time budget of 25 milliseconds per ANN search, use
+        <code>&amp;ranking.matching.anntimebudget=25ms</code>.
+      </p>
+      <p>
+        Read more about the ANN time budget in <a href="../../performance/graceful-degradation.html#early-termination-of-approximate-nearest-neighbor-search">Early termination of approximate nearest neighbor search</a>.
+      </p>
+      <p>
+        Available since {% include version.html version="8.684.9" %}.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <th>ranking.matching.anntimeout<br/>.enable</th>
+    <td></td>
+    <td>Boolean</td>
+    <td>false</td>
+    <td>
+      <p id="ranking.matching.anntimeout.enable">
+        This parameter enables an additional ANN timeout,
+        which makes ANN searches terminate early if a specified point in time
+        before the soft timeout is reached.
+        The goal of this is to leave enough time for the actual matching process
+        without hitting the soft timeout, cf.
+        <a href="#ranking.softtimeout.enable">ranking.softtimeout.enable</a>.
+      </p>
+      <p>
+        The point in time at which ANN searches have to be finished is specified
+        as a factor of the actual soft timeout used by the search node via
+        <a href="#ranking.matching.anntimeout.factor">ranking.matching.anntimeout.factor</a>.
+        The default for this is 0.9, i.e., the ANN search of a query with a single nearestNeighbor operator
+        will terminate early if 90% of the time until the soft timeout is used up.
+        If a query uses multiple ANN searches, the available time until the specified
+        timeout is split evenly between all ANN searches.
+      </p>
+      <p>
+        The ANN timeout functions similarly to the ANN time budget specified by
+        <a href="#ranking.matching.anntimebudget">ranking.matching.anntimebudget</a>
+        with the following two differences:
+        <br/>1. The timeout is specified as a factor
+        of the actual soft timeout being used, which means that it automatically adapts
+        to the soft timeout and, hence, also the <a href="#timeout">timeout</a>.
+        <br/>2. An ANN search hitting the ANN timeout is considered a failure and results in
+        the query being reported as degraded:
+        an <a href="../querying/default-result-format.html#anntimeout">anntimeout</a>
+        element is returned in the query response at timeout.
+      </p>
+      </p>
+      <p>
+        For this parameter to have an effect, the soft timeout has to be enabled, cf.
+        <a href="#ranking.softtimeout.enable">ranking.softtimeout.enable</a>.
+      </p>
+      <p>
+        The number of such timeouts can be observed using the
+        <a href="../operations/metrics/searchnode.html#content_proton_documentdb_matching_approximate_nns_timed_out_queries">approximate_nns_timed_out_queries</a>
+        metric.
+      </p>
+      <p>
+        Read more about the ANN timeout in <a href="../../performance/graceful-degradation.html#early-termination-of-approximate-nearest-neighbor-search">Early termination of approximate nearest neighbor search</a>.
+      </p>
+      <p>
+        Available since {% include version.html version="8.696.20" %}.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <th>ranking.matching.anntimeout<br/>.factor</th>
+    <td></td>
+    <td>Number</td>
+    <td>0.9</td>
+    <td>
+      <p id="ranking.matching.anntimeout.factor">
+        Sets the point in time at which ANN searches have to be finished.
+        Specified as a factor of the actual soft timeout used by the search node.
+        See <a href="#ranking.matching.anntimeout.enable">ranking.matching.anntimeout.enable</a>
+        for more information on the ANN timeout.
+      </p>
+      <p>
+        Available since {% include version.html version="8.696.20" %}.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <th>ranking.sorting</th>
+    <td>sorting</td>
+    <td>String</td>
+    <td></td>
+    <td>
+      <p id="ranking.sorting">
+        A valid <a href="../querying/sorting-language.html">sort specification</a>.
+        Fields you want to sort on must be stored as document attributes in the index structure
+        by adding <a href="../schemas/schemas.html#attribute">attribute</a> to the indexing statement.
+        <!-- ToDo: Add example / link to example. Move the sortspec here instead-->
       </p>
     </td>
   </tr>
