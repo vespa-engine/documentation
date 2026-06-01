@@ -111,9 +111,27 @@ with **zero manual interventions**.
 This keeps the total cost in check, and performance tracking advances in hardware.  
 
 Find a list of supported instance types at
-[AWS](https://cloud.vespa.ai/en/reference/aws-flavors.html),
-[GCP](https://cloud.vespa.ai/en/reference/gcp-flavors.html), and
-[Azure](https://cloud.vespa.ai/en/reference/azure-flavors.html) instance types.
+[AWS](instance-types/aws-instance-types.html),
+[GCP](instance-types/gcp-instance-types.html), and
+[Azure](instance-types/azure-instance-types.html) instance types.
+
+
+### Instance type equivalence
+Some instance types are so similar that it does not matter which one you get -
+example from the [GCP Instance Type Reference](instance-types/gcp-instance-types.html):
+
+    arm64	32.0	256
+    x86_64	32.0	252
+    x86_64	32.0	256
+
+Observe variations in both architecture and memory capacity.
+CPU architectures have different load profiles,
+but not setting the architecture increases likelihood of successfully provisioning the node during shortages.
+
+Nodes must match resources to within a 2% difference to be eligible,
+e.g., this configuration matches all of the above:
+
+    <resources vcpu="32" memory="256Gb">
 
 
 
