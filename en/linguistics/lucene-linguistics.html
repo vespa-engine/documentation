@@ -358,3 +358,155 @@ field title_grams type string {
 
 {% include note.html content='Queries look for all stems by default (regardless of the schema configuration). For example, a search for
 <code>dog</code> would expand to <code>do</code> and <code>og</code> as well, looking for all three terms.' %}
+
+
+<h2 id="autocomplete-with-edge-n-grams">Recipe: autocomplete with edge n-grams</h2>
+
+<p>
+  Edge n-grams turn a term into its growing prefixes &mdash; <code>deli</code> becomes
+  <code>d</code>, <code>de</code>, <code>del</code>, <code>deli</code> &mdash; which is a common way to implement
+  prefix matching and search-as-you-type. Reach for Lucene Linguistics edge n-grams when you also need
+  <em>text normalization</em> that the built-in
+  <a href="../reference/schemas/schemas.html#gram">gram match</a> does not provide, for example
+  mapping <code>&amp;</code> to <code>and</code> so that <em>"Guns &amp; Roses"</em> also matches a search for
+  <code>and</code>. If you do not need normalization, prefer the built-in
+  <a href="../reference/schemas/schemas.html#gram">gram matching</a> (see the
+  <a href="https://github.com/vespa-engine/sample-apps/tree/master/incremental-search/search-as-you-type">search-as-you-type</a>
+  sample app) &mdash; it grams the query and the document consistently and avoids the pitfalls below.
+</p>
+
+<p>
+  Getting edge n-grams right with Lucene Linguistics requires three pieces to line up. The two warnings below
+  are the mistakes that are easy to make and hard to spot.
+</p>
+<ol>
+  <li>Generate the grams with <code>edgeNGram</code> as a <strong>token filter</strong>, not a tokenizer.</li>
+  <li>Add <a href="../reference/schemas/schemas.html#stemming"><code>stemming: multiple</code></a> so that
+    <em>all</em> grams are indexed (the grams share a token position &mdash; see
+    <a href="#indexing-all-stemmed-words">Indexing all stems</a> above).</li>
+  <li>Use a separate, non-gramming profile for the <strong>query string</strong>.</li>
+</ol>
+
+<h3 id="autocomplete-indexing">Indexing: generate the grams</h3>
+
+{% include warning.html content='Do not combine a length-changing
+<a href="https://lucene.apache.org/core/9_8_0/core/org/apache/lucene/analysis/CharFilter.html">CharFilter</a>
+(for example a <code>patternReplace</code> that rewrites <code>&amp;</code> to <code>and</code>) with an n-gram
+<strong>tokenizer</strong> such as <code>edgeNGram</code>. The CharFilter rewrites character offsets, which makes the
+n-gram tokenizer collapse several grams onto the same token position; only the first of those is then indexed, so grams
+go silently missing. Generate n-grams with a <strong>token filter</strong> (after a regular tokenizer) instead, as shown
+below.' %}
+
+<p>
+  Put the n-gram generation last in the <code>tokenFilters</code> chain, after a normal tokenizer and the
+  normalization filters. The <code>standard</code> tokenizer splits on whitespace and punctuation so each word is
+  grammed on its own; use the <code>keyword</code> tokenizer instead if you want prefixes of the whole field value.
+</p>
+
+<pre>{% highlight xml %}
+<item key="profile=autocomplete;language=en">
+  <tokenizer>
+    <name>standard</name>
+  </tokenizer>
+  <charFilters>
+    <item>
+      <name>patternReplace</name>
+      <conf>
+        <item key="pattern">&amp;</item>
+        <item key="replacement">and</item>
+      </conf>
+    </item>
+  </charFilters>
+  <tokenFilters>
+    <item><name>asciiFolding</name></item>
+    <item><name>lowercase</name></item>
+    <item>
+      <name>edgeNGram</name>
+      <conf>
+        <item key="minGramSize">2</item>
+        <item key="maxGramSize">20</item>
+      </conf>
+    </item>
+  </tokenFilters>
+</item>
+{% endhighlight %}</pre>
+
+<p>
+  The matching field must set <code>stemming: multiple</code>, otherwise only the first (shortest) gram of each word
+  is written to the index:
+</p>
+
+<pre>
+field name type string {
+    indexing: index | summary
+    linguistics {
+        profile: autocomplete
+    }
+    stemming: multiple
+}
+</pre>
+
+{% include note.html content='Verify what gets indexed with a
+<a href="../reference/schemas/schemas.html#tokens">tokens</a> document summary. In that output a
+<em>nested</em> array represents several tokens that share one position (the grams of one word) &mdash; that is expected,
+not a bug.' %}
+
+<p>
+  Keep <code>minGramSize</code> at <code>2</code> or higher unless you really need single-character prefixes: a
+  <code>minGramSize</code> of <code>1</code> makes every term emit a one-character gram, so those posting lists grow to
+  cover a large fraction of the corpus.
+</p>
+
+<h3 id="autocomplete-querying">Querying: do not gram the query string</h3>
+
+{% include warning.html content='Do not apply the n-gram analyzer to the query string. The query term is itself
+expanded into its grams &mdash; <code>pizza</code> becomes <code>WORD_ALTERNATIVES [p, pi, piz, pizz, pizza]</code>, which
+is an <strong>OR</strong> &mdash; so the query matches any document containing <em>any</em> of those grams. With a small
+<code>minGramSize</code> this drastically over-matches: a search for <code>pizza</code> would match <em>"planet
+smoothie"</em> through the shared gram <code>p</code>. Gram at indexing time only, and analyze the query with a
+non-gramming profile.' %}
+
+<p>
+  Define a second profile that is identical to the indexing one but <em>without</em> the <code>edgeNGram</code> token
+  filter, so a query term stays a single token:
+</p>
+
+<pre>{% highlight xml %}
+<item key="profile=autocomplete_query;language=en">
+  <tokenizer>
+    <name>standard</name>
+  </tokenizer>
+  <charFilters>
+    <item>
+      <name>patternReplace</name>
+      <conf>
+        <item key="pattern">&amp;</item>
+        <item key="replacement">and</item>
+      </conf>
+    </item>
+  </charFilters>
+  <tokenFilters>
+    <item><name>asciiFolding</name></item>
+    <item><name>lowercase</name></item>
+  </tokenFilters>
+</item>
+{% endhighlight %}</pre>
+
+<p>
+  Select that profile for the query string with
+  <a href="../reference/querying/yql.html#grammar">grammar.profile</a>, using
+  <a href="../reference/querying/yql.html#grammar">grammar: 'linguistics'</a> so no extra tokenization is layered on top
+  of the profile (this works with <a href="../reference/querying/yql.html#text">text()</a> and
+  <a href="../reference/querying/yql.html#userinput">userInput()</a>):
+</p>
+
+<pre>
+where name contains ({grammar: 'linguistics', grammar.profile: 'autocomplete_query'}text(@query))
+</pre>
+
+<p>
+  Now a query for <code>pizza</code> stays the single token <code>pizza</code> and matches only terms that start with
+  <em>pizza</em>, while the document side still holds every gram. See
+  <a href="linguistics.html#overriding-profile-for-query-strings">Overriding profile for query strings</a> for more on
+  per-query profiles.
+</p>
