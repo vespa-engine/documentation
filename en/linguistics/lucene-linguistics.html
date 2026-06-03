@@ -384,7 +384,8 @@ field title_grams type string {
   <li>Add <a href="../reference/schemas/schemas.html#stemming"><code>stemming: multiple</code></a> so that
     <em>all</em> grams are indexed (the grams share a token position &mdash; see
     <a href="#indexing-all-stemmed-words">Indexing all stems</a> above).</li>
-  <li>Use a separate, non-gramming profile for the <strong>query string</strong>.</li>
+  <li>Use a separate, non-gramming profile for the <strong>query string</strong> (bound in the schema with
+    <code>profile.index</code> / <code>profile.search</code>).</li>
 </ol>
 
 <h3 id="autocomplete-indexing">Indexing: generate the grams</h3>
@@ -493,20 +494,42 @@ non-gramming profile.' %}
 {% endhighlight %}</pre>
 
 <p>
-  Select that profile for the query string with
-  <a href="../reference/querying/yql.html#grammar">grammar.profile</a>, using
-  <a href="../reference/querying/yql.html#grammar">grammar: 'linguistics'</a> so no extra tokenization is layered on top
-  of the profile (this works with <a href="../reference/querying/yql.html#text">text()</a> and
-  <a href="../reference/querying/yql.html#userinput">userInput()</a>):
+  Bind it as the query-side profile on the field by expanding <code>profile</code> into <code>index</code> and
+  <code>search</code> (see
+  <a href="linguistics.html#different-processing-for-query-strings">Different processing for query strings</a>). This
+  keeps the asymmetry in the schema, so ordinary queries do the right thing without any per-query annotation:
+</p>
+
+<pre>
+field name type string {
+    indexing: index | summary
+    linguistics {
+        profile {
+            index: autocomplete
+            search: autocomplete_query
+        }
+    }
+    stemming: multiple
+}
+</pre>
+
+<p>
+  A search for <code>pizza</code> now stays the single token <code>pizza</code> and matches only terms that start with
+  <em>pizza</em>, while the document side still holds every gram:
+</p>
+
+<pre>
+where name contains @query
+</pre>
+
+<p>
+  You can also override the profile per query with
+  <a href="../reference/querying/yql.html#grammar">grammar.profile</a> (with <code>grammar: 'linguistics'</code> so no
+  extra tokenization is layered on top; works with <a href="../reference/querying/yql.html#text">text()</a> and
+  <a href="../reference/querying/yql.html#userinput">userInput()</a>) &mdash; handy when you do not want to change the
+  schema. See <a href="linguistics.html#overriding-profile-for-query-strings">Overriding profile for query strings</a>:
 </p>
 
 <pre>
 where name contains ({grammar: 'linguistics', grammar.profile: 'autocomplete_query'}text(@query))
 </pre>
-
-<p>
-  Now a query for <code>pizza</code> stays the single token <code>pizza</code> and matches only terms that start with
-  <em>pizza</em>, while the document side still holds every gram. See
-  <a href="linguistics.html#overriding-profile-for-query-strings">Overriding profile for query strings</a> for more on
-  per-query profiles.
-</p>
