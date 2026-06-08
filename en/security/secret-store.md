@@ -42,17 +42,35 @@ After creation, you can delete the entire vault by clicking the red trash bin
 button on the top right.
 
 
-### Access control
-Each vault has an "Access control" section which determines which application
-has access to the secrets in the vault. For each application, you can set up
-which environment - [dev](../operations/environments#dev)
-or [prod](../operations/environments#prod) (including test and staging) - the
-application should have access within. 
+### Access scopes
+Each vault has an "Access scopes" section that lists the access rules defined
+for the vault. Every rule has a scope - either *application* or
+*infrastructure*. Click "Edit access" to manage them; the editor has an
+"Application scope" tab and an "Infrastructure scope" tab.
 
-Note that the application must have been created before you can set access
-control to it.
+#### Application scope
+Application scope grants your applications read access to the secrets in the
+vault, for use within your application code. In the "Application scope" tab,
+grant each application access in the
+[prod](../operations/environments#prod) (including test and staging) and/or
+[dev](../operations/environments#dev) environment.
+
+Note that the application must have been created before you can grant it access.
 Use the steps at [Retrieval Augmented Generation (RAG) in Vespa](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation#deploying-to-the-vespa-cloud-using-gpu)
 to create an application and grant access.
+
+#### Infrastructure scope
+Infrastructure scope grants Vespa Cloud Enclave hosts read access to the secrets
+in the vault, so the platform can use them on your behalf rather than your
+application code. Access is granted to your tenant's Enclave cloud account. This
+is required by features such as
+[telemetry export](../operations/telemetry-export.html), where the collector
+running on your hosts reads the authentication token for your telemetry backend.
+
+The "Infrastructure scope" tab is shown only for Vespa Cloud Enclave tenants. In
+it, the cloud accounts that already have access are listed. To grant access,
+select a cloud account from the dropdown. To revoke access, click "Remove" next
+to the cloud account.
 
 
 ### Secrets
