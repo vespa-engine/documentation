@@ -26,13 +26,17 @@ $ vespa config unset target
 
 # Stop overriding application option in local config
 $ vespa config unset --local application
+
+# Unset a global option, overriding default_config_scope
+$ vespa config unset --global target
 ```
 
 ### Options
 
 ```
-  -h, --help    help for unset
-  -l, --local   Unset option in local configuration, i.e. for the current application
+  -g, --global   Unset option in global configuration, overriding default_config_scope
+  -h, --help     help for unset
+  -l, --local    Unset option in local configuration, i.e. for the current application
 ```
 
 ### Options inherited from parent commands
