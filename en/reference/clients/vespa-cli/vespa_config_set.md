@@ -26,15 +26,22 @@ $ vespa config set application my-tenant.my-application.my-instance
 # Set the instance explicitly. This will take precedence over an instance specified as part of the application option.
 $ vespa config set instance other-instance
 
-# Set an option in local configuration, for the current application only
+# Control whether config set/unset writes to local or global config by default
+$ vespa config set default_config_scope local
+
+# Set an option in local configuration, for the current application only. Overrides default_config_scope
 $ vespa config set --local zone dev.aws-us-east-1c
+
+# Set an option in global configuration. Overrides default_config_scope
+$ vespa config set --global target cloud
 ```
 
 ### Options
 
 ```
-  -h, --help    help for set
-  -l, --local   Write option to local configuration, i.e. for the current application
+  -g, --global   Write option to global configuration, overriding default_config_scope
+  -h, --help     help for set
+  -l, --local    Write option to local configuration, i.e. for the current application
 ```
 
 ### Options inherited from parent commands

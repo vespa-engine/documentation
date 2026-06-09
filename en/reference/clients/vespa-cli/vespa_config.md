@@ -95,6 +95,13 @@ This is only relevant for cloud and hosted targets and defaults to a dev zone.
 See [https://docs.vespa.ai/en/operations/zones.html](https://docs.vespa.ai/en/operations/zones.html) for available zones. Examples:
 dev.aws-us-east-1c, dev.gcp-us-central1-f
 
+default_config_scope
+
+Controls whether config set and config unset write to local or global
+configuration by default. Valid values are "local" and "global". When unset,
+defaults to "global". In Vespa 9, the default will change to "local". Use
+--local or --global on individual commands to override this setting.
+
 ```
 vespa config [flags]
 ```
