@@ -865,7 +865,8 @@ In the console, open [**Account > Billing**](https://console.vespa-cloud.com/lin
 Use [Vespa Support](https://vespa.ai/support/) if you need to provide this information without console login.
 
 ### Does Vespa Cloud support Single Sign-On (SSO)?
-Yes, contact [Vespa Support](https://vespa.ai/support/) to set it up.
+Yes, SSO is available for customers on the Enterprise plan.
+See the [Single Sign-On](../operations/sso.html) documentation for setup instructions.
 
 
 
