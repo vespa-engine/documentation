@@ -16,6 +16,15 @@ This command runs a browser-based authentication flow for the Vespa Cloud contro
 Use --file-storage flag to store the refresh token in unencrypted files instead of the system keyring.
 This is useful in SSH/CI/Docker environments where keyring access may not be available.
 
+Use --no-browser to print the login URL to standard output instead of opening a browser automatically.
+This is useful in non-interactive terminals (e.g. Git Bash on Windows) or remote sessions where
+a browser cannot be opened.
+
+Use --batch to suppress all human-readable output and print only machine-readable key=value pairs:
+  code=<device-confirmation-code>
+  url=<verification-url>
+This is useful for scripting or automation where the output is parsed programmatically.
+
 
 ```
 vespa auth login [flags]
@@ -30,8 +39,10 @@ $ vespa auth login
 ### Options
 
 ```
+      --batch          Print machine-readable key=value pairs (code, url) and suppress all other output
       --file-storage   Use file storage (unencrypted) instead of keyring for storing refresh token
   -h, --help           help for login
+      --no-browser     Print login URL to standard output without confirmation and without automatic opening of browser
 ```
 
 ### Options inherited from parent commands
