@@ -94,11 +94,10 @@ follow the steps in [production deployment](../production-deployment.html).
 To tear down a Vespa Cloud Enclave system, do the steps above in reverse order:
 
 1. [Undeploy the application(s)](../deleting-applications.html)
-2. Undeploy the Terraform changes
+2. [Undeploy the Terraform changes](https://developer.hashicorp.com/terraform/cli/commands/destroy)
 
-It is important to undeploy the Vespa application(s) first.
+It is important to undeploy the Vespa application(s) first. There will be a delay between when the application is deleted and all its supporting cloud resources are removed.
 After running the Terraform, Vespa Cloud cannot manage the resources allocated, so you must clean up these yourself.
-
 
 ## Troubleshooting
 
