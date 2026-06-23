@@ -1,0 +1,114 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Resource Management and Scaling
+applies_to: enterprise
+---
+
+<p>
+    Resources, namely CPU, memory (RAM), and disk (Persistent Volume) are specified through a combination of the
+    Application Package and VespaSet CRD. We've maintained the familiar notion of <a href="https://docs.vespa.ai/en/performance/node-resources.html">resources</a>
+    from the Application Package, while allowing Kubernetes-specific overrides when necessary.
+</p>
+
+<h2>Vespa Application</h2>
+
+<p>
+    Resources for the Vespa Application Pods, including the Container, Content, and Cluster Controller Pods, are configured through the
+    <a href="https://docs.vespa.ai/en/reference/applications/services/services.html">Application Package</a>. The requests from the Application
+    Package will be directly translated to [Kubernetes request and limit](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#requests-and-limits) constraints for
+    the Application Pods.
+</p>
+
+<p>
+    For CPU, a whole number will translate to a virtual core, and a float will translate to a fractional CPU request. Memory values will translate
+    to a <code>Gi</code> suffix, and disk values will translate to a <code>G</code> suffix. The disk value will be rounded to the nearest whole integer if a float is provided.
+</p>
+
+<p>
+    For example:
+</p>
+
+<pre>
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;services version="1.0" xmlns:deploy="vespa"&gt;
+
+    &lt;container id="default" version="1.0"&gt;
+        &lt;document-api/&gt;
+        &lt;nodes count="2" exclusive="true"&gt;
+            &lt;resources vcpu="1" memory="2Gb" disk="10Gb" /&gt;
+        &lt;/nodes&gt;
+        &lt;search/&gt;
+    &lt;/container&gt;
+
+    &lt;content id="documentation" version="1.0"&gt;
+        &lt;min-redundancy&gt;2&lt;/min-redundancy&gt;
+        &lt;documents&gt;
+            &lt;document type="music" mode="index" /&gt;
+        &lt;/documents&gt;
+        &lt;nodes count="2"&gt;
+            &lt;resources vcpu="1" memory="2Gb" disk="10Gb"   /&gt;
+        &lt;/nodes&gt;
+    &lt;/content&gt;
+&lt;/services&gt;
+</pre>
+
+<p>This application package will translate to the following Kubernetes requests and limits for the Container and Content Pod. The Operator will set the request and limit resources equally, which is often safer for latency-sensitive JVM services.</p>
+
+<pre>
+$ kubectl get pod default-100 -n test -o jsonpath='{range .spec.containers[?(@.name=="vespa")]}requests: {.resources.requests}{"\n"}limits: {.resources.limits}{"\n"}{end}'
+
+requests: {"cpu":"1","memory":"2Gi"}
+limits: {"cpu":"1","memory":"2Gi"}
+</pre>
+
+<p>
+    Additionally, it will create a PersistentVolumeClaim (PVC) requesting <code>10G</code> of storage.
+</p>
+
+<p>
+    For all practical purposes, the Operator will impose a hard floor of <code>CPU=0.5</code>, <code>memory=1Gi</code>, and <code>disk=10Gb</code>.
+</p>
+
+<h3>ConfigServer Resources</h3>
+
+<p>
+    ConfigServer Pod resources can be configured by overriding the <code>vespa</code> container's resource specification via <a href="../configuration/custom-overrides-podtemplate.html">PodTemplate Overrides</a>. The ConfigServer deduces its heap size from the Pod cgroup limits, which are derived from the <code>requests</code> and <code>limits</code> set on the Pod.
+    Setting requests and limits to the same value is recommended. Horizontally scaling the replica count for ConfigServer Pods is not currently supported.
+</p>
+
+<p>
+    For example, the following specification in <code>VespaSet.spec.configServer.podTemplate</code> will tune the ConfigServer's request and limit resources to
+    <code>CPU=4</code> and <code>memory=8Gi</code>.
+</p>
+
+<pre>
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: sample-vespaset
+spec:
+  configServer:
+    podTemplate:
+      spec:
+        containers:
+          - name: vespa
+            resources:
+              requests:
+                cpu: "4"
+                memory: "8Gi"
+              limits:
+                cpu: "4"
+                memory: "8Gi"
+</pre>
+
+<h3>Autoscaling</h3>
+
+<p>
+    Vespa on Kubernetes supports autoscaling through ranges specified in the <code>resource</code> elements in the application package.
+    The Vespa Autoscaler acts on metrics that are exposed via the <code>/metrics/v2/</code> API. This does not require the Kubernetes Metrics
+    Server to be enabled.
+</p>
+
+<p>
+    Refer to the <a href="https://docs.vespa.ai/en/operations/autoscaling.html">Autoscaling</a> guide for more details.
+</p>
