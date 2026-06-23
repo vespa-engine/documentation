@@ -74,5 +74,9 @@ user-assigned managed identity defined in the Terraform module.
 
 Only your Vespa tenant (that registered this Azure subscription) can deploy applications targeting your enclave.
 
+The [terraform-azure-enclave](https://github.com/vespa-cloud/terraform-azure-enclave)
+module is scanned with [Checkov](https://www.checkov.io/) to detect security
+misconfigurations before release.
+
 For more general information about security in Vespa Cloud, see the
 [whitepaper](../../security/whitepaper).

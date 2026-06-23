@@ -69,5 +69,9 @@ AWS IAM policy document defined in the Terraform module.
 The tenant that registered the AWS account is the only tenant that can deploy
 applications targeting the enclave.
 
+The [terraform-aws-enclave](https://github.com/vespa-cloud/terraform-aws-enclave)
+module is scanned with [Checkov](https://www.checkov.io/) to detect security
+misconfigurations before release.
+
 For more general information about security in Vespa Cloud, see the
 [whitepaper](../../security/whitepaper).
