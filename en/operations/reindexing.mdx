@@ -1,0 +1,64 @@
+---
+title: "Reindexing"
+---
+
+When the indexing pipeline of a Vespa application changes, Vespa may automatically refeed stored data such that the index is updated according to the new specification. Changes in the indexing pipeline may be due to changes in external libraries, e.g. for linguistics, or due to changes in the configuration done by the user, such as the [indexing script](/en/reference/writing/indexing-language) in a document's schema, or the [indexing mode](/en/reference/applications/services/content#document.mode) of a document type in a content cluster. Reindexing can be done for an application's full corpus, for only certain content clusters, or for only certain document types in certain clusters, using the [reindex endpoint](/en/reference/api/deploy-v2#reindex), and inspected at the [reindexing endpoint](/en/reference/api/deploy-v2#reindexing), details are described below.
+
+## Start reindexing
+
+When a change in the indexing pipeline of an application is deployed, this is discovered by the config server (see the [prepare endpoint](/en/reference/api/deploy-v2#prepare-session) for details). If the change is to be deployed, a [validation override](/en/reference/applications/validation-overrides) might have to be added to the application package (e.g. if changing match settings for a field). Deployment output will then list the *reindex actions* required to make the index reflect the new indexing pipeline. Use the [reindex endpoint](/en/reference/api/deploy-v2#reindex) to mark reindexing as ready for affected document types, **but only after the new indexing pipeline is successfully deployed**, i.e. when the application has converged on the config generation that introduced the change. Reindexing then commences with the next deployment of the application. Summary of steps needed to enable and start reindexing:
+
+<Steps>
+<Step>
+Change indexing pipeline in application package, adding validation overrides if needed
+</Step>
+<Step>
+Wait until config has converged on new config generation
+</Step>
+<Step>
+Mark reindexing change as ready by POSTing to reindex endpoint
+</Step>
+<Step>
+Start reindexing job by deploying application package one more time
+</Step>
+</Steps>
+
+## Reindexing progress
+
+Reindexing is done by a component in each content cluster that [visits](/en/writing/visiting) all documents of the indicated types, and re-feeds these through the [indexing chain](/en/writing/indexing) of the cluster. (Note that only the [document fields](/en/reference/schemas/schemas#document) are re-fed — all derived fields, produced by the indexing pipeline, are recomputed.) The reindexing process avoids write races with concurrent feed by locking [small subsets](/en/content/buckets) of the corpus when reindexing them; this may cause elevated write latencies for a fraction of concurrent write operations, but does not impact general throughput. Moreover, since reindexing can be both lengthy and resource consuming, depending on the corpus, the process is tuned to yield resources to other tasks, such as external feed and serving, and is generally safe to run in the background.
+
+Reindexing is done for one document type at a time, in parallel across content clusters. Detailed progress can be found at the [reindexing endpoint](/en/reference/api/deploy-v2#reindexing). If state is *failed*, reindexing attempts to resume from the position where it failed after a grace period of some minutes. State *pending* indicates reindexing will start, or resume, when the cluster is ready, while *running* means it's currently progressing. Finally, *successful* means all documents of that type were successfully reindexed. Additionally, if the *speed* of a reindexing is `0.0`—set by users—that reindexing is halted until the speed is either set to a positive value again, or it is replaced by a new reindexing of that document type.
+
+## Procedure
+
+Refer to [schema changes](/en/reference/schemas/schemas#modifying-schemas) for a procedure / way to test the reindexing feature, and tools to validate the data.
+
+## Use cases
+
+Below are sample changes to the schema for different use cases, or examples of operational steps for data manipulation.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Use case</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;clear field&#42;&#42;</td>
+      <td>To clear a field, do a partial update of all documents with the value, say an empty string.<br/> <br/> It is also possible to use reindexing, but there is a twist - intuitively, this would work:<br/><br/>  <code>{`field artist type string {`}</code><br/>  <code>{`indexing: "" | summary | index`}</code><br/> <code>{`}`}</code><br/><br/>  However, the reset only works for <a href="/en/reference/schemas/schemas#schema" aria-label="synthetic fields">synthetic fields</a>.<br/><br/>  A solution is to deploy a <a href="/en/applications/document-processors" aria-label="document processor">document processor</a> that empties the field, to the default indexing chain - then trigger a reprocessing.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;change indexing settings&#42;&#42;</td>
+      <td>As reindexing takes time, a field's data can be in one state or another, while the queries to it have the most current state. This is OK for many changes and applications. <br/><br/> If not, it is possible to reindex to a new field for a more atomic change. Add a &#42;synthetic field&#42; outside the &#42;document definition&#42; and pipe the content of the current field to it:  <br/><br/> <code>{`search mydocs {`}</code> <br/> <code>{`field title_non_stemmed type string {`}</code>   <br/><code>{`indexing: input title | index | summary`}</code>  <br/><code>{`stemming: none`}</code> <br/><code>{`}`}</code> <br/><code>{`document mydocs {`}</code> <br/><code>{`field title type string`}</code> <br/><code>{`{`}</code>  <br/><code>{`indexing: index | summary`}</code>  <br/><code>{`}`}</code>  <br/><br/>Once reindexing is completed, switch queries to use the new field. This solution naturally increases memory and disk requirements in the transition.<br/><br/>  Going back to using the original field with the new settings can be done by changing the index settings for the original field, wait for reindexing to be finished and start using the original field again in queries, then remove the temporary synthetic field.</td>
+    </tr>
+  </tbody>
+</table>
+
+Relevant pointers:
+
+<CardGroup>
+  <Card title="Advanced indexing language" icon="code" href="/en/reference/writing/indexing-language" horizontal />
+  <Card title="Schemas" icon="database" href="/en/basics/schemas" horizontal />
+</CardGroup>

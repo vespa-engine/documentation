@@ -1,0 +1,115 @@
+---
+title: "Environments"
+---
+
+Vespa Cloud has two kinds of environments:
+
+- Manual environment for rapid development and test: `dev`
+- Automated environment with integrated CD pipeline: `prod`
+
+An application is deployed to one or more *zones* (see [zone list](/en/operations/zones)), which is a combination of an *environment* and a *region*, like `vespa deploy -z dev.aws-us-east-1c`.
+
+## Dev
+
+The dev environment is built for rapid developments cycles, with auto-downscaling and auto-expiry for ease of use and cost control. The dev environment is the default, to deploy to this, use `vespa deploy`.
+
+### Auto downscaling
+
+One use case for the dev environment is to take an application package from a prod environment and deploy to the dev environment to debug. To minimize cost and make this speedy, Vespa Cloud will by default ignore [nodes](/en/reference/applications/services/services#nodes) and [resources](/en/reference/applications/services/services#resources) settings.
+
+With this, you can safely download an application package from prod (that are normally large) and deploy to dev, with no changes.
+
+To override this behavior and control the resources, specify them explicitly for the dev environment as described in [deployment variants](/en/operations/deployment-variants#services.xml-variants). Example:
+
+```xml
+<content version="1.0">
+    <nodes deploy:environment="dev"
+           count="1" />
+    <nodes deploy:environment="prod"
+           deploy:region="aws-us-east-1c"
+           count="20">
+        <resources vcpu="16.0" memory="128Gb" disk="3750Gb"/>
+    </nodes>
+</content>>
+```
+
+<Warning>
+**Important:** 
+
+The `dev` environment has redundancy 1 by default, and there are no availability or data persistence guarantees. Do not use applications deployed to these zones for production serving use cases.
+</Warning>
+
+### Auto expiry
+
+Deployments to `dev` expire after 14 days of inactivity, that is, 14 days after the last [deployment](/en/basics/applications#deploying-applications). **This applies to all plans**. To add 7 more days to the expiry period, redeploy the application or use the Vespa Cloud Console.
+
+### Vespa version
+
+The latest active Vespa version is used when deploying to the dev environment. The deployment is upgraded at a time which is most likely at night for the developer in order to minimize downtime (based on the time when last deployments were made). An upgrade will be skipped if metrics indicate ongoing feed or query load, but will still be done if current version is more than a week old.
+
+## Prod
+
+Applications are deployed to the `prod` environment for production serving. Deployments are passed through an integrated CD pipeline for system tests and staging tests. Read more in [automated deployments](/en/operations/automated-deployments).
+
+## Test
+
+The `test` environment is used by the integrated CD pipeline for prod deployments, to run [system tests](/en/operations/automated-deployments#system-tests). The test capacity is ephemeral and only used during test. Nodes in test and staging environments do not have access to data in prod environments.
+
+Note that one cannot deploy directly to test and staging environments. For long-lived test applications (e.g., a QA system that is integrated with other services) use the prod environment.
+
+System tests are always invoked, even if there are no tests defined. In this case, an instance is just started and then stopped. This has value in itself, as it ensures that the application is able to start.
+
+Test runs can be [aborted](/en/operations/automated-deployments#disabling-tests).
+
+## Staging
+
+See system tests above, this applies to the staging, too. [Staging tests](/en/operations/automated-deployments#staging-tests) use a fraction of the configured prod capacity, this can be overridden to using 1 node regardless of prod cluster size:
+
+```xml
+<content version="1.0">
+    <nodes deploy:environment="staging" count="1">
+        <resources vcpu="2.0" memory="8Gb" disk="50Gb"/>
+    </nodes>
+</content>
+```
+
+## Reference
+
+Environment settings:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Description</th>
+      <th>Expiry</th>
+      <th>Cluster sizes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`dev`}</code></td>
+      <td>Used for manual development testing.</td>
+      <td>14 days</td>
+      <td><code>{`1`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`test`}</code></td>
+      <td>Used for <a href="/en/applications/testing#system-tests" aria-label="automated system tests">automated system tests</a>.</td>
+      <td>-</td>
+      <td><code>{`1`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`staging`}</code></td>
+      <td>Used for <a href="/en/applications/testing#staging-tests" aria-label="automated staging tests">automated staging tests</a>.</td>
+      <td>-</td>
+      <td><code>{`min(max(2, 0.05 * spec), spec)`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`prod`}</code></td>
+      <td>Hosts all production deployments.</td>
+      <td>No expiry</td>
+      <td><code>{`max(2, spec)`}</code></td>
+    </tr>
+  </tbody>
+</table>

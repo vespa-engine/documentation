@@ -1,0 +1,935 @@
+﻿---
+title: "Vespa 8 Release Notes"
+sidebarTitle: "Vespa 8"
+---
+
+This document lists the changes between Vespa major versions 7 and 8. As documented in [Vespa versions](/en/learn/releases#versions), new functionality in Vespa is introduced in minor versions, while major versions are used to mark releases breaking compatibility. As Vespa 8 does not introduce any new functionality, it is as safe and mature as the versions of Vespa 7 preceding it. No further releases will be made of Vespa 7, except possible critical security fixes.
+
+## Overview
+
+The compatibility breaking changes in Vespa 8 fall into these categories:
+
+- [Changes to default behaviour](#changed-defaults)
+- [Application package structure and settings](#application-package-changes) - deprecated settings and constructs in e.g. *schemas* and *services.xml* are removed.
+- [Java APIs](#java-api-changes) - deprecated APIs are removed or revoked from Vespa's [public API](https://javadoc.io/doc/com.yahoo.vespa/annotations/latest/com/yahoo/api/annotations/PublicApi.html) surface.
+- [Container runtime environment](#container-runtime) - incompatible changes to the Java build and runtime environments.
+- [HTTP API changes](#removed-http-api-parameters)
+- [Removed command line tools](#removed-command-line-tools)
+- [Removed or renamed metrics](#removed-or-renamed-metrics)
+- [Changes to the document selection language](#document-selection-exact-type-matching)
+- [Security related changes](#security)
+- [Operating system support](#operating-system)
+- [Other changes](#other-changes), not covered by any of the above categories.
+
+To ensure their applications are compatible with Vespa 8, application owners must:
+
+- Review the list of [changes to defaults](#changed-defaults) and add the necessary options if you want to preserve behavior from Vespa 7.
+- Make sure there are no deprecation warnings when compiling against Vespa 7.
+- Review the [application package changes](#application-package-changes) and make sure there are no deployment warnings when deploying on Vespa 7.
+- Review the list of [HTTP API changes](#removed-http-api-parameters) and update any clients of the application.
+- Review the remaining sections of this document, and update the application and its environment accordingly.
+
+Usage of deprecated Java APIs produce warnings during compilation, while *deployment warnings* are produced for application package deprecations and most changes to the container runtime environment. In hosted Vespa or Vespa Cloud, deployment warnings are shown in the application's console view. However, for other types of changes, there is no way to emit deprecation warnings, so these are only described in this document and other Vespa documentation.
+
+The following sections lists all the changes from Vespa 7 to Vespa 8 in detail.
+
+## Changed defaults
+
+These changes may break clients, and impact both performance and user experience. Applications that are in production and relies on these defaults should make configuration changes to keep the existing behavior when upgrading to Vespa 8. This can be done on Vespa 7, *before* upgrading - using [bucket tests](/en/applications/testing#feature-switches-and-bucket-tests) can be useful.
+
+The following defaults have changed:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Change</th>
+      <th>Configuration required to avoid change on Vespa 8</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>The default <a href="/en/reference/querying/simple-query-language" aria-label="simple query language">simple query language</a> (for end users) is changed from <code>{`all`}</code> to <a href="/en/ranking/wand#weakand" aria-label="weakAnd">weakAnd</a>.<br/>  <Note>&#42;&#42;Note:&#42;&#42;<br/><br/> This might increase recall, and increase latency significantly if document corpus is large.</Note></td>
+      <td>Explicitly pass <a href="/en/reference/api/query#model.type" aria-label="model.type">model.type</a>=all in queries or set this parameter in the relevant <a href="/en/querying/query-profiles" aria-label="query profiles">query profiles</a>: <code>{`<field name="model.type">all</field>`}</code>.</td>
+    </tr>
+    <tr>
+      <td>The default grammar in <a href="/en/reference/querying/yql#userinput" aria-label="YQL userInput">YQL userInput</a> is changed from <code>{`all`}</code> to <a href="/en/ranking/wand#weakand" aria-label="weakAnd">weakAnd</a>. <br/> <Note>&#42;&#42;Note:&#42;&#42;<br/><br/> This might increase recall, and increase latency significantly if document corpus is large.</Note></td>
+      <td>Prefix <code>{`userInput`}</code> in YQL by <code>{`{grammar: "all"}`}</code>.</td>
+    </tr>
+    <tr>
+      <td>The value of the services.xml <a href="/en/reference/querying/default-result-format#geo-position-rendering" aria-label="legacy flag v7-geo-positions">legacy flag v7-geo-positions</a> changes from true to false. See the <a href="/en/reference/release-notes/vespa8-geo-migration-guide" aria-label="Vespa 8 geo migration guide">Vespa 8 geo migration guide</a>.</td>
+      <td>Add to services.xml: <code>{`          <legacy> <v7-geo-positions>true</v7-geo-positions> </legacy>        `}</code></td>
+    </tr>
+    <tr>
+      <td>Fields of type <code>{`map`}</code> <a href="/en/reference/querying/default-result-format#inconsistent-map-rendering" aria-label="changes JSON rendering">changes JSON rendering</a> in search results.</td>
+      <td>Add overrides in your query profile(s) for the <code>{`renderer.json.jsonMaps`}</code> parameter.</td>
+    </tr>
+    <tr>
+      <td>Fields of type <code>{`weightedset`}</code> <a href="/en/reference/querying/default-result-format#inconsistent-weightedset-renderingg" aria-label="changes JSON rendering">changes JSON rendering</a> in search results.</td>
+      <td>Add overrides in your query profile(s) for the <code>{`renderer.json.jsonWsets`}</code> parameter.</td>
+    </tr>
+    <tr>
+      <td>Expressions used as summary features, are no longer rendered wrapped in <code>{`rankingExpression()`}</code>.</td>
+      <td>Specify configuration in your rank profile as shown in <a href="/en/reference/querying/default-result-format#summary-features-wrapped-in-rankingexpression" aria-label="this example">this example</a>.</td>
+    </tr>
+    <tr>
+      <td>Fields of type <code>{`raw`}</code> are now presented as a base64 encoded string in summary, the same way as in json feed format. Earlier, you needed to add <code>{`raw-as-base64-in-summary`}</code> in your schema file to get this behavior.</td>
+      <td>If you have fields of type "raw" and you must have the old summary behavior for them in search results, add the line   <code>{`raw-as-base64-in-summary : false`}</code>   in your schema definition.</td>
+    </tr>
+    <tr>
+      <td>The default tensor format in responses has changed from 'long' to 'short': Tensors in query results, document API responses, and stateless model evaluation are rendered in the short form appropriate for their type (if any), documented <a href="/en/reference/schemas/document-json-format#tensor" aria-label="here">here</a>.</td>
+      <td>&#42;&#42;Queries&#42;&#42;: Pass <a href="/en/reference/api/query#presentation.format.tensors" aria-label="presentation.format.tensors">presentation.format.tensors</a>=long in queries, or set it parameter in the relevant <a href="/en/querying/query-profiles" aria-label="query profiles">query profiles</a>. <br/><br/> &#42;&#42;Document/v1&#42;&#42;: Pass the parameter <code>{`format.tensors=long`}</code> in requests. <br/><br/> &#42;&#42;Stateless model evaluation&#42;&#42;: Pass the parameter <code>{`format.tensors=long`}</code> in requests.</td>
+    </tr>
+    <tr>
+      <td>The default fieldset when getting or visiting documents is now <code>{`[document]`}</code> in all cases, meaning you only get those fields that are declared in the "document" block of the schema (generated fields are not included). This was already the default for the <code>{`/document/v1`}</code> API when fetching or visiting documents of a single known document type. Now it is also the default when visiting at the root level, for the command line tools <code>{`vespa-visit`}</code> and <code>{`vespa-get`}</code>, and if you use the programmatic <code>{`documentapi`}</code> from java to fetch documents.</td>
+      <td>In most cases there is no difference between <code>{`[all]`}</code> and <code>{`[document]`}</code> fieldsets - so no action is needed. If the old behavior is needed you can:<br/><br/> • For the command line tools, specify the fieldset as <code>{`-l "[all]"`}</code> to include generated fields.<br/> • For <code>{`/document/v1`}</code> specify <code>{`[all]`}</code> as the value for the <code>{`fieldSet`}</code> parameter.<br/>• If using <code>{`documentapi`}</code> from java, add the line  <code>{`params.setFieldSet("[all]");`}</code> to modify your <code>{`VisitorParameters`}</code> value , or <code>{`params = params.withFieldSet("[all]");`}</code> to modify your <code>{`DocumentOperationParameters`}</code> value. <br/><br/>If you run document processors to generate fields and want those returned, it may be more useful to declare a fieldset with just those fields you actually want as output instead.</td>
+    </tr>
+    <tr>
+      <td>Vespa will now limit the number of groups and hits in <a href="/en/querying/grouping" aria-label="grouping query results">grouping query results</a> when <code>{`max`}</code> is not specified explicitly in grouping expressions. The default value is determined by <a href="/en/reference/api/query#grouping.defaultmaxgroups" aria-label="grouping.defaultMaxGroups">grouping.defaultMaxGroups</a>/ <a href="/en/reference/api/query#grouping.defaultmaxhits" aria-label="grouping.defaultMaxHits">grouping.defaultMaxHits</a>. The parameter <a href="/en/reference/api/query#grouping.globalmaxgroups" aria-label="grouping.globalMaxGroups">grouping.globalMaxGroups</a> must now be overridden in query profiles to allow grouping expressions that may return unbounded or large results.</td>
+      <td>• <a href="/en/reference/api/query#grouping.defaultmaxgroups" aria-label="grouping.defaultMaxGroups">grouping.defaultMaxGroups</a> changed from <code>{`-1`}</code> to <code>{`10`}</code>. <br/>• <a href="/en/reference/api/query#grouping.defaultmaxhits" aria-label="grouping.defaultMaxHits">grouping.defaultMaxHits</a> changed from <code>{`-1`}</code> to <code>{`10`}</code>. <br/>• <a href="/en/reference/api/query#grouping.globalmaxgroups" aria-label="grouping.globalMaxGroups">grouping.globalMaxGroups</a> changed from <code>{`-1`}</code> to <code>{`10000`}</code>. <br/>• <a href="/en/reference/api/query#grouping.defaultprecisionfactor" aria-label="grouping.defaultPrecisionFactor">grouping.defaultPrecisionFactor</a> changed from <code>{`1.0`}</code> to <code>{`2.0`}</code>.</td>
+    </tr>
+    <tr>
+      <td>Vespa <a href="/en/operations/access-logging" aria-label="access logs">access logs</a> are compressed with <a href="https://github.com/facebook/zstd" aria-label="zstd">zstd</a>.</td>
+      <td>Add a config override under <code>{`<container>`}</code> in <code>{`services.xml`}</code>:  <br/><br/> <code>{`<config name="container.core.access-log">`}</code><br/> <code>{`<fileHandler>`}</code> <br/><code>{`<compressionFormat>GZIP<compressionFormat>`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+## Application package changes
+
+### Removed settings from schemas
+
+The following settings are removed from [schema](/en/reference/schemas/schemas):
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Replacement</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>attribute: huge</td>
+      <td>None. Setting &#42;huge&#42; on an attribute doesn't have any effect, the code is rewritten to support it by default.</td>
+    </tr>
+    <tr>
+      <td><a href="/en/reference/schemas/schemas#compression" aria-label="compression">compression</a></td>
+      <td>None. Document compression is not needed, as compression is always enabled.</td>
+    </tr>
+    <tr>
+      <td>body (inside a field definition)</td>
+      <td>None. Deprecated since before Vespa 7, had no effect in Vespa 7.</td>
+    </tr>
+    <tr>
+      <td>header (inside a field definition)</td>
+      <td>None. Deprecated since before Vespa 7, had no effect in Vespa 7.</td>
+    </tr>
+    <tr>
+      <td>field type weightedset<code>{`<float>`}</code></td>
+      <td>Because floating-point types are inherently imprecise they are badly suited as keys in maps and sets. If you feel the need for such data consider using something like:<br/><br/> <code>{`struct weightedfloat {`}</code><br/> <code>{`field value type float {}`}</code><br/>  <code>{`field weight type int {}`}</code><br/> <code>{`}`}</code> <br/> <code>{`field myfield type array<weightedfloat> {`}</code> <br/> <code>{`...`}</code></td>
+    </tr>
+    <tr>
+      <td>field type map<code>{`<float,anything>`}</code></td>
+      <td>Using "float" as the key in a map is no longer supported, see <code>{`weightedset<float>`}</code> above.</td>
+    </tr>
+    <tr>
+      <td>field type weightedset<code>{`<double>`}</code></td>
+      <td>Using "double" as the key in a set is no longer supported, see <code>{`weightedset<float>`}</code> above.</td>
+    </tr>
+    <tr>
+      <td>field type map<code>{`<double,anything>`}</code></td>
+      <td>Using "double" as the key in a map is no longer supported, see <code>{`weightedset<float>`}</code> above.</td>
+    </tr>
+    <tr>
+      <td>field type weightedset<code>{`<uri>`}</code></td>
+      <td>Using complex types as the key in a set is no longer supported, see <code>{`weightedset<float>`}</code> above.</td>
+    </tr>
+    <tr>
+      <td>field type map<code>{`<uri,anything>`}</code></td>
+      <td>Using complex types as the key in a map is no longer supported, see <code>{`weightedset<float>`}</code> above.</td>
+    </tr>
+    <tr>
+      <td>Old syntax for array types like "string[]"</td>
+      <td>Write as <code>{`array<string>`}</code> instead.</td>
+    </tr>
+    <tr>
+      <td>Rank functions must have different names in a rank-profile</td>
+      <td>Only the last of two functions with the same name would be used. Remove or rename the first one.</td>
+    </tr>
+    <tr>
+      <td>Conflicting sorting settings are now rejected</td>
+      <td>Only keep the last of the conflicting settings.</td>
+    </tr>
+    <tr>
+      <td>A summary-field may only be added once in a document-summary block</td>
+      <td>Remove duplicates.</td>
+    </tr>
+    <tr>
+      <td>Schema and document should have the same name</td>
+      <td>Change name of the schema, so it is equal to the contained document.</td>
+    </tr>
+  </tbody>
+</table>
+
+### TensorFlow import
+
+Vespa 8 removes support for direct import of [TensorFlow models](/en/ranking/tensorflow). [ONNX](https://onnx.ai/) is now the preferred ML model format, and works both for [ranking](/en/ranking/onnx) and [stateless model evaluation](/en/ranking/stateless-model-evaluation). ONNX contains tools to convert models from TensorFlow to ONNX, but Vespa will no longer provide this.
+
+### Changed semantics in services.xml
+
+The following elements and attributes in services.xml have new semantics:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`<nodes><redundancy>`}</code></td>
+      <td>It is now an error to configure a number of nodes (per group) that is smaller than the configured redundancy. It used to generate an application-level warning, with the redundancy implicitly reduced. Remove any <code>{`<nodes>`}</code> override in the non-prod environments, as the node count is automatically adjusted.</td>
+    </tr>
+  </tbody>
+</table>
+
+### Removed constructs from services.xml
+
+The following elements and attributes are removed from services.xml:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Parent element</th>
+      <th>Removed construct</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`<admin>`}</code></td>
+      <td><code>{`<filedistribution>`}</code></td>
+      <td>Configuring up/download rates is not supported</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<configserver>`}</code></td>
+      <td>Use <a href="/en/reference/applications/services/admin#configservers" aria-label="`configservers`"><code>{`configservers`}</code></a> element instead</td>
+    </tr>
+    <tr>
+      <td><code>{`<config>`}</code></td>
+      <td>&#42;namespace&#42; attribute</td>
+      <td>The namespace must be included in the &#42;name&#42; attribute.</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<myArray operation="append">`}</code> syntax</td>
+      <td>Previously used to append items to config arrays. Use <a href="/en/reference/applications/config-files#configuring-arrays" aria-label="`item`"><code>{`item`}</code></a> instead.</td>
+    </tr>
+    <tr>
+      <td><code>{`<container>`}</code></td>
+      <td>&#42;jetty&#42; attribute</td>
+      <td>Removed, had no effect on Vespa 7.</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<nodes>`}</code> jvm attributes</td>
+      <td>JVM attributes &#42;jvmargs, allocated-memory, jvm-options, jvm-gc-options&#42; renamed and moved to <a href="/en/reference/applications/services/container#jvm" aria-label="`JVM`"><code>{`JVM`}</code></a> subelement</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<client>`}</code></td>
+      <td>Previously used for setting up client providers. Use a <a href="/en/applications/request-handlers" aria-label="`request handler`"><code>{`request handler`}</code></a> instead.</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<handler><clientBinding>`}</code></td>
+      <td>Client bindings are no longer supported.</td>
+    </tr>
+    <tr>
+      <td><code>{`<content>`}</code></td>
+      <td><code>{`<dispatch>`}</code></td>
+      <td>Removed due to removal of &#42;vespa-dispatch-bin&#42;, <a href="#vespa-dispatch-bin-process-is-removed" aria-label="details.">details.</a></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<tuning><dispatch><min-group-coverage>`}</code></td>
+      <td>Use <a href="/en/reference/applications/services/content#min-active-docs-coverage" aria-label="`min-active-docs-coverage`"><code>{`min-active-docs-coverage`}</code></a> instead.</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<tuning><dispatch><use-local-node>`}</code></td>
+      <td>Ignored, the local node will automatically be preferred when appropriate.</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<engine><proton><tuning><searchnode><flushstrategy><native><transactionlog><maxentries>`}</code></td>
+      <td>Use <a href="/en/reference/applications/services/content#flushstrategy-native-transactionlog-maxsize" aria-label="`maxsize`"><code>{`maxsize`}</code></a> instead. Vespa 7 documentation: The maximum number of entries in the <a href="/en/content/proton#transaction-log" aria-label="`transaction log`"><code>{`transaction log`}</code></a> for a document type before running flush, default 1000000 (1 M).</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<engine><proton><tuning><searchnode><summary><store><logstore><chunk><maxentries>`}</code></td>
+      <td>Use <a href="/en/reference/applications/services/content#summary-store-logstore-chunk-maxsize" aria-label="`maxsize`"><code>{`maxsize`}</code></a> instead. Vespa 7 documentation: Maximum number of documents in a chunk. See &#42;summary.log.chunk.maxentries&#42;.</td>
+    </tr>
+    <tr>
+      <td><code>{`<services>`}</code> (root)</td>
+      <td><code>{`<jdisc>`}</code></td>
+      <td>Use <a href="/en/reference/applications/services/container" aria-label="`container`"><code>{`container`}</code></a> instead.</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<service>`}</code></td>
+      <td>Running generic services is no longer supported.</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<clients>`}</code></td>
+      <td>Client load types are deprecated and ignored.</td>
+    </tr>
+  </tbody>
+</table>
+
+### *application/* folder support removed
+
+Application package content (*services.xml*, the *schemas/* folder, etc.) is supposed to be put at the root level in the application zip, such that the unzipped application package has *./services.xml*, etc.
+
+But it used to be that the application package content could be placed inside an *application* directory. This support is removed on Vespa 8.
+
+### *searchdefinitions/* folder is deprecated
+
+Search definition schemas should now be placed in the *schemas/* folder. The old folder will still work on Vespa 8, but causes a deprecation warning upon deployment.
+
+## Java API changes
+
+### Removed Java packages
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Package</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;com.yahoo.docproc.util&#42;</td>
+      <td>Removed</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.jdisc.test&#42;</td>
+      <td>No longer <a href="https://javadoc.io/doc/com.yahoo.vespa/annotations/latest/com/yahoo/api/annotations/PublicApi.html" aria-label="public API">public API</a></td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.log.event&#42;</td>
+      <td>No longer <a href="https://javadoc.io/doc/com.yahoo.vespa/annotations/latest/com/yahoo/api/annotations/PublicApi.html" aria-label="public API">public API</a></td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.statistics&#42;</td>
+      <td>Removed</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.vespa.curator&#42;</td>
+      <td>No longer <a href="https://javadoc.io/doc/com.yahoo.vespa/annotations/latest/com/yahoo/api/annotations/PublicApi.html" aria-label="public API">public API</a></td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.documentapi.messagebus.loadtypes&#42;</td>
+      <td>Load types are no longer supported. Use corresponding method overloads without &#42;LoadType&#42; or &#42;LoadTypeSet&#42; parameters instead.</td>
+    </tr>
+  </tbody>
+</table>
+
+### Removed Java Classes and methods
+
+Classes and methods that were marked as deprecated in Vespa 7 are removed. If deprecation warnings are emitted for Vespa APIs when building the application, these must be fixed before migrating to Vespa 8. The sections below contain only the most notable changes.
+
+The following classes are no longer public API and have been moved to Vespa internal packages:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Package</th>
+      <th>Class</th>
+      <th>Migration advice</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;com.yahoo.config.subscription&#42;</td>
+      <td>All classes, except <a href="https://javadoc.io/doc/com.yahoo.vespa/config/latest/com/yahoo/config/subscription/ConfigGetter.html" aria-label="`ConfigGetter`"><code>{`ConfigGetter`}</code></a></td>
+      <td>Config should be <a href="/en/applications/configuring-components#use-config-in-code" aria-label="`injected`"><code>{`injected`}</code></a> to your component class constructor.</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.docproc&#42;</td>
+      <td>&#42;DocprocExecutor&#42;</td>
+      <td>For unit tests, follow the steps in the <a href="https://github.com/vespa-engine/sample-apps/blob/master/examples/document-processing/src/test/java/ai/vespa/example/album/ProductTypeRefinerDocProcTest.java" aria-label="`document-processing`"><code>{`document-processing`}</code></a> sample app. If you need a &#42;DocumentTypeManager&#42; in production code, it can be directly <a href="/en/applications/dependency-injection" aria-label="`injected`"><code>{`injected`}</code></a> to your component class constructor.</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;DocprocService&#42;</td>
+      <td>For unit tests, follow the steps in the <a href="https://github.com/vespa-engine/sample-apps/blob/master/examples/document-processing/src/test/java/ai/vespa/example/album/ProductTypeRefinerDocProcTest.java" aria-label="`document-processing`"><code>{`document-processing`}</code></a> sample app. If you need a &#42;DocumentTypeManager&#42; in production code, it can be directly <a href="/en/applications/dependency-injection" aria-label="`injected`"><code>{`injected`}</code></a> to your component class constructor.</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;DocumentOperationWrapper&#42;</td>
+      <td>No replacement - if needed, contact the Vespa team for advice.</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;HandledProcessingException&#42;</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;ProcessingEndpoint&#42;</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;TransientFailureException&#42;</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.log&#42;</td>
+      <td>&#42;VespaFormatter&#42;</td>
+      <td>No replacement.</td>
+    </tr>
+  </tbody>
+</table>
+
+The following methods are removed:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Method</th>
+      <th>Migration advice</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;com.yahoo.documentapi.DocumentAccess.createDefault()&#42;</td>
+      <td>Container components can have a &#42;DocumentAccess&#42; injected via their constructor. For use outside the container, e.g. in a custom command line tool, use the new method &#42;createForNonContainer()&#42;.</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.log.LogSetup.getLogHandler()&#42;</td>
+      <td>No replacement.</td>
+    </tr>
+  </tbody>
+</table>
+
+### Breaking changes to Java APIs
+
+The Javadoc of the deprecated types/members should document the replacement API. The below list is not exhaustive - some smaller and trivial changes are not listed.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Type(s)</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;com.yahoo.processing&#42;</td>
+      <td>Removed use of Guava's &#42;ListenableFuture&#42; in type signatures. Replacement uses &#42;CompletableFuture&#42;.</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.search.handler.HttpSearchResponse.waitableRender()&#42;</td>
+      <td>Removed use of Guava's &#42;ListenableFuture&#42; in type signature. The method is replaced with &#42;asyncRender()&#42;.</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.jdisc.handler&#42;</td>
+      <td>Removed use of Guava's &#42;ListenableFuture&#42; in type signatures. Replacement uses &#42;CompletableFuture&#42;</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.searchlib.rankingexpression.rule&#42;</td>
+      <td>Removed use of Guava collection types in type signatures.</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.search.rendering.JsonRenderer&#42;</td>
+      <td>Removed use of Jackson types from class signature.</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.jdisc.Container&#42;</td>
+      <td>Removed use of Guice types from class signature.</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.vdslib.VisitorStatistics&#42;</td>
+      <td>Removed all &#42;set/getSecondPass&#42;-related methods.</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.documentapi&#42;</td>
+      <td>Removed all methods taking in a &#42;com.yahoo.documentapi.messagebus.DocumentProtocol.Priority&#42; argument. Explicit operation priorities are deprecated and should not be set by the client.</td>
+    </tr>
+  </tbody>
+</table>
+
+### Removed support for built-in XML factories
+
+The Jdisc container has historically supported injection of built-in providers for the following XML factories:
+
+- *javax.xml.datatype.DatatypeFactory*
+- *javax.xml.parsers.DocumentBuilderFactory* and *SAXParserFactory*
+- *javax.xml.stream.XMLEventFactory*, *XMLInputFactory* and *XMLOutputFactory*
+- *javax.xml.transform.TransformerFactory*
+- *javax.xml.validation.SchemaFactory*
+- *javax.xml.xpath.XPathFactory*
+
+These are now removed. Please check for more recent alternatives if you need this type of XML processing.
+
+### Deprecated Java APIs
+
+A few redundant APIs have been deprecated because they have replacements that provide the same, or better, functionality. We advise you switch to the replacement to reduce future maintenance cost.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Type(s)</th>
+      <th>Replacement</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;com.yahoo.container.jdisc.LoggingRequestHandler&#42;</td>
+      <td>Use &#42;com.yahoo.container.jdisc.ThreadedHttpRequestHandler&#42; instead.</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.log.LogLevel&#42;</td>
+      <td>Use &#42;java.util.logging.Level&#42; instead.</td>
+    </tr>
+  </tbody>
+</table>
+
+## Container Runtime Environment
+
+### JDK version
+
+Vespa 8 upgrades the JDK version from 11 to 17. To ensure full compatibility, all container components should be rebuilt with JDK 17 before being deployed on Vespa 8.
+
+### Changes to provided maven artifacts
+
+[Guava](https://search.maven.org/artifact/com.google.guava/guava) has been upgraded from version 20.0 to 27.1. If you are using APIs that have been removed from the library since version 20, your code must be updated. In most cases, it should be trivial to find replacement APIs in Java's standard library.
+
+The following Maven artifacts are no longer provided runtime to user application plugins by the Jdisc container:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Artifact</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.fasterxml.jackson.jaxrs/jackson-jaxrs-base" aria-label="`*com.fasterxml.jackson.jaxrs:jackson-jaxrs-base*`"><code>{`*com.fasterxml.jackson.jaxrs:jackson-jaxrs-base*`}</code></a></td>
+      <td>JSON input/output handling for JAX-RS implementations, e.g. Jersey</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.fasterxml.jackson.jaxrs/jackson-jaxrs-json-provider" aria-label="`*com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider*`"><code>{`*com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider*`}</code></a></td>
+      <td>JSON input/output handling for JAX-RS implementations, e.g. Jersey</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.fasterxml.jackson.module/jackson-module-jaxb-annotations" aria-label="`*com.fasterxml.jackson.module:jackson-module-jaxb-annotations*`"><code>{`*com.fasterxml.jackson.module:jackson-module-jaxb-annotations*`}</code></a></td>
+      <td>Jackson data binding with JAXB annotations.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.google.code.findbugs/jsr305" aria-label="`*com.google.code.findbugs:jsr305*`"><code>{`*com.google.code.findbugs:jsr305*`}</code></a></td>
+      <td>Annotations in package &#42;javax.annotation[.&#42;]&#42;, e.g. &#42;Nullable&#42; and &#42;Nonnnull&#42;.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.google.inject.extensions/guice-assistedinject" aria-label="`*com.google.inject.extensions:guice-assistedinject*`"><code>{`*com.google.inject.extensions:guice-assistedinject*`}</code></a></td>
+      <td>Guice extensions.<br />For component injection see <a href="/en/applications/dependency-injection#depending-on-another-component" aria-label="Depending on another component">Depending on another component</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.google.inject.extensions/guice-multibindings" aria-label="`*com.google.inject.extensions:guice-multibindings*`"><code>{`*com.google.inject.extensions:guice-multibindings*`}</code></a></td>
+      <td>Guice extensions.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/javax.annotation/javax.annotation-api" aria-label="`*javax.annotation:javax.annotation-api*`"><code>{`*javax.annotation:javax.annotation-api*`}</code></a></td>
+      <td>Annotations in package &#42;javax.annotation[.&#42;]&#42;, e.g. &#42;ManagedBean&#42; and &#42;Resource&#42;.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/javax.validation/validation-api" aria-label="`*javax.validation:validation-api*`"><code>{`*javax.validation:validation-api*`}</code></a></td>
+      <td>Javax bean validation, used by Jersey 2.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/search?q=g:org.eclipse.jetty" aria-label="`*org.eclipse.jetty:*`"><code>{`*org.eclipse.jetty:*`}</code></a></td>
+      <td>The Eclipse Jetty Project.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.apache.felix/org.apache.felix.framework" aria-label="`*org.apache.felix:org.apache.felix.framework*`"><code>{`*org.apache.felix:org.apache.felix.framework*`}</code></a></td>
+      <td>Felix OSGi framework.</td>
+    </tr>
+    <tr>
+      <td>&#42;org.apache.felix:org.apache.felix.log&#42;</td>
+      <td>Felix OSGi framework.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.apache.felix/org.apache.felix.main" aria-label="`*org.apache.felix:org.apache.felix.main*`"><code>{`*org.apache.felix:org.apache.felix.main*`}</code></a></td>
+      <td>Felix OSGi framework.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.bouncycastle/bcpkix-jdk15on" aria-label="`*org.bouncycastle:bcpkix-jdk15on*`"><code>{`*org.bouncycastle:bcpkix-jdk15on*`}</code></a></td>
+      <td>Bouncy Castle crypto API.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.bouncycastle/bcprov-jdk15on" aria-label="`*org.bouncycastle:bcprov-jdk15on*`"><code>{`*org.bouncycastle:bcprov-jdk15on*`}</code></a></td>
+      <td>Bouncy Castle crypto provider.</td>
+    </tr>
+    <tr>
+      <td>&#42;org.glassfish.&#42;:&#42;</td>
+      <td>Jersey 2. All related artifacts are removed.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.json/json" aria-label="`*org.json:json*`"><code>{`*org.json:json*`}</code></a></td>
+      <td>See <a href="https://github.com/vespa-engine/vespa/issues/14762" aria-label="vespa-engine/vespa#14762">vespa-engine/vespa#14762</a></td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.javassist/javassist" aria-label="`*org.javassist:javassist*`"><code>{`*org.javassist:javassist*`}</code></a></td>
+      <td>Bytecode manipulation, used by Jersey 2.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.jvnet.mimepull/mimepull" aria-label="`*org.jvnet.mimepull:mimepull*`"><code>{`*org.jvnet.mimepull:mimepull*`}</code></a></td>
+      <td>MIME Streaming Extension, used by Jersey 2.</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.lz4/lz4-java" aria-label="`*org.lz4:lz4-java*`"><code>{`*org.lz4:lz4-java*`}</code></a></td>
+      <td>Compression library.</td>
+    </tr>
+  </tbody>
+</table>
+
+Make sure your application OSGi bundle embeds the required artifacts from the above list. An artifact can be embedded by adding it in scope *compile* to the *dependencies* section in pom.xml. Typically, these artifacts have until now been used in scope *provided*. Use `mvn dependency:tree` to check whether any of the listed artifacts are directly or transitively included as dependencies.
+
+As always, remove any dependencies that are not required by your project. Consult the Maven documentation on [Dependency Exclusions](https://maven.apache.org/guides/introduction/introduction-to-optional-and-excludes-dependencies.html#dependency-exclusions) for how to remove a transitively included dependency.
+
+An example adding *org.json:json* as a compile scoped dependency:
+
+```xml
+<dependencies>
+  ...
+  <dependency>
+    <groupId>org.json</groupId>
+    <artifactId>json</artifactId>
+    <version>20211205</version>
+    <scope>compile</scope>
+  </dependency>
+  ...
+</dependencies>
+```
+
+## Removed HTTP API parameters
+
+The following HTTP API parameters are removed from the [query API](/en/reference/api/query):
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Standard API path</th>
+      <th>Parameter name</th>
+      <th>Replacement</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>/search/</td>
+      <td>&#42;pos.ll&#42;</td>
+      <td>add a <a href="/en/reference/querying/yql#geolocation" aria-label="geoLocation">geoLocation</a> item to the query</td>
+    </tr>
+    <tr>
+      <td>/search/</td>
+      <td>&#42;pos.radius&#42;</td>
+      <td>add a <a href="/en/reference/querying/yql#geolocation" aria-label="geoLocation">geoLocation</a> item to the query</td>
+    </tr>
+    <tr>
+      <td>/search/</td>
+      <td>&#42;pos.attribute&#42;</td>
+      <td>add a <a href="/en/reference/querying/yql#geolocation" aria-label="geoLocation">geoLocation</a> item to the query</td>
+    </tr>
+    <tr>
+      <td>/search/</td>
+      <td>&#42;pos.bb&#42;</td>
+      <td>Support for restricting search by a bounding box, using the <code>{`pos.bb`}</code> query parameter, has been removed - add a <a href="/en/reference/querying/yql#geolocation" aria-label="geoLocation">geoLocation</a> item to the query</td>
+    </tr>
+  </tbody>
+</table>
+
+## Removed command line tools
+
+### vespa-http-client
+
+The `vespa-http-client` command line tool is removed on Vespa 8 and is replaced by the new [vespa-feed-client](/en/clients/vespa-feed-client). The new client uses [HTTP/2](/en/performance/http2) and the [Document v1 API](/en/writing/document-v1-api-guide).
+
+The underlying rest API used by the vespa-http-client will still be available and supported on Vespa 8. You can therefore continue to use an old client distributed with Vespa 7 to feed to a Vespa 8 installation. Note that there will not be released any updates for vespa-http-client after the initial Vespa 8 release, while fixes and security updates to the rest API implementation will continue as part of Vespa 8. We strongly recommend that you migrate away from vespa-http-client in a timely manner.
+
+## Removed or renamed metrics
+
+The following metrics are renamed:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Old Name</th>
+      <th>New name</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;vds.filestor.alldisks.&#42;&#42;</td>
+      <td>vds.filestor.&#42;</td>
+      <td>&#42;alldisks&#42; has been removed from the metric name.</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.&#42;.sum.&#42;&#42;</td>
+      <td>vds.visitor.&#42;.&#42;</td>
+      <td>&#42;sum&#42; has been removed from the metric name.</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor.&#42;.sum.&#42;&#42;</td>
+      <td>vds.filestor.&#42;.&#42;</td>
+      <td>&#42;sum&#42; has been removed from the metric name.</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.&#42;.sum.&#42;&#42;</td>
+      <td>vds.distributor.&#42;.&#42;</td>
+      <td>&#42;sum&#42; has been removed from the metric name.</td>
+    </tr>
+  </tbody>
+</table>
+
+The following metrics are removed:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;http.status.401.rate&#42;</td>
+      <td>Use &#42;http.status.4xx.rate&#42; with dimension &#42;statusCode&#42;==401</td>
+    </tr>
+    <tr>
+      <td>&#42;http.status.403.rate&#42;</td>
+      <td>Use &#42;http.status.4xx.rate&#42; with dimension &#42;statusCode&#42;==403</td>
+    </tr>
+    <tr>
+      <td>&#42;content.proton.documentdb.matching.query_collateral_time.&#42;&#42;</td>
+      <td>Use &#42;content.proton.documentdb.matching.query_setup_time.&#42;&#42; instead</td>
+    </tr>
+    <tr>
+      <td>&#42;content.proton.documentdb.matching.rank_profile.query_collateral_time.&#42;&#42;</td>
+      <td>Use &#42;content.proton.documentdb.matching.rank_profile.query_setup_time.&#42;&#42; instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.averagevisitorlifetime~~.sum~~.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.averagequeuewait~~.sum~~.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.queuesize~~.sum~~.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.completed~~.sum~~.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.averagemessagesendtime~~.sum~~.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.averageprocessingtime~~.sum~~.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.queuesize.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.averagequeuewait.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.put~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.remove~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.get~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.update~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.createiterator~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.visit~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.remove_location~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.deletebuckets~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.puts~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.removes~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.updates~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.gets~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.visitor~~.sum~~.latency.average&#42;</td>
+      <td>Use .sum/.count instead</td>
+    </tr>
+  </tbody>
+</table>
+
+## Exact matching of document types in selection language
+
+The [document selection language](/en/reference/writing/document-selector-language) now uses *exact* matching for document types rather than *inheritance* ("is-a") matching.
+
+Example with two minimal document schemas:
+
+- `document my_doc_type {}`
+- `document my_extended_doc_type inherits my_doc_type {}`
+
+Previously, the selection expression `my_doc_type` would match both a document instance of type `my_doc_type` *and* `my_extended_doc_type`. It will now *only* match a document of type `my_doc_type`.
+
+## Security
+
+### Strict mode enabled by default
+
+*Strict mode* for request filtering in the jdisc container is enabled by default in Vespa 8. See documentation on the [strict-mode](/en/reference/applications/services/http#filtering) attribute in services.xml for details.
+
+### Request headers controlling remote host/port in access log
+
+
+The jdisc container will use the *X-Forwarded-For* and *X-Forwarded-Port* request headers to set the remote host and port respectively in the access log. The following request headers will no longer be handled by default:
+
+- y-ra
+- yahooremoteip
+- client-ip
+- y-rp
+
+## Operating system support for Vespa artifacts
+
+### RPMs
+
+The supported OS for Vespa RPMs changes from [CentOS Linux 7](https://www.centos.org/centos-linux/) to [CentOS Stream 8](https://www.centos.org/centos-stream/) for Vespa 8. RPMs will still be built and distributed on [Fedora Copr](https://copr.fedorainfracloud.org/coprs/g/vespa/vespa/). If you install Vespa RPMs you will have to upgrade your OS to [CentOS Stream 8](https://www.centos.org/centos-stream/).
+
+### OCI containers (Docker containers)
+
+The base image used in our OCI containers changes from [docker.io/centos:7](https://hub.docker.com/_/centos) to [quay.io/centos/centos:stream8](https://quay.io/repository/centos/centos?tab=tags) for Vespa 8. This means that the container image is built and tested on systems running kernel version *4.18.0* (current kernel for CentOS Stream 8). If you use Vespa's container image, you should upgrade the hosts running the containers to the same or a newer kernel version.
+
+## Other changes
+
+### Unknown rank profiles
+
+Queries that specify a rank profile which does not exist in all the schemas being queried will now fail instead of falling back to using the `default` profile. Queries to multiple schemas must use a rank profile that exists in all of them, which can be ensured by [inheriting](/en/schemas/inheritance-in-schemas) a common schema.
+
+### Unknown summary classes
+
+Queries that specify a non-existent [summary class](/en/querying/document-summaries) will now fail, instead of being rendered empty. Queries to multiple schemas must use a summary class that exists in all of them, which can be ensured by [inheriting](/en/schemas/inheritance-in-schemas) a common schema.
+
+### The "qrserver" service name
+
+Vespa containers are in general using "container" as their service name. However, a container cluster that has declared neither [document-processing](/en/reference/applications/services/docproc) nor [document-api](/en/reference/applications/services/container#document-api) used to be named "qrserver". On Vespa 8 all container clusters uses the service name "container". This affects the output of all metrics APIs, as well as the Vespa log output.
+
+### Container access logs
+
+The folder for container access logs has been moved from `$VESPA_HOME/logs/vespa/qrs/` to `$VESPA_HOME/logs/vespa/access/`.
+
+The default compression format has changed from gzip to zstd, see [changed defaults](#changed-defaults).
+
+### ONNX output in summary features
+
+When defining an ONNX model output in summary features, Vespa 8 ensures that the summary feature name is `onnx` rather than `onnxModel` as in previous version.
+
+### Changes in rankfeatures
+
+Vespa can calculate and return all [rank-features](/en/reference/api/query#ranking.listfeatures) in the `rankfeatures` summary field. Vespa 8 contains some changes to this list:
+
+- `now` is removed
+- `bm25(field)` is added
+- `matches(field)` is added
+
+### The "storage" message bus routing policy is removed
+
+The "storage" routing policy was removed in early Vespa 7, and clients specifying it have been forwarded to the content routing policy for backwards compatibility. The forwarding is removed on Vespa 8 and clients needs be updated.
+
+Replace all usages of the "storage" policy with "content", which behaves identically.
+
+### vespa-dispatch-bin process is removed
+
+The dispatch functionality is moved into the Vespa Container and the *vespa-dispatch-bin* process is removed. As this is not a public interface, the default was switched to **not** using vespa-dispatch-bin in Vespa-7.109.10. The process was removed in subsequent Vespa releases:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>||||</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="/en/querying/query-api" aria-label="Dispatch">Dispatch</a> | Content cluster | dynamically allocated in 19100 - 19899 range | <code>{`$VESPA_HOME/sbin/vespa-dispatch-bin`}</code> | Dispatcher, communicates between container and content nodes. Can be multi-level in a hierarchy</td>
+    </tr>
+  </tbody>
+</table>
+
+
+Rolling upgrade note: A rolling upgrade over Vespa-7.109.10 should work with no extra steps.
+
+### YQL format
+
+- When Vespa outputs an YQL statement, it will now not end the string by a semicolon. Terminating statements with semicolon continue to be optional and legal input.
+- [Annotations](/en/reference/querying/yql#annotations) are not enclosed in `[]` brackets (still valid input).
+- The annotation name is not quoted (still valid input).
+
+Example Vespa 7 / Vespa 8:
+
+```js
+where text contains ([{"distance": 5}]near("a", "b"));
+where text contains ({distance: 5}near("a", "b"))
+```
+
+### Upgrade procedure
+
+The [upgrade procedure](/en/operations/self-managed/live-upgrade) has been simplified in Vespa 8 (when upgrading from Vespa 7 to Vespa 8 or between Vespa 8 versions). When upgrading from Vespa 7.x to Vespa 7.y replace item 3 [Upgrade config servers](/en/operations/self-managed/live-upgrade#upgrade-config-server) in the [upgrade procedure](/en/operations/self-managed/live-upgrade) with this procedure:
+- When upgrading the config servers, the nodes of the application cannot receive config until they are upgraded themselves. We need to set all of them in standalone mode before continuing by running this command on each node:   
+
+    ```bash
+    $ vespa-configproxy-cmd -m setmode memorycache
+    ```
+    Each node will automatically reattach itself when it is upgraded.
+- Install the new Vespa version on the config servers and [restart](/en/operations/self-managed/admin-procedures#vespa-start-stop-restart) them one by one. Wait until it is up again, look in vespa log for "Changing health status code from 'initializing' to 'up'" or use [health checks](/en/operations/self-managed/configuration-server#troubleshooting).
+- Redeploy and activate the application:
+    
+    `$` [`vespa deploy`](/en/clients/vespa-cli#deployment)
