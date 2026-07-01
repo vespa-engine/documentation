@@ -1,0 +1,585 @@
+---
+title: "Access Logging"
+---
+
+The Vespa access log format allows the logs to be processed by a number of available tools handling JSON based (log) files. With the ability to add custom key/value pairs to the log from any Searcher, you can easily track the decisions done by container components for given requests.
+
+## Vespa Access Log Format
+
+In the Vespa access log, each log event is logged as a JSON object on a single line. The log format defines a list of fields that can be logged with every request. In addition to these fields, [custom key/value pairs](#logging-key-value-pairs-to-the-json-access-log-from-searchers) can be logged via Searcher code. Pre-defined fields:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Always present</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ip</td>
+      <td>string</td>
+      <td>The IP address request came from</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>time</td>
+      <td>number</td>
+      <td>UNIX timestamp with millisecond decimal precision (e.g. 1477828938.123) when request is received</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>duration</td>
+      <td>number</td>
+      <td>The duration of the request in seconds with millisecond decimal precision (e.g. 0.123)</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>responsesize</td>
+      <td>number</td>
+      <td>The size of the response in bytes</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>code</td>
+      <td>number</td>
+      <td>The HTTP status code returned</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>method</td>
+      <td>string</td>
+      <td>The HTTP method used (e.g. 'GET')</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>uri</td>
+      <td>string</td>
+      <td>The request URI from path and beyond (e.g. '/search?query=test')</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>version</td>
+      <td>string</td>
+      <td>The HTTP version (e.g. 'HTTP/1.1')</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>agent</td>
+      <td>string</td>
+      <td>The user agent specified in the request</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>host</td>
+      <td>string</td>
+      <td>The host header provided in the request</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>scheme</td>
+      <td>string</td>
+      <td>The scheme of the request</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>port</td>
+      <td>number</td>
+      <td>The IP port number of the interface on which the request was received</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>remoteaddr</td>
+      <td>string</td>
+      <td>The IP address of the <a href="#logging-remote-address-port" aria-label="remote client">remote client</a> if specified in HTTP header</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>remoteport</td>
+      <td>string</td>
+      <td>The port used from the <a href="#logging-remote-address-port" aria-label="remote client">remote client</a> if specified in HTTP header</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>peeraddr</td>
+      <td>string</td>
+      <td>Address of immediate client making request if different from &#42;remoteaddr&#42;</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>peerport</td>
+      <td>string</td>
+      <td>Port used by immediate client making request if different from &#42;remoteport&#42;</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>user-principal</td>
+      <td>string</td>
+      <td>The name of the authenticated user (java.security.Principal.getName()) if principal is set</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>ssl-principal</td>
+      <td>string</td>
+      <td>The name of the x500 principal if client is authenticated through SSL/TLS</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>search</td>
+      <td>object</td>
+      <td>Object holding search specific fields</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>search.totalhits</td>
+      <td>number</td>
+      <td>The total number of hits for the query</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>search.hits</td>
+      <td>number</td>
+      <td>The hits returned in this specific response</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>search.coverage</td>
+      <td>object</td>
+      <td>Object holding <a href="/en/performance/graceful-degradation" aria-label="query coverage information">query coverage information</a> similar to that returned in result set.</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>connection</td>
+      <td>string</td>
+      <td>Reference to the connection log entry. See <a href="#connection-log" aria-label="Connection log">Connection log</a></td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>attributes</td>
+      <td>object</td>
+      <td>Object holding <a href="#logging-key-value-pairs-to-the-json-access-log-from-searchers" aria-label="custom key/value pairs">custom key/value pairs</a> logged in searcher.</td>
+      <td>no</td>
+    </tr>
+  </tbody>
+</table>
+
+<Note>
+**Note:** 
+
+IP addresses can be both IPv4 addresses in standard dotted format (e.g. 127.0.0.1) or IPv6 addresses in standard form with leading zeros omitted (e.g. 2222:1111:123:1234:0:0:0:4321).
+</Note>
+
+An example log line will look like this (here, pretty-printed):
+
+```json
+{
+  "ip": "152.200.54.243",
+  "time": 920880005.023,
+  "duration": 0.122,
+  "responsesize": 9875,
+  "code": 200,
+  "method": "GET",
+  "uri": "/search?query=test&param=value",
+  "version": "HTTP/1.1",
+  "agent": "Mozilla/4.05 [en] (Win95; I)",
+  "host": "localhost",
+  "search": {
+    "totalhits": 1234,
+    "hits": 0,
+    "coverage": {
+      "coverage": 98,
+      "documents": 100,
+      "degraded": {
+        "non-ideal-state": true
+      }
+    }
+  }
+}
+```
+
+<Note>
+**Note:** 
+
+The log format is extendable by design such that the order of the fields can be changed and new fields can be added between minor versions. Make sure any programmatic log handling is using a proper JSON processor.
+</Note>
+
+Example: Decompress, pretty-print, with human-readable timestamps:
+
+```bash
+$ jq '. + {iso8601date:(.time | todateiso8601)}' \
+  <(unzstd -c /opt/vespa/logs/vespa/access/JsonAccessLog.default.20210601010000.zst)
+```
+
+### Logging Remote Address/Port
+
+In some cases when a request passes through an intermediate service, this service may add HTTP headers indicating the IP address and port of the real origin client. These values are logged as *remoteaddr* and *remoteport* respectively. Vespa will log the contents in any of the following HTTP request headers as *remoteaddr*: *X-Forwarded-For*, *Y-RA*, *YahooRemoteIP* or *Client-IP*. If more than one of these headers are present, the precedence is in the order listed here, i.e. *X-Forwarded-For* takes precedence over *Y-RA*. The contents of the *Y-RP* HTTP request header will be logged as *remoteport*.
+
+If the remote address or -port differs from those initiating the HTTP request, the address and port for the immediate client making the request are logged as *peeraddress* and *peerport* respectively.
+
+## Configuring Logging
+
+For details on the access logging configuration see [accesslog in the container](/en/reference/applications/services/container#accesslog) element in *services.xml*.
+
+Key configuration options include:
+
+- **fileNamePattern**: Pattern for log file names with time variable support
+- **rotationInterval**: Time-based rotation schedule (minutes since midnight)
+- **rotationSize**: Size-based rotation threshold in bytes (0 = disabled)
+- **rotationScheme**: Either 'sequence' or 'date'
+- **compressionFormat**: GZIP or ZSTD compression for rotated files
+
+### Logging Request Content
+
+Vespa supports logging of request content for specific URI paths. This is useful for inspecting query content of search POST requests or document operations of Document v1 POST/PUT requests. The request content is logged as a base64-encoded string in the JSON access log.
+
+To configure request content logging, use the [request-content](/en/reference/applications/services/container#request-content) element in the accesslog configuration in *services.xml*.
+
+Here is an example of how the request content appears in the JSON access log:
+
+```json
+{
+  ...
+  "method": "POST",
+  "uri": "/search",
+  ...,
+  "request-content": {
+    "type": "application/json; charset=utf-8",
+    "length": 12345,
+    "body": "<raw bytes encoded with base64>"
+  }
+}
+```
+
+### File name pattern
+
+The file name pattern is expanded using the time when the file is created. The following parts in the file name are expanded:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Format</th>
+      <th>Meaning</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`%`}</code>Y`</td>
+      <td>YYYY</td>
+      <td>Year</td>
+      <td>2003</td>
+    </tr>
+    <tr>
+      <td><code>{`%`}</code>m`</td>
+      <td>MM</td>
+      <td>Month, numeric</td>
+      <td>08</td>
+    </tr>
+    <tr>
+      <td><code>{`%`}</code>x`</td>
+      <td>MMM</td>
+      <td>Month, textual</td>
+      <td>Aug</td>
+    </tr>
+    <tr>
+      <td><code>{`%`}</code>d`</td>
+      <td>dd</td>
+      <td>Date</td>
+      <td>25</td>
+    </tr>
+    <tr>
+      <td><code>{`%`}</code>H`</td>
+      <td>HH</td>
+      <td>Hour</td>
+      <td>14</td>
+    </tr>
+    <tr>
+      <td><code>{`%`}</code>M`</td>
+      <td>mm</td>
+      <td>Minute</td>
+      <td>30</td>
+    </tr>
+    <tr>
+      <td><code>{`%`}</code>S`</td>
+      <td>ss</td>
+      <td>Seconds</td>
+      <td>35</td>
+    </tr>
+    <tr>
+      <td><code>{`%`}</code>s`</td>
+      <td>SSS</td>
+      <td>Milliseconds</td>
+      <td>123</td>
+    </tr>
+    <tr>
+      <td><code>{`%`}</code>Z`</td>
+      <td>Z</td>
+      <td>Time zone</td>
+      <td>-0400</td>
+    </tr>
+    <tr>
+      <td><code>{`%`}</code>T`</td>
+      <td>Long</td>
+      <td>System.currentTimeMillis</td>
+      <td>1349333576093</td>
+    </tr>
+    <tr>
+      <td><code>{`%`}</code>%<code>{` `}</code></td>
+      <td><code>{`%`}</code>`</td>
+      <td>Escape percentage</td>
+      <td>%</td>
+    </tr>
+  </tbody>
+</table>
+
+## Log rotation
+
+Apache httpd style log *rotation* can be configured by setting the *rotationScheme*. There's two alternatives for the rotationScheme, sequence and date. Rotation can be triggered by time intervals using *rotationInterval* and/or by file size using *rotationSize*.
+
+### Sequence rotation scheme
+
+The *fileNamePattern* is used for the active log file name (which in this case will often be a constant string). At rotation, this file is given the name fileNamePattern.N where N is 1 + the largest integer found by extracting the integers from all files ending by .`<Integer>` in the same directory
+
+```xml
+<accesslog type='json'
+           fileNamePattern='logs/vespa/access/JsonAccessLog.<container id>.%Y%m%d%H%M%S'
+           rotationScheme='sequence' />
+```
+
+### Date rotation scheme
+
+The *fileNamePattern* is used for the active log file name here too, but the log files are not renamed at rotation. Instead, you must specify a time-dependent fileNamePattern so that each time a new log file is created, the name is unique. In addition, a symlink is created pointing to the active log file. The name of the symlink is specified using *symlinkName*.
+
+```xml
+<accesslog type='json'
+           fileNamePattern='logs/vespa/access/JsonAccessLog.<container id>.%Y%m%d%H%M%S'
+           rotationScheme='date'
+           symlinkName='JsonAccessLog' />
+```
+
+### Rotation interval
+
+The time of rotation is controlled by setting *rotationInterval*:
+
+```xml
+<accesslog type='json'
+           fileNamePattern='logs/vespa/access/JsonAccessLog.<container id>.%Y%m%d%H%M%S'
+           rotationInterval='0 60 ...'
+           rotationScheme='date'
+           symlinkName='JsonAccessLog.<container id>' />
+```
+
+The rotationInterval is a list of numbers specifying when to do rotation. Each element represents the number of minutes since midnight. Ending the list with '...' means continuing the [arithmetic progression](https://en.wikipedia.org/wiki/Arithmetic_progression) defined by the two last numbers for the rest of the day. E.g. "0 100 240 480 ..." is expanded to "0 100 240 480 720 960 1200"
+
+### Log retention
+
+Access logs are rotated, but not deleted by Vespa processes. It is up to the application owner to take care of archiving of access logs.
+
+## Logging Key/Value pairs to the JSON Access Log from Searchers
+
+To add a key/value pair to the access log from a searcher, use
+
+```bash
+query/result.getContext(true).logValue(key,value)
+```
+
+Such key/value pairs may be added from any thread participating in handling the query without incurring synchronization overhead.
+
+If the same key is logged multiple times, the values written will be included in the log as an array of strings rather than a single string value.
+
+The key/value pairs are added to the *attributes* object in the log.
+
+An example log line will then look something like this:
+
+```json
+{"ip":"152.200.54.243","time":920880005.023,"duration":0.122,"responsesize":9875,"code":200,"method":"GET","uri":"/search?query=test&param=value","version":"HTTP/1.1","agent":"Mozilla/4.05 [en] (Win95; I)","host":"localhost","search":{"totalhits":1234,"hits":0},"attributes":{"singlevalue":"value1","multivalue":["value2","value3"]}}
+```
+
+A pretty print version of the same example:
+
+```json
+{
+  "ip": "152.200.54.243",
+  "time": 920880005.023,
+  "duration": 0.122,
+  "responsesize": 9875,
+  "code": 200,
+  "method": "GET",
+  "uri": "/search?query=test&param=value",
+  "version": "HTTP/1.1",
+  "agent": "Mozilla/4.05 [en] (Win95; I)",
+  "host": "localhost",
+  "search": {
+    "totalhits": 1234,
+    "hits": 0
+  },
+  "attributes": {
+    "singlevalue": "value1",
+    "multivalue": [
+      "value2",
+      "value3"
+    ]
+  }
+}
+```
+
+## Connection log
+
+In addition to the access log, one entry per connection is written to the connection log. This entry is written on connection close. Available fields:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Always present</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>id</td>
+      <td>string</td>
+      <td>Unique ID of the connection, referenced from access log.</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>timestamp</td>
+      <td>number</td>
+      <td>Timestamp (ISO8601 format) when the connection was opened</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>duration</td>
+      <td>number</td>
+      <td>The duration of the request in seconds with millisecond decimal precision (e.g. 0.123)</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>peerAddress</td>
+      <td>string</td>
+      <td>IP address used by immediate client making request</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>peerPort</td>
+      <td>number</td>
+      <td>Port used by immediate client making request</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>localAddress</td>
+      <td>string</td>
+      <td>The local IP address the request was received on</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>localPort</td>
+      <td>number</td>
+      <td>The local port the request was received on</td>
+      <td>yes</td>
+    </tr>
+    <tr>
+      <td>remoteAddress</td>
+      <td>string</td>
+      <td>Original client ip, if proxy protocol enabled</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>remotePort</td>
+      <td>number</td>
+      <td>Original client port, if proxy protocol enabled</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>httpBytesReceived</td>
+      <td>number</td>
+      <td>Number of HTTP bytes sent over the connection</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>httpBytesSent</td>
+      <td>number</td>
+      <td>Number of HTTP bytes received over the connection</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>requests</td>
+      <td>number</td>
+      <td>Number of requests sent by the client</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>responses</td>
+      <td>number</td>
+      <td>Number of responses sent to the client</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>ssl</td>
+      <td>object</td>
+      <td>Detailed information on ssl connection</td>
+      <td>no</td>
+    </tr>
+  </tbody>
+</table>
+
+## SSL information
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Always present</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>clientSubject</td>
+      <td>string</td>
+      <td>Client certificate subject</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>clientNotBefore</td>
+      <td>string</td>
+      <td>Client certificate valid from</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>clientNotAfter</td>
+      <td>string</td>
+      <td>Client certificate valid to</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>sessionId</td>
+      <td>string</td>
+      <td>SSL session id</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>protocol</td>
+      <td>string</td>
+      <td>SSL protocol</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>cipherSuite</td>
+      <td>string</td>
+      <td>Name of session cipher suite</td>
+      <td>no</td>
+    </tr>
+    <tr>
+      <td>sniServerName</td>
+      <td>string</td>
+      <td>SNI server name</td>
+      <td>no</td>
+    </tr>
+  </tbody>
+</table>

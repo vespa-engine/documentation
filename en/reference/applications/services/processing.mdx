@@ -1,0 +1,357 @@
+---
+title: "services.xml - processing"
+---
+
+
+This document explains the syntax and semantics of the `processing` subelement of the [`container`](/en/reference/applications/services/container) part of `services.xml`. `processing` is for configuring a pure [request-response processing](/en/applications/processing) application, with no particular dependency to search or query handling. The processing block is used to configure [processors](/en/applications/processing):
+
+```yaml expandable
+processing
+    binding
+    processor [id, class, bundle, provides, before, after]
+        provides
+        before
+        after
+    renderer [id, class, bundle]
+    chain [id, inherits, excludes]
+        processor [idref, id, class, bundle, provides, before, after]
+            provides
+            before
+            after
+        inherits
+            chain
+            exclude
+        phase [id, before, after]
+            before
+            after
+```
+
+Example:
+
+```xml
+<processing>
+    <processor id="processor1" class="com.yahoo.test.Processor1" />
+    <chain id="default">
+        <processor idref="processor1"/>
+        <processor id="processor2" class="com.yahoo.test.Processor2"/>
+    </chain>
+    <renderer id="renderer1" class="com.yahoo.test.Renderer1" />
+</processing>
+```
+
+## binding
+
+The URI to map the ProcessingHandler to. The default binding is `http://*/processing/*`. Multiple elements are allowed. Example:
+
+```xml
+<binding>http://*/processing/*</binding>
+```
+
+## processor
+
+The definition of a single processor, for referencing when defining chains. If a single processor is to be used in multiple chains, it is cleaner to define it directly under `processing` and then refer to it with `idref`, than defining it inline separately for each chain.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Required</th>
+      <th>Value</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;id&#42;&#42;</td>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The component ID</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;class&#42;&#42;</td>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The class of the component, defaults to id</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;bundle&#42;&#42;</td>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The bundle to load the component from, defaults to class or id (if no class is given)</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;before&#42;&#42;</td>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>Space separated list of phases and/or processors which should succeed this processor</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;after&#42;&#42;</td>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>Space separated list of phases and/or processors which should precede this processor</td>
+    </tr>
+  </tbody>
+</table>
+
+Example:
+
+```xml
+<processor id="processor2" class="com.yahoo.test.Processor2"/>
+```
+
+## renderer
+
+The definition of a renderer, for use by a Handler.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Required</th>
+      <th>Value</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;id&#42;&#42;</td>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The component ID</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;class&#42;&#42;</td>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The class of the component, defaults to id</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;bundle&#42;&#42;</td>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>The bundle to load the component from, defaults to class or id (if no class is given)</td>
+    </tr>
+  </tbody>
+</table>
+
+Example:
+
+```xml
+<renderer id="renderer1" class="com.yahoo.test.Renderer1" />
+```
+
+## processor (in chain)
+
+Reference to or inline definition of a processor in a chain. If inlining, same as [processor](#processor) - if referring to, use *idref* attribute:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Required</th>
+      <th>Value</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;idref&#42;&#42;</td>
+      <td></td>
+      <td>string</td>
+      <td></td>
+      <td>Reference to the definition of this processor.</td>
+    </tr>
+  </tbody>
+</table>
+
+Example:
+
+```xml
+<chain id="default">
+    <processor idref="processor2" />
+</chain>
+```
+
+## provides
+
+A name provided by a processor for phases and other processors to use as dependencies. Example:
+
+```xml
+<provides>IntentAnalysis</provides>
+```
+
+## chain
+
+An element for defining a chain of [processors](/en/reference/applications/services/processing) / [searchers](/en/reference/applications/services/search) / [document processors](/en/reference/applications/services/docproc) (i.e. components). A chain is a set ordered by dependencies. Dependencies are expressed through phases, which may depend upon other phases, or components. For an incoming request from the network, the chain named *default* will be invoked. Refer to [Chained components](/en/applications/chaining) for a guide. Requires one of *id* or *idref*.
+
+Searcher, Document processing and Processing chains can be modified at runtime without restarts. Modification includes adding/removing processors in chains and changing names of chains and processors. Make the change and [deploy](/en/basics/applications#deploying-applications). Some changes require a container restart, refer to [reconfiguring document processing](/en/applications/document-processors#reconfiguring-document-processing).
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Required</th>
+      <th>Value</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;idref&#42;&#42;</td>
+      <td></td>
+      <td>string</td>
+      <td></td>
+      <td>A reference to a defined chain. Mutually exclusive with &#42;id&#42;. If &#42;idref&#42; is used, no other attributes apply.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;id&#42;&#42;</td>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The chain ID. Required unless &#42;idref&#42; is used</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;inherits&#42;&#42;</td>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>A space-separated list of chains this chain should include the contents of - see example below.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;excludes&#42;&#42;</td>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>A space-separated list of processors (contained in an inherited chain) this chain should not include. The exclusion is done before any consolidation of component references when inheriting chains. Example:<br/><br/><code>{`<chain id="demo" inherits="idOfInheritedChain"`}</code><br/> <code>{`excludes="idOfProc1 idOfProc2">`}</code><br/><code>{`<processor id="proc2" class="com.yahoo.test.Proc2"/>`}</code><br/> <code>{`</chain>`}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;class&#42;&#42;</td>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;name&#42;&#42;</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;documentprocessors&#42;&#42;</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+## inherits
+
+Inherit from one or more parent chain(s).
+
+When a search chain inherits from another search chain, it subsumes the phases and the *searcher references* (both implicitly and explicitly defined) from the parent chain.
+
+If two or more inherited component references have the same name, a new component specification matching those will be used instead. If that is not possible, an error will be signaled (i.e. if the version specifications can not be consolidated or if they require component definitions from different chains).
+
+The component references determines which instances are used in the resulting chain instance.
+
+A component reference is a component specification that says: there shall be exactly one component in this chain with the given name, and this component must match the version specification.
+
+A component reference *overrides* any inherited component references with the same name (i.e. the inherited ones are ignored).
+
+If several components match a given component reference, the newest (as determined by the version) is used.
+
+## exclude
+
+Exclude components from inherited chains.
+
+## phase
+
+Defines a phase, which is a named checkpoint to help order components inside a chain. Components and other phases may depend on a phase to be able to make assumptions about the order of components. Refer to the [Chained components](/en/applications/chaining) guide.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Required</th>
+      <th>Value</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;id&#42;&#42;</td>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>The ID, or name, which other phases and processors may depend upon as a <a href="#before" aria-label="successor">successor</a> or <a href="#after" aria-label="predecessor">predecessor</a>.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;before&#42;&#42;</td>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>Space-separated list of phases and/or processors which should succeed this phase</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;after&#42;&#42;</td>
+      <td>optional</td>
+      <td>string</td>
+      <td></td>
+      <td>Space-separated list of phases and/or processors which should precede this phase</td>
+    </tr>
+  </tbody>
+</table>
+
+Optional sub-elements:
+
+- before: same as the attribute
+- after: same as the attribute
+
+These are equivalent:
+
+```xml
+<phase id="name">
+    <before>phaseName1</before>
+    <after>phaseName2</after>
+</phase>
+
+<phase id="name" before="phaseName1" after="phaseName2" />
+```
+
+Example:
+
+```xml
+<chain id="demo">
+    <phase id="CheckpointName">
+        <before>IntentAnalysis</before>
+        <after>OtherAnalysis</after>
+    </phase>
+    <processor id="processor2" class="com.yahoo.test.Processor2"/>
+</chain>
+```
+
+## before
+
+The name of a phase or component which should succeed this phase or component. Multiple `before` elements can be used to define multiple components or phases which always should succeed this component or phase in a chain. In other words, the phase or component defined is placed *before* name in the element.
+
+## after
+
+The name of a phase or component which should precede this phase or component. Multiple `after` elements can be used to define multiple component or phases which always should precede this component or phase in a chain. In other words, the phase or component defined is placed *after* the name in the element.

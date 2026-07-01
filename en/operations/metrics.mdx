@@ -1,0 +1,232 @@
+---
+title: "Metrics"
+---
+
+Metrics for all nodes is aggregated using *[/metrics/v2/values](/en/reference/api/metrics-v2#metrics-v2-values)* or *[/prometheus/v1/values](/en/reference/api/prometheus-v1#prometheus-v1-values)*. Values from these endpoints reflect the 1 minute activity immediately before the request.
+
+Example getting a metric value from using the prometheus endpoint:
+
+```bash
+$ curl -s http://ENDPOINT/prometheus/v1/values/?consumer=vespa | \
+  grep "vds.idealstate.merge_bucket.pending.average" | egrep -v 'HELP|TYPE'
+```
+
+<Warning>
+**Important:** 
+
+Make sure to use [consumer=vespa](/en/reference/api/metrics-v1#consumer) to list all metrics.
+</Warning>
+
+Example getting a metric value using */metrics/v2/values*:
+
+```bash
+$ curl ENDPOINT/metrics/v2/values | \
+  jq -r -c '
+    .nodes[] |
+    .hostname as $h |
+    .services[].metrics[] |
+    select(.values."content.proton.documentdb.documents.total.last") |
+    [$h, .dimensions.documenttype, .values."content.proton.documentdb.documents.total.last"] |
+    @tsv'
+
+node9.vespanet	music	0
+node8.vespanet	music	0
+```
+
+## Aggregating metrics
+
+Metrics in Vespa are generated from services running on the individual nodes, and in many cases have many recordings per metric, from within each node, with unique tag / dimension combinations. These recordings need to be put together to contribute to the overall picture of how the system is behaving. If this is done the right way you will be able to “zoom out” to get the bigger picture, or to “zoom in” to see how things behave in more detail. This is very useful when looking into possible production issues. Unfortunately it is easy to combine metrics the wrong way, resulting in potentially significantly distorted graphs.
+
+For each of the values (suffixes) available for the different metrics here is how we recommend that you aggregate them to get the best use of them. The guidelines should be used both for aggregations over time (multiple snapshot intervals) and over tag combinations.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Suffix Name</th>
+      <th>Aggregation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`max`}</code></td>
+      <td>Use the highest value available <code>{`MAX(max)`}</code>.</td>
+    </tr>
+    <tr>
+      <td><code>{`min`}</code></td>
+      <td>Use the lowest value available <code>{`MIN(min)`}</code>.</td>
+    </tr>
+    <tr>
+      <td><code>{`sum`}</code></td>
+      <td>Use the sum of all values <code>{`SUM(sum)`}</code>.</td>
+    </tr>
+    <tr>
+      <td><code>{`count`}</code></td>
+      <td>Use the sum of all values <code>{`SUM(count)`}</code>.</td>
+    </tr>
+    <tr>
+      <td><code>{`average`}</code></td>
+      <td>To generate an average value you want to do <code>{`SUM(sum) / SUM(count)`}</code> where you generate the graph. Don’t use the <code>{`average`}</code> suffix itself if you have the <code>{`sum`}</code> and <code>{`count`}</code> suffixes available. Using this will easily lead to computing averages of averages, which will easily become very distorted and noisy.</td>
+    </tr>
+    <tr>
+      <td><code>{`last`}</code></td>
+      <td>Avoid this except for metrics you expect to be stable, such as amount of memory available on a node, etc. This value is the last from a metrics snapshot period, hence basically a single value picked from all values during the snapshot period. Typically, very noisy for volatile metrics. It does not make sense to aggregate on this value at all, but if you must then choose a value with the same combination of tags over time.</td>
+    </tr>
+    <tr>
+      <td><code>{`95percentile`}</code></td>
+      <td>This value cannot be aggregated in a way that gives a mathematically correct value. But where you have to either compute the average value for the most realistic value, <code>{`AVERAGE(95percentile)`}</code>, or max if the goal is to better identify outliers, <code>{`MAX(95percentile)`}</code>. Regardless, this value is best used when considered at the most granular level, with all tag values specified.</td>
+    </tr>
+    <tr>
+      <td><code>{`99percentile`}</code></td>
+      <td>Same as for the <code>{`95percentile`}</code> suffix.</td>
+    </tr>
+  </tbody>
+</table>
+
+## Metric-sets
+
+Node metrics in */metrics/v1/values* are listed per service, with a set of system metrics - example:
+
+```json expandable
+{
+    "services": [
+        {
+            "name": "vespa.container",
+            "timestamp": 1662120754,
+            "status": {
+                "code": "up",
+                "description": "Data collected successfully"
+            },
+            "metrics": [
+                {
+                    "values": {
+                        "memory_virt": 3683172352,
+                        "memory_rss": 1425416192,
+                        "cpu": 2.0234722784298,
+                        "cpu_util": 0.202347227843
+                    },
+                    "dimensions": {
+                        "metrictype": "system",
+                        "instance": "container",
+                        "clustername": "default",
+                        "vespaVersion": "8.46.19"
+                    }
+                },
+                {
+                    "values": {},
+                    "dimensions": {
+                        "clustername": "default",
+                        "instance": "container",
+                        "vespaVersion": "8.46.19"
+                    }
+                }
+            ]
+        },
+```
+
+The `default` metric-set is added to the system metric-set, unless a [consumer](/en/reference/api/metrics-v1#consumer) request parameter specifies a different built-in or custom metric set - see [metric list](/en/reference/operations/metrics/default-metric-set#metric-sets).
+
+The `Vespa` metric-set has a richer set of metrics, see [metric list](/en/reference/operations/metrics/vespa-metric-set#metric-sets).
+
+The *consumer* request parameter can also be used in [/metrics/v2/values](/en/reference/api/metrics-v2#metrics-v2-values) and [/prometheus/v1/values](/en/reference/api/prometheus-v1#prometheus-v1-values).
+
+Example minimal metric-set; system metric-set + a specific metric:
+
+```xml
+<admin version="2.0">
+    <adminserver hostalias="node1" />
+    <metrics>
+        <consumer id="my-metric-set">
+            <metric id="vds.idealstate.garbage_collection.documents_removed.count" />
+        </consumer>
+    </metrics>
+</admin>
+```
+
+Example default metric-set and more; system metric-set + default metric-set + a built-in metric:
+
+```xml
+<admin version="2.0">
+    <adminserver hostalias="node1" />
+    <metrics>
+        <consumer id="my-metric-set">
+            <metric-set id="default" />
+            <metric id="vds.idealstate.garbage_collection.documents_removed.count" />
+        </consumer>
+    </metrics>
+</admin>
+```
+
+## Metrics names
+
+The names of metrics emitted by Vespa typically follow this naming scheme: `<prefix>.<service>.<component>.<suffix>`. The separator (`.` here) may differ for different metrics integrations. Similarly, the `<prefix>` string may differ depending on your configuration. Further some metrics have several levels of `component` names. Each metric will have a number of values associated with them, one for each `suffix` provided by the metric. Typical suffixes include `sum`, `count` and `max`.
+
+## Container Metrics
+
+Metrics from the container with description and unit can be found in the [container metrics reference](/en/reference/operations/metrics/container#container-metrics). The most commonly used metrics are mentioned below.
+
+### Generic Container Metrics
+
+These metrics are output for the server as a whole, e.g. related to resources. Some metrics indicate memory usage, such as `mem.heap.*`, `mem.native.*`, `mem.direct.*`. Other metrics are related to the JVM garbage collection, `jdisc.gc.count` and `jdisc.gc.ms`.
+
+### Thread Pool Metrics
+
+Metrics for the container thread pools. The `jdisc.thread_pool.*` metrics have a dimension `threadpool` with thread pool name, e.g. *default-pool* for the container's default thread pool. See [Container Tuning](/en/performance/container-tuning#container-tuning) for details.
+
+### HTTP Specific Metrics
+
+These are metrics specific for HTTP. Those metrics that are specific to a connector will have a dimension containing the TCP listen port.
+
+Refer to [Container Metrics](/en/reference/operations/metrics/container) for metrics on HTTP status response codes, `http.status.*` or more detailed requests related to the handling of requests, `jdisc.http.*`. Other relevant metrics include `serverNumConnections`, `serverNumOpenConnections`, `serverBytesReceived` and `serverBytesSent`.
+
+### Query Specific Metrics
+
+For metrics related to queries please start with the `queries` and `query_latency`, the `handled.requests` and `handled.latency` or the `httpapi_*` metrics for more insights.
+
+### Feed Specific Metrics
+
+For metrics related to feeding into Vespa, we recommend using the `feed.operations` and `feed.latency` metrics.
+
+## Available metrics
+
+Each of the services running in a Vespa installation maintains and reports a number of metrics.
+
+Metrics from the container services are the most commonly used, and are listed in [Container Metrics](/en/reference/operations/metrics/container). You will find the metrics available there, with description and unit.
+
+## Metrics from custom components
+
+Add custom metrics from components like [Searchers](/en/applications/searchers) and [Document processors](/en/applications/document-processors):
+
+<Steps>
+<Step>
+Add a [MetricReceiver](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/metrics/simple/MetricReceiver.html) instance to the constructor of the component - it is [injected](/en/applications/dependency-injection) by the Container.
+</Step>
+<Step>
+Declare [Gauge](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/metrics/simple/Gauge.html) and [Counter](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/metrics/simple/Counter.html) metrics using the *declare*\-methods on the *MetricReceiver*. Optionally set arbitrary metric dimensions to default values at declaration time - refer to the javadoc for details.
+</Step>
+<Step>
+Each time there is some data to measure, invoke the [sample](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/metrics/simple/Gauge.html#sample\(double\)) method on gauges or the [add](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/metrics/simple/Counter.html#add\(\)) method on counters. The gauges and counters declared are inherently thread-safe. When sampling data, any dimensions can optionally be set.
+</Step>
+<Step>
+Add a [consumer](/en/reference/applications/services/admin#consumer) in *services.xml* for the metrics to be emitted in the metric APIs, like in the previous section.
+</Step>
+</Steps>
+Find a full example in the [album-recommendation-java](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java) sample application.
+
+<Note>
+**Note:** 
+
+Metrics with no value do now show in the metric APIs - in the example above, make at least one query to set the metric value.
+</Note>
+
+### Example / QA
+
+I have two different libraries that are running as components with their own threads within the vespa container. We are injecting MetricReceiver to each library. After injecting the receiver we store the reference to this receiver in a container-wide object so that they can be used inside these libraries (the libraries each have several classes and such, so it is not possible to inject the receiver every time, and we need to use the stored reference). Questions:
+
+<AccordionGroup>
+<Accordion title="Is the MetricReceiver object unique within the container? That is, if I am injecting the receiver to two different components, is always the same object getting injected?">
+Yes, you get the same object.
+</Accordion>
+<Accordion title="How long does an object remain valid? Does the same object remain valid for the life of the container (meaning from container booting up to the point of restart/shutdown) or can the object change? I ask this because we store the reference to the receiver at a common place so that it can be used to emit metrics elsewhere in the library where we can’t inject it, so I am wondering how frequently we need to update this reference.">
+It remains valid for the lifetime of the component to which it got injected. Therefore, if you share component references through some other mean than direct or indirect injection you may end up with invalid references. A "container-wide object" sounds like trouble. You should have it injected into all the components that needs it instead. Or, if you feel that will be too fine-grained, create one large object which gets these things injected, and then have that injected into all components that need the common stuff.
+</Accordion>
+</AccordionGroup>

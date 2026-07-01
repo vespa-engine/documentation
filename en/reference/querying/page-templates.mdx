@@ -1,0 +1,312 @@
+---
+title: "Page templates reference"
+sidebarTitle: "Page templates"
+---
+
+This document is a reference to the elements of the Page Template XML format. Refer to the [Introduction to Page Templates](/en/querying/page-templates).
+
+A page template describes a particular way or set of ways of organizing data from some sources on a page. It has the following structure:
+
+<Card>
+`<`[page](#page) id="[\[id\]](#id)"> *`<!-- The top-level section of this page -->`* 
+&ensp;&ensp;\[page-element\]\* 
+`</page>`
+</Card>
+
+...where each `[page-element]` is one of:
+
+\<[section](#section)\>[page-element]\*\</section\>
+
+_A nested section (screen area)_
+
+\<[source](#source) name="[source-name]"\> [renderer]\* [parameter]\* \</source\>
+
+_A data source which should be placed in this section_
+
+\<[renderer](#renderer) name="[renderer-name]"\> [parameter]\* \</renderer\>
+
+_The renderer to use for the source or section containing this_
+
+\<[choice](#choice)\> [map] or [page-element]/[alternative]\* \</choice\>
+
+_A choice between alternative page elements resolved at runtime_
+
+\<placeholder id="[id]"/\>
+
+_an element to be replaced by a map item at runtime_
+
+\<[include](#include) idref="[page-id]"\>/\>
+
+_Include the page elements contained in another page_
+
+where the nested elements above are:
+
+\<parameter name="[name]"\>[value]\</parameter\>
+
+_A parameter of the owning element. Renderer parameters are sent as-is to the frontend in the result. Source parameters are sent to the source by setting the query parameter`source.[sourceName].[name]`._
+
+\<alternative\> [page-element]\* \</alternative\>
+
+_multiple page elements constituting one choice alternative_
+
+\<[map](#map) to="placeholder-id1 placeholder-id2 ... "\> [page-element]/[item]\* \</alternative\>
+
+_a mapping of some page elements to placeholders_
+
+\<[item](#item)\> [page-element]\* \</item\>
+
+_multiple page elements which should all map to one placeholder_
+
+All tags may also include a `description` attribute to document the use of the tag. Tags and attributes are described in detail in the following.
+
+## id
+
+An id has the format:
+
+```bash
+id        ::= name(:major(.minor(.micro(.qualifier)?)?)?)?
+name      ::= identifier
+major     ::= integer
+minor     ::= integer
+micro     ::= integer
+qualifier ::= identifier
+```
+
+Any omitted numeric version component missing is taken to mean 0, while a missing qualifier is taken to mean the empty string.
+
+## page
+
+The root tag of a page template. Defines a page, is also its root section. Attributes and subtags are the same as for [section](#section), with the exception that the `id` attribute is mandatory for a page.
+
+## section
+
+A representation of an area of screen real-estate. At runtime a section will contain content from various sources. The final renderer will render the section with its data items and/or subsections in an area of screen real-estate determined by its containing tag.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>id</td>
+      <td>A unique identifier of this section used for referring.</td>
+      <td>_No id_</td>
+    </tr>
+    <tr>
+      <td>layout</td>
+      <td>An identifier. Permissible values are <code>{`row`}</code>, <code>{`column`}</code> and any additional layouts supported by the renderer i of the returned page.</td>
+      <td><code>{`column`}</code></td>
+    </tr>
+    <tr>
+      <td>region</td>
+      <td>An identifier. The permissible values, and whether this is mandatory is determined by the particular layout identifier of the containing section (<code>{`row`}</code> and <code>{`column`}</code> does not specify any region identifiers).</td>
+      <td>_None_</td>
+    </tr>
+    <tr>
+      <td>source</td>
+      <td>A space-separated set of sources permissible within this. This is a shorthand for defining sources as subtags. The total source list of this section consists of both the sources listed here and as subtags.</td>
+      <td>_All sources are permissible if none are specified._</td>
+    </tr>
+    <tr>
+      <td>max</td>
+      <td>The maximum number of items permissible within this section (including any subsections). Regardless of the blending method used, the most relevant items are kept.</td>
+      <td>_Unrestricted_</td>
+    </tr>
+    <tr>
+      <td>min</td>
+      <td>The minimum number of items desired within this.</td>
+      <td>_Unrestricted_</td>
+    </tr>
+    <tr>
+      <td>order</td>
+      <td>The method of ordering to use on the items displayed in this container. This may be any <a href="/en/reference/querying/sorting-language" aria-label="sorting specification">sorting specification</a> over the fields of the hits, plus the source name and relevance score, for example <code>{`[source]-[relevance] category`}</code> to group by source, sort each group primarily by decreasing relevance and secondarily by the "category" field. The <code>{`[source]`}</code> identifier will sort sources by the order in which they are listed in the template in use.</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+## source
+
+A data source whose data should be placed in the containing section.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>The name of this source.</td>
+      <td>_Mandatory_</td>
+    </tr>
+    <tr>
+      <td>url</td>
+      <td>The url of this source. If this is set, the data of this source is _not_ fetched, but instead the source tag (with url) will appear in the returned page such that the frontend may fetch it. This is provided primarily as a migration path, as such data can not be inspected and processed to optimize the returned page.</td>
+      <td>_No url: Fetch this configured source from the container._</td>
+    </tr>
+  </tbody>
+</table>
+
+## renderer
+
+A renderer to use to render a section of a data item (hit) of a particular type.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>The name of this renderer.</td>
+      <td>_Mandatory_</td>
+    </tr>
+    <tr>
+      <td>for</td>
+      <td>The name of a hit type or a source this is the renderer for.</td>
+      <td>_If in a section: This is the renderer for the whole section.</td>
+    </tr>
+  </tbody>
+</table>
+If in a source: This is the default renderer for hits from this source._ |
+
+## choice
+
+A choice between multiple alternative (lists of) page elements. A resolver chooses between the possible alternatives for each request at runtime. The `alternative` tag is used to enclose an alternative. If an alternative consists of just one page element tag, the enclosing alternative tag may be skipped.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>method</td>
+      <td>the name of the method for making the choice. Must be supported by the optimizer in use.</td>
+      <td>_Any method_</td>
+    </tr>
+  </tbody>
+</table>
+
+### Contained tags
+
+Either:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Tag</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>[page-element]</td>
+      <td>An alternative consisting of a single page element.</td>
+      <td>0-n</td>
+    </tr>
+    <tr>
+      <td>alternative</td>
+      <td>An alternative consisting of multiple page elements.</td>
+      <td>0-n</td>
+    </tr>
+  </tbody>
+</table>
+
+or
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Tag</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#map" aria-label="map">map</a></td>
+      <td>Specify all alternatives as a single mapping function.</td>
+      <td>0-1</td>
+    </tr>
+  </tbody>
+</table>
+
+## map
+
+Specify all the alternatives of a choice as a mapping function of elements to placeholders. A map is a convenience shorthand of writing many alternatives in the case where a collection of elements should be mapped to a set of placeholders with the constraint that each placeholder should get a unique element. This is useful e.g. in the case where a set of sources are to be mapped to a set of sections.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>to</td>
+      <td colSpan={2}>A space-separated list of the placeholder id's the map values should be mapped to. There cannot be more placeholder id's than there are values in this map (but fewer is ok).</td>
+    </tr>
+  </tbody>
+</table>
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Contained Tags</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>[page-element]</td>
+      <td>A map item consisting of a single page element to map to a placeholder.</td>
+      <td>0-n</td>
+    </tr>
+    <tr>
+      <td>item</td>
+      <td>An item containing multiple page elements to be mapped to a single placeholder.</td>
+      <td>0-n</td>
+    </tr>
+  </tbody>
+</table>
+
+## include
+
+Includes the page elements contained directly in the `page` element in the given page template (the page tag itself is not included). Inclusion works exactly as if the `include` tag was literally replaced by the content of the included page.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Description</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>idref</td>
+      <td>The id specification of the page to include. Portions of the version may be left unspecified to get the latest matching version.</td>
+      <td>_(Mandatory)_</td>
+    </tr>
+  </tbody>
+</table>
