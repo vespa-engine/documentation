@@ -1,0 +1,102 @@
+---
+title: "Provide Custom Overrides"
+description: "While services.xml defines the Vespa application specification, it abstracts away the underlying Kubernetes infrastructure. Advanced users often need to configure Kubernetes-specific settings for the Vespa application Pods to integrate Vespa within their broader platform ecosystem."
+---
+
+The Pod Template mechanism allows you to inject custom configurations into the Vespa application pods created by the ConfigServer.
+
+Common use cases for overriding the default pod configuration include:
+
+- **Sidecar Injection**: Running auxiliary containers alongside Vespa for logging (e.g., Fluent Bit), monitoring (e.g., Datadog, Prometheus exporters), or service mesh proxies (e.g., Envoy, Istio).
+- **Scheduling Constraints**: Using nodeSelector, affinity, or tolerations to pin Vespa pods to specific hardware (e.g., high-memory nodes, specific availability zones) or isolate them from other workloads.
+- **Metadata Management**: Adding custom Labels or Annotations for cost allocation, team ownership, or integration with external inventory tools.
+- **Security & Config**: Mounting Kubernetes Secrets or ConfigMaps that contain credentials or environment configurations required by custom sidecars.
+
+## Configure Custom Overrides
+
+Overrides are defined in the `VespaSet` Custom Resource under `spec.application.podTemplate` and `spec.configServer.podTemplate`. This field accepts a standard Kubernetes PodTemplateSpec.
+
+The Operator and ConfigServer treat this template as an overlay. When creating a ConfigServer or Application Pod, the base template of the main `vespa` container is merged with your custom overlay.
+
+Vespa on Kubernetes enforces a `Add-Only` merge strategy. One cannot remove or downgrade core `vespa` container settings, but only augment them.
+
+| Category | Allowed Actions | Restricted Actions |
+| --- | --- | --- |
+| **Containers** | • Add new sidecar containers. <br/>• Add env vars/mounts to main container. | • Cannot change main container image, command, or args. <br/>• Cannot override main container CPU/Memory resources (these are locked to `services.xml`). |
+| **Volumes** | • Add new Volumes (ConfigMap, Secret, EmptyDir). | • Cannot modify operator-reserved volumes (e.g., `/data`). |
+| **Metadata** | • Add new Labels and Annotations. | • Cannot overwrite operator-created labels and annotations |
+
+## Examples
+
+### Example 1: Injecting a Logging Sidecar
+
+This example adds a Fluent Bit sidecar to ship logs to a central system. It defines the sidecar container and mounts a shared volume that the Vespa container also writes to.
+
+```bash
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+spec:
+  application:
+    image: vespaengine/vespa:8.200.15
+    # Define the Custom Overlay
+    podTemplate:
+      spec:
+        containers:
+          # 1. Define the Sidecar
+          - name: fluent-bit
+            image: fluent/fluent-bit:1.9
+            volumeMounts:
+              - name: vespa-logs
+                mountPath: /opt/vespa/logs/vespa
+        # 2. Define the Shared Volume
+        volumes:
+          - name: vespa-logs
+            emptyDir: {}
+```
+
+### Example 2: Pinning Pods to Specific Nodes
+
+This example uses a nodeSelector to ensure Vespa pods only run on nodes labeled with workload=high-performance.
+
+```bash
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: prod-vespa
+spec:
+  application:
+    podTemplate:
+      spec:
+        # Schedule only on nodes with label 'workload: high-performance'
+        nodeSelector:
+          workload: high-performance
+        # Tolerate the 'dedicated' taint if those nodes are tainted
+        tolerations:
+          - key: "dedicated"
+            operator: "Equal"
+            value: "search-team"
+            effect: "NoSchedule"
+```
+
+### Example 3: Adding Cost Allocation Labels
+
+This example adds custom labels that will appear on every tenant pod, enabling cost tracking by team.
+
+```bash
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: shared-vespa
+spec:
+  application:
+    podTemplate:
+      metadata:
+        labels:
+          cost-center: "engineering-search"
+          owner: "team-alpha"
+        annotations:
+          # Example annotation for an external monitoring system
+          monitoring.datadoghq.com/enabled: "true"
+```
