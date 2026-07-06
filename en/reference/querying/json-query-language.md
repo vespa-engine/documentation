@@ -127,6 +127,11 @@ Each array item is a grouping statement represented as JSON where
 - Each grouping function is represented by a JSON object where the name of the function is the field
   name and the value is the function content.
 - Lists of arguments are represented as JSON arrays.
+- A direct `label` field on an `all` operation with a direct `each` labels the
+  group list produced by that `each`, equivalent to `each(...) as(label)` in the
+  [grouping language](grouping-language.html#labels).
+- Output expression labels use grouping language syntax inside `output`, for
+  example `"output": "count() as(total)"`.
 
 Examples:
 
@@ -148,6 +153,53 @@ equivalent JSON `grouping`-argument:
         "group" : "time.monthofyear(a)",
         "each" : { "output" : "count()" },
       }
+    }
+  }
+]
+```
+
+Grouping statement:
+
+```
+all(
+  group(year)
+  each(output(count())) as(by_year)
+)
+```
+
+equivalent JSON `grouping`-argument:
+
+```json
+"grouping": [
+  {
+    "all": {
+      "group": "year",
+      "label": "by_year",
+      "each": {
+        "output": "count()"
+      }
+    }
+  }
+]
+```
+
+Grouping statement:
+
+```
+all(
+  group(author)
+  output(count() as(authors_cardinality))
+)
+```
+
+equivalent JSON `grouping`-argument:
+
+```json
+"grouping": [
+  {
+    "all": {
+      "group": "author",
+      "output": "count() as(authors_cardinality)"
     }
   }
 ]
@@ -602,6 +654,4 @@ Format of this in JSON:
   ]
 }
 ```
-
-
 
