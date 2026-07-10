@@ -396,9 +396,17 @@ an array field has a certain number of elements or items.
 The _grouping language_ has a [size()](../reference/querying/grouping-language.html#list-expressions) operator that can be used in queries.
 
 ### Is it possible to query for fields with NaN/no value set/null/none
+{: #querying-for-fields-with-no-value }
 The [visiting](../writing/visiting.html#analyzing-field-values) API using document selections supports it, with a linear scan over all documents.
-If the field is an _attribute_ one can query using grouping to identify Nan Values,
+If the field is an _attribute_ one can query using grouping to identify NaN values,
 see count and list [fields with NaN](../querying/grouping.html#count-fields-with-nan).
+
+To do the opposite - match the documents that _do_ have a value set - use a query filter:
+- Numeric fields: an all-encompassing [range](../reference/querying/yql.html#numeric) -
+  `where range(size, -Infinity, Infinity)` matches documents where the field is set.
+- String _attributes_: a [regular expression](../querying/text-matching.html#regular-expression-match) -
+  `where album matches "^."` matches documents with a non-empty value.
+  Add [fast-search](../reference/schemas/schemas.html#attribute) to the attribute to make this efficient on a large corpus.
 
 ### How to retrieve random documents using YQL? Functionality similar to MySQL "ORDER BY rand()"
 See the [random.match](../reference/ranking/rank-features.html#random.match) rank feature - example:
