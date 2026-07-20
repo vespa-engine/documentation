@@ -208,6 +208,36 @@ Generally the run time complexity is determined by:
 
 Serving latency can be brought down by [using multiple threads per query request](../performance/practical-search-performance-guide.html#multithreaded-search-and-ranking).
 
+### Fast forest evaluation
+
+For large forests, an alternative GBDT evaluator can further reduce evaluation cost.
+Enable it by setting the `vespa.eval.use_fast_forest`
+[rank-property](../reference/ranking/rank-feature-configuration.html) to `true` in the rank profile:
+
+<pre>
+rank-profile prediction inherits default {
+    rank-properties {
+        vespa.eval.use_fast_forest: true
+    }
+    second-phase {
+        expression: xgboost("my_model.json")
+    }
+}
+</pre>
+
+This is a rank profile setting, not a query parameter - it is applied when the model is compiled,
+so it cannot be toggled per query. To A/B test it, create a second rank profile that only adds this property.
+
+{% include note.html content="Fast forest evaluation only applies when every split in the model is numeric
+(`<` or its inverted form), no tree has more than 2,048 leaves, and the root expression is the bare sum of trees.
+UBJ models are therefore never eligible: the importer always appends `base_score` to the tree sum.
+Legacy JSON models are eligible for `reg:squarederror` and ranking objectives, but not when the expression is
+wrapped in another function — for instance `sigmoid(xgboost(...))` for a logistic objective.
+In any of these cases the setting has no effect and Vespa silently falls back to the default evaluator." %}
+
+The speedup depends more on the number of leaves per tree than on the number of trees:
+models with at most 64 leaves per tree benefit the most.
+
 ## Categorical features
 
 {% include warning.html content="Vespa does **not** support XGBoost's native categorical splits
