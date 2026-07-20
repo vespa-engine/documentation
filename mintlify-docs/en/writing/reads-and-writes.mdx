@@ -1,0 +1,63 @@
+---
+title: "Reads and writes"
+description: "This guide covers the aspects of accessing [documents](/en/schemas/documents) in Vespa. Documents are stored in content clusters. Writes (PUT, UPDATE, DELETE) and reads (GET) pass through a container cluster. Find a more detailed flow at the end of this article."
+---
+
+<Frame>![Vespa Overview](/assets/img/vespa-overview.svg)</Frame>
+
+Highlights:
+
+- Vespa's indexing structures are built for high-rate field updates. Refer to the [feed sizing guide](/en/performance/sizing-feeding) for write performance, in particular [partial updates](/en/writing/partial-updates) for partial updates.
+- Vespa supports [parent/child](/en/schemas/parent-child) for de-normalized data. This can be used to simplify the code to update application data, as one write will update all children documents.
+- Applications can add custom feed [document processors](/en/applications/document-processors) and multiple container clusters — see [indexing](/en/writing/indexing) for details.
+- Writes in Vespa are *consistent* in a stable cluster, but Vespa will prioritize availability over consistency when there is a conflict. See the [elasticity](/en/content/elasticity#consistency) documentation and the [Vespa consistency model](/en/content/consistency). It is recommended to use the same client instance for updating a given document when possible — for data consistency, but also [performance](/en/performance/sizing-feeding#concurrent-mutations) (see *concurrent mutations*). Read more on write operation [ordering](/en/content/content-nodes#ordering). For performance, group field updates to the same document into [one update operation](/en/performance/sizing-feeding#client-roundtrips).
+- Applications can [auto-expire documents](/en/schemas/documents#document-expiry). This feature also blocks PUTs to documents that are already expired — see [indexing](/en/writing/document-routing#document-selection) and [document selection](/en/reference/applications/services/content#documents). This is a common problem when feeding test data with timestamps, and the writes a silently dropped.
+
+Also see [troubleshooting](/en/operations/self-managed/admin-procedures#troubleshooting).
+
+## Operations
+
+| Operation | Description |
+| :--- | :--- |
+| **Get** | Get a document by ID. |
+| **Put** | Write a document by ID — a document is overwritten if a document with the same document ID exists. <br/><br/>Puts can have [conditions](/en/writing/document-v1-api-guide#conditional-writes) for test-and-set use cases. Conditions can be combined with [create if nonexistent](/en/writing/document-v1-api-guide#create-if-nonexistent), which causes the condition to be ignored if the document does not already exist. |
+| **Remove** | Remove a document by ID. If the document to be removed is not found, it is not considered a failure. Read more about [data-retention](/en/operations/self-managed/admin-procedures#data-retention-vs-size). Also see [batch deletes](/en/writing/batch-delete).<br/><br/> Removes can have [conditions](/en/writing/document-v1-api-guide#conditional-writes) for test-and-set use cases.<br/><br/> A removed document is written as a tombstone, and later garbage collected — see [removed-db / prune / age](/en/reference/applications/services/content#removed-db-prune-age). Vespa does not retain, nor return, the document data of removed documents. |
+| **Update** | Also referred to as [partial updates](/en/writing/partial-updates), as it updates one or more fields of a document by ID — the [document v1 API](/en/writing/document-v1-api-guide#put) can be used to perform [updates in the JSON Document format](/en/reference/schemas/document-json-format#update). If the document to update is not found, it is not considered a failure. Updates support [create if nonexistent](/en/writing/document-v1-api-guide#create-if-nonexistent) (upsert). <br/><br/>Updates can have [conditions](/en/writing/document-v1-api-guide#conditional-writes) for test-and-set use cases. <br/><br/>All data structures ([attribute](/en/content/attributes), [index](/en/content/proton#index) and [summary](/en/querying/document-summaries)) are updatable. Note that only *assign* and *remove* are idempotent — message re-sending can apply updates more than once. Use *conditional writes* for stronger consistency. <br/><br/>**All field types** <br/><br/>• [assign](/en/reference/schemas/document-json-format#assign) (may also be used to clear fields) <br/><br/> **Numeric field types** <br/><br/> • [increment](/en/reference/schemas/document-json-format#arithmetic). Also see [auto-generate weightedset keys](/en/reference/schemas/schemas#weightedset)<br/><br/> • [decrement](/en/reference/schemas/document-json-format#arithmetic),<br/><br/> • [multiply](/en/reference/schemas/document-json-format#arithmetic), <br/><br/>• [divide](/en/reference/schemas/document-json-format#arithmetic).<br/><br/> **Composite types**<br/><br/> • [add](/en/reference/schemas/document-json-format#add) For *array* and *weighted set*. To put into a *map*, see the [assign](/en/reference/schemas/document-json-format#assign) section, <br/><br/>• [remove](/en/reference/schemas/document-json-format#composite-remove),<br/><br/> • [match](/en/reference/schemas/document-json-format#match) Pick element from collection, then apply given operation to matched element,<br/><br/> • [accessing elements within a composite field using fieldpaths](/en/reference/schemas/document-json-format#fieldpath)<br/><br/> **Tensor types** <br/><br/>• [modify](/en/reference/schemas/document-json-format#tensor-modify) Modify individual cells in a tensor - can replace, add or multiply cell values,<br/><br/> • [add](/en/reference/schemas/document-json-format#tensor-add) Add cells to mapped or mixed tensors, <br/><br/>• [remove](/en/reference/schemas/document-json-format#tensor-remove) Remove cells from mapped or mixed tensors |
+
+## API and utilities
+
+Also see the [JSON Document format](/en/reference/schemas/document-json-format):
+
+| API / util | Description |
+| :--- | :--- |
+| [Vespa CLI](/en/clients/vespa-cli) | Command-line tool to `get`, `put`, `remove`, `update`, `feed`, `visit`. |
+| [/document/v1/](/en/reference/api/document-v1) | API for `get`, `put`, `remove`, `update`, `visit`. |
+| [Java Document API](/en/writing/document-api-guide) | Provides direct read-and write access to Vespa documents using Vespa's internal communication layer. Use this when accessing documents from Java components in Vespa such as [searchers](/en/applications/searchers) and [document processors](/en/applications/document-processors). See the [Document](https://github.com/vespa-engine/vespa/blob/master/document/src/main/java/com/yahoo/document/Document.java) class. |
+| [pyvespa](https://vespa-engine.github.io/pyvespa/reads-writes) | Python client library for reading and writing documents to Vespa. Provides convenient methods for feeding, querying, and visiting documents. Expect less performance than Vespa CLI and vespa-feed-client for heavy batch feed operations. |
+
+Advanced / debugging tools:
+
+- [vespa-feed-client](/en/clients/vespa-feed-client): Java library and command line client for feeding document operations using [/document/v1/](/en/reference/api/document-v1).
+- [vespa-feeder](/en/reference/operations/self-managed/tools#vespa-feeder) is a utility for feeding over the [Message Bus](/en/writing/document-routing).
+- [vespa-get](/en/reference/operations/self-managed/tools#vespa-get) gets single documents over the [Message Bus](/en/writing/document-routing).
+- [vespa-visit](/en/reference/operations/self-managed/tools#vespa-visit) gets multiple documents over the [Message Bus](/en/writing/document-routing).
+
+## Feed flow
+
+Use the [Vespa CLI](/en/clients/vespa-cli), [vespa-feed-client](/en/clients/vespa-feed-client), [pyvespa python client](https://vespa-engine.github.io/pyvespa/reads-writes) or [/document/v1/ API](/en/reference/api/document-v1) to read and write documents:
+
+<Frame>![Feed with feed client](/assets/img/elastic-feed-container.svg)</Frame>
+
+Alternatively, use [vespa-feeder](/en/reference/operations/self-managed/tools#vespa-feeder) to feed files or the [Java Document API](/en/writing/document-api-guide).
+
+<Frame>![Feed with vespafeeder](/assets/img/elastic-feed-vespafeeder.svg)</Frame>
+
+[Indexing](/en/writing/document-routing#routing-for-indexing) and/or [document processing](/en/applications/document-processors) is a chain of processors that manipulate documents before they are stored. Document processors can be user defined. When using indexed search, the final step in the chain prepares documents for indexing.
+
+The [Document API](/en/writing/document-api-guide) forwards requests to distributors on content nodes. For more information, read about [content nodes](/en/content/content-nodes) and the [search core](/en/content/proton).
+
+## Further reading
+
+- [Visiting](/en/writing/visiting)
+- [/document/v1/ API guide](/en/writing/document-v1-api-guide)
+- [/document/v1/ API reference](/en/reference/api/document-v1)
