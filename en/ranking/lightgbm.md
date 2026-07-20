@@ -174,6 +174,35 @@ Generally the run time complexity is determined by:
 
 Serving latency can be brought down by [using multiple threads per query request](../performance/practical-search-performance-guide.html#multithreaded-search-and-ranking). 
 
+### Fast forest evaluation
+
+For large forests, an alternative GBDT evaluator can further reduce evaluation cost.
+Enable it by setting the `vespa.eval.use_fast_forest`
+[rank-property](../reference/ranking/rank-feature-configuration.html) to `true` in the rank profile:
+
+<pre>
+rank-profile classify inherits default {
+    rank-properties {
+        vespa.eval.use_fast_forest: true
+    }
+    second-phase {
+        expression: lightgbm("lightgbm_model.json")
+    }
+}
+</pre>
+
+This is a rank profile setting, not a query parameter: it is applied when the model is compiled,
+so it cannot be toggled per query. To A/B test it, create a second rank profile that only adds this property.
+
+{% include note.html content="Fast forest evaluation only applies when every split in the model is numeric
+(`<` or its inverted form) and no tree has more than 2,048 leaves. Models using LightGBM's native
+[categorical splits](#using-categorical-features) are not eligible, and neither is a model whose root
+expression wraps the tree sum in another function: for instance, a `binary` objective, which Vespa
+automatically wraps in `sigmoid(...)`. In any of these cases the setting has no effect and Vespa silently
+falls back to the default evaluator." %}
+
+The speedup depends more on the number of leaves per tree than on the number of trees:
+models with at most 64 leaves per tree benefit the most.
 
 ## Objective functions
 
