@@ -1,0 +1,170 @@
+---
+title: "The Config System"
+description: "The config system in Vespa is responsible for turning the application package into live configuration of all the nodes, processes and components that realizes the running system. Here we deep dive into various aspects of how this works."
+---
+
+## Node configuration
+
+The problem of configuring nodes can be divided into three parts, each addressed by different solutions:
+
+- **Node system level configuration:** Configure OS level settings such as time zone as well as user privileges on the node.
+- **Package management**: Ensure that the correct set of software packages is installed on the nodes. This functionality is provided by three tools working together.
+- **Vespa configuration:** Starts the configured set of processes on each node with their configured startup parameters and provides dynamic configuration to the modules run by these services. *Configuration* here is any data which:
+            
+  - can not be fixed at compile time
+  - is static most of the time
+
+Note that by these definitions, this allows all the nodes to have the same software packages (disregarding version differences, discussed later), as variations in what services are run on each node and in their behavior is achieved entirely by using Vespa Configuration. This allows managing the complexity of node variations completely within the configuration system, rather than across multiple systems.
+
+Configuring a system can be divided into:
+
+- **Configuration assembly:** Assembly of a complete set of configurations for delivery from the inputs provided by the parties involved in configuring the system
+- **Configuration delivery:** Definition of individual configurations, APIs for requesting and accessing configuration, and the mechanism for delivering configurations from their source to the receiving components
+
+This division allows the problem of reliable configuration delivery in large distributed systems to be addressed in configuration delivery, while the complexities of assembling complete configurations can be treated as a vm-local design problem.
+
+An important feature of Vespa Configuration is the nature of the interface between the delivery and assembly subsystems. The assembly subsystem creates as output a (Java) object model of the distributed system. The delivery subsystem queries this model to obtain concrete configurations of all the components of the system. This allows the assembly subsystem to accept higher level, and simpler to use, abstractions as input and automatically derive detailed configurations with the correct interdependencies. This division insulates the external interface and the components being configured from changes in each other. In addition, the system model provides the home for logic implementing node/component instance variations of configuration.
+
+## Configuration assembly
+
+Config assembly is the process of turning the configuration input sources into an object model of the desired system, which can respond to queries for configs given a name and config id. Config assembly for Vespa systems can become complex, because it involves merging information owned by multiple parties:
+
+- **Vespa operations** own the nodes and controls assignment of nodes to services/applications
+- **Vespa service providers** own services which hosts multiple applications running on Vespa
+- **Vespa applications** define the final applications running on nodes and shared services
+
+The current config model assembly procedure uses a single source - the *application package*. The application package is a directory structure containing defined files and subdirectories which together completely defines the system - including which nodes belong in the system, which services they should run and the configuration of these services and their components. When the application deployer wants to change the application, [vespa prepare](/en/reference/clients/vespa-cli/vespa_prepare) is issued to a config server, with the application package as argument.
+
+At this point the system model is assembled and validated and any feedback is issued to the deployer. If the deployer decides to make the new configuration active, a [vespa activate](/en/reference/clients/vespa-cli/vespa_activate) is then issued, causing the config server cluster to switch to the new system model and respond with new configs on any active subscriptions where the new system model caused the config to change. This ensures that subscribers gets new configs timely on changes, and that the changes propagated are the minimal set such that small changes to an application package causes correspondingly small changes to the system.
+
+<Frame>
+![](/assets/img/config-assembly.svg)
+</Frame>
+
+The config model itself is pluggable, so that service providers may write plugins for assembling a particular service. The plugins are written in Java, and is installed together with the Vespa Configuration. Service plugins define their own syntax for specifying services that may be configured by Vespa applications. This allows the applications to be specified in an abstract manner, decoupled from the configuration that is delivered to the components.
+
+## Configuration delivery
+
+Configuration delivery encompasses the following aspects:
+
+- Definition of configurations
+- The component view (API) of configuration
+- Configuration delivery mechanism
+
+These aspects work together to realize the following goals:
+
+- Eliminate inconsistency between code and configuration.
+- Eliminate inconsistency between the desired configuration and the state on each node.
+- Limit temporary inconsistencies after reconfiguration.
+
+The next three subsections discusses the three aspects above, followed by subsections on two special concerns - bootstrapping and system upgrades.
+
+### Configuration definitions
+
+A *configuration* is a set of simple or array key-values with a name and a type, which can possibly be nested - example:
+
+```txt
+myProperty "myvalue"
+myArray[1]
+myArray[0].key1 "someValue"
+myArray[0].key2 1337
+```
+
+The *type definition* (or class) of a configuration object defines and documents the set of fields a configuration may contain with their types and default values. It has a name as well as a namespace. For example, the above config instance may have this definition:
+
+```txt
+namespace=foo.bar
+
+# Documentation of this key
+myProperty string default="foo"
+
+# etc.
+myArray[].key1 string
+myArray[].key2 int default=0
+```
+
+An individual config typically contains a coherent set of settings regarding some topic, such as *logging* or *indexing*. A complete system consists of many instances of many config types.
+
+### Component view
+
+Individual components of a system consumes one or more such configs and use their values to influence their behavior. APIs are needed for *requesting* configs and for *accessing* the values of those configs as they are provided.
+
+*Access* to configs happens through a (Java or C++) class generated from the config definition file. This ensures that any inconsistency between the fields declared in a config type and the expectations of the code accessing it are caught at compile time. The config definition is best viewed as another class with an alternative form of source syntax belonging to the components consuming it. A Maven target is provided for generating such classes from config definition types.
+
+Components may use two different methods for *requesting* configurations subscription and dependency injection:
+
+**Subscription:** The component sets up *ConfigSubscriber*, then subscribes to one or more configs. This is the simple approach, there are [other ways of](/en/applications/configapi-dev) getting configs too:
+
+```java
+ConfigSubscriber subscriber = new ConfigSubscriber();
+ConfigHandle<MydConfig> handle = subscriber.subscribe(MyConfig.class, "myId");
+if (!subscriber.nextConfig()) throw new RuntimeException("Config timed out.");
+if (handle.isChanged()) {
+    String message = handle.getConfig().myKey();
+    // ... consume the rest of this config
+}
+```
+
+**Dependency injection:** The component declares its config dependencies in the constructor and subscriptions are set up on its behalf. When changed configs are available a new instance of the component is created. The advantage of this method is that configs are immutable throughout the lifetime of the component such that no thread coordination is required. This method is currently only available in Java using the [Container](/en/applications/containers).
+
+```java
+public MyComponent(MyConfig config) {
+    String myKey = config.myKey();
+    // ... consume the rest of this config
+}
+```
+
+For unit testing, [configs can be created with Builders](/en/applications/configapi-dev#unit-testing), submitted directly to components.
+
+### Delivery mechanism
+
+The config delivery mechanism is responsible for ensuring that a new config instance is delivered to subscribing components, each time there is a change to the system model causing that config instance to change. A config subscription is identified by two parameters, the *config definition name and namespace* and the [config id](/en/applications/configapi-dev#config-id) used to identify the particular component instance making the subscription.
+
+The in-process config library will forward these subscription requests to a node local [config proxy](/en/operations/self-managed/config-proxy), which provides caching and fan-in from processes to node. The proxy in turn issues these subscriptions to a node in the configuration server cluster, each of which hosts a copy of the system model and resolves config requests by querying the system model.
+
+To provide config server failover, the config subscriptions are implemented as long-timeout gets, which are immediately resent when they time out, but conceptually this is best understood as push subscriptions:
+
+<Frame>
+![](/assets/img/config-delivery.svg)
+</Frame>
+
+As configs are not stored as files locally on the nodes, there is no possibility of inconsistencies due to local edits, or of nodes coming out of maintenance with a stale configuration. As configuration changes are pushed as soon as the config server cluster allows, time inconsistencies during reconfigurations are minimized, although not avoided as there is no global transaction.
+
+Application code and config is generally pulled from the config server - it is however possible to use the [url](/en/reference/applications/config-files#url) config type to refer to any resource to download to nodes.
+
+### Bootstrapping
+
+Each Vespa node runs a [config-sentinel](/en/operations/self-managed/config-sentinel) process which start and maintains services run on a node.
+
+### System upgrades
+
+The configuration server will up/downgrade between config versions on the fly on minor upgrades which causes discrepancies between the config definitions requested from those produced by the configuration model. Major upgrades, which involve incompatible changes to the configuration protocol or the system model, require a [procedure](/en/operations/self-managed/config-proxy).
+
+## Notes
+
+Find more information for using the Vespa config API in the [reference doc](/en/applications/configapi-dev).
+
+Vespa Configuration makes the following assumptions about the nodes using it:
+
+- All nodes have the software packages needed to run the configuration system and any services which will be configured to run on the node. This usually means that all nodes have the same software, although this is not a requirement
+- All nodes have [VESPA_CONFIGSERVERS](/en/operations/self-managed/files-processes-and-ports#environment-variables) set
+- All nodes know their fully qualified domain name
+
+Reading this document is not necessary in order to use Vespa or to develop Java components for the Vespa container - for this purpose, refer to [Configuring components](/en/applications/configuring-components).
+
+## Further reads
+
+- [Configuration server operations](/en/operations/self-managed/configuration-server) is a good resource for troubleshooting.
+- Refer to the [bundle plugin](/en/applications/bundles#maven-bundle-plugin) for how to build an application package with Java components.
+- During development on a local instance it can be handy to just wipe the state completely and start over:
+            
+  <Steps>
+    <Step>
+    [Delete all config server state](/en/operations/self-managed/configuration-server#zookeeper-recovery) on all config servers
+    </Step>
+
+    <Step>
+    Run [vespa-remove-index](/en/reference/operations/self-managed/tools#vespa-remove-index) to wipe content nodes
+    </Step>
+
+  </Steps>
