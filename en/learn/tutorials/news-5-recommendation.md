@@ -177,9 +177,7 @@ so we modify `services.xml` and add it under `documents` in the `content` sectio
     &lt;container id="default" version="1.0"&gt;
         &lt;search /&gt;
         &lt;document-api /&gt;
-        &lt;nodes&gt;
-            &lt;node hostalias="node1" /&gt;
-        &lt;/nodes&gt;
+        &lt;nodes count="1" /&gt;
     &lt;/container&gt;
 
     &lt;content id="mind" version="1.0"&gt;
@@ -188,9 +186,7 @@ so we modify `services.xml` and add it under `documents` in the `content` sectio
             &lt;document type="news" mode="index" /&gt;
             &lt;document type="user" mode="index" /&gt;
         &lt;/documents&gt;
-        &lt;nodes&gt;
-            &lt;node hostalias="node1" distribution-key="0" /&gt;
-        &lt;/nodes&gt;
+        &lt;nodes count="1" /&gt;
     &lt;/content&gt;
 
 &lt;/services&gt;
@@ -200,7 +196,7 @@ so we modify `services.xml` and add it under `documents` in the `content` sectio
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ vespa deploy --wait 300 my-app 
+$ vespa deploy --wait 600 my-app 
 </pre>
 </div>
 
@@ -215,8 +211,8 @@ feed `mind/vespa_user_embeddings.json` and `mind/vespa_news_embeddings.json`:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
-$ vespa feed mind/vespa_user_embeddings.json --target http://localhost:8080
-$ vespa feed mind/vespa_news_embeddings.json --target http://localhost:8080
+$ vespa feed mind/vespa_user_embeddings.json
+$ vespa feed mind/vespa_news_embeddings.json
 </pre>
 </div>
 
@@ -292,7 +288,7 @@ Deploy the updates to query profiles:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ vespa deploy --wait 300 my-app
+$ vespa deploy --wait 600 my-app
 </pre>
 </div>
 
@@ -528,27 +524,20 @@ restart is required so that the index can be built:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ vespa deploy --wait 300 my-app
+$ vespa deploy --wait 600 my-app
 </pre>
 </div>
 
-Introducing the HNSW `index` requires a content node restart, in this case we restart all services:
+Introducing the HNSW `index` requires a content node restart.
+On Vespa Cloud, this is handled automatically after deployment —
+wait for the deployment to complete and the application to become ready:
 
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ docker exec vespa /usr/bin/sh -c \
-  '/opt/vespa/bin/vespa-stop-services &amp;&amp; /opt/vespa/bin/vespa-start-services'
-</pre>
-</div>
-
-<!-- Give the container some time to reindex -->
 <pre data-test="exec" style="display:none">
 $ vespa status --wait 300 
 </pre>
 
 
-After doing this and waiting a bit for Vespa to start, we can query Vespa again:
+After the deployment completes, we can query Vespa again:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>

@@ -1,6 +1,6 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
-title: "News search and recommendation tutorial - getting started on Docker"
+title: "News search and recommendation tutorial - getting started on Vespa Cloud"
 redirect_from:
 - /en/tutorials/news-1-getting-started.html
 - /en/tutorials/news-1-deploy-an-application
@@ -8,7 +8,7 @@ redirect_from:
 
 
 Our goal with this series is to set up a Vespa application for personalized
-news recommendations. We will do this in stages, starting with a simple news
+news recommendations on Vespa Cloud. We will do this in stages, starting with a simple news
 search system and gradually adding functionality as we go through the
 tutorial parts.
 
@@ -22,32 +22,33 @@ The parts are:
 6. [News recommendation with searchers](news-6-recommendation-with-searchers.html) - custom searchers, doc processors
 7. [News recommendation with parent-child](news-7-recommendation-with-parent-child.html) - parent-child, tensor ranking
 
-There are different entry points to this tutorial. This one is describing how to get
-started using Docker on your local machine. You can also deploy the application we are creating on
-[Vespa Cloud](https://cloud.vespa.ai).
-
-In this part, we will start with a minimal Vespa application to
-get used to some basic operations for running the application on Docker.
+In this part, we will start with a minimal Vespa application to get used to some basic
+operations for deploying and running an application on Vespa Cloud.
 In the next part of the tutorial, we'll start developing our application.
 
-{% include pre-req.html memory="4 GB" extra-reqs='
-<li>Python3 for converting the dataset to Vespa JSON.</li>
-<li><code>curl</code> to download the dataset and run the Vespa health-checks.</li>
-<li><a href="https://openjdk.org/projects/jdk/17/" data-proofer-ignore>Java 17</a> in part 6.</li>
-<li><a href="https://maven.apache.org/install.html">Apache Maven</a> in part 6.</li>' %}
-
-{% include note.html content='4 GB Docker memory is sufficient for the demo dataset in part 2.
-The <span style="text-decoration: underline;">full</span> MIND dataset requires more, use 10 GB.' %}
+<div class="vespa-notification vespa-notification-prereqs" role="alert">
+  <p><strong>Prerequisites:</strong></p>
+  <ul>
+    <li>A Vespa Cloud account - create a <a href="https://console.vespa-cloud.com/">tenant</a>
+        if you do not have one.</li>
+    <li><a href="https://brew.sh/">Homebrew</a> to install the <a href="../../clients/vespa-cli.html">Vespa CLI</a>,
+        or download the Vespa CLI from <a href="https://github.com/vespa-engine/vespa/releases">Github releases</a>.</li>
+    <li>Python3 for converting the dataset to Vespa JSON.</li>
+    <li><code>curl</code> to download the dataset.</li>
+    <li><a href="https://openjdk.org/projects/jdk/17/" data-proofer-ignore>Java 17</a> in part 6.</li>
+    <li><a href="https://maven.apache.org/install.html">Apache Maven</a> in part 6.</li>
+  </ul>
+</div>
 
 In upcoming parts of this series, we will have some additional Python dependencies -
 we use [PyTorch](https://pytorch.org/) to train vector representations for news and users
 and train machine learning models for use in ranking.
 
 
-## Installing vespa-cli 
+## Installing Vespa CLI
 
 This tutorial uses [Vespa-CLI](../../clients/vespa-cli.html),
-Vespa CLI is the official command-line client for Vespa.ai. 
+Vespa CLI is the official command-line client for Vespa.ai.
 It is a single binary without any runtime dependencies and is available for Linux, macOS, and Windows.
 
 <div class="pre-parent">
@@ -57,16 +58,19 @@ $ brew install vespa-cli
 </pre>
 </div>
 
-For the rest of this tutorial, you will be using localhost, so you need to configure your Vespa CLI to connect to localhost.
-Run the following to use endpoints on localhost:
+In this tutorial it is possible to use either a local or global 
+Vespa CLI configuration mode for configuration variables. Using 
+local configuration mode is generally recommended when working 
+with multiple distinct Vespa applications, but most parts of 
+this tutorial uses the same configuration values which makes 
+it easier to use global configuration mode:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>
-$ vespa config set target local
+$ vespa config set default_config_scope global
 </pre>
 </div>
-
 
 
 ## A minimal Vespa application
@@ -105,58 +109,69 @@ There are two files there:
 We will revisit these files in the next part of the tutorial.
 
 
-## Starting Vespa
+## Configuring Vespa CLI for Vespa Cloud
+Configure the Vespa CLI to use Vespa Cloud, and set the application name.
+Replace `tenant-name` with your tenant name from [console.vespa-cloud.com](https://console.vespa-cloud.com):
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa config set target cloud
+$ vespa config set application tenant-name.news
+</pre>
+</div>
+
+Usually its better to use local configuration for each application, 
+but this tutorial uses global configuration to avoid having to set the 
+configuration values for each part of the tutorial.
+
+Authenticate with Vespa Cloud:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa auth login
+</pre>
+</div>
+
+Follow the browser instructions to complete authentication.
+
+Next, add a certificate for [data plane access](/en/security/guide#data-plane) to the application:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa auth cert app-1-getting-started
+</pre>
+</div>
+
+
+
+
+## Deploying to Vespa Cloud
 
 This application doesn't contain much at the moment,
-let's start up the application anyway by starting a Docker container to run it:
+but let's deploy it to Vespa Cloud anyway to get used to the basic operations.
+The first deployment may take a few minutes while nodes are provisioned:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ docker pull vespaengine/vespa
-$ docker run --detach --name vespa --hostname vespa-tutorial \
-  --publish 8080:8080 --publish 19071:19071 --publish 19092:19092 \
-  vespaengine/vespa
-</pre>
-</div>
-
-First, we pull the latest [vespa-image](https://hub.docker.com/r/vespaengine/vespa/)
-from the Docker hub, then we
-start it with the name `vespa`. This starts the Docker container and the
-initial Vespa services to be able to deploy an application.
-
-Starting the container can take a short while. Before continuing, make sure
-that the configuration service is running by using `vespa status`. 
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ vespa status deploy --wait 300 
-</pre>
-</div>
-
-With the config server up and running, deploy the application using vespa-cli:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="exec">
-$ vespa deploy --wait 300 app-1-getting-started 
+$ vespa deploy --wait 600 app-1-getting-started 
 </pre>
 </div>
 
 The command uploads the application and verifies the content.
 If anything is wrong with the application, this step will fail with a failure description;
-Otherwise, this switches the application to a live status.
+otherwise, this switches the application to a live status.
 
-Whenever you have a new version of your application, 
+Whenever you have a new version of your application,
 run the same command to deploy the application.
 In most cases, there is no need to restart services.
 Vespa takes care of reconfiguring the system.
-If a restart of services is required in some rare case, however, the output will notify 
-which services need restart to make the change effective. 
 
-In the upcoming parts of the tutorials, we'll frequently deploy the 
-application changes in this manner. 
+In the upcoming parts of the tutorials, we'll frequently deploy the
+application changes in this manner.
 
 
 ## Feeding to Vespa
@@ -167,7 +182,7 @@ For now, to test that everything is up and running, we'll feed in a single test 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" >
-$ vespa feed -t http://localhost:8080 doc.json
+$ vespa feed doc.json
 </pre>
 </div>
 
@@ -237,57 +252,12 @@ $ vespa document -v remove id:news:news::1
 Well done!
 
 
-## Stopping and starting Vespa
+## Managing the Vespa Cloud application
 
-Keep Vespa running to continue with the next steps in this tutorial set (skip the below).
+Application instances in the [dev zone](../operations/environments.html#dev) will by default keep running for 14 days after the last deployment.
+You can control this in the [console](https://console.vespa-cloud.com/).
 
-To stop Vespa, we can run the following commands:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-$ docker exec vespa vespa-stop-services
-$ docker exec vespa vespa-stop-configserver
-</pre>
-</div>
-
-Likewise, to start the Vespa services:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-$ docker exec vespa vespa-start-configserver
-$ docker exec vespa vespa-start-services
-</pre>
-</div>
-
-If a [restart is required](../../reference/schemas/schemas.html#changes-that-require-restart-but-not-re-feed)
-due to changes in the application package,
-these two steps are what you need to do.
-
-To wipe the index and restart:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-$ docker exec vespa sh -c ' \
-  vespa-stop-services && \
-  vespa-remove-index -force && \
-  vespa-start-services'
-</pre>
-</div>
-
-You can stop and kill the Vespa container application like this:
-
-<div class="pre-parent">
-  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="after">
-$ docker stop vespa; docker rm -f vespa
-</pre>
-</div>
-
-This will delete the Vespa application, including all data and configuration. See 
-[container tuning for production](../../operations/self-managed/docker-containers.html). 
+The [Vespa Cloud console](https://console.vespa-cloud.com) can also be used to delte the application instance.
 
 
 ## Conclusion
