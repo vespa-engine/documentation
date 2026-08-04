@@ -36,9 +36,9 @@ $ vespa auth cert --application <tenant>.<app>.<instance>
 
 ```
 $ vespa auth cert --application scoober.albums.default
-Success: Certificate written to security/clients.pem
-Success: Certificate written to $HOME/.vespa/scoober.albums.default/data-plane-public-cert.pem
-Success: Private key written to $HOME/.vespa/scoober.albums.default/data-plane-private-key.pem
+Success: Certificate written to '$HOME/.vespa/scoober.albums.default/data-plane-public-cert.pem'
+Success: Private key written to '$HOME/.vespa/scoober.albums.default/data-plane-private-key.pem'
+Success: Copied certificate from '$HOME/.vespa/scoober.albums.default/data-plane-public-cert.pem' to 'security/clients.pem'
 ```
 
 The certificates can be created regardless of the application existence in Vespa
@@ -75,8 +75,18 @@ downtime.
 **Step 1: Generate a new certificate and private key**
 
 ```bash
-$ vespa auth cert --append --application scoober.albums.default
+$ vespa auth cert --new-key --application scoober.albums.default
 ```
+
+This prompts for confirmation, then:
+* backs up the current private key to `data-plane-private-key.pem.old`
+* writes a new private key to `data-plane-private-key.pem`
+* prepends the new certificate to `data-plane-public-cert.pem`, keeping the existing one
+* copies the resulting certificate file into `security/clients.pem` of the application package
+
+Add `-f` (`--force`) to skip the confirmation prompt, and `-N` (`--no-add`) to skip updating
+the application package. If a backup already exists, the
+command fails - complete or abandon the previous rotation and delete the backup file first.
 
 **Step 2: Deploy the updated application package**
 
@@ -86,16 +96,23 @@ Deploy the application.
 **Step 3: Migrate clients to the new certificate**
 
 Test that everything works with the new key and update all clients to use the new private key.
+The Vespa CLI already uses the new key pair after step 1.
 
 **Step 4: Remove old certificates**
 
 Once all clients use the new key, remove the old certificates:
 
 ```bash
-$ vespa auth cert --prune --application scoober.albums.default
+$ vespa auth cert --prune-old --application scoober.albums.default
 ```
 
+This keeps the newest certificate matching the current private key, and asks before removing
+each old certificate.
+
+Add `-f` (`--force`) to remove all of them without prompting.
+
 Deploy again to complete the rotation. Any clients still using the old certificate will lose access once the old certificate is removed and deployed.
+When the deployment is complete, you may delete the `data-plane-private-key.pem.old` backup. A new rotation cannot start while it exists.
 
 #### Rotate mTLS with OpenSSL
 
@@ -314,7 +331,7 @@ $ vespa curl --application <tenant>.<app>.<instance> /ApplicationStatus
 
 ```
 $ curl --key $HOME/.vespa/scoober.albums.default/data-plane-private-key.pem \
-       --cert $HOME/.vespa/scoober.albums.default/data-plane-public-key.pem \
+       --cert $HOME/.vespa/scoober.albums.default/data-plane-public-cert.pem \
        $ENDPOINT
 ```
 
