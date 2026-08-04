@@ -275,7 +275,7 @@ This contains the full Vespa application, with Java components - deploy it:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ vespa deploy --wait 300 app-6-recommendation-with-searchers
+$ vespa deploy --wait 600 app-6-recommendation-with-searchers
 </pre>
 </div>
 

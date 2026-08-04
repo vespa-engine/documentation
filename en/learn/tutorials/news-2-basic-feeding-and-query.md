@@ -56,7 +56,33 @@ news content at first. We'll use the impression data as we begin building
 the recommendation system later in this series.
 
 Let's start by downloading the data. The `news` sample app directory will 
-be our starting point. We've included a script to download the data for us:
+be our starting point. The MIND dataset is hosted on
+[Hugging Face](https://huggingface.co/datasets/yjw1029/MIND) and requires
+a free account and acceptance of the dataset's terms of use.
+
+### Accept the dataset terms
+
+1. Log in at [huggingface.co](https://huggingface.co)
+2. Go to the [MIND dataset page](https://huggingface.co/datasets/yjw1029/MIND)
+3. Click **Agree and access repository** to accept the terms
+
+### Create a Hugging Face access token
+
+1. Go to [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+2. Click **New token**, give it a name, select **Read** role, and copy the token
+
+### Download the dataset
+
+Set your token as an environment variable:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ export HF_TOKEN=hf_your_token_here
+</pre>
+</div>
+
+Then run the download script from the **news** sample app directory:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -110,12 +136,6 @@ ranking will be done and how data will be processed during feeding and indexing.
 The schema, e.g., `news.sd`, is a required part of an
 application package — the other file needed is `services.xml`.
 
-For self-hosted multi-node deployments, a `hosts.xml` file is also needed. 
-For multi-node self-hosted deployments using `hosts.xml`, see
-the [multinode high 
-availability](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)
-sample application. 
-
 We mentioned these files in the previous part but didn't really explain them at the time.
 We'll go through them here, starting with the specification of services.
 
@@ -135,9 +155,7 @@ service. Write the following to `news/my-app/services.xml`:
     &lt;container id="default" version="1.0"&gt;
         &lt;search /&gt;
         &lt;document-api /&gt;
-        &lt;nodes&gt;
-            &lt;node hostalias="node1" /&gt;
-        &lt;/nodes&gt;
+        &lt;nodes count="1" /&gt;
     &lt;/container&gt;
 
     &lt;content id="mind" version="1.0"&gt;
@@ -145,9 +163,7 @@ service. Write the following to `news/my-app/services.xml`:
         &lt;documents&gt;
             &lt;document type="news" mode="index" /&gt;
         &lt;/documents&gt;
-        &lt;nodes&gt;
-            &lt;node hostalias="node1" distribution-key="0" /&gt;
-        &lt;/nodes&gt;
+        &lt;nodes count="1" /&gt;
     &lt;/content&gt;
 
 &lt;/services&gt;
@@ -163,13 +179,13 @@ Quite a lot is set up here:
   for how to use mTLS with Vespa.
 - `<document-api>` sets up the [document
   endpoint](../../reference/api/document-v1.html) for feeding and visiting.
-- `<nodes>` defines the nodes required per service.  (See the
+- `<nodes count="1" />` defines the number of nodes for the service. (See the
   [reference](../../reference/applications/services/container.html) for more on container
   cluster setup).
 - `<content>` The stateful content cluster
 - `<redundancy>` denotes how many copies to store of each document.
 - `<documents>` assigns the document types in the _schema_ — the content
-  cluster capacity can be increased by adding node elements — see [elasticity](../../content/elasticity.html). (See also the
+  cluster capacity can be increased by raising the node count — see [elasticity](../../content/elasticity.html). (See also the
   [reference](../../reference/applications/services/content.html) for more on content cluster
   setup.)
 
@@ -278,10 +294,40 @@ my-app/
 └── services.xml
 </pre>
 
+If not already done from the previous [news tutorial](news-1-deploy-an-application.html), set Vespa configuration variables. Use your tenant name from the [Vespa Cloud console](https://console.vespa-cloud.com/) instead of `tenant-name`:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre>
+$ vespa config set target cloud
+$ vespa config set application tenant-name.news
+</pre>
+</div>
+
+Log in to Vespa Cloud:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa auth login
+</pre>
+</div>
+
+Add security credentials to the application package for data plane access:
+
+<div class="pre-parent">
+  <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
+<pre data-test="exec">
+$ vespa auth cert my-app -f
+</pre>
+</div>
+
+Finally, deploy the application package to Vespa Cloud:
+
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains="Success">
-$ vespa deploy --wait 300 my-app
+$ vespa deploy --wait 600 my-app
 </pre>
 </div>
 
@@ -307,7 +353,7 @@ file can now be fed to Vespa. Use the method described in the previous part:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ vespa feed mind/vespa.json --target http://localhost:8080
+$ vespa feed mind/vespa.json
 </pre>
 </div>
 
@@ -364,14 +410,19 @@ $ vespa query -v 'yql=select * from news where default contains "music"'
 </pre>
 </div>
 
-or a POST JSON query (Notice the *Content-Type* header specification):
+or a POST JSON query. The values can be found by using the previous `vespa query -v` command. 
+The content type should be changed to `application/json`.
+It's also possible to use `vespa status` to find the url of your cloud instance.
+:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec" data-test-assert-contains='"coverage": 100'>
-$ curl -s -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where default contains \"music\""}' \
-  http://localhost:8080/search/ | python3 -m json.tool
+$ curl --key /path/to/key \
+     --cert /path/to/cert \
+     -H 'Content-Type: application/json' \
+     --data '{"yql" : "select * from sources * where default contains \"music\""}' \
+     'https://your-vespa-url.vespa-app.cloud/search/' | python3 -m json.tool
 </pre>
 </div>
 

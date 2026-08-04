@@ -287,7 +287,7 @@ $ (cd app-7-parent-child && mvn package)
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ vespa deploy --wait 300 app-7-parent-child
+$ vespa deploy --wait 600 app-7-parent-child
 </pre>
 </div>
 
@@ -320,8 +320,8 @@ Feed the created feed files:
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre data-test="exec">
-$ vespa feed mind/global_category_ctr.json --target http://localhost:8080
-$ vespa feed mind/news_category_ctr_update.json --target http://localhost:8080
+$ vespa feed mind/global_category_ctr.json
+$ vespa feed mind/news_category_ctr_update.json
 </pre>
 </div>
 
