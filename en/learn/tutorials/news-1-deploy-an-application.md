@@ -63,7 +63,9 @@ Vespa CLI configuration mode for configuration variables. Using
 local configuration mode is generally recommended when working 
 with multiple distinct Vespa applications, but most parts of 
 this tutorial uses the same configuration values which makes 
-it easier to use global configuration mode:
+it easier to use global configuration mode. The global
+configuration mode is useful because you don't have to reapply 
+the same Vespa configurations for each part of this tutorial series:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
