@@ -27,8 +27,9 @@ redirect_from:
 
 
 <h3 id="dashboard-tabs">Tabs and filters</h3>
+<!-- TODO(snapshot): refresh monitoring-dashboard-tabs.png — the tab bar now includes the Autoscaling: Content, Autoscaling: Container, Metric Reference, and Explore tabs, and the "Per host metrics" toggle now sits at the end of the variable row next to the annotation toggles. -->
 <img src="/assets/img/monitoring-dashboard-tabs.png" alt="Dashboard tab bar">
-<p>The dashboard is organized into seven tabs:</p>
+<p>The dashboard is organized into ten tabs:</p>
 <table class="table">
   <thead>
     <tr><th>Tab</th><th>What it shows</th><th>When to use it</th></tr>
@@ -55,6 +56,18 @@ redirect_from:
     <tr><td><strong>Health</strong></td>
         <td>Cluster state, data consistency, restarts, reindexing, resource limits</td>
         <td>Stability monitoring, post-incident review</td></tr>
+    <tr><td><strong>Autoscaling: Content</strong></td>
+        <td>Per content cluster: CPU peak vs. ideal load, the query/write mix and query-growth that move the ideal target, load adjustment, active nodes, rescale actions</td>
+        <td>Understanding why and by how much a content cluster is being resized</td></tr>
+    <tr><td><strong>Autoscaling: Container</strong></td>
+        <td>The same set of panels for each container cluster</td>
+        <td>Understanding why and by how much a container cluster is being resized</td></tr>
+    <tr><td><strong>Metric Reference</strong></td>
+        <td>Alphabetical index of every metric referenced by the dashboard, with the tab(s) each one appears on</td>
+        <td>Looking up where a specific metric is graphed (browser Ctrl+F)</td></tr>
+    <tr><td><strong>Explore</strong></td>
+        <td>Ad-hoc: plot any metric, aggregated per cluster (optionally per host)</td>
+        <td>A quick look at a metric not covered by the curated tabs</td></tr>
   </tbody>
 </table>
 <p>Filters at the top apply across all tabs:</p>
@@ -64,13 +77,14 @@ redirect_from:
   <li><strong>Rank Profile</strong> &mdash; filter per-rank-profile panels on the Query tab (defaults to "All")</li>
 </ul>
 <p>
-  Query, Feed, Content Node, Resources, and Health tabs group metrics per cluster &mdash;
+  Query, Feed, Content Node, Resources, Health, and both Autoscaling tabs group metrics per cluster &mdash;
   you see all metrics for one cluster before scrolling to the next.
   Container metrics are grouped per container cluster, content metrics per content cluster.
 </p>
 
 
 <h3 id="dashboard-annotations">Annotations</h3>
+<!-- TODO(snapshot): refresh monitoring-annotations-example.png — annotations now render the affected cluster as a boxed tag, and an OS upgrade annotation has been added. -->
 <img src="/assets/img/monitoring-annotations-example.png" alt="Latency chart with Service restart and Core dump annotations">
 <p>
   Annotations are vertical lines drawn on every chart that mark operational events.
@@ -88,6 +102,9 @@ redirect_from:
     <tr><td><strong>Vespa upgrade</strong></td>
         <td>A new Vespa version is rolled out</td>
         <td>Brief rolling-restart latency spikes are expected around this marker</td></tr>
+    <tr><td><strong>OS upgrade</strong></td>
+        <td>Nodes start reporting a new host OS version</td>
+        <td>Nodes are rebuilt on the new OS, so brief per-node capacity dips are expected</td></tr>
     <tr><td><strong>Data migration</strong></td>
         <td>Bucket merges pending exceed a threshold</td>
         <td>Explains elevated CPU/IO and latency during redistribution</td></tr>
@@ -114,10 +131,11 @@ redirect_from:
 </p>
 
 <h4 id="health-indicators">Health Indicators</h4>
+<!-- TODO(snapshot): refresh monitoring-health-indicators.png — the Health Indicators row was reworked into auto-grid stat tiles with conditional rendering; verify the snapshot matches the current layout. -->
 <img src="/assets/img/monitoring-health-indicators.png" alt="Overview tab Health Indicators row">
 <p>
   The Overview tab opens with a dedicated <strong>Health Indicators</strong> row &mdash;
-  five stat panels designed to surface stability issues in a single glance.
+  stat panels designed to surface stability and data-consistency issues at a glance.
   A row of green zeros is the signal to stop; a non-zero value tells you which tab to visit next.
 </p>
 <table class="table">
@@ -140,6 +158,9 @@ redirect_from:
     <tr><td><strong>Container: Services Down</strong></td>
         <td>Active container nodes where some service isn't running</td>
         <td>0 during steady state; brief spikes during deployments are expected</td></tr>
+    <tr><td><strong>Buckets Out of Sync (%)</strong></td>
+        <td>Percentage of data buckets not yet replicated/consistent, per content cluster (green = synced, blue = rebalancing)</td>
+        <td>0% at steady state. Non-zero is normal and expected during scaling, node replacement, upgrades, and recovery, and should converge back to 0 &mdash; investigate only if it persists with no such event or fails to converge. See the <a href="#data-consistency">Health tab</a> for the trend</td></tr>
   </tbody>
 </table>
 
@@ -160,9 +181,20 @@ redirect_from:
 
 <h4 id="overview-resource-utilization">Resource utilization</h4>
 <p>
-  The bottom row gives a quick view of CPU, memory, and disk across all clusters.
-  Any resource consistently above 80% warrants attention.
+  CPU, memory, and disk are shown in two rows &mdash; one for <strong>content</strong> clusters and
+  one for <strong>container</strong> clusters &mdash; because the two cluster types have different
+  expectations. Each cluster is drawn in its own colour so several clusters are easy to tell apart.
 </p>
+<ul>
+  <li><strong>Content</strong> &mdash; high utilization is a concern on content nodes: CPU drives query
+    and write latency, and memory and disk approach the
+    <a href="../writing/feed-block.html">feed-block limits</a>. Concern lines are drawn at
+    CPU 70% / 85%, memory 80% / 90%, and disk 70% / 80%.</li>
+  <li><strong>Container</strong> &mdash; the stateless tier. CPU saturation still matters (lines at
+    70% / 85%) and disk is usually low, but <strong>memory is expected to run high</strong> (JVM heap,
+    direct/native buffers, caches) and a high value is not a concern by itself, so the container
+    memory panel draws no threshold lines.</li>
+</ul>
 
 
 <h3 id="query-tab">Query tab</h3>
@@ -208,6 +240,7 @@ Client
 </ul>
 
 <h4 id="rank-profile-metrics">Rank profile metrics</h4>
+<!-- TODO(snapshot): verify/refresh monitoring-rank-profile-rows.png — the rank-profile rows gained time-breakdown panels (setup / rerank / grouping) and panel titles now carry aggregation suffixes, e.g. "(avg)" / "(max)". -->
 <img src="/assets/img/monitoring-rank-profile-rows.png" alt="Query tab rank profile sub-rows">
 <p>
   The Query tab groups per-rank-profile metrics into four sub-rows, all filterable by
@@ -298,33 +331,117 @@ Client
   This tab only appears when the application uses
   <a href="../querying/approximate-nn-hnsw.html">approximate nearest neighbor search</a> &mdash;
   it is automatically hidden when no NNS distance computations are detected.
+  All metrics are grouped per content cluster, with a per-host toggle.
 </p>
 <p>Vespa supports two NNS modes:</p>
 <ul>
   <li><strong>Approximate NNS</strong> &mdash; uses an HNSW graph index to find neighbors efficiently
-    without scanning every document. Fast, but may miss some true nearest neighbors.</li>
-  <li><strong>Exact NNS</strong> &mdash; brute-force scan computing distance to every document.
-    Accurate but expensive. Vespa falls back to this when the filter hit ratio is below the
-    <code>approximate-threshold</code> (default 0.02).</li>
-</ul>
-<p>Key metrics:</p>
-<ul>
-  <li><strong>Exact NNS Ratio</strong> &mdash; fraction of queries using brute-force search.
-    Should be below 0.05 (5%). High values mean many queries fall back to exact search,
-    significantly increasing cost.</li>
-  <li><strong>Approx NNS Visit Efficiency</strong> &mdash; ratio of graph nodes visited to
-    distances computed. Values of 1.0&ndash;3.0 are typical; much higher suggests the HNSW index
-    could be tuned.</li>
-  <li><strong>Distances Computed / Nodes Visited</strong> &mdash; rate metrics showing the raw
-    NNS workload.</li>
+    without checking every document that passes the filter. Generally fast, but may miss some true
+    nearest neighbors.</li>
+  <li><strong>Exact NNS</strong> &mdash; brute-force search computing distance to every document that
+    passes the filter. Accurate but expensive.</li>
 </ul>
 <p>
-  Tuning parameters (set per
-  <a href="../basics/ranking.html#rank-profiles">rank profile</a>):
-  <code>approximate-threshold</code>, <code>filter-first-threshold</code>,
-  <code>target-hits-max-adjustment-factor</code>, <code>exploration-slack</code>.
-  If the exact NNS ratio is high, consider increasing <code>approximate-threshold</code>
-  or restructuring filters to be less restrictive.
+  Approximate NNS works well in most cases, but is less suited when the filter is very restrictive,
+  as that makes the graph hard to navigate. For a restrictive filter, exact NNS works well since only
+  few documents have to be checked. Vespa automatically falls back to exact NNS when the filter hit
+  ratio is below the <code>approximate-threshold</code> (default 0.02). In this border region, the
+  filter-first heuristic ("Acorn-1") controlled by <code>filter-first-threshold</code> can avoid the
+  latency spikes of classical HNSW.
+</p>
+
+<h4 id="nns-overview-detail">Overview and detail metrics</h4>
+<ul>
+  <li><strong>Exact NNS Distance Computation Ratio</strong> &mdash; fraction of distance computations
+    using brute-force search. Highly dependent on incoming queries. High values (above ~50%)
+    <em>could</em> indicate that <code>approximate-threshold</code> is too high.</li>
+  <li><strong>Approximate NNS Visit Efficiency</strong> &mdash; ratio of graph nodes visited to
+    distances computed. Lower is more efficient. Values above 1.0 show the filter-first heuristic
+    ("Acorn-1") is in use, and reflect the hit ratios of incoming queries' filters &mdash; the higher
+    the value, the lower the hit ratios. Values outside [1.0, 20.0] <em>could</em> indicate
+    <code>filter-first-exploration</code> is too high.</li>
+  <li><strong>Distances Computed</strong> &mdash; rate of distance calculations. Higher means more CPU
+    used for NNS; unoptimized HNSW parameters can cause sudden spikes.</li>
+  <li><strong>Nodes Visited</strong> &mdash; rate of HNSW graph node visits. For classical HNSW this
+    equals the number of computed distances; the filter-first heuristic visits more nodes than
+    distances it computes.</li>
+</ul>
+
+<h4 id="nns-query-rate">Query rate</h4>
+<p>
+  The query rate is split into the queries that perform an approximate NNS and the rest
+  (which includes queries that fall back to exact NNS), so the two add up to the total.
+  This shows at a glance how much of the traffic exercises the HNSW index.
+</p>
+
+<h4 id="nns-latency-breakdown">Query latency breakdown</h4>
+<p>
+  Latency is decomposed so you can tell <em>where</em> time is being spent. The total splits into setup
+  and matching, and setup splits again to isolate approximate NNS:
+</p>
+<ul>
+  <li><strong>Query Latency</strong> &mdash; total time matching and ranking a query (average and max).</li>
+  <li><strong>Query Setup Time</strong> &mdash; setting up and tearing down queries (average and max).
+    Includes filter computation <em>and</em> approximate NNS.</li>
+  <li><strong>Query Matching Time</strong> &mdash; the matching process (average and max). This is where
+    <em>exact</em> NNS happens. Derived as Query Latency &minus; Query Setup Time.</li>
+  <li><strong>Query Setup Time Without Approximate NNS Time</strong> &mdash; setup minus approximate NNS,
+    i.e. mostly filter computation.</li>
+  <li><strong>Query Approximate NNS Time</strong> &mdash; time spent on approximate NNS, averaged only
+    over the queries that perform one.</li>
+</ul>
+
+<h4 id="nns-timeouts">Timeouts</h4>
+<ul>
+  <li><strong>ANN Timeout Rate</strong> &mdash; rate of queries that terminated an approximate NNS early
+    because they hit the ANN time budget.</li>
+  <li><strong>Soft Timeout Rate</strong> &mdash; rate of queries that terminated early because they hit
+    the soft timeout.</li>
+</ul>
+
+<h4 id="nns-how-to-act">How to act on high latencies</h4>
+<ol>
+  <li>Check whether the system is simply overloaded &mdash; look at <strong>Query Rate</strong> and
+    <strong>Thread Pool &ndash; Match Utilization</strong>.</li>
+  <li>Identify the source &mdash; approximate or exact NNS?
+    <ul>
+      <li><strong>Query Approximate NNS Time</strong> high &mdash; likely unoptimized HNSW parameters;
+        see the tuning parameters below. A query time budget is the safe way to experiment.</li>
+      <li><strong>Query Setup Time</strong> high <em>without</em> approximate NNS time being high &mdash;
+        the filter computation is slow; restructuring the query could help.</li>
+      <li><strong>Query Matching Time</strong> high &mdash; this is where exact NNS happens; indicates
+        <code>approximate-threshold</code> is too large, making Vespa fall back to exact NNS too early.</li>
+    </ul>
+  </li>
+</ol>
+
+<h4 id="nns-tuning">HNSW parameter tuning</h4>
+<p>
+  Besides <code>targetHits</code>, several
+  <a href="../reference/schemas/schemas.html#approximate-threshold">rank-profile parameters</a>
+  (each with a <a href="../reference/api/query.html#ranking.matching.approximateThreshold">query-parameter
+  counterpart</a>) tune HNSW behaviour:
+</p>
+<ul>
+  <li><code>approximate-threshold</code> (default 0.02) &mdash; filter hit ratio below which a query
+    falls back to exact NNS. If set wrong, queries crossing it can spike in latency.</li>
+  <li><code>filter-first-threshold</code> (default 0.2) &mdash; filter hit ratio below which the filter
+    is checked before a distance computation. Improves latency at low hit ratios but may reduce recall;
+    set to 0.0 to disable the heuristic.</li>
+  <li><code>filter-first-exploration</code> (default 0.01) &mdash; how much of the graph the filter-first
+    heuristic explores. Higher improves recall but worsens latency &mdash; increase with caution.</li>
+  <li><code>exploration-slack</code> (default 0.0) &mdash; an alternative to raising <code>targetHits</code>
+    for better recall, at the cost of latency.</li>
+  <li><code>post-filter-threshold</code>, <code>target-hits-max-adjustment-factor</code> &mdash; configure
+    post-filtering, useful for queries with high filter hit ratios.</li>
+</ul>
+<p>
+  The safe way to experiment is the
+  <a href="../reference/api/query.html#ranking.matching.anntimebudget"><code>ranking.matching.anntimebudget</code></a>
+  query parameter, which caps the time spent on approximate NNS so latency cannot explode while you tune.
+  To debug a specific slow query, capture a profile with the
+  <a href="../clients/vespa-cli.html">Vespa CLI</a> <code>query</code> command and its
+  <code>--profile</code> option.
 </p>
 
 
@@ -346,6 +463,13 @@ Client
   Disk and memory usage from Proton's internal accounting. This is distinct from node-level
   metrics in the Resources tab &mdash; these are the values Vespa uses for
   <a href="../writing/feed-block.html">feed-blocking</a> decisions.
+</p>
+<p>
+  By default each panel shows one line per content cluster. Enable the
+  <strong>Per host metrics</strong> toggle to break disk and memory down per node &mdash;
+  useful for spotting a single node approaching its feed-block limit while the
+  cluster view still looks healthy, for example when data is unevenly distributed
+  across nodes.
 </p>
 
 <h4 id="content-executors">Executor utilization</h4>
@@ -458,6 +582,7 @@ Client
 </ul>
 
 <h4 id="jvm-memory">JVM memory breakdown</h4>
+<!-- TODO(snapshot): verify/refresh monitoring-jvm-memory.png — a JVM GC Pause Duration panel was added and JVM panel titles now carry aggregation suffixes, e.g. "(avg)" / "(max)". -->
 <img src="/assets/img/monitoring-jvm-memory.png" alt="JVM memory breakdown: heap, direct, native, GC">
 <p>The Resources tab's JVM row separates the three layers of container memory:</p>
 <ul>
@@ -488,15 +613,24 @@ Client
 
 <h4 id="data-consistency">Data consistency</h4>
 <ul>
-  <li><strong>Buckets Out of Sync</strong> &mdash; percentage of
+  <li><strong>Buckets Out of Sync (%)</strong> &mdash; percentage of
     <a href="../content/buckets.html">data buckets</a> not yet replicated/consistent.
-    Should be 0% during steady state; non-zero during scaling, restarts, or failures.</li>
+    Shown as a time series here and as an at-a-glance stat on the Overview tab.</li>
   <li><strong>Merge Pending</strong> &mdash; bucket merge operations queued.
     High during data redistribution.</li>
 </ul>
 <p>
-  After scaling events, expect buckets out of sync and pending merges.
-  These should converge back to zero. If they don't, investigate.
+  This is a <em>progress</em> signal, not a severity gauge &mdash; so the panels carry
+  <strong>no green/orange/red thresholds</strong>. It is expected to be non-zero, often high,
+  during normal operations: scaling resizes, node replacement, rolling upgrades, and recovery
+  all redistribute data, and a freshly added node can be close to 100% out of sync until it
+  receives its share. The value alone does not indicate a problem; what matters is its behaviour
+  over time. Read it alongside the
+  <a href="#dashboard-annotations">Auto-scaling, Vespa upgrade, and Data migration annotations</a>:
+  a rise that lines up with one of those events and then <strong>converges back to zero</strong>
+  is healthy. Investigate only when it is non-zero with <em>no</em> corresponding event, or when
+  it <strong>fails to converge</strong> long after the triggering event. (The Overview stat is
+  coloured neutrally &mdash; green when synced, blue while rebalancing &mdash; for the same reason.)
 </p>
 
 <h4 id="stability">Stability</h4>
@@ -519,6 +653,114 @@ Client
   <a href="../writing/feed-block.html">feeding is blocked</a>.
   The dashboard includes a Resource Limits Reference panel (collapsed) explaining the
   default limits (disk 80%, memory 80%), the blocking mechanism, and what to do about it.
+</p>
+
+
+<h3 id="autoscaling-tabs">Autoscaling tabs</h3>
+<p>
+  The <strong>Autoscaling: Content</strong> and <strong>Autoscaling: Container</strong> tabs
+  explain <em>why</em> <a href="autoscaling.html">autoscaling</a> resizes a cluster and roughly
+  <em>how big</em> the change is. They are most useful when a resize surprised you, or when you
+  are deciding whether to enable autoscaling in the first place &mdash; the panels render even
+  while autoscaling is disabled, so you can see what it <em>would</em> do.
+  Each tab repeats its set of panels once per cluster (content clusters on the first tab,
+  container clusters on the second).
+</p>
+<p>
+  The autoscaler compares each cluster's <strong>peak load</strong> (the busiest point in the
+  recent window) against an <strong>ideal load</strong> target it maintains per resource. The
+  ideal target sits intentionally below 100% &mdash; it already reserves headroom for traffic
+  growth and for absorbing traffic if another zone becomes unavailable. Peak above ideal pushes
+  the cluster to scale <strong>up</strong>; peak held comfortably below ideal scales it
+  <strong>down</strong>.
+</p>
+<p>
+  Of the per-resource targets the autoscaler tracks, only <strong>CPU</strong> peak and ideal are
+  exported to the Vespa Cloud metric tier (memory and disk are still considered internally; their
+  targets simply aren't published), so these tabs focus on CPU.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Panel</th><th>What it shows</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>CPU load &mdash; peak vs ideal</strong></td>
+        <td>Peak observed CPU load against the autoscaler's ideal CPU target. The gap between
+          them is the scale-up (or scale-down) pressure, and its size drives how big the resize is.</td></tr>
+    <tr><td><strong>Query vs write rate &mdash; CPU mix driver</strong></td>
+        <td>The query and write rates side by side. The ideal CPU target is a blend of a
+          query-oriented and a write-oriented target, weighted by where CPU is spent &mdash; so a
+          shift in this mix moves the ideal line even at steady total load.</td></tr>
+    <tr><td><strong>Query growth (rate vs 3h average)</strong></td>
+        <td>Query rate divided by its own trailing 3-hour average. Above 1.0 means traffic is
+          trending up, which makes the autoscaler reserve growth headroom (lowering the ideal CPU
+          target) and can trigger a scale-up even when current load looks flat. A direction
+          indicator, not an exact value.</td></tr>
+    <tr><td><strong>CPU load adjustment (peak / ideal)</strong></td>
+        <td>The central signal: peak CPU divided by ideal CPU. 1.0 means ideally scaled for CPU;
+          above 1.0 is under-provisioned, below 1.0 over-provisioned. The value roughly sets the
+          size of the next resize (1.5 &asymp; needs about 50% more CPU).</td></tr>
+    <tr><td><strong>Active nodes</strong></td>
+        <td>Active node count with the non-active fraction overlaid. Step changes mark completed
+          resizes; a non-zero non-active fraction means a change is in progress &mdash; for content
+          clusters this includes data redistribution.</td></tr>
+    <tr><td><strong>Autoscaling actions</strong></td>
+        <td>Rescale decisions in the selected window. Line each bump up with the node-count and
+          load-adjustment panels to see what triggered it. These events also appear as the
+          <em>Auto-scaling</em> <a href="#dashboard-annotations">annotation</a> on every chart.</td></tr>
+  </tbody>
+</table>
+<p>
+  <strong>Reading the "why it scaled when load looks flat" case:</strong> the ideal target moves.
+  When the query/write mix shifts toward writes, when query growth rises above 1.0, or when the
+  autoscaler reserves capacity so the cluster can absorb traffic from a zone that becomes
+  unavailable, the ideal CPU target drops &mdash; and a scale-up can follow at steady observed
+  load. Watching the <em>ideal</em> line, not just <em>peak</em>, is the key. The zone-failover
+  reservation is not directly graphed, so if the ideal line moves while the query/write mix, query
+  growth, and node count all look flat, that reservation is the likely cause.
+</p>
+<p>
+  Content clusters scale on CPU, memory <em>and</em> disk, and a resize can change node count,
+  group count, or node size; because data must be redistributed, the non-active fraction stays
+  above zero until rebalancing completes. Container clusters are CPU-driven and scale by node
+  count only &mdash; with no data to move, their resizes complete quickly.
+</p>
+
+
+<h3 id="metric-reference-tab">Metric Reference tab</h3>
+<p>
+  The Metric Reference tab is a single text panel listing every Prometheus-exported metric
+  currently queried by the dashboard, paired with the tab(s) it is graphed on and a
+  <strong>Per host</strong> column marking the metrics you can break down per node with the
+  <strong>Per host metrics</strong> toggle. Open the tab
+  and use the browser&rsquo;s find shortcut (Ctrl+F / Cmd+F) to look up where a metric appears.
+  The list is alphabetical and includes the aggregator suffix (<code>_max</code>,
+  <code>_sum</code>, <code>_count</code>, <code>_rate</code>, <code>_average</code>,
+  <code>_min</code>, <code>_95percentile</code>, <code>_99percentile</code>); some metrics
+  appear on multiple tabs.
+</p>
+<p>
+  The table is generated from the dashboard JSON, so it stays in sync with the panels.
+  No queries, panels, or filters live on this tab beyond the reference itself.
+</p>
+
+
+<h3 id="explore-tab">Explore tab</h3>
+<p>
+  An ad-hoc explorer for metrics not covered by the curated tabs. Pick a metric from the
+  <strong>Explore metric</strong> dropdown and an aggregation from
+  <strong>Explore aggregation</strong> (<code>sum</code> / <code>avg</code> / <code>max</code> /
+  <code>min</code>); the panel plots the selected metric aggregated per cluster, with Vespa&rsquo;s
+  admin components (cluster controllers and logserver) excluded. Toggle
+  <strong>Per host metrics</strong> to break it down per node when the metric carries a
+  <code>host</code> label.
+</p>
+<p>
+  It is deliberately generic &mdash; the Y-axis unit is not metric-specific and the same
+  aggregation is applied to whatever metric you pick. Use the
+  <a href="#metric-reference-tab">Metric Reference</a> tab or the
+  <a href="metrics.html">metrics reference</a> to find metric names; for curated,
+  unit-correct charts prefer the dedicated tabs.
 </p>
 
 
