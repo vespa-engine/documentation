@@ -1,0 +1,392 @@
+---
+title: "Semantic Rule Language Reference"
+sidebarTitle: "Semantic rules"
+---
+
+
+This is the reference for the semantic rule language in Vespa. For a guide on using this language, see [query rewriting](/en/linguistics/query-rewriting). Refer to the [Query API](/en/reference/api/query#semantic-rules) for how to use in queries.
+
+## Rule bases
+
+Semantic rules are collected in files called _rule bases_. The name of these files are _[rule-base-name].sr_. They must be placed in _[application-package]/rules/_ to be deployed.
+
+## Basic syntax
+
+A rule base may contain any number of the following four constructs, explained in the rest of this document:
+
+- [directives](#directives)
+- [production rules](#production-rules)
+- [named conditions](#named-conditions)
+- comments, starting by # and ending by newline.
+
+Production rules and named conditions are _statements_. Statements may span multiple lines and are terminated by `;`.
+
+## Directives
+
+A directive is a "meta-level" statement which is not used during rule evaluation, but tells the rule engine how to use the rule base. A statement starts by `@` and ends by newline. They may take parameters. These directives exist:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Statement</th>
+      <th>Usage</th>
+      <th>Location</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>@default</td>
+      <td>Make this rule base the default, to be used with all queries</td>
+      <td>Anywhere outside other statements</td>
+    </tr>
+    <tr>
+      <td>@automata(&lt;automata-filename&gt;)</td>
+      <td>Use an automata file with this base</td>
+      <td>Anywhere outside other statements</td>
+    </tr>
+    <tr>
+      <td>@include(&lt;rulebase-name&gt;)</td>
+      <td>Include all the statements of another rule base in this</td>
+      <td>Anywhere outside other statements</td>
+    </tr>
+    <tr>
+      <td>@super</td>
+      <td>Include the conditions of the same-named conditions from the included rule base</td>
+      <td>In a condition</td>
+    </tr>
+    <tr>
+      <td>@stemming(&lt;true|false&gt;)</td>
+      <td>Whether terms should match after stemming or exactly (true by default)</td>
+      <td>Before any rule</td>
+    </tr>
+    <tr>
+      <td>@language(&lt;<a href="https://en.wikipedia.org/wiki/ISO_639-1" aria-label="language-code">language-code</a>&gt;)</td>
+      <td>The language of the rule base, which should also be the query language. Influences stemming.</td>
+      <td>Before any rule</td>
+    </tr>
+  </tbody>
+</table>
+
+## Production Rules
+
+A production rule is of the form:
+
+<Card>  
+[\<condition\>](#conditions)\<operator\>[\<production-list\>](#production-list);
+</Card>
+
+This performs the production as defined by the operator if the condition matches. There are two kinds of production rules (and two operators), replacing and adding:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Rule kind</th>
+      <th>Operator</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Replacing</td>
+      <td>-&gt;</td>
+      <td>_Replace_ the matched terms by the production</td>
+    </tr>
+    <tr>
+      <td>Adding</td>
+      <td>+&gt;</td>
+      <td>_Add_ the production to the matched terms</td>
+    </tr>
+  </tbody>
+</table>
+
+## Namespaces
+
+A namespace is a collection of facts which can be read from conditions and changed by productions. Namespaces may be positional (sequences), or not. A positional namespace will track the current fact and match and insert at the current position, while non-positional namespaces will match any fact against any condition.
+
+There is a default namespace which does not need an explicit reference. For query rules, the default namespace is the query terms.
+
+To determine the namespace used to read from conditions or change in productions, use:
+
+<Card>
+\<namespace>.[\<condition\>](#conditions)<br/>
+\<namespace>.[\<production\>](#production)
+</Card>
+
+There are two namespaces defined during query processing:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Namespace</th>
+      <th>Syntax</th>
+      <th>Positional</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Query</td>
+      <td></td>
+      <td>Yes</td>
+      <td>The default namespace. References the terms of the query. The condition value returned will be the term itself.</td>
+    </tr>
+    <tr>
+      <td>Parameter</td>
+      <td><code>{`parameter.`}</code></td>
+      <td>No</td>
+      <td>References the parameter of the query. Conditions will be true if the parameter is set in the query. The value returned from conditions is the value of the parameter. Productions will need both a key and value specified to set a parameter value.</td>
+    </tr>
+  </tbody>
+</table>
+
+## Named Conditions
+
+A named condition is on the form:
+
+<Card>
+[condition-name] :-[\<condition\>](#conditions);
+</Card>
+
+This simply assigns a name to the condition on the right, so it can be referred to the conditions in rules and other named conditions.
+
+## Conditions
+
+A condition is an expression which evaluates to true or false over the _facts_ of a [namespace](#namespaces). If the namespace is _positional_ (a _sequence_), evaluation starts at the _current position_ in the namespace. When evaluated true, conditions will also return a value which can be referenced by comparison conditions.
+
+Conditions may be preceded by a reference name and a label:
+
+<Card>
+([\<reference-name\>](#reference-name)/)?([\<label\>](#condition-label):)?[\<condition\>](#condition)
+</Card>
+
+### Reference Name
+
+The reference name allows an explicit name to be set, from which the terms matched by the condition can be referred in a condition. This is useful when multiple conditions of the same type are used in the condition of the same rule.
+
+If no reference name is given, the text standing between the square brackets of the condition is used as reference name.
+
+### Label
+
+If a label is specified, the condition will only match terms having that label (the label is the index in query terms). If a label is not set, the term will match if a label is not set, or if it is `default`.
+
+### Condition
+
+These are the supported kinds of conditions:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Condition</th>
+      <th>Syntax</th>
+      <th>Meaning</th>
+      <th>Returned value</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Term</td>
+      <td>&lt;term&gt;</td>
+      <td>True if this is the term at the current position</td>
+      <td>Determined by the <a href="#namespaces" aria-label="namespace">namespace</a></td>
+    </tr>
+    <tr>
+      <td>Reference (produce the matched term(s))</td>
+      <td>[&lt;condition-name&gt;]</td>
+      <td>Evaluate a named condition</td>
+      <td>The matched term(s) of the condition</td>
+    </tr>
+    <tr>
+      <td>Reference (produce all terms in the condition)</td>
+      <td>[&lt;condition-name&gt;&#42;]</td>
+      <td>Evaluate a named condition</td>
+      <td>All the terms in the condition</td>
+    </tr>
+    <tr>
+      <td>Sequence</td>
+      <td>&lt;condition&gt; &lt;condition&gt;</td>
+      <td>Match both conditions by consecutive terms in the right order in the sequence</td>
+      <td>The last nested condition value</td>
+    </tr>
+    <tr>
+      <td>Choice</td>
+      <td>&lt;condition&gt;, &lt;condition&gt;</td>
+      <td>Match any one of the conditions, each one tried at the current position</td>
+      <td>The last nested condition value</td>
+    </tr>
+    <tr>
+      <td>Group</td>
+      <td>(&lt;condition&gt;)</td>
+      <td>Evaluate the condition inside the grouping as a unit</td>
+      <td>The last nested condition value</td>
+    </tr>
+    <tr>
+      <td>Ellipsis</td>
+      <td>â€¦</td>
+      <td>Matches any sequence to make the overall condition match</td>
+      <td>The matched sequence</td>
+    </tr>
+    <tr>
+      <td>Referable ellipsis</td>
+      <td>[â€¦]</td>
+      <td>An ellipsis where the matched sequence can be referenced from the production</td>
+      <td>The matched sequence</td>
+    </tr>
+    <tr>
+      <td>Not</td>
+      <td>!&lt;condition&gt;</td>
+      <td>Matches if the condition does not match</td>
+      <td>Nothing</td>
+    </tr>
+    <tr>
+      <td>And</td>
+      <td>&lt;condition&gt; &amp; &lt;condition&gt;</td>
+      <td>Matches if all the conditions matches at the (same) current position</td>
+      <td>The last nested condition value</td>
+    </tr>
+    <tr>
+      <td>Comparison</td>
+      <td>&lt;condition&gt; <a href="#operator" aria-label="&lt;operator&gt;">&lt;operator&gt;</a> &lt;condition&gt;</td>
+      <td>True if the comparison is true for the values returned from the conditions</td>
+      <td>The last nested condition value</td>
+    </tr>
+    <tr>
+      <td>Literal</td>
+      <td>'&lt;literal&gt;'</td>
+      <td>Returns a value for comparison. This always evaluates to true.</td>
+      <td>The literal value</td>
+    </tr>
+    <tr>
+      <td>Start anchor</td>
+      <td>. &lt;condition&gt;</td>
+      <td>Matches condition only if it matches the query from the start</td>
+      <td>The matched sequence</td>
+    </tr>
+    <tr>
+      <td>End anchor</td>
+      <td>&lt;condition&gt; .</td>
+      <td>Matches condition only if it matches the query to the end</td>
+      <td>The matched sequence</td>
+    </tr>
+  </tbody>
+</table>
+
+### Comparison Condition Operators
+
+The possible operators of a comparison condition are:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Operator</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>=</td>
+      <td>Left and right values are equal</td>
+    </tr>
+    <tr>
+      <td>&lt;=</td>
+      <td>Left value is smaller or equal</td>
+    </tr>
+    <tr>
+      <td>&gt;=</td>
+      <td>Left value is larger or equal</td>
+    </tr>
+    <tr>
+      <td>&lt;</td>
+      <td>Left value is smaller</td>
+    </tr>
+    <tr>
+      <td>&gt;</td>
+      <td>Left value is larger</td>
+    </tr>
+    <tr>
+      <td>=~</td>
+      <td>Left value contains right value as a substring</td>
+    </tr>
+  </tbody>
+</table>
+
+## Production List
+
+A production list consists of a space-separated list of _productions_ which are carried out when the production of a rule is matched. A production can be preceded by the type of term to produce, a label (index in queries), and followed by the weight (importance) of the produced value:
+
+<Card>
+([\<term-type\>](#term-type))?([\<label\>](#production-label):)?[\<production\>](#production)(! [\<weight\>](#weight))?
+</Card>
+
+### Term Type
+
+The default term type is the term type of the context which the term is added to. The possible explicit term types are:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Syntax</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>?</td>
+      <td>Insert as an OR term</td>
+    </tr>
+    <tr>
+      <td>=</td>
+      <td>Insert as an EQUIV term</td>
+    </tr>
+    <tr>
+      <td>+</td>
+      <td>Insert as an AND term</td>
+    </tr>
+    <tr>
+      <td>$</td>
+      <td>Insert as a RANK term</td>
+    </tr>
+    <tr>
+      <td>-</td>
+      <td>Insert as a NOT term</td>
+    </tr>
+  </tbody>
+</table>
+
+### Label
+
+If included, the label decides the label the produced term(s) will have in the namespace. This is the index in the query namespace.
+
+### Production
+
+There are three types of productions:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Production</th>
+      <th>Syntax</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Literal term</td>
+      <td>&lt;term&gt;</td>
+      <td>Produce this term literally</td>
+    </tr>
+    <tr>
+      <td>Literal term with value</td>
+      <td>&lt;term&gt;='&lt;value&gt;'</td>
+      <td>Produce this term and value literally.</td>
+    </tr>
+    <tr>
+      <td>Reference</td>
+      <td>[&lt;condition-reference&gt;]</td>
+      <td>Produce the terms matched by the referenced condition. The reference name is either the name of a named condition used in the condition, an ellipsis - <code>{`...`}</code> - or an explicit condition reference name.</td>
+    </tr>
+  </tbody>
+</table>
+
+### Weight
+
+The weight is a percentage integer denoting the importance of the produced term. The default is 100. In the query namespace the weight becomes the term weight, determining the relevance contribution of the term.

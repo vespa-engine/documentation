@@ -1,0 +1,700 @@
+---
+title: "Embedding"
+---
+
+A common technique is to map unstructured data - say, text or images - to points in an abstract vector space and then do the computation in that space. For example, retrieve similar data by [finding nearby points in the vector space](/en/querying/approximate-nn-hnsw), or [using the vectors as input to a neural net](/en/ranking/onnx). This mapping is referred to as _embedding_. Read more about embedding and embedding management in this [blog post](https://blog.vespa.ai/tailoring-frozen-embeddings-with-vespa/).
+
+Embedding vectors can be sent to Vespa in queries and writes:
+
+<Frame>
+ ![document- and query-embeddings](/assets/img/vespa-overview-embeddings-1.svg)
+</Frame>
+
+Alternatively, you can use the `embed` function to generate the embeddings inside Vespa to reduce vector transfer costs and make clients simpler:
+
+<Frame>
+ ![Vespa's embedding feature, creating embeddings from text](/assets/img/vespa-overview-embeddings-2.svg)
+</Frame>
+
+Adding embeddings to schemas will change the characteristics of an application; Memory usage will grow, and feeding latency might increase. Read more on how to address this in [binarizing vectors](/en/rag/binarizing-vectors).
+
+## Configuring embedders
+
+Embedders are [components](/en/applications/components) which must be configured in your [services.xml](/en/reference/applications/services/services). Components are shared and can be used across schemas.
+
+```xml
+<container id="default" version="1.0">
+    <component id="hf-embedder" type="hugging-face-embedder">
+        <transformer-model path="my-models/model.onnx"/>
+        <tokenizer-model path="my-models/tokenizer.json"/>
+        <prepend>
+            <query>query:</query>
+            <document>passage:</document>
+        </prepend>
+    </component>
+    ...
+</container>
+```
+
+You can [write your own](https://javadoc.io/doc/com.yahoo.vespa/linguistics/latest/com/yahoo/language/process/Embedder.html), or use [embedders provided in Vespa](#provided-embedders).
+
+If you have multiple container clusters that are using the same embedder, consider using an [include](/en/reference/applications/services/container#include) statement to avoid duplicating component config.
+
+## Embedding a query text
+
+Where you would otherwise supply a tensor in a query request, you can (with an embedder configured) instead supply any text enclosed in `embed()`:
+
+```bash
+input.query(q)=embed(myEmbedderId, "Hello%20world")
+```
+
+Both single and double quotes are permitted, and if you have only configured a single embedder, you can skip the embedder id argument and the quotes.
+
+The text argument can be supplied by a referenced parameter instead, using the `@parameter` syntax:
+
+```json
+{
+    "yql": "select * from doc where {totalTargetHits:10}nearestNeighbor(embedding_field, query_embedding)",
+    "text": "my text to embed",
+    "input.query(query_embedding)": "embed(@text)",
+}
+```
+
+Remember that regardless of whether you are using embedders, input tensors must always be [defined in the schema's rank-profile](/en/reference/schemas/schemas#inputs).
+
+## Embedding a document field
+
+Use the `embed` function of the [indexing language](/en/reference/writing/indexing-language#indexing-statement) to convert strings into embeddings:
+
+```text
+schema doc {
+
+    document doc {
+
+        field title type string {
+            indexing: summary | index
+        }
+
+    }
+
+    field embeddings type tensor<bfloat16>(x[384]) {
+        indexing {
+            input title |embed embedderId| attribute | index
+        }
+    }
+
+}
+```
+
+Notice that the embedding field is defined outside the `document` clause in the schema. If you have only configured a single embedder, you can skip the embedder id argument.
+
+The input field can also be an array, where the output becomes a rank two tensor, see [this blog post](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/):
+
+```bash
+schema doc {
+
+    document doc {
+
+        field chunks type array<string> {
+            indexing: index | summary
+        }
+
+    }
+
+    field embeddings type tensor<bfloat16>(p{},x[5]) {
+        indexing: input chunks |embed embedderId| attribute | index
+    }
+
+}
+```
+
+## Provided embedders
+
+Vespa provides several embedders as part of the platform.
+
+### Huggingface Embedder
+
+An embedder using any [Huggingface tokenizer](https://huggingface.co/docs/tokenizers/index), including multilingual tokenizers, to produce tokens which are then input to a supplied transformer model in [ONNX](https://onnx.ai/) model format:
+
+```xml
+<container id="default" version="1.0">
+    <component id="hf-embedder" type="hugging-face-embedder">
+        <transformer-model path="my-models/model.onnx"/>
+        <tokenizer-model path="my-models/tokenizer.json"/>
+    </component>
+    ...
+</container>
+```
+
+The huggingface-embedder supports all [Huggingface tokenizer implementations](https://huggingface.co/docs/tokenizers/index).
+
+- The `transformer-model` specifies the embedding model in [ONNX](https://onnx.ai/) format. See [exporting models to ONNX](/en/ranking/onnx#using-optimum-to-export-models-to-onnx-format) for how to export embedding models from Huggingface to be compatible with Vespa's `hugging-face-embedder`. See [Limitations on Model Size and Complexity](/en/ranking/onnx#limitations-on-model-size-and-complexity) for details on the ONNX model format supported by Vespa. 
+- The `tokenizer-model` specifies the Huggingface `tokenizer.json` formatted file. See [HF loading tokenizer from a JSON file.](https://huggingface.co/transformers/v4.8.0/fast_tokenizers.html#loading-from-a-json-file)
+
+Use `path` to supply the model files from the application package, `url` to supply them from a remote server, or `model-id` to use a [model supplied by Vespa Cloud](/en/rag/model-hub). You can also use a model hosted in private Huggingface Model Hub by adding your Huggingface API token to the [secret store](/en/security/secret-store) and referring to the secret using `secret-ref` in the model tag. See [model config reference](/en/reference/rag/embedding#model-config-reference) for more details.
+
+```xml
+<container id="default" version="1.0">
+    <component id="e5" type="hugging-face-embedder">
+        <transformer-model url="https://huggingface.co/intfloat/e5-small-v2/resolve/main/model.onnx"/>
+        <tokenizer-model url="https://huggingface.co/intfloat/e5-small-v2/raw/main/tokenizer.json"/>
+    </component>
+    ...
+</container>
+```
+
+See the [reference](/en/reference/rag/embedding#huggingface-embedder-reference-config) for all configuration parameters.
+
+#### Huggingface embedder models
+
+The following are examples of text embedding models that can be used with the hugging-face-embedder and their output [tensor](/en/ranking/tensor-user-guide) dimensionality. The resulting [tensor type](/en/reference/ranking/tensor#tensor-type-spec) can be `float`, `bfloat16` or using binarized quantization into `int8`. See blog post [Combining matryoshka with binary-quantization](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/) for more examples of using the Huggingface embedder with binary quantization.
+
+The following models use `pooling-strategy` `mean`, which is the default [pooling-strategy](/en/reference/rag/embedding#huggingface-embedder-reference-config):
+
+- [intfloat/e5-small-v2](https://huggingface.co/intfloat/e5-small-v2) produces `tensor<float>(x[384])`
+- [intfloat/e5-base-v2](https://huggingface.co/intfloat/e5-base-v2) produces `tensor<float>(x[768])`
+- [intfloat/e5-large-v2](https://huggingface.co/intfloat/e5-large-v2) produces `tensor<float>(x[1024])`
+- [intfloat/multilingual-e5-base](https://huggingface.co/intfloat/multilingual-e5-base) produces `tensor<float>(x[768])`
+
+The following models are useful for binarization and Matryoshka dimensionality flexibility where only the first k dimensions are retained. [Matryoshka 🤝 Binary vectors: Slash vector search costs with Vespa](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/) is a great read on this subject. When enabling binarization with `int8` use [distance-metric hamming](/en/reference/schemas/schemas#hamming):
+
+- [mxbai-embed-large-v1](https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1) produces `tensor<float>(x[1024])`. This model is also useful for binarization, which can be triggered by using destination `tensor<int8>(x[128])`. Use `pooling-strategy` `cls` and `normalize` `true`.
+- [nomic-embed-text-v1.5](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) produces `tensor<float>(x[768])`. This model is also useful for binarization, which can be triggered by using destination `tensor<int8>(x[96])`. Use `normalize` `true`.
+
+Snowflake arctic model series:
+
+- [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) produces `tensor<float>(x[384])`. Use `pooling-strategy` `cls` and `normalize` `true`.
+- [snowflake-arctic-embed-m](https://huggingface.co/Snowflake/snowflake-arctic-embed-m) produces `tensor<float>(x[768])`. Use `pooling-strategy` `cls` and `normalize` `true`.
+
+All of these example text embedding models can be used in combination with Vespa's [nearest neighbor search](/en/querying/nearest-neighbor-search) using the appropriate [distance-metric](/en/reference/schemas/schemas#distance-metric). Notice that to use the [distance-metric: prenormalized-angular](/en/reference/schemas/schemas#prenormalized-angular), the `normalize` configuration must be set to `true`.
+
+Check the [Massive Text Embedding Benchmark](https://huggingface.co/blog/mteb) (MTEB) benchmark and [MTEB leaderboard](https://huggingface.co/spaces/mteb/leaderboard) for help with choosing an embedding model.
+
+### Bert embedder
+
+DEPRECATED; prefer using the [Huggingface Embedder](#huggingface-embedder) instead of the Bert embedder.
+
+An embedder using the [WordPiece](/en/reference/rag/embedding#wordpiece-embedder) embedder to produce tokens which are then input to a supplied [ONNX](https://onnx.ai/) model on the form expected by a BERT base model:
+
+```xml
+<container version="1.0">
+    <component id="myBert" type="bert-embedder">
+        <transformer-model url="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx"/>
+        <tokenizer-vocab url="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/raw/main/vocab.txt"/>
+        <max-tokens>128</max-tokens>
+        <transformer-output>last_hidden_state</transformer-output>
+    </component>
+</container>
+```
+
+- The `transformer-model` specifies the embedding model in [ONNX](https://onnx.ai/) format. See [exporting models to ONNX](/en/ranking/onnx#using-optimum-to-export-models-to-onnx-format), for how to export embedding models from Huggingface to compatible [ONNX](https://onnx.ai/) format. 
+- The `tokenizer-vocab` specifies the Huggingface `vocab.txt` file, with one valid token per line. Note that the Bert embedder does not support the `tokenizer.json` formatted tokenizer configuration files. This means that tokenization settings like max tokens should be set explicitly. 
+- The `transformer-output` specifies the name given to to embedding output in the `model.onnx` file; this will differ depending on how the model is exported to ONNX format. One common name is `last_hidden_state`, especially in transformer-based models. Other common names are `output` or `output_0`, `embedding` or `embeddings`, `sentence_embedding`, `pooled_output`, or `encoder_last_hidden_state`. The default is `output_0`. 
+
+The Bert embedder is limited to English ([WordPiece](/en/reference/rag/embedding#wordpiece-embedder)) and BERT-styled transformer models with three model inputs (_input\_ids, attention\_mask, token\_type\_ids_). Prefer using the [Huggingface Embedder](#huggingface-embedder) instead of the Bert embedder.
+
+See [configuration reference](/en/reference/rag/embedding#bert-embedder-reference-config) for all configuration options.
+
+### ColBERT embedder
+
+An embedder supporting [ColBERT](https://github.com/stanford-futuredata/ColBERT) models. The ColBERT embedder maps text to _token_ embeddings, representing a text as multiple contextualized embeddings. This produces better quality than reducing all tokens into a single vector.
+
+Read more about ColBERT and the ColBERT embedder in blog post form [Announcing the Vespa ColBERT embedder](https://blog.vespa.ai/announcing-colbert-embedder-in-vespa/) and [Announcing Vespa Long-Context ColBERT](https://blog.vespa.ai/announcing-long-context-colbert-in-vespa/).
+
+```xml
+<container version="1.0">
+    <component id="colbert" type="colbert-embedder">
+        <transformer-model url="https://huggingface.co/colbert-ir/colbertv2.0/resolve/main/model.onnx"/>
+        <tokenizer-model url="https://huggingface.co/colbert-ir/colbertv2.0/raw/main/tokenizer.json"/>
+        <max-query-tokens>32</max-query-tokens>
+        <max-document-tokens>128</max-document-tokens>
+    </component>
+</container>
+```
+
+- The `transformer-model` specifies the ColBERT embedding model in [ONNX](https://onnx.ai/) format. See [exporting models to ONNX](/en/ranking/onnx#using-optimum-to-export-models-to-onnx-format) for how to export embedding models from Huggingface to compatible [ONNX](https://onnx.ai/) format. The [vespa-engine/col-minilm](https://huggingface.co/vespa-engine/col-minilm) page on the HF model hub has a detailed example of how to export a colbert checkpoint to ONNX format for accelerated inference. 
+- The `tokenizer-model` specifies the Huggingface `tokenizer.json` formatted file. See [HF loading tokenizer from a JSON file.](https://huggingface.co/transformers/v4.8.0/fast_tokenizers.html#loading-from-a-json-file)
+- The `max-query-tokens` controls the maximum number of query text tokens that are represented as vectors, and similarly, `max-document-tokens` controls the document side. These parameters can be used to control resource usage. 
+
+See [configuration reference](/en/reference/rag/embedding#colbert-embedder-reference-config) for all configuration options and defaults.
+
+The ColBERT token embeddings are represented as a [mixed tensor](/en/ranking/tensor-user-guide#tensor-concepts): `tensor<float>(token{}, x[dim])` where `dim` is the vector dimensionality of the contextualized token embeddings. The [colbert model checkpoint](https://huggingface.co/colbert-ir/colbertv2.0) on Hugging Face hub uses 128 dimensions.
+
+The embedder destination tensor is defined in the [schema](/en/basics/schemas), and depending on the target [tensor cell precision](/en/reference/ranking/tensor#tensor-type-spec) definition the embedder can compress the representation: If the target tensor cell type is `int8`, the ColBERT embedder compresses the token embeddings with binarization for the document to reduce storage to 1-bit per value, reducing the token embedding storage footprint by 32x compared to using float. The _query_ representation is not compressed with binarization. The following demonstrates two ways to use the ColBERT embedder in the document schema to [embed a document field](#embedding-a-document-field).
+
+```text
+schema doc {
+    document doc {
+        field text type string {..}
+    }
+    field colbert_tokens type tensor<float>(token{}, x[128]) {
+        indexing: input text | embed colbert | attribute
+    }
+    field colbert_tokens_compressed type tensor<int8>(token{}, x[16]) {
+        indexing: input text | embed colbert | attribute
+    }
+}
+```
+
+The first field `colbert_tokens` stores the original representation as the tensor destination cell type is float. The second field, the `colbert_tokens_compressed` tensor is compressed. When using `int8` tensor cell precision, one should divide the original vector size by 8 (128/8 = 16).
+
+You can also use `bfloat16` instead of `float` to reduce storage by 2x compared to `float`.
+
+```text
+field colbert_tokens type tensor<bfloat16>(token{}, x[128]) {
+    indexing: input text | embed colbert | attribute
+}
+```
+
+You can also use the ColBERT embedder with an array of strings (representing chunks):
+
+```text
+schema doc {
+    document doc {
+        field chunks type array<string> {..}
+    }
+    field colbert_tokens_compressed type tensor<int8>(chunk{}, token{}, x[16]) {
+        indexing: input text | embed colbert chunk | attribute
+    }
+}
+```
+
+Here, we need a second mapped dimension in the target tensor and a second argument to embed, telling the ColBERT embedder the name of the tensor dimension to use for the chunks.
+
+Notice that the examples above did not specify the `index` function for creating a [HNSW](/en/querying/approximate-nn-hnsw) index. The colbert representation is intended to be used as a ranking model and not for retrieval with Vespa's nearestNeighbor query operator, where you can e.g., use a document-level vector and/or lexical matching.
+
+To reduce memory footprint, use [paged attributes](/en/content/attributes#paged-attributes).
+
+#### ColBERT ranking
+
+See the sample applications for using ColBERT in ranking with variants of the MaxSim similarity operator expressed using Vespa tensor computation expressions. See: [colbert](https://github.com/vespa-engine/sample-apps/tree/master/colbert) and [colbert-long](https://github.com/vespa-engine/sample-apps/tree/master/colbert-long).
+
+### SPLADE embedder
+
+An embedder supporting [SPLADE](https://github.com/naver/splade) models. The SPLADE embedder maps text to mapped tensor, representing a text as a sparse vector of unique tokens and their weights.
+
+```xml
+<container version="1.0">
+    <component id="splade" type="splade-embedder">
+        <transformer-model path="models/splade_model.onnx"/>
+        <tokenizer-model path="models/tokenizer.json"/>
+    </component>
+</container>
+```
+
+- The `transformer-model` specifies the SPLADE embedding model in [ONNX](https://onnx.ai/) format. See [exporting models to ONNX](/en/ranking/onnx#using-optimum-to-export-models-to-onnx-format) for how to export embedding models from Huggingface to compatible [ONNX](https://onnx.ai/) format. 
+- The `tokenizer-model` specifies the Huggingface `tokenizer.json` formatted file. See [HF loading tokenizer from a JSON file.](https://huggingface.co/transformers/v4.8.0/fast_tokenizers.html#loading-from-a-json-file)
+
+See [configuration reference](/en/reference/rag/embedding#splade-embedder-reference-config) for all configuration options and defaults.
+
+The splade token weights are represented as a [mapped tensor](/en/ranking/tensor-user-guide#tensor-concepts): `tensor<float>(token{})`.
+
+The embedder destination tensor is defined in the [schema](/en/basics/schemas). The following demonstrates how to use the SPLADE embedder in the document schema to [embed a document field](#embedding-a-document-field).
+
+```text
+schema doc {
+    document doc {
+        field text type string {..}
+    }
+    field splade_tokens type tensor<float>(token{}) {
+        indexing: input text | embed splade | attribute
+    }
+}
+```
+
+You can also use the SPLADE embedder with an array of strings (representing chunks). Here, also using lower tensor cell precision `bfloat16`:
+
+```text
+schema doc {
+    document doc {
+        field chunks type array<string> {..}
+    }
+    field splade_tokens type tensor<bfloat16>(chunk{}, token{}) {
+        indexing: input text | embed splade chunk | attribute
+    }
+}
+```
+
+Here, we need a second mapped dimension in the target tensor and a second argument to embed, telling the splade embedder the name of the tensor dimension to use for the chunks.
+
+To reduce memory footprint, use [paged attributes](/en/content/attributes#paged-attributes).
+
+#### SPLADE ranking
+
+See the [splade](https://github.com/vespa-engine/sample-apps/tree/master/splade) sample application for how to use SPLADE in ranking, including also how to use the SPLADE embedder with an array of strings (representing chunks).
+
+#### SPLADE retrieval
+
+[Sparse retrieval in Vespa](https://blog.vespa.ai/redefining-hybrid-search-possibilities-with-vespa/#sparse-retrieval-in-vespa) is a good discussion on how SPLADE can be used for retrieval.
+
+### VoyageAI Embedder
+
+An embedder that uses the [VoyageAI](https://www.voyageai.com/) embedding API to generate high-quality embeddings for semantic search. This embedder calls the VoyageAI API service and does not require local model files or ONNX inference. All embeddings returned by VoyageAI are normalized to unit length, making them suitable for cosine similarity and [prenormalized-angular](/en/reference/schemas/schemas#prenormalized-angular) distance metrics (see [VoyageAI FAQ](https://docs.voyageai.com/docs/faq#which-similarity-function-should-i-use)).
+
+```xml
+<container version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4</model>
+        <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
+        <dimensions>1024</dimensions>
+    </component>
+</container>
+```
+
+- The `model` specifies which VoyageAI model to use. 
+- The `api-key-secret-ref` references a secret in Vespa's [secret store](/en/security/secret-store) containing your VoyageAI API key. This is required for authentication. 
+
+See the [reference](/en/reference/rag/embedding#voyageai-embedder-reference-config) for all configuration parameters.
+
+#### VoyageAI embedder models
+
+For the complete list of available models and their specifications, see:
+
+- [VoyageAI Embeddings Documentation](https://docs.voyageai.com/docs/embeddings) - General-purpose and specialized models
+- [Contextualized Chunk Embeddings](https://docs.voyageai.com/docs/contextualized-chunk-embeddings) - Models for embedding document chunks with surrounding context. See [Working with chunks](../rag/working-with-chunks.html).
+- [Multimodal Embeddings](https://docs.voyageai.com/docs/multimodal-embeddings) - Multimodal models for text, images, and video
+
+#### Contextualized chunk embeddings
+
+To use [contextualized chunk embeddings](https://docs.voyageai.com/docs/contextualized-chunk-embeddings), configure the VoyageAI embedder with a `voyage-context-*` model and use it to embed an `array<string>` field containing your document chunks:
+
+```js
+schema doc {
+    document doc {
+        field chunks type array<string> {
+            indexing: index | summary
+        }
+    }
+    field embeddings type tensor<float>(chunk{}, x[1024]) {
+        indexing: input chunks | embed voyage | attribute | index
+        attribute {
+            distance-metric: prenormalized-angular
+        }
+    }
+}
+```
+
+When embedding array fields with a contextualized chunk embedding model, Vespa sends all chunks from a document in a single API request, allowing Voyage to encode each chunk with context from the other chunks. Be aware that the combined size of all chunks in a document must fit within the VoyageAI API's input token limit. See [Working with chunks](/en/rag/working-with-chunks) for chunking strategies.
+
+#### Input type detection
+
+VoyageAI models distinguish between query and document embeddings for improved retrieval quality. The embedder automatically detects the context and sets the appropriate input type based on whether the embedding is performed during feed (/en/writing/indexing ) or query processing in Vespa.
+
+For advanced use cases where you need to control the input type programmatically, you can use the `destination` property of the [Embedder.Context](https://javadoc.io/static/com.yahoo.vespa/linguistics/8.620.35/com/yahoo/language/process/Embedder.Context.html) when calling the embedder from Java code.
+
+#### Using voyage-4-nano for local query inference
+
+The [voyage-4-nano](/en/rag/model-hub#voyage-4-nano) model is available as an ONNX model for use with the [Hugging Face embedder](#huggingface-embedder). Since it shares the same embedding space as the larger [Voyage 4](https://blog.voyageai.com/2026/01/15/voyage-4/) models, it can be used for query embeddings with local inference â€” trading some accuracy for lower cost by eliminating API usage for queries entirely.
+
+### OpenAI Embedder
+
+Available since Vespa 8.678
+
+An embedder that uses the [OpenAI](https://platform.openai.com/docs/guides/embeddings) embeddings API to generate embeddings for semantic search. The embedder can target any OpenAI-compatible API.
+
+```xml
+<container version="1.0">
+    <component id="openai" type="openai-embedder">
+        <model>text-embedding-3-small</model>
+        <api-key-secret-ref>openai_api_key</api-key-secret-ref>
+        <dimensions>1536</dimensions>
+    </component>
+</container>
+```
+
+- The `model` specifies which OpenAI model to use. 
+- The `api-key-secret-ref` references a secret in Vespa's [secret store](/en/security/secret-store) containing your OpenAI API key. For self-hosted OpenAI-compatible endpoints that do not require authentication, this element can be omitted. 
+
+See the [reference](/en/reference/rag/embedding#openai-embedder-reference-config) for all configuration parameters.
+
+### Mistral Embedder
+
+Available since Vespa 8.678
+
+An embedder that uses the [Mistral](https://docs.mistral.ai/capabilities/embeddings/overview/) embeddings API to generate embeddings for semantic search.
+
+```xml  
+<container version="1.0">
+    <component id="mistral" type="mistral-embedder">
+        <model>mistral-embed</model>
+        <api-key-secret-ref>mistral_api_key</api-key-secret-ref>
+        <dimensions>1024</dimensions>
+    </component>
+</container>
+```
+
+- The `model` specifies which Mistral model to use. 
+- The `api-key-secret-ref` references a secret in Vespa's [secret store](/en/security/secret-store) containing your Mistral API key. This is required for authentication. 
+
+Mistral supports output quantization on models that offer it, such as `codestral-embed`. See the [reference](/en/reference/rag/embedding#mistral-embedder-reference-config) for all configuration parameters.
+
+## Embedder performance
+
+Embedding inference can be resource-intensive for larger embedding models. Factors that impact performance:
+
+- The embedding model parameters. Larger models are more expensive to evaluate than smaller models.
+- The sequence input length. Transformer models scale quadratically with input length. Since queries are typically shorter than documents, embedding queries is less computationally intensive than embedding documents. 
+- The number of inputs to the `embed` call. When encoding arrays, consider how many inputs a single document can have. For local CPU inference, increasing [feed timeout](/en/reference/api/document-v1#timeout) settings might be required when documents have many `embed`inputs. 
+
+For local ONNX-based embedders (such as the [Hugging Face](#huggingface-embedder), [Bert](#bert-embedder), [ColBERT](#colbert-embedder), and [SPLADE](#splade-embedder) embedders), using [GPU](/en/reference/rag/embedding#embedder-onnx-reference-config), especially for longer sequence lengths (documents), can dramatically improve performance and reduce cost. See the blog post on [GPU-accelerated ML inference in Vespa Cloud](https://blog.vespa.ai/gpu-accelerated-ml-inference-in-vespa-cloud/). With GPU-accelerated instances, using fp16 models instead of fp32 can increase throughput by as much as 3x compared to fp32.
+
+For cloud embedders that call an external API ([VoyageAI](#voyageai-embedder), [OpenAI](#openai-embedder), [Mistral](#mistral-embedder)), throughput is bound by API latency and rate limits rather than local hardware. See [Thread pool tuning for cloud embedders](#thread-pool-tuning) and [dynamic batching](#dynamic-batching) for tuning guidance.
+
+Refer to [binarizing vectors](/en/rag/binarizing-vectors) for how to reduce vector size.
+
+## Metrics
+
+Vespa's built-in embedders emit metrics for computation time and token sequence length. These metrics are prefixed with `embedder.` and listed in the [Container Metrics](/en/reference/operations/metrics/container) reference documentation. Third-party embedder implementations may inject the `ai.vespa.embedding.Embedder.Runtime` component to easily emit the same predefined metrics, although emitting custom metrics is perfectly fine.
+
+## Sample applications
+
+These sample applications use embedders:
+
+- [commerce-product-ranking](https://github.com/vespa-engine/sample-apps/tree/master/commerce-product-ranking) - demonstrates using multiple embedders
+- [multi-vector-indexing](https://github.com/vespa-engine/sample-apps/tree/master/multi-vector-indexing) demonstrates how to use embedders with multiple document field inputs
+- [colbert](https://github.com/vespa-engine/sample-apps/tree/master/colbert) demonstrates how to use the colbert-embedder 
+- [colbert-long](https://github.com/vespa-engine/sample-apps/tree/master/colbert-long) demonstrates how to use the colbert-embedder with long contexts (array input) 
+- [splade](https://github.com/vespa-engine/sample-apps/tree/master/splade) demonstrates how to use the splade-embedder.
+
+## Tricks and tips
+
+Various tricks that are useful with embedders.
+
+### Adding a fixed string to a query text
+
+Embedding models might require text to be prepended with a fixed string, e.g.:
+
+```xml
+<component id="e5" type="hugging-face-embedder">
+    <transformer-model url="https://huggingface.co/intfloat/e5-small-v2/resolve/main/model.onnx"/>
+    <tokenizer-model url="https://huggingface.co/intfloat/e5-small-v2/raw/main/tokenizer.json"/>
+    <prepend>
+        <query>query:</query>
+        <document>passage:</document>
+    </prepend>
+</component>
+```
+
+The above configuration prepends text in queries and field data. Find a complete example in the [ColBERT](https://github.com/vespa-engine/sample-apps/tree/master/colbert) sample application.
+
+The `<prepend>` element is also supported by the [OpenAI embedder](/en/reference/rag/embedding#openai-embedder-reference-config), which is useful for OpenAI-compatible instruction-tuned models that expect a task-specific prefix.
+
+An alternative approach is using query profiles to prepend query data. If you need to add a standard wrapper or a prefix instruction around the input text you want to embed use parameter substitution to supply the text, as in `embed(myEmbedderId, @text)`, and let the parameter (`text` here) be defined in a [query profile](/en/querying/query-profiles), which in turn uses [value substitution](/en/querying/query-profiles#value-substitution) to place another query request with a supplied text value within it. The following is a concrete example where queries should have a prefix instruction before being embedded in a vector representation. The following defines a `text` input field to `search/query-profiles/default.xml`:
+
+```xml
+<query-profile id="default">
+    <field name="text">"Represent this sentence for searching relevant passages: %{user_query}</field>
+</query-profile>
+```
+
+Then, at query request time, we can pass `user_query` as a request parameter, this parameter is then used to produce the `text` value which then is embedded.
+
+```json
+{
+    "yql": "select * from doc where userQuery() or (totalTtargetHits: 100}nearestNeighbor(embedding, e))",
+    "input.query(e)": "embed(mxbai, @text)",
+    "user_query": "space contains many suns"
+}
+```
+
+The text that is embedded by the embedder is then: _Represent this sentence for searching relevant passages: space contains many suns_.
+
+### Concatenating input fields
+
+You can concatenate values in indexing using "`.`", and handle missing field values using [choice](/en/writing/indexing#choice-example) to produce a single input for an embedder:
+
+```text
+schema doc {
+
+    document doc {
+
+        field title type string {
+            indexing: summary | index
+        }
+
+        field body type string {
+            indexing: summary | index
+        }
+
+    }
+
+    field embeddings type tensor<bfloat16>(x[384]) {
+        indexing {
+            (input title || "") . " " . (input body || "") |embed embedderId| attribute | index
+        }
+        index: hnsw
+    }
+
+}
+```
+
+You can also use concatenation to add a fixed preamble to the string to embed.
+
+### Combining with foreach
+
+The indexing expression can also use `for_each` and include other document fields. For example, the _E5_ family of embedding models uses instructions along with the input. The following expression prefixes the input with _passage:_ followed by a concatenation of the title and a text chunk.
+
+```text
+schema doc {
+
+    document doc {
+
+        field title type string {
+            indexing: summary | index
+        }
+
+        field chunks type array<string> {
+            indexing: index | summary
+        }
+
+    }
+    field embedding type tensor<bfloat16>(p{}, x[384]) {
+        indexing {
+            input chunks |
+                for_each {
+                    "passage: " . (input title || "") . " " . ( _ || "")
+                } | embed e5 | attribute | index
+        }
+        attribute {
+            distance-metric: prenormalized-angular
+        }
+    }
+}
+```
+
+See [Indexing language execution value](/en/writing/indexing#execution-value-example)for details.
+
+### Separate feed and search embedders
+
+In Vespa Cloud, it is general practice to configure separate container clusters for feed and search, so that bursty feed load cannot affect query latency. When using HTTP-based cloud embedders ([VoyageAI](#voyageai-embedder), [OpenAI](#openai-embedder), [Mistral](#mistral-embedder)), configure a separate embedder component in each cluster. This lets you pick different models and API keys per workload, and gives two additional benefits: **cost optimization** (via model variants) and **rate limit isolation**.
+
+```xml
+<container id="feed" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-large</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_feed_api_key</api-key-secret-ref>
+    </component>
+    <document-api/>
+</container>
+
+<container id="search" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-lite</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_search_api_key</api-key-secret-ref>
+    </component>
+    <search/>
+</container>
+```
+
+#### Cost optimization with model variants
+
+When a provider offers multiple model sizes that share the same embedding space, you can use a more powerful (and more expensive) model for document embeddings while using a smaller, cheaper model for query embeddings. Since document embedding happens once during indexing but query embedding occurs on every search request, this can significantly reduce operational costs while maintaining retrieval quality.
+
+For example, the [Voyage 4 model family](https://blog.voyageai.com/2026/01/15/voyage-4/) shares a vector space across sizes, making it a natural fit for this pattern: use `voyage-4-large` in the feed cluster and `voyage-4-lite` in the search cluster as shown above. See also [Using voyage-4-nano for local query inference](#voyageai-local-query-inference) for an even more cost-effective query-side option.
+
+#### Rate limit isolation
+
+Separating feed and search operations is particularly important for managing API rate limits. Bursty document feeding operations can consume significant API quota, potentially causing rate limit errors that affect search queries. By using **separate API keys** for feed and search embedders, you ensure that feeding bursts don't negatively impact search.
+
+### Thread pool tuning for cloud embedders
+
+When using an HTTP-based cloud embedder (VoyageAI, OpenAI, Mistral), container feed throughput is primarily limited by embedding API latency combined with the document processing thread pool size, not by CPU. Each document being fed blocks a thread while waiting for the embedding API response. To improve throughput, you likely have to increase the [document processing thread pool size](../reference/applications/services/docproc#threadpool), assuming the content cluster is not the bottleneck.
+
+For example, consider a container cluster with 2 nodes, each with 8 vCPUs. With the default document processing thread pool size of 1 thread per vCPU, you have 16 total threads. If the average embedding API latency is 200ms, the maximum throughput is approximately 16 / 0.2 = 80 documents/second. See [container tuning](/en/performance/container-tuning) for more on container tuning.
+
+Note that the effective throughput can never exceed the rate limit of your API key. Use the [embedder metrics](/en/reference/operations/metrics/container) to determine embedder latency and throughput. For additional throughput improvements, consider enabling [dynamic batching](#dynamic-batching).
+
+### Dynamic batching
+
+Dynamic batching combines multiple concurrent embedding requests into a single embedding invocation. This is useful when throughput is constrained by the provider's requests-per-minute (RPM) limit rather than the tokens-per-minute (TPM) limit. Batching reduces RPM usage by combining requests; TPM usage is unaffected.
+
+Dynamic batching is supported by the [VoyageAI](#voyageai-embedder), [OpenAI](#openai-embedder), and [Mistral](#mistral-embedder) embedders.
+
+```xml
+<container id="feed" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-large</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_feed_api_key</api-key-secret-ref>
+        <batching max-size="16" max-delay="200ms"/>
+    </component>
+    <document-api/>
+</container>
+```
+
+The `max-size` attribute sets the maximum number of requests in a single batch, and `max-delay` sets the maximum time to wait for a full batch before sending a partial one. Batching is disabled by default.
+
+The [document processing thread pool size](/en/reference/applications/services/docproc#threadpool) should be at least `max-size`, since each thread contributes one request to the batch.
+
+## Troubleshooting
+
+This section covers common issues and how to resolve them.
+
+### Model download failure
+
+If models fail to download, it will cause the Vespa stateless container service to not start with `RuntimeException: Not able to create config builder for payload` - see [example](/en/applications/components#component-load).
+
+This usually means that the model download failed. Check the Vespa log for more details. The most common reasons for download failure are network issues or incorrect URLs.
+
+This will also be visible in the Vespa status output as the container will not listen to its port:
+
+```sh
+vespa status -t http://127.0.0.1:8080            
+Container at http://127.0.0.1:8080 is not ready: unhealthy container at http://127.0.0.1:8080/status.html: Get "http://127.0.0.1:8080/status.html": EOF
+Error: services not ready: http://127.0.0.1:8080
+```
+
+### Tensor shape mismatch
+
+The native embedder implementations expect that the output tensor has a specific shape. If the shape is incorrect, you will see an error message during feeding like:
+
+```json
+feed: got status 500 ({"pathId":"..","..","message":"[UNKNOWN(252001) @ tcp/vespa-container:19101/chain.indexing]:
+Processing failed. Error message: java.lang.IllegalArgumentException: Expected 3 output dimensions for output name 'sentence_embedding': [batch, sequence, embedding], got 2 -- See Vespa log for details. "}) for put xx:not retryable
+```
+
+This means that the exported ONNX model output tensor does not have the expected shape. For example, the above is logged by the [hf-embedder](#huggingface-embedder) that expects the output shape to be [batch, sequence, embedding] (A 3D tensor). This is because the embedder implementation performs the [pooling-strategy](/en/reference/rag/embedding#huggingface-embedder) over the sequence dimension to produce a single embedding vector. The batch size is always 1 for Vespa embeddings.
+
+See [onnx export](/en/ranking/onnx#using-optimum-to-export-models-to-onnx-format) for how to export models to ONNX format with the correct output shapes and [onnx debug](/en/ranking/onnx#debugging-onnx-models) for debugging input and output names.
+
+### Input names
+
+The native embedder implementations expect that the ONNX model accepts certain input names. If the names are incorrect, it will cause the Vespa container service to not start, and you will see an error message in the vespa log like:
+
+```sh
+WARNING container Container.com.yahoo.container.di.Container
+Caused by: java.lang.IllegalArgumentException: Model does not contain required input: 'input_ids'. Model contains: my_input
+```
+
+This means that the ONNX model accepts "my\_input", while our configuration attempted to use "input\_ids". The default input names for the [hf-embedder](#huggingface-embedder) are "input\_ids", "attention\_mask" and "token\_type\_ids". These are overridable in the configuration ([reference](/en/reference/rag/embedding#huggingface-embedder)). Some embedding models do not use the "token\_type\_ids" input. We can specify this in the configuration by setting `transformer-token-type-ids` to empty, illustrated by the following example.
+
+```xml
+<component id="hf-embedder" type="hugging-face-embedder">
+    <transformer-model path="my-models/a-model-without-token-types-model.onnx"/>
+    <tokenizer-model path="my-models/tokenizer.json"/>
+    <transformer-token-type-ids/>      
+</component>
+```
+
+### Output names
+
+The native embedder implementations expect that the ONNX model produces certain output names. It will cause the Vespa stateless container service to not start, and you will see an error message in the vespa log like:
+
+```sh
+Model does not contain required output: 'test'. Model contains: last_hidden_state
+```
+
+This means that the ONNX model produces "last\_hidden\_state", while our configuration attempted to use "test". The default output name for the [hf-embedder](#huggingface-embedder) is "last\_hidden\_state". This is overridable in the configuration. See [reference](/en/reference/rag/embedding#huggingface-embedder).
+
+### EOF
+
+If vespa status shows that the container is healthy, but you observe an EOF error during feeding, this means that the stateless container service has crashed and stopped listening to its port. This could be related to the embedder ONNX model size, docker container memory resource constraints, or the configured JVM heap size of the Vespa stateless container service.
+
+```sh
+vespa feed ext/1.json 
+feed: got error "Post "http://127.0.0.1:8080/document/v1/doc/doc/docid/1": unexpected EOF" (no body) for put id:doc:doc::1: giving up after 10 attempts
+```
+
+This could be related to insufficient stateless container (JVM) memory. Check the container logs for OOM errors. See [jvm-tuning](/en/performance/container-tuning#jvm-tuning) for JVM tuning options (The default heap size is 1.5GB). Container crashes could also be caused by too little memory allocated to the docker or podman container, which can cause the Linux kernel to kill processes to free memory. See the [docker containers memory](/en/operations/self-managed/docker-containers#memory) documentation. Vespa estimates the memory needed for embedder model inference automatically, but the estimate can be inaccurate. Override it with [\<inference\>\<memory\>](/en/reference/applications/services/container#inference-memory) to reserve a specific amount of container memory for inference.

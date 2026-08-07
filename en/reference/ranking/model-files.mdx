@@ -1,0 +1,111 @@
+---
+title: "Stateless model reference"
+sidebarTitle: "model files"
+---
+
+_.model_ files are used in [stateless model evaluation](/en/ranking/stateless-model-evaluation). These are files with [ranking expressions](/en/basics/ranking), located in [models](/en/reference/applications/application-packages) / a subdirectory of _models_, with _.model_ suffix:
+
+```
+├── models
+│   └── my_model.model
+└── services.xml
+```
+
+## .model file format specification
+
+```txt
+model [name] {
+
+    inputs {
+        ([input-name] [input-type])*
+    }
+
+    constants {
+        [constant]*
+    }
+
+    (function [name]([argument-name]*) {
+        expression: [ranking expression]
+    })*
+
+}
+```
+
+The elements can appear in any order (and number).
+
+### Constant element
+
+<Card>
+[constant-name] [type]?: [scalar, [tensor on literal form](/en/reference/ranking/tensor#tensor-literal-form), or `file:` followed by a file reference]
+</Card>
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>The name of the constant, written either the full feature name <code>{`constant(myName)`}</code>, or just as <code>{`name`}</code>.</td>
+    </tr>
+    <tr>
+      <td>type</td>
+      <td>The type of the constant, either <code>{`double`}</code> or a <a href="/en/reference/ranking/tensor#tensor-type-spec" aria-label="tensor type">tensor type</a>. If omitted, the type is double.</td>
+    </tr>
+    <tr>
+      <td>value</td>
+      <td>A number, a <a href="/en/reference/ranking/tensor#tensor-literal-form" aria-label="tensor on literal form">tensor on literal form</a>, or <code>{`file:`}</code> followed by a path relative to the model file to a file containing the constant. The file must be stored on the <a href="/en/reference/schemas/schemas#tensor" aria-label="tensor JSON Format">tensor JSON Format</a> and end with <code>{`.json`}</code>. The file may be lz4 compressed, in which case the ending must be <code>{`.json.lz4`}</code>.</td>
+    </tr>
+  </tbody>
+</table>
+
+Constant examples:
+
+```js
+constants {
+    myDouble: 0.5
+    constant(myOtherDouble) double: 0.6
+    constant(myArray) tensor(x[3]):[1, 2, 3]
+    constant(myMap) tensor(key{}):\{key1: 1.0, key2: 2.0}
+    constant(myLargeTensor) tensor(x[10000]): file:constants/myTensor.json.lz4
+}
+```
+
+## Model example
+
+This file must be saved as `example.model` somewhere in the [models](/en/reference/applications/application-packages) directory tree, and the same directory must also contain `myLargeConstant.json.lz4` with a tensor as compressed json.
+
+```js expandable
+model example {
+
+    # All inputs that are not scalar (aka 0-dimensional tensor) must be declared
+    inputs {
+        
+        input1 tensor(name{},x[3])
+        input2 tensor(x[3])
+    }
+
+    constants {
+
+        constant(constant1) tensor(x[3]):{{x:0}:0.5, {x:1}:1.5, {x:2}:2.5}
+        constant(constant2): 3.0
+        constant(myLargeConstant) tensor(x[10000]): file:myLargeConstant.json.lz4
+    }
+
+    function foo1() {
+
+        expression: reduce(sum(input1 * input2, name) * constant1, max, x) * constant2
+    }
+
+    function foo2() {
+
+        expression: reduce(sum(input1 * input2, name) * constant(constant1asLarge), max, x) * constant2
+    }
+
+}
+```
+
+This makes the model _example_ available with the functions _foo1_ and _foo2_.

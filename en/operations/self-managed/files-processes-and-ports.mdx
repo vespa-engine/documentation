@@ -1,0 +1,254 @@
+---
+title: "Files, Processes, Ports, Environment"
+---
+
+This is a reference of directories used in a Vespa installation, processes that run on the Vespa nodes and ports / environment variables used. Also see [log files](/en/reference/operations/log-files).
+
+## Directories
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Directory</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`$VESPA_HOME/bin/`}</code></td>
+      <td>Command line utilities and scripts</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/libexec/vespa/`}</code></td>
+      <td>Command line utilities and scripts</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/sbin/`}</code></td>
+      <td>Server programs, daemons, etc</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/lib64/`}</code></td>
+      <td>Dynamically linked libraries, typically third-party libraries</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/lib/jars/`}</code></td>
+      <td>Java archives</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/logs/vespa/`}</code></td>
+      <td>Log files</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/var/db/vespa/config_server/serverdb/`}</code></td>
+      <td>Config server database and user applications</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/share/vespa/`}</code></td>
+      <td>A directory with config definitions and XML schemas for application package validation</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/conf/vespa`}</code></td>
+      <td>Various config files used by Vespa or libraries Vespa depend on</td>
+    </tr>
+  </tbody>
+</table>
+
+## Processes and ports
+
+The following is an overview of which ports and port ranges are used by the different services in a Vespa system. Note that for services capable of running multiple instances on the same node, all instances will run within the listed port range.
+
+Processes are run as user `vespa`.
+
+Many services are allocated ports dynamically. So even though the allocation is deterministic, i.e. the same system will get the same ports on subsequent startups, a particular service instance may get different ports when the overall system setup is changed through [services.xml](/en/reference/applications/services/services). Use [vespa-model-inspect](/en/reference/operations/self-managed/tools#vespa-model-inspect) to see port allocations.
+
+- The number of ports used in a range depends on number of instances that are running
+- Not all ports within a range are used, but they are assigned each service to support future extensions
+- The range from 19100 is used for internal communication ports, i.e. ports that are not necessary to use from an external API
+- See [Configuring Http Servers and Filters](/en/applications/http-servers-and-filters) for how to configure Container ports and [services.xml](/en/reference/applications/services/services) for how to configure other ports
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Process</th>
+      <th>Host</th>
+      <th>Port/range</th>
+      <th>ps</th>
+      <th>Function</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="/en/operations/self-managed/configuration-server" aria-label="Config server">Config server</a></td>
+      <td>Config server nodes</td>
+      <td>19070-19071</td>
+      <td><code>{`java (...) -jar $VESPA_HOME/lib/jars/standalone-container-jar-with-dependencies.jar`}</code></td>
+      <td>Vespa Configuration server</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2181-2183</td>
+      <td></td>
+      <td>Embedded Zookeeper cluster ports, see <a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/zookeeper-server.def" aria-label="zookeeper-server.def">zookeeper-server.def</a></td>
+    </tr>
+    <tr>
+      <td><a href="/en/operations/self-managed/config-sentinel" aria-label="Config sentinel">Config sentinel</a></td>
+      <td>All nodes</td>
+      <td>19098</td>
+      <td><code>{`$VESPA_HOME/sbin/vespa-config-sentinel`}</code></td>
+      <td>Sentinel that starts and stops vespa services and makes sure they are running unless they are manually stopped</td>
+    </tr>
+    <tr>
+      <td><a href="/en/operations/self-managed/config-proxy" aria-label="Config proxy">Config proxy</a></td>
+      <td>All nodes</td>
+      <td>19090</td>
+      <td><code>{`java (…) com.yahoo.vespa.config.proxy.ProxyServer`}</code></td>
+      <td>Communication liaison between Vespa processes and config server. Caches config in memory</td>
+    </tr>
+    <tr>
+      <td><a href="/en/operations/self-managed/slobrok" aria-label="Slobrok">Slobrok</a></td>
+      <td>Admin nodes</td>
+      <td>19099 for RPC port, HTTP port dynamically allocated in the 19100-19899 range</td>
+      <td><code>{`$VESPA_HOME/sbin/vespa-slobrok`}</code></td>
+      <td>Service location object broker</td>
+    </tr>
+    <tr>
+      <td><a href="/en/reference/operations/log-files#logd" aria-label="logd">logd</a></td>
+      <td>All nodes</td>
+      <td>19089</td>
+      <td><code>{`$VESPA_HOME/sbin/vespa-logd`}</code></td>
+      <td>Reads local log files and sends them to log server</td>
+    </tr>
+    <tr>
+      <td><a href="/en/reference/operations/log-files#log-server" aria-label="Log server">Log server</a></td>
+      <td>Log server node</td>
+      <td>19080</td>
+      <td><code>{`java (...) -jar lib/jars/logserver-jar-with-dependencies.jar`}</code></td>
+      <td>Vespa Log server</td>
+    </tr>
+    <tr>
+      <td><a href="/en/operations/self-managed/monitoring#metrics-proxy" aria-label="Metrics proxy">Metrics proxy</a></td>
+      <td>All nodes</td>
+      <td>19092-19095</td>
+      <td><code>{`java (...) -jar $VESPA_HOME/lib/jars/container-disc-with-dependencies.jar`}</code></td>
+      <td>Provides a single access point for metrics from all services on a Vespa node</td>
+    </tr>
+    <tr>
+      <td><a href="/en/content/content-nodes#distributor" aria-label="Distributor">Distributor</a></td>
+      <td>Content cluster</td>
+      <td>dynamically allocated in the 19100-19899 range</td>
+      <td><code>{`$VESPA_HOME/sbin/vespa-distributord-bin`}</code></td>
+      <td>Content layer distributor processes</td>
+    </tr>
+    <tr>
+      <td><a href="/en/content/content-nodes#cluster-controller" aria-label="Cluster controller">Cluster controller</a></td>
+      <td>Content cluster</td>
+      <td>19050, plus ports dynamically allocated in the 19100-19899 range</td>
+      <td><code>{`java (...) -jar $VESPA_HOME/lib/jars/container-disc-jar-with-dependencies.jar`}</code></td>
+      <td>Cluster controller processes, manages state for content nodes</td>
+    </tr>
+    <tr>
+      <td><a href="/en/content/proton" aria-label="proton">proton</a></td>
+      <td>Content cluster</td>
+      <td>dynamically allocated in the 19100-19899 range</td>
+      <td><code>{`$VESPA_HOME/sbin/vespa-proton-bin`}</code></td>
+      <td>Searchnode process, receives queries from the container and returns results from the indexes. Also receives feed and indexes documents</td>
+    </tr>
+    <tr>
+      <td><a href="/en/applications/containers" aria-label="container">container</a></td>
+      <td>Container cluster</td>
+      <td>8080</td>
+      <td><code>{`java (...) -jar $VESPA_HOME/lib/jars/container-disc-with-dependencies.jar`}</code></td>
+      <td>Container running servers, handlers and processing components</td>
+    </tr>
+  </tbody>
+</table>
+
+## System limits
+
+The [startup scripts](/en/operations/self-managed/admin-procedures#vespa-start-stop-restart) checks that system limits are set, failing startup if not. Refer to [vespa-configserver.service](https://github.com/vespa-engine/vespa/blob/master/vespabase/src/vespa-configserver.service.in) and [vespa.service](https://github.com/vespa-engine/vespa/blob/master/vespabase/src/vespa.service.in) for minimum values.
+
+## Core dumps
+
+Example settings:
+
+```bash
+$ mkdir -p /tmp/cores && chmod a+rwx /tmp/cores
+$ echo "/tmp/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
+```
+
+This will write files like */tmp/cores/core.vespa-proton-bi.1721.localhost.1580387387*.
+
+## Environment variables
+
+Vespa configuration is set in [application packages](/en/basics/applications). Some configuration is used to bootstrap nodes - this is set in environment variables. Environment variables are only read at startup.
+
+*`$VESPA_HOME/conf/vespa/default-env.txt`* is read in Vespa start scripts - use this to modify variables ([example](/en/operations/self-managed/multinode-systems#aws-ec2)). Each line has the format `action variablename value` where the items are:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Item</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>action</td>
+      <td>One of <code>{`fallback`}</code>, <code>{`override`}</code>, or <code>{`unset`}</code>. <code>{`fallback`}</code> sets the variable if it is unset (or empty). <code>{`override`}</code> set the value regardless. <code>{`unset`}</code> unsets the variable.</td>
+    </tr>
+    <tr>
+      <td>variablename</td>
+      <td>The name of the variable, e.g. <code>{`VESPA_CONFIGSERVERS`}</code></td>
+    </tr>
+    <tr>
+      <td>value</td>
+      <td>The rest of the line is the variable's value.</td>
+    </tr>
+  </tbody>
+</table>
+
+Refer to the [template](https://github.com/vespa-engine/vespa/blob/master/vespabase/conf/default-env.txt.in) for format.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Environment variable</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>VESPA_CONFIGSERVERS</td>
+      <td>A comma-separated list of hosts to run configservers, use fully qualified hostnames. Should always be set to the same value on all hosts in a multi-host setup. If not set, <code>{`localhost`}</code> is assumed. Refer to <a href="/en/operations/self-managed/configuration-server" aria-label="configuration server operations">configuration server operations</a>.</td>
+    </tr>
+    <tr>
+      <td>VESPA_HOSTNAME</td>
+      <td>Vespa uses <code>{`hostname`}</code> for node identity. But sometimes this doesn't work properly, either because that name can't be used to find an IP address which works for connecting to services running on the node, or it's just that the name doesn't agree with what the config server thinks the node's host name is. In this case, override by setting the <code>{`VESPA_HOSTNAME`}</code>, to be used instead of running the <code>{`hostname`}</code> command.<br/><br/>  Note that <code>{`VESPA_HOSTNAME`}</code> will be used &#42;both&#42; when a node identifies itself to the config server &#42;and&#42; when a service on that node registers a network connection point that other services can connect to.<br/><br/>  An error message with "hostname detection failed" is emitted if the <code>{`VESPA_HOSTNAME`}</code> isn't set and the hostname isn't usable. If <code>{`VESPA_HOSTNAME`}</code> is set to something that cannot work, an error with "hostname validation failed" is emitted instead.</td>
+    </tr>
+    <tr>
+      <td>VESPA_CONFIG_SOURCES</td>
+      <td>Used by libraries like the <a href="/en/writing/document-api-guide" aria-label="Document API">Document API</a> to set config server endpoints. Refer to <a href="/en/operations/self-managed/configuration-server#configuration" aria-label="configuration server operations">configuration server operations</a> for example use.</td>
+    </tr>
+    <tr>
+      <td>VESPA_WEB_SERVICE_PORT</td>
+      <td>The port number where REST apis will run, default <code>{`8080`}</code>. This isn't strictly needed, as the port number can be set for each HTTP server in <code>{`services.xml`}</code>, but with a big application it can be easier to set the default port number just once. Also note that this needs to be set when starting the &#42;configserver&#42;, since the REST api implementation gets its port number from there.</td>
+    </tr>
+    <tr>
+      <td>VESPA_TLS_CONFIG_FILE</td>
+      <td>Absolute path to <a href="/en/security/mtls" aria-label="TLS configuration file">TLS configuration file</a>.</td>
+    </tr>
+    <tr>
+      <td>VESPA_CONFIGSERVER_JVMARGS</td>
+      <td>JVM arguments for the config server - see <a href="/en/performance/container-tuning#config-server-and-config-proxy" aria-label="tuning">tuning</a>.</td>
+    </tr>
+    <tr>
+      <td>VESPA_CONFIGPROXY_JVMARGS</td>
+      <td>JVM arguments for the config proxy - see <a href="/en/performance/container-tuning#config-server-and-config-proxy" aria-label="tuning">tuning</a>.</td>
+    </tr>
+    <tr>
+      <td>VESPA_LOG_LEVEL</td>
+      <td>Tuning of log output from tools, see <a href="/en/reference/operations/log-files#controlling-log-levels" aria-label="controlling log levels">controlling log levels</a></td>
+    </tr>
+  </tbody>
+</table>

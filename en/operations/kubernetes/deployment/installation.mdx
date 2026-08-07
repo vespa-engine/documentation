@@ -1,0 +1,238 @@
+---
+title: "Install Vespa on Kubernetes"
+sidebarTitle: "Installation"
+description: "These steps walk through deploying Vespa using the official Helm chart."
+---
+
+## Requirements
+
+The following tools are required for a smooth deployment.
+
+<CardGroup>
+  <Card title="Helm" icon="ship" href="https://helm.sh/docs/intro/install/" horizontal />
+  <Card title="kubectl" icon="terminal" href="https://kubernetes.io/docs/reference/kubectl/" horizontal />
+  <Card title="Vespa CLI" icon="command" href="/en/clients/vespa-cli" horizontal />
+</CardGroup>
+
+These instructions assume that your `kubeconfig` is pointing to an active Kubernetes cluster. Refer to the [Getting Started](https://kubernetes.io/docs/setup/) guide to create a Kubernetes cluster. For instructions on deploying Vespa locally on MiniKube, refer to the [Deploy Vespa Locally](/en/reference/applications/deployment) guide.
+
+Vespa on Kubernetes uses a [Custom Resource Definition](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) (CRD) called a `VespaSet`. Users intending to manage the CRD definition by themselves should apply it to the cluster before installation.
+
+The permissions that are needed to run Vespa are listed on the [Permissions](/en/operations/kubernetes/deployment/permissions) page. The Helm Chart will automatically apply a default set of RBAC API resources onto the cluster.
+
+## Setup Registry Access
+
+<Note>
+**Note**: 
+
+Vespa on Kubernetes is an enterprise feature. You will need access to the images below. Contact us through our support portal to receive an authentication ID and token. For production use, we recommend mirroring these images into your own registry or a well-known internal repository appropriate to your infrastructure.
+</Note>
+
+- `VESPA_IMAGE=images.ves.pa/kubernetes/vespa`
+- `VESPA_OPERATOR_IMAGE=images.ves.pa/kubernetes/operator`
+- `HELM_CHART_REF=oci://images.ves.pa/helm/vespa-operator`
+
+We will use this naming convention throughout this guide. The tags for all three images conform to the [Vespa Version](/en/learn/releases) release semantics. We recommend using the latest Vespa release as the default. We will refer to it as `VESPA_VERSION`.
+
+The Vespa Operator and all Vespa components are local to a namespace. We will refer to the namespace as `NAMESPACE` in this guide.
+
+## Deploy the Vespa Operator
+
+Authenticate to the Helm Chart OCI registry. The credentials will be provided by our support team.
+
+```bash
+$ helm registry login images.ves.pa -u $USER -p $TOKEN
+```
+
+Install the Helm Chart onto the namespace. This will deploy the Vespa Operator and apply the `VespaSet` resource definition. Set `image.repository` to `VESPA_OPERATOR_IMAGE` as provided by our support team. The `image.tag` refers to the `VESPA_VERSION`.
+
+```bash
+$ helm install vespa-operator $HELM_CHART_REF --namespace $NAMESPACE --create-namespace --set image.repository=$VESPA_OPERATOR_IMAGE --set image.tag=$VESPA_VERSION
+```
+
+The lifecycle of the CRD definition can be managed separately. However, the CRD specification must be manually applied to the Kubernetes cluster before installing the Helm Chart. Our support team can provide this specification if necessary. To do this, use the `--skip-crds` option in Helm.
+
+```bash
+$ kubectl apply vespasets.k8s.ai.vespa-v1.yaml
+$ helm install vespa-operator $HELM_CHART_REF --namespace $NAMESPACE --create-namespace --skip-crds --set image.repository $VESPA_OPERATOR_IMAGE --set image.tag $VESPA_VERSION
+```
+
+Ensure that the `Deployment` resource was successfully created, and that the `Vespa Operator` Pod is running.
+
+## Deploy a VespaSet
+
+To set up a `dev` environment in Vespa on Kubernetes, refer to the example on the [Setup Dev Environment](/en/operations/kubernetes/deployment/dev-mode) page.
+
+A `VespaSet` is a quorum of [ConfigServer](/en/operations/self-managed/configuration-server) Pods that manage the lifecycle of Vespa applications. Several examples of `VespaSet` resources are provided in the Helm Chart `samples` directory. An example of a `VespaSet` for an archetypical [Amazon Elastic Kubernetes Service](https://aws.amazon.com/eks/) (EKS) setup is shown below.
+
+```bash
+# vespaset sample for EKS
+$ cat > vespaset.yaml <<EOF
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: vespaset-sample
+  namespace: ${NAMESPACE}
+spec:
+  version: "${VESPA_VERSION}"
+
+  configServer:
+    image: "${VESPA_OPERATOR_IMAGE}"
+    storageClass: "gp3"
+    generateRbac: false
+
+  application:
+    image: "${VESPA_IMAGE}"
+    storageClass: "gp3"
+
+  ingress:
+    endpointType: "LOAD_BALANCER"
+EOF
+
+$ kubectl apply -f vespaset.yaml
+```
+
+An example for an archetypical local deployment on MiniKube is shown below.
+
+```bash
+# vespaset sample for MiniKube
+$ cat > vespaset.yaml <<EOF
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: vespaset-sample
+  namespace: ${NAMESPACE}
+spec:
+  version: "${VESPA_VERSION}"
+
+  configServer:
+    image: "${VESPA_OPERATOR_IMAGE}"
+    storageClass: "local-storage"
+    generateRbac: false
+
+  application:
+    image: "${VESPA_IMAGE}"
+    storageClass: "local-storage"
+
+  ingress:
+    endpointType: "NONE"
+EOF
+
+$ kubectl apply -f vespaset.yaml
+```
+
+Once a `VespaSet` is applied, the operator will automatically detect the newly created resource and create a quorum of ConfigServers.
+
+Once applied, the ConfigServers will bootstrap themselves until meeting a quorum. This process takes roughly a minute. The bootstrap process is complete once the `VespaSet` resource shows the status as `RUNNING` for all ConfigServer Pods. For example:
+
+```bash expandable
+$ kubectl describe vespaset vespaset-sample -n $NAMESPACE
+Name:         vespaset-sample
+Namespace:    $NAMESPACE
+API Version:  k8s.ai.vespa/v1
+Kind:         VespaSet
+Spec:
+  Application:
+    Image:          192.168.49.2:5000/localhost/vespaai/kubernetes
+    Storage Class:  gp3
+  Config Server:
+    Generate Rbac:    false
+    Image:            192.168.49.2:5000/localhost/vespaai/kubernetes
+    Storage Class:    gp3
+  Ingress:
+    Endpoint Type:  NONE
+  Version:          8.643.16
+Status:
+  Bootstrap Status:
+    Pods:
+      cfg-1:
+        Last Updated:  2026-01-29T21:38:45Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.643.16
+      cfg-2:
+        Last Updated:  2026-01-29T21:38:09Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.643.16
+      cfg-3:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.643.16
+  Last Transition Time:  2026-01-29T21:33:55Z
+  Message:               All configservers running
+  Phase:                 RUNNING
+Events:                  <none>
+```
+
+## Deploy a Vespa Application
+
+A Vespa application can be deployed through the ConfigServers' ingress endpoint once a quorum has been met. Refer to the [Vespa Sample Applications](https://github.com/vespa-engine/sample-apps) to get started. In the following example, we will use the [Album Recommendation](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation) sample application.
+
+Set up the Vespa CLI to download the Album Recommendation sample to a directory.
+
+```bash
+$ vespa clone album-recommendation myapp && cd myapp
+```
+
+The `Node` resources must be specified for any application package is deployed on Vespa on Kubernetes. These will directly translate to Kubernetes container [resource requests and limits](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/). In a default deployment without any [PodTemplate](/en/operations/kubernetes/custom-overrides-podtemplate) overrides, the requests will equal the limits for a container.
+
+Modify the container and content cluster specifications in the application package, as shown below:
+
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0" xmlns:deploy="vespa" xmlns:preprocess="properties">
+
+    <container id="default" version="1.0">
+        <document-api/>
+        <search/>
+
+        <nodes count="2">
+            <resources vcpu="2" memory="2Gb" disk="20Gb" />
+        </nodes>
+    </container>
+
+    <content id="music" version="1.0">
+        <min-redundancy>2</min-redundancy>
+        <documents>
+            <document type="music" mode="index" />
+        </documents>
+        <nodes count="2">
+            <resources vcpu="2" memory="2Gb" disk="20Gb" />
+        </nodes>
+    </content>
+
+</services>
+```
+
+Enable port-forwarding from the ConfigServer's ingress port `19071` to your local port `19071`. Any ConfigServer Pod can be used.
+
+```bash
+$ vespa config set target local
+$ kubectl -n $NAMESPACE port-forward pod/cfg-1 19071:19071
+```
+
+Deploy and activate the application.
+
+```bash
+$ vespa prepare --target local
+$ while ! vespa --target local activate; do sleep 1; done
+```
+
+The ConfigServers will create the Container, Content, and Cluster-Controller Pods as specified in the application package. The deployment is considered complete once all Pods show the phase `RUNNING` in the `VespaSet` status.
+
+Port-forwarding provides a simple way to ingress to the ConfigServer locally. For other ingress options, refer to the [Configuring the External Access Layer](/en/operations/kubernetes/ingress) page.
+
+## Feed and Query Documents
+
+Feed and query documents by port-forwarding the ConfigServer ingress port and the Dataplane ingress port, then using the Vespa CLI.
+
+```bash
+$ kubectl -n $NAMESPACE port-forward pod/cfg-1 19071:19071
+$ kubectl -n $NAMESPACE port-forward pod/default-100 8080:8080
+$ vespa feed dataset/A-Head-Full-of-Dreams.json
+$ vespa query 'yql=select * from music where true limit 1'
+```
+
+Refer to the [Vespa CLI documentation](/en/reference/clients/vespa-cli/vespa) for the full list of available commands.

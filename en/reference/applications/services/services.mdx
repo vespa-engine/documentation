@@ -1,0 +1,255 @@
+---
+title: "services.xml"
+---
+
+
+*services.xml* specifies the clusters an application should have and their capabilities. It is placed in the root of the [application package](/en/basics/applications).
+
+Elements:
+
+<Card>
+[services \[version\]](#services)<br/>
+&ensp;&ensp;&ensp;[container &ensp;&ensp;\[version\]](/en/reference/applications/services/container) - specifies a container cluster<br/>
+&ensp;&ensp;&ensp;[content   &ensp;&ensp;&ensp;\[version\]](/en/reference/applications/services/content) - specifies a content cluster<br/>
+&ensp;&ensp;&ensp;[admin     &ensp;&ensp;&ensp;&ensp;&ensp;\[version\]](/en/reference/applications/services/admin) - control plane configuration (rarely needed)<br/>
+&ensp;&ensp;&ensp;[routing   &ensp;&ensp;&ensp;&ensp;\[version\] - how content should be routed (rarely needed)](/en/writing/document-routing#routing-services)<br/>
+</Card>
+
+## `<services>`
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Required</th>
+      <th>Value</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>version</td>
+      <td>required</td>
+      <td>number</td>
+      <td></td>
+      <td>1.0 in this version of Vespa</td>
+    </tr>
+  </tbody>
+</table>
+
+Optional subelements (one or more of *container* or *content* is required):
+
+- [`<container>`](/en/reference/applications/services/container)
+- [`<content>`](/en/reference/applications/services/content)
+- [`<admin>`](/en/reference/applications/services/admin)
+- [`<routing>`](/en/writing/document-routing#routing-services)
+
+The rest of this document describes tags that are used within multiple services tags.
+
+## `<nodes>`
+
+The *nodes* element configures the hardware resources of a cluster, and so is used in both container and content clusters. This tag works differently on Vespa Cloud and self-managed instances:
+
+- Vespa Cloud: The number of nodes are specified by a *count* attribute, and the resources of each node by a [resource](#resources) child element.
+- Self-managed: *nodes* have a [node](#node) child element for each node, A node referred to in *services.xml* must be defined in [hosts.xml](/en/reference/applications/hosts) using *hostalias*.
+
+It is possible to specify both to make an application package work in both environments, and it is always possible to deploy either type for development on the other: When the nodes tag has Vespa Cloud content it is interpreted as a single-node cluster in a self-hosted environment and vice versa.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>type</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;count&#42;&#42;</td>
+      <td>integer or range</td>
+      <td></td>
+      <td>Vespa Cloud: The number of nodes of the cluster.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;exclusive&#42;&#42;</td>
+      <td>boolean</td>
+      <td>false</td>
+      <td>Optional. Vespa Cloud: If true these nodes will never be placed on shared hosts even when this would otherwise be allowed (which is only for content nodes in some environments). When nodes are allocated exclusively, the resources must match the resources of the host exactly.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;groups&#42;&#42;</td>
+      <td>integer or range</td>
+      <td></td>
+      <td>Vespa Cloud content nodes only, optional: Integer or range. Sets the number of groups into which content nodes should be divided. Each group will have an equal share of the nodes, and one or more complete copies of the corpus and index, and each query will be routed to just one group - see <a href="/en/content/elasticity#grouped-distribution" aria-label="grouped distribution">grouped distribution</a>. This allows scaling to a higher query load than is possible with just a single group.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;group-size&#42;&#42;</td>
+      <td>integer or range</td>
+      <td></td>
+      <td>Vespa Cloud content nodes only, optional: Integer or range where either value can be skipped (replaced by an empty string) to create a one-sided limit. This can be set as an alternative to explicitly setting <code>{`groups`}</code>: The group sizes used will always be within these limits (inclusive), for any <code>{`count`}</code>.</td>
+    </tr>
+  </tbody>
+</table>
+
+If neither *groups* nor *group-size* is set, all nodes belong to a single group. Read more in [topology](/en/performance/topology-and-resizing).
+
+Ranges are expressed by the syntax `[lower-limit, upper-limit]`; Both limits are inclusive. Any value set as a range will be [autoscaled](/en/operations/autoscaling).
+
+## `<resources>`
+
+Under [nodes](#nodes) on Vespa Cloud: Specifies the resources each node in the cluster should have.
+
+The resources must match a node flavor in [AWS](/en/performance/instance-types/aws-instance-types), [GCP](/en/performance/instance-types/gcp-instance-types) [Azure](/en/performance/instance-types/azure-instance-types), depending on where you are deploying. Exception: If you use remote disk, you can specify any number lower than the max size.
+
+**Subelements:** [`<gpu>`](#gpu)
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>type</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;vcpu&#42;&#42;</td>
+      <td>float or range</td>
+      <td>2</td>
+      <td>CPU (virtual threads)</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;memory&#42;&#42;</td>
+      <td>float or range, each followed by a byte unit, such as "Gb"</td>
+      <td>8 Gb in container clusters, 16 Gb in content clusters</td>
+      <td>Memory</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;disk&#42;&#42;</td>
+      <td>float or range, each followed by a byte unit, such as "Gb"</td>
+      <td>50 in container clusters, 300 in content clusters</td>
+      <td>Disk space. To fit core dumps/heap dumps, the disk space should be larger than 3 x memory size for content nodes, 2 x memory size for container nodes. If disk size is not explicitly specified, Vespa Cloud chooses a default disk size. The default may be automatically increased to satisfy the minimum disk-to-memory ratio. When both disk and memory are explicitly specified, Vespa Cloud enforces the same minimum ratios.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;storage-type&#42;&#42;</td>
+      <td>string (enum)</td>
+      <td><code>{`any`}</code></td>
+      <td>The type of storage to use. This is useful to specify local storage when network storage provides insufficient io operations or too noisy io performance:<br/><br/> • <code>{`local`}</code>: Node-local storage is required. <br/>• <code>{`remote`}</code>: Network storage must be used.<br/> • <code>{`any`}</code>: Both remote or local storage may be used.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;disk-speed&#42;&#42;</td>
+      <td>string (enum)</td>
+      <td><code>{`fast`}</code></td>
+      <td>The required disk speed category:<br/><br/> • <code>{`fast`}</code>: SSD-like disk speed is required<br/> • <code>{`slow`}</code>: This is sized for spinning disk speed <br/>• <code>{`any`}</code>: Performance does not depend on disk speed (often suitable for container clusters).</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;architecture&#42;&#42;</td>
+      <td>string (enum)</td>
+      <td><code>{`any`}</code></td>
+      <td>Node CPU architecture:<br/><br/> • <code>{`x86_64`}</code> <br/>• <code>{`arm64`}</code><br/> • <code>{`any`}</code>: Use any of the available architectures.</td>
+    </tr>
+  </tbody>
+</table>
+
+Ranges are expressed by the syntax `[lower-limit, upper-limit]`; Both limits are inclusive. Any value set as a range will be [autoscaled](/en/operations/autoscaling).
+
+## `<node>`
+
+Under [nodes](#nodes) on self-managed systems: Specifies a node that should be a member in the cluster.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Required</th>
+      <th>Value</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>hostalias</td>
+      <td>required</td>
+      <td>string</td>
+      <td></td>
+      <td>a host name which must be mapped to a full hostname in <a href="/en/reference/applications/hosts" aria-label="hosts.xml">hosts.xml</a></td>
+    </tr>
+  </tbody>
+</table>
+
+## `<gpu>`
+
+Under [resources](#resources) on Vespa Cloud: Declares GPU resources to provision.
+
+Limitations:
+
+- Available in AWS zones only
+- Valid for container clusters only
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>type</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;count&#42;&#42;</td>
+      <td>integer</td>
+      <td>Number of GPUs</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;memory&#42;&#42;</td>
+      <td>integer, followed by a byte unit, such as "Gb"</td>
+      <td>Amount of memory per GPU. Total amount of GPU memory available is this number multiplied by <code>{`count`}</code>.</td>
+    </tr>
+  </tbody>
+</table>
+
+Example:
+
+```xml
+<nodes count="2">
+    <resources vcpu="4" memory="16Gb" disk="125Gb">
+        <gpu count="1" memory="16Gb"/>
+    </resources>
+</nodes>
+```
+
+## Zone-specific configuration
+
+Use *deployment variants* to express configuration like:
+
+```xml
+<nodes deploy:environment="prod"
+       deploy:region="aws-use1-az4"
+       count="20">
+    <resources vcpu="4" memory="16Gb" disk="125Gb"/>
+</nodes>
+```
+
+Refer to [deployment variants](/en/operations/deployment-variants) for details and more options.
+
+## Generic configuration using `<config>`
+
+Most elements in *services.xml* accept a sub-element named *config*. *config* elements can be included on different levels in the XML structure and the lower-level ones will override values in the higher-level ones (example below). The *config* element must include the attribute *name*, which gives the full name of the configuration option in question, including the namespace. The name can either refer to configuration definitions that are shipped with Vespa or ones that are part of the [application package](../config-files.html). For a complete example on generic configuration see the [application package](/en/reference/applications/config-files#generic-configuration-in-services-xml) reference.
+
+```xml
+<container id="default" version="1.0">
+    <handler id="com.yahoo.vespatest.ConfiguredHandler">
+        <config name="vespatest.response">
+            <response>configured string</response>
+        </config>
+    </handler>
+</container>
+```
+
+## Modular Configuration
+
+Some features are configurable using XML files in subdirectories of the application package. This means that the configuration found in these XML files will be used as if it was inlined in *services.xml*. This is supported for [search chains](/en/reference/applications/services/search#chain), [docproc chains](/en/reference/applications/services/docproc) and [routing tables](/en/writing/document-routing#routing-services).

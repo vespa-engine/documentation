@@ -1,0 +1,680 @@
+---
+title: "Default JSON Result Format"
+sidebarTitle: "The default result format"
+---
+The default Vespa query response format is used when [presentation.format](/en/reference/api/query#presentation.format) is unset or set to `json`. An alternative binary [CBOR](https://cbor.io/) format is available by setting `format=cbor` or using `Accept: application/cbor`. CBOR is a drop-in replacement - when deserialized, the result is identical to JSON. CBOR is both more compact and faster to generate, especially for numeric data such as tensors and embeddings. Results are rendered with one or more objects:
+
+- `root`: mandatory object with the tree of returned data
+- `timing`: optional object with query timing information
+- `trace`: optional object for metadata about query execution
+
+Refer to the [query API guide](/en/querying/query-api#result-examples) for result and tracing examples.
+
+All object names are literal strings, the node `root` is the map key "root" in the return JSON object, in other words, only strings are used as map keys.
+
+## root
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Element</th>
+      <th>Parent</th>
+      <th>Mandatory</th>
+      <th>Type</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;root&#42;&#42;</td>
+      <td></td>
+      <td>yes</td>
+      <td>Map of string to object</td>
+      <td>The root of the tree of returned data.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;children&#42;&#42;</td>
+      <td>root</td>
+      <td>no</td>
+      <td>Array of objects</td>
+      <td>Array of JSON objects with the same structure as <code>{`root`}</code>.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;fields&#42;&#42;</td>
+      <td>root</td>
+      <td>no</td>
+      <td>Map of string to object</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;totalCount&#42;&#42;</td>
+      <td>fields</td>
+      <td>no</td>
+      <td>Integer</td>
+      <td>Number of documents matching the query. Not accurate when using &#42;nearestNeighbor&#42;, &#42;wand&#42; or &#42;weakAnd&#42; query operators. The value is the number of hits after <a href="/en/reference/schemas/schemas#rank-score-drop-limit" aria-label="first-phase dropping">first-phase dropping</a>.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;searchGroup&#42;&#42;</td>
+      <td>fields</td>
+      <td>no</td>
+      <td>Integer</td>
+      <td>The index of the group that produced this result, when informative and unique. Useful for <a href="/en/content/elasticity#pinning-groups" aria-label="group pinning">group pinning</a>.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;coverage&#42;&#42;</td>
+      <td>root</td>
+      <td>no</td>
+      <td>Map of string to string/number</td>
+      <td>Map of metadata about how much of the total corpus has been searched to return the given documents.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;coverage&#42;&#42;</td>
+      <td>coverage</td>
+      <td>yes</td>
+      <td>Integer</td>
+      <td>Percentage of total corpus searched (when lower than 100 this is an approximation and is a lower bound, as no info from nodes down is known)</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;documents&#42;&#42;</td>
+      <td>coverage</td>
+      <td>yes</td>
+      <td>Long</td>
+      <td>The number of active documents searched.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;full&#42;&#42;</td>
+      <td>coverage</td>
+      <td>yes</td>
+      <td>Boolean</td>
+      <td>Whether the full corpus was searched.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;nodes&#42;&#42;</td>
+      <td>coverage</td>
+      <td>yes</td>
+      <td>Integer</td>
+      <td>The number of search nodes returning results.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;results&#42;&#42;</td>
+      <td>coverage</td>
+      <td>yes</td>
+      <td>Integer</td>
+      <td>The number of results merged creating the final rendered result.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;resultsFull&#42;&#42;</td>
+      <td>coverage</td>
+      <td>yes</td>
+      <td>Integer</td>
+      <td>The number of full result sets merged, e.g. when there are several sources/clusters for the results.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;degraded&#42;&#42;</td>
+      <td>coverage</td>
+      <td>no</td>
+      <td>Map of string to object</td>
+      <td>Map of match-phase degradation elements.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;match-phase&#42;&#42;</td>
+      <td>degraded</td>
+      <td>no</td>
+      <td>Boolean</td>
+      <td>Indicator whether <a href="/en/reference/schemas/schemas#match-phase" aria-label="match-phase degradation">match-phase degradation</a> has occurred.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;timeout&#42;&#42;</td>
+      <td>degraded</td>
+      <td>no</td>
+      <td>Boolean</td>
+      <td>Indicator whether the query <a href="/en/reference/api/query#timeout" aria-label="timed out">timed out</a> before completion.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;adaptive-timeout&#42;&#42;</td>
+      <td>degraded</td>
+      <td>no</td>
+      <td>Boolean</td>
+      <td>Indicator whether the query timed out with <a href="/en/reference/api/query#ranking.softtimeout.enable" aria-label="adaptive timeout">adaptive timeout</a> before completion.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;non-ideal-state&#42;&#42;</td>
+      <td>degraded</td>
+      <td>no</td>
+      <td>Boolean</td>
+      <td>Indicator whether the content cluster is in <a href="/en/content/idealstate" aria-label="ideal state">ideal state</a>.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;errors&#42;&#42;</td>
+      <td>root</td>
+      <td>no</td>
+      <td>Array of objects</td>
+      <td>Array of error messages with the fields given below. <a href="/en/querying/query-api#error-result" aria-label="Example">Example</a>.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;code&#42;&#42;</td>
+      <td>errors</td>
+      <td>yes</td>
+      <td>Integer</td>
+      <td>Numeric identifier used by the container application. See <a href="https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/java/com/yahoo/container/protect/Error.java" aria-label="error codes">error codes</a> and <a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/result/ErrorMessage.java" aria-label="ErrorMessage.java">ErrorMessage.java</a> for a short description.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;message&#42;&#42;</td>
+      <td>errors</td>
+      <td>no</td>
+      <td>String</td>
+      <td>Full error message.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;source&#42;&#42;</td>
+      <td>errors</td>
+      <td>no</td>
+      <td>String</td>
+      <td>Which <a href="/en/querying/federation" aria-label="data provider">data provider</a> logged the error condition.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;stackTrace&#42;&#42;</td>
+      <td>errors</td>
+      <td>no</td>
+      <td>String</td>
+      <td>Stack trace if an exception was involved.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;summary&#42;&#42;</td>
+      <td>errors</td>
+      <td>yes</td>
+      <td>String</td>
+      <td>Short description of error.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;transient&#42;&#42;</td>
+      <td>errors</td>
+      <td>no</td>
+      <td>Boolean</td>
+      <td>Whether the system is expected to recover from the faulty state on its own. If the flag is not present, this may or may not be the case, or the flag is not applicable.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;fields&#42;&#42;</td>
+      <td>root</td>
+      <td>no</td>
+      <td>Map of string to object</td>
+      <td>The named document (schema) <a href="/en/reference/schemas/schemas#field" aria-label="fields">fields</a>. Fields without value are not rendered.<br/><br/>In addition to the fields defined in the schema, the following might be returned:<br/><br/> &lt;ul&gt;&lt;li&gt;&lt;b&gt;sddocname&lt;/b&gt;: Schema name. Returned in the <a href="/en/querying/document-summaries" aria-label="default document summary">default document summary</a>.&lt;/li&gt;&lt;li&gt;&lt;b&gt;documentid&lt;/b&gt;: Document ID. Returned in the <a href="/en/querying/document-summaries" aria-label="default document summary">default document summary</a>.&lt;/li&gt;&lt;li&gt;&lt;b&gt;summaryfeatures&lt;/b&gt;: Refer to <a href="/en/reference/schemas/schemas#summary-features" aria-label="summary-features">summary-features</a> and <a href="/en/ranking/ranking-intro#observing-values-used-in-ranking" aria-label="observing values used in ranking">observing values used in ranking</a>.&lt;/li&gt;&lt;li&gt;&lt;b&gt;matchfeatures&lt;/b&gt;: Refer to <a href="/en/reference/schemas/schemas#match-features" aria-label="match-features">match-features</a> and <a href="/en/querying/nearest-neighbor-search-guide#strict-filters-and-distant-neighbors" aria-label="example use">example use</a>.&lt;/li&gt;&lt;/ul&gt;</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;id&#42;&#42;</td>
+      <td>root</td>
+      <td>no</td>
+      <td>String</td>
+      <td>String identifying the hit, document or other data type. For document hits, this is the full string document ID if the hit is filled with a document summary that includes the <code>{`documentid`}</code> field. If it is not filled or only filled with a document summary without the <code>{`documentid`}</code> field, it is an internally generated unique id on the form <code>{`index:[source]/[node-index]/[hex-gid]`}</code>.<br/><br/>See <a href="/en//schemas/documents#docid-in-results" aria-label="Document IDs in search results">Document IDs in search results</a> for how to ensure that the full string document ID (from memory) is returned.<br/><br/>For further information on the internally generated ids, see the <a href="/en/writing/document-v1-api-guide#troubleshooting" aria-label="/document/v1/guide">/document/v1/guide</a> and also <a href="https://stackoverflow.com/questions/74033383/receiving-responses-of-different-formats-for-the-same-query-in-vespa" aria-label="receiving-responses-of-different-formats-for-the-same-query-in-vespa">receiving-responses-of-different-formats-for-the-same-query-in-vespa</a> (outdated regarding document IDs being stored on disk only).</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;label&#42;&#42;</td>
+      <td>root</td>
+      <td>no</td>
+      <td>String</td>
+      <td>The label of a grouping list.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;limits&#42;&#42;</td>
+      <td>root</td>
+      <td>no</td>
+      <td>Object</td>
+      <td>Used in grouping, the limits of a bucket in histogram style data.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;from&#42;&#42;</td>
+      <td>limits</td>
+      <td>no</td>
+      <td>String</td>
+      <td>Lower bound of a bucket group.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;to&#42;&#42;</td>
+      <td>limits</td>
+      <td>no</td>
+      <td>String</td>
+      <td>Upper bound of a bucket group.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;relevance&#42;&#42;</td>
+      <td>root</td>
+      <td>yes</td>
+      <td>Double</td>
+      <td>Double value representing the rank score. The rank score is returned from the <a href="/en/ranking/ranking-intro" aria-label="rank-profile">rank-profile</a>. See the <a href="/en/learn/faq#what-could-cause-the-relevance-field-to-be--infinity" aria-label="FAQ">FAQ</a> for how to handle &lt;code&gt;"-Infinity"&lt;/code&gt; (represented as string) values.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;source&#42;&#42;</td>
+      <td>root</td>
+      <td>no</td>
+      <td>String</td>
+      <td>Which data provider created this node.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;types&#42;&#42;</td>
+      <td>root</td>
+      <td>no</td>
+      <td>Array of string</td>
+      <td>Metadata about what kind of document or other kind of node in the result set this object is.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;value&#42;&#42;</td>
+      <td>root</td>
+      <td>no</td>
+      <td>String</td>
+      <td>Used in grouping for value groups, the argument for the grouping data which is in the fields.</td>
+    </tr>
+  </tbody>
+</table>
+
+
+## timing
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Element</th>
+      <th>Parent</th>
+      <th>Mandatory</th>
+      <th>Type</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;timing&#42;&#42;</td>
+      <td></td>
+      <td>no</td>
+      <td>Map of string to object</td>
+      <td>Query timing information, enabled by <a href="/en/reference/api/query#presentation.timing" aria-label="presentation.timing">presentation.timing</a>. The <a href="/en/performance/practical-search-performance-guide#basic-text-search-query-performance" aria-label="query performance guide">query performance guide</a> is a useful resource to understand the values in its child elements.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;querytime&#42;&#42;</td>
+      <td>timing</td>
+      <td>no</td>
+      <td>Double</td>
+      <td>Time to execute the first protocol phase/matching phase, in seconds.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;summaryfetchtime&#42;&#42;</td>
+      <td>timing</td>
+      <td>no</td>
+      <td>Double</td>
+      <td><a href="/en/querying/document-summaries" aria-label="Document summary">Document summary</a> fetch time, in seconds. This is the time to execute the summary fill protocol phase for the globally ordered top-k hits.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;searchtime&#42;&#42;</td>
+      <td>timing</td>
+      <td>no</td>
+      <td>Double</td>
+      <td>Approximately the sum of <code>{`querytime`}</code> and <code>{`summaryfetchtime`}</code> and is close to what a client will observe (except network latency). In seconds.</td>
+    </tr>
+  </tbody>
+</table>
+
+## trace
+
+<Info>
+**Note:** The tracing elements below is a subset of all elements. Refer to the [search performance guide](/en/performance/practical-search-performance-guide#advanced-query-tracing) for examples.
+</Info>
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Element</th>
+      <th>Parent</th>
+      <th>Mandatory</th>
+      <th>Type</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;trace&#42;&#42;</td>
+      <td></td>
+      <td>no</td>
+      <td>Map of string to object</td>
+      <td>Metadata about query execution.<br/><br/>&#42;&#42;Note:&#42;&#42; The tracing elements below are a subset of all elements. Refer to the <a href="/en/performance/practical-search-performance-guide#advanced-query-tracing" aria-label="search performance guide">search performance guide</a> for examples.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;children&#42;&#42;</td>
+      <td>trace</td>
+      <td>no</td>
+      <td>Array of object</td>
+      <td>Array of maps with exactly the same structure as <code>{`trace`}</code> itself.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;timestamp&#42;&#42;</td>
+      <td>children</td>
+      <td>no</td>
+      <td>Long</td>
+      <td>Number of milliseconds since the start of query execution this node was added to the trace.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;message&#42;&#42;</td>
+      <td>children</td>
+      <td>no</td>
+      <td>String</td>
+      <td>Descriptive trace text regarding this step of query execution.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;message&#42;&#42;</td>
+      <td>children</td>
+      <td>no</td>
+      <td>Array of objects</td>
+      <td>Array of messages.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;start_time&#42;&#42;</td>
+      <td>message</td>
+      <td>no</td>
+      <td>String</td>
+      <td>Timestamp, e.g. 2022-07-27 09:51:21.938 UTC</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;traces&#42;&#42;</td>
+      <td>message or threads</td>
+      <td>no</td>
+      <td>Array of traces or objects</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;distribution-key&#42;&#42;</td>
+      <td>message</td>
+      <td>no</td>
+      <td>Integer</td>
+      <td>The <a href="/en/reference/applications/services/content#node" aria-label="distribution key">distribution key</a> of the content node creating this span.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;duration_ms&#42;&#42;</td>
+      <td>message</td>
+      <td>no</td>
+      <td>Float</td>
+      <td>Duration of span.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;timestamp_ms&#42;&#42;</td>
+      <td>traces</td>
+      <td>no</td>
+      <td>Float</td>
+      <td>Time since start of parent, see <code>{`start_time`}</code>.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;event&#42;&#42;</td>
+      <td>traces</td>
+      <td>no</td>
+      <td>String</td>
+      <td>Description of span.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;tag&#42;&#42;</td>
+      <td>traces</td>
+      <td>no</td>
+      <td>String</td>
+      <td>Name of span.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;threads&#42;&#42;</td>
+      <td>traces</td>
+      <td>no</td>
+      <td>Array of objects</td>
+      <td>Array of objects that again have <code>{`traces`}</code> elements.</td>
+    </tr>
+  </tbody>
+</table>
+
+
+## JSON Schema
+
+Formal schema for the query API default result format:
+
+```json expandable
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "title": "Result",
+    "description": "Schema for Vespa results",
+    "type": "object",
+
+
+    "properties": {
+        "root": {
+            "type": "document_node",
+            "required": true
+        },
+        "trace": {
+            "type": "trace_node",
+            "required": false
+        }
+    },
+
+    "definitions": {
+        "document_node": {
+            "properties": {
+                "children": {
+                    "type": "array",
+                    "items": {
+                        "type": "document_node"
+                    },
+                    "required": false
+                },
+                "coverage": {
+                    "type": "coverage",
+                    "required": false
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "type": "error"
+                    },
+                    "required": false
+                },
+                "fields": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "required": false
+                },
+                "id": {
+                    "type": "string",
+                    "required": false
+                },
+                "relevance": {
+                    "type": "number",
+                    "required": true
+                },
+                "types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "required": false
+                },
+                "source": {
+                    "type": "string",
+                    "required": false
+                },
+                "value": {
+                    "type": "string",
+                    "required": false
+                },
+                "limits": {
+                    "type": "object",
+                    "required": false
+                },
+                "label": {
+                    "type": "string",
+                    "required": false
+                }
+            },
+            "additionalProperties": true,
+        },
+        "trace_node": {
+            "properties": {
+                "children": {
+                    "type": "array",
+                    "items": {
+                        "type": "trace_node"
+                    },
+                    "required": false
+                },
+                "timestamp": {
+                    "type": "number",
+                    "required": false
+                },
+                "message": {
+                    "type": "string",
+                    "required": false
+                }
+            }
+        },
+        "fields": {
+            "properties": {
+                "totalCount": {
+                    "type": "number",
+                    "required": true
+                }
+            }
+        },
+        "coverage": {
+            "properties": {
+                "coverage": {
+                    "type": "number",
+                    "required": true
+                },
+                "documents": {
+                    "type": "number",
+                    "required": true
+                },
+                "full": {
+                    "type": "boolean",
+                    "required": true
+                },
+                "nodes": {
+                    "type": "number",
+                    "required": true
+                },
+                "results": {
+                    "type": "number",
+                    "required": true
+                },
+                "resultsFull": {
+                    "type": "number",
+                    "required": true
+                }
+            }
+        },
+        "error": {
+            "properties": {
+                "code": {
+                    "type": "number",
+                    "required": true
+                },
+                "message": {
+                    "type": "string",
+                    "required": false
+                },
+                "source": {
+                    "type": "string",
+                    "required": false
+                },
+                "stackTrace": {
+                    "type": "string",
+                    "required": false
+                },
+                "summary": {
+                    "type": "string",
+                    "required": true
+                },
+                "transient": {
+                    "type": "boolean",
+                    "required": false
+                }
+            }
+        }
+    }
+}
+```
+
+## Appendix: Legacy Vespa 7 JSON rendering
+
+There were some inconsistencies between search results and document rendering in Vespa 7, which are fixed in Vespa 8. This appendix describes the old behavior, what the changes are, and how to configure to select a specific rendering.
+
+### Inconsistent weightedset rendering
+
+Fields with various weightedset types has a JSON input representation (for feeding) as a JSON object; for example `{"one":1, "two":2,"three":3}` for the value of a a `weightedset<string>` field. The same format is used when rendering a document (for example when visiting).
+
+In search results however, there are intermediate processing steps during which the field value is represented as an array of item/weight pairs, so in a search result the field value would render as `[ {"item":"one", "weight":1},{"item":"two", "weight":2},{"item":"three", "weight":3} ]`
+
+In Vespa 8, the default JSON renderer for search results outputs the same format as document rendering. If you have code that depends on the old format you can turn off this by setting `renderer.json.jsonWsets=false` in the query (usually via a [query profile](/en/querying/query-profiles)).
+
+### Inconsistent map rendering
+
+Fields with various map types has a JSON input representation (for feeding) as a JSON object; for example `{"1001":1.0, "1002":2.0, "1003":3.0}` for the value of a a `map<int,float>` field. The same format is used when rendering a document (for example when visiting).
+
+In search results however, there are intermediate processing steps and the field value is represented as an array of key/value pairs, so in a search results the field value would (in some cases) render as `[ {"key":1001, "value":1.0},{"key":1002, "value":2.0},{"key":1003, "value":3.0} ]`
+
+In Vespa 8, the default JSON renderer for search results output the same format as document rendering. For code that depends on the old format one can turn off this by setting `renderer.json.jsonMaps=false` in the query (usually via a [query profile](/en/querying/query-profiles)).
+
+### Geo position rendering
+
+Fields with the type `position` would in Vespa 7 be rendered using the internal fields "x" and "y". These are integers representing microdegrees, aka geographical degrees times 1 million, of longitude (for x) and latitude (for y). Also, any field _foo_ of type `position` would trigger addition of two extra synthetic summary fields _foo.position_ and _foo.distance_ (see below for details).
+
+In Vespa 8, positions are rendered with two JSON fields "lat" and "lng", both having a floating-point value. The "lat" field is latitude (going from -90.0 at the South Pole to +90.0 at the North Pole). The "lng" field is longitude (going from -180.0 at the dateline seen as extreme west, via 0.0 at the Greenwich meridian, to +180.0 at the dateline again, now as extreme east). The field names are chosen so the format is the same as used in the Google "places" API.
+
+A closely related change is the removal of two synthetic summary fields which would be returned in search results. For example with this in schema:
+
+```js
+field mainloc type position {
+    indexing: attribute | summary
+}
+```
+
+Vespa 7 would include the _mainloc_ summary field, but also _mainloc.position_ and _mainloc.distance_; the latter only when the query actually had a position to take the distance from.
+
+The first of these (_mainloc.position_ in this case) was mainly useful for producing XML output in older Vespa versions, and now contains just the same information as the _mainloc_ summary field. The second (_mainloc.distance_ in this case) would return a distance in internal units, and can be replaced by a summary feature - here `distance(mainloc)` would give the same number, while `distance(mainloc).km` would be the recommended replacement with suitable code changes.
+
+### Summary-features wrapped in "rankingExpression"
+
+In Vespa 7, if a rank profile wanted a function `foobar` returned in summary-features (or match-features), it would be rendered as `rankingExpression(foobar)` in the output.
+
+For programmatic use, the `FeatureData` class has extra checking to allow lookup with `getDouble("foobar")` or `getTensor("foobar")`, but now it's present and rendered with just the original name as specified.
+
+If applications needs the JSON rendering to look exactly as in Vespa 7, one can specify that in the rank profile. For example, with this in the schema:
+
+```js
+rank-profile whatever {
+    function lengthScore() { expression: matchCount(title)/fieldLength(title) }
+    summary-features {
+        matchCount(title)
+        lengthScore
+        ...
+```
+
+could, in Vespa 7, yield JSON output containing:
+
+```json
+summaryfeatures: {
+        matchCount(title): 1,
+        rankingExpression(lengthScore): 0.25,
+        ...
+```
+
+in Vespa 8, you instead get the expected:
+
+```json
+summaryfeatures: {
+        matchCount(title): 1,
+        lengthScore: 0.25,
+        ...
+```
+
+But to get the old behavior one can specify:
+
+```js
+rank-profile whatever {
+    function lengthScore() { expression: matchCount(title)/fieldLength(title) }
+    summary-features {
+        matchCount(title)
+			  rankingExpression(lengthScore)
+        ...
+```
+
+which gives you the same output as before.

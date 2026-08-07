@@ -1,0 +1,856 @@
+﻿---
+title: "Embedding Reference"
+sidebarTitle: "Embedding"
+---
+Reference configuration for [embedders](/en/rag/embedding).
+
+## Model config reference
+
+Embedder models use the [model](/en/reference/applications/config-files#model) type configuration which accepts the attributes `model-id`, `url` or `path`. Multiple of these can be specified as a single config value, where one is used depending on the deployment environment:
+
+- If a `model-id` is specified and the application is deployed on Vespa Cloud, the `model-id` is used.
+- Otherwise, if a `url` is specified, it is used
+- Otherwise, `path` is used.
+
+When using `path`, the model files must be supplied in the application package.
+
+## Huggingface Embedder
+
+An embedder using any [Huggingface tokenizer](https://huggingface.co/docs/tokenizers/index), including multilingual tokenizers, to produce tokens which is then input to a supplied transformer model in ONNX model format.
+
+The Huggingface embedder is configured in [services.xml](/en/reference/applications/services/services), within the `container` tag:
+
+```xml
+<container id="default" version="1.0">
+    <component id="hf-embedder" type="hugging-face-embedder">
+        <transformer-model path="my-models/model.onnx"/>
+        <tokenizer-model path="my-models/tokenizer.json"/>
+        <prepend>
+          <query>query:</query>
+          <document>passage:</document>
+        </prepend>
+    </component>
+    ...
+</container>
+```
+
+### Private Model Hub
+
+You may also use models hosted in a [private Huggingface model hub](https://huggingface.co/docs/hub/en/repositories-settings#private-repositories).
+
+Retrieve an API key from Huggingface with the appropriate permissions, and add it to the [vespa secret store.](/en/security/secret-store) Add the secret to the container `<secrets>` and refer to it in your Huggingface model configuration:
+
+```xml
+<container id="default" version="1.0">
+  <secrets>
+    <myPrivateHubApiKey vault="my-vault" name="my-secret-name" />
+  </secrets>
+  <component id="hf-embedder" type="hugging-face-embedder">
+      <transformer-model url="my-url" secret-ref="myPrivateHubApiKey"/>
+      <tokenizer-model url="my-url" secret-ref="myPrivateHubApiKey"/>
+  </component>
+</container>
+```
+
+### Huggingface embedder reference config
+
+In addition to [embedder ONNX parameters](#embedder-onnx-reference-config):
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>transformer-model</td>
+      <td>One</td>
+      <td>Use to point to the transformer ONNX model file</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>tokenizer-model</td>
+      <td>One</td>
+      <td>Use to point to the <code>{`tokenizer.json`}</code> Huggingface tokenizer configuration file</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>max-tokens</td>
+      <td>One</td>
+      <td>The maximum number of tokens accepted by the transformer model</td>
+      <td>numeric</td>
+      <td>512</td>
+    </tr>
+    <tr>
+      <td>transformer-input-ids</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer input IDs</td>
+      <td>string</td>
+      <td>input_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-attention-mask</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer attention mask</td>
+      <td>string</td>
+      <td>attention_mask</td>
+    </tr>
+    <tr>
+      <td>transformer-token-type-ids</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer token type IDs. If the model does not use <code>{`token_type_ids`}</code> use <code>{`<transformer-token-type-ids/>`}</code></td>
+      <td>string</td>
+      <td>token_type_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-output</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer output</td>
+      <td>string</td>
+      <td>last_hidden_state</td>
+    </tr>
+    <tr>
+      <td>pooling-strategy</td>
+      <td>One</td>
+      <td>How the output vectors of the ONNX model is pooled to obtain a single vector representation. Valid values are <code>{`mean`}</code>,<code>{`cls`}</code> and <code>{`none`}</code></td>
+      <td>string</td>
+      <td>mean</td>
+    </tr>
+    <tr>
+      <td>normalize</td>
+      <td>One</td>
+      <td>A boolean indicating whether to normalize the output embedding vector to unit length (length 1). Useful for <code>{`prenormalized-angular`}</code> <a href="/en/reference/schemas/schemas#distance-metric" aria-label="distance-metric">distance-metric</a></td>
+      <td>boolean</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>prepend</td>
+      <td>Optional</td>
+      <td>Prepend instructions that are prepended to the text input before tokenization and inference. Useful for models that have been trained with specific prompt instructions. The instructions are prepended to the input text.<br/><br/> • Element <code>{`<query>`}</code> - Optional query prepend instruction.<br/> • Element <code>{`<document>`}</code> - Optional document prepend instruction. <br/><br/><code>{`<prepend>`}</code><br/> <code>{`<query>query:</query>`}</code><br/> <code>{`<document>passage:</document>`}</code> <br/><code>{`</prepend>`}</code></td>
+      <td>Optional <code>{`<query> <document>`}</code> elements.</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+## Bert embedder
+
+The Bert embedder is configured in [services.xml](/en/reference/applications/services/services), within the `container` tag:
+
+```xml
+<container version="1.0">
+  <component id="myBert" type="bert-embedder">
+    <transformer-model path="models/e5-small-v2.onnx"/>
+    <tokenizer-vocab url="https://huggingface.co/intfloat/e5-small-v2/raw/main/vocab.txt"/>
+  </component>
+</container>
+```
+
+### Bert embedder reference config
+
+In addition to [embedder ONNX parameters](#embedder-onnx-reference-config):
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>transformer-model</td>
+      <td>One</td>
+      <td>Use to point to the transformer ONNX model file</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>tokenizer-vocab</td>
+      <td>One</td>
+      <td>Use to point to the Huggingface <code>{`vocab.txt`}</code> tokenizer file with valid wordpiece tokens. Does not support <code>{`tokenizer.json`}</code> format.</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>max-tokens</td>
+      <td>One</td>
+      <td>The maximum number of tokens allowed in the input</td>
+      <td>integer</td>
+      <td>384</td>
+    </tr>
+    <tr>
+      <td>transformer-input-ids</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer input IDs</td>
+      <td>string</td>
+      <td>input_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-attention-mask</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer attention mask</td>
+      <td>string</td>
+      <td>attention_mask</td>
+    </tr>
+    <tr>
+      <td>transformer-token-type-ids</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer token type IDs. If the model does not use <code>{`token_type_ids`}</code> use <code>{`<transformer-token-type-ids/>`}</code></td>
+      <td>string</td>
+      <td>token_type_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-output</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer output</td>
+      <td>string</td>
+      <td>output_0</td>
+    </tr>
+    <tr>
+      <td>transformer-start-sequence-token</td>
+      <td>One</td>
+      <td>The start of sequence token</td>
+      <td>numeric</td>
+      <td>101</td>
+    </tr>
+    <tr>
+      <td>transformer-end-sequence-token</td>
+      <td>One</td>
+      <td>The start of sequence token</td>
+      <td>numeric</td>
+      <td>102</td>
+    </tr>
+    <tr>
+      <td>pooling-strategy</td>
+      <td>One</td>
+      <td>How the output vectors of the ONNX model is pooled to obtain a single vector representation. Valid values are <code>{`mean`}</code> and <code>{`cls`}</code></td>
+      <td>string</td>
+      <td>mean</td>
+    </tr>
+  </tbody>
+</table>
+
+## colbert embedder
+
+The colbert embedder is configured in [services.xml](/en/reference/applications/services/services), within the `container` tag:
+
+```xml
+<container version="1.0">
+  <component id="colbert" type="colbert-embedder">
+    <transformer-model path="models/colbertv2.onnx"/>
+    <tokenizer-model url="https://huggingface.co/colbert-ir/colbertv2.0/raw/main/tokenizer.json"/>
+    <max-query-tokens>32</max-query-tokens>
+    <max-document-tokens>256</max-document-tokens>
+  </component>
+</container>
+```
+
+The Vespa colbert implementation works with default configurations for transformer models that use WordPiece tokenization.
+
+### colbert embedder reference config
+
+In addition to [embedder ONNX parameters](#embedder-onnx-reference-config):
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>transformer-model</td>
+      <td>One</td>
+      <td>Use to point to the transformer ColBERT ONNX model file</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>tokenizer-model</td>
+      <td>One</td>
+      <td>Use to point to the <code>{`tokenizer.json`}</code> Huggingface tokenizer configuration file</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>max-tokens</td>
+      <td>One</td>
+      <td>Max length of token sequence the transformer-model can handle</td>
+      <td>numeric</td>
+      <td>512</td>
+    </tr>
+    <tr>
+      <td>max-query-tokens</td>
+      <td>One</td>
+      <td>The maximum number of ColBERT query token embeddings. Queries are padded to this length. Must be lower than max-tokens</td>
+      <td>numeric</td>
+      <td>32</td>
+    </tr>
+    <tr>
+      <td>max-document-tokens</td>
+      <td>One</td>
+      <td>The maximum number of ColBERT document token embeddings. Documents are not padded. Must be lower than max-tokens</td>
+      <td>numeric</td>
+      <td>512</td>
+    </tr>
+    <tr>
+      <td>transformer-input-ids</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer input IDs</td>
+      <td>string</td>
+      <td>input_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-attention-mask</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer attention mask</td>
+      <td>string</td>
+      <td>attention_mask</td>
+    </tr>
+    <tr>
+      <td>transformer-mask-token</td>
+      <td>One</td>
+      <td>The mask token id used for ColBERT query padding</td>
+      <td>numeric</td>
+      <td>103</td>
+    </tr>
+    <tr>
+      <td>transformer-start-sequence-token</td>
+      <td>One</td>
+      <td>The start of sequence token id</td>
+      <td>numeric</td>
+      <td>101</td>
+    </tr>
+    <tr>
+      <td>transformer-end-sequence-token</td>
+      <td>One</td>
+      <td>The end of sequence token id</td>
+      <td>numeric</td>
+      <td>102</td>
+    </tr>
+    <tr>
+      <td>transformer-pad-token</td>
+      <td>One</td>
+      <td>The pad sequence token id</td>
+      <td>numeric</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>query-token-id</td>
+      <td>One</td>
+      <td>The colbert query token marker id</td>
+      <td>numeric</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>document-token-id</td>
+      <td>One</td>
+      <td>The colbert document token marker id</td>
+      <td>numeric</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>transformer-output</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer output</td>
+      <td>string</td>
+      <td>contextual</td>
+    </tr>
+  </tbody>
+</table>
+
+The Vespa colbert-embedder uses `[unused0]`token id 1 for `query-token-id`, and `[unused1]`, token id 2 for ` document-token-id`document marker. Document punctuation chars are filtered (not configurable). The following characters are removed ``!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~``.
+
+### splade embedder reference config
+
+In addition to [embedder ONNX parameters](#embedder-onnx-reference-config):
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>transformer-model</td>
+      <td>One</td>
+      <td>Use to point to the transformer ONNX model file</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>tokenizer-model</td>
+      <td>One</td>
+      <td>Use to point to the <code>{`tokenizer.json`}</code> Huggingface tokenizer configuration file</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>term-score-threshold</td>
+      <td>One</td>
+      <td>An optional threshold to increase sparseness, tokens/terms with a score lower than this is not retained.</td>
+      <td>numeric</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>max-tokens</td>
+      <td>One</td>
+      <td>The maximum number of tokens accepted by the transformer model</td>
+      <td>numeric</td>
+      <td>512</td>
+    </tr>
+    <tr>
+      <td>transformer-input-ids</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer input IDs</td>
+      <td>string</td>
+      <td>input_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-attention-mask</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer attention mask</td>
+      <td>string</td>
+      <td>attention_mask</td>
+    </tr>
+    <tr>
+      <td>transformer-token-type-ids</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer token type IDs. If the model does not use <code>{`token_type_ids`}</code> use <code>{`<transformer-token-type-ids/>`}</code></td>
+      <td>string</td>
+      <td>token_type_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-output</td>
+      <td>One</td>
+      <td>The name or identifier for the transformer output</td>
+      <td>string</td>
+      <td>logits</td>
+    </tr>
+  </tbody>
+</table>
+
+<Tooltip tip="This content is applicable to Vespa Cloud deployments.">`Vespa Cloud`</Tooltip>
+
+## VoyageAI Embedder
+
+An embedder that uses the [VoyageAI](https://www.voyageai.com/) API to generate embeddings.
+
+The VoyageAI embedder is configured in [services.xml](/en/reference/applications/services/services), within the `container` tag:
+
+```xml
+<container id="default" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-law-2</model>
+        <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
+        <dimensions>1024</dimensions>
+        <endpoint>https://api.voyageai.com/v1/embeddings</endpoint>
+        <truncate>true</truncate>
+        <batching max-size="16" max-delay="200ms"/>
+    </component>
+</container>
+```
+
+### VoyageAI embedder reference config
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>model</td>
+      <td>One</td>
+      <td>&#42;&#42;Required&#42;&#42;. The VoyageAI model to use. See the <a href="https://docs.voyageai.com/docs/embeddings" aria-label="VoyageAI embeddings documentation">VoyageAI embeddings documentation</a> for the complete list of available models including general-purpose, specialized, <a href="https://docs.voyageai.com/docs/contextualized-chunk-embeddings" aria-label="contextualized">contextualized</a>, and <a href="https://docs.voyageai.com/docs/multimodal-embeddings" aria-label="multimodal">multimodal</a> models.</td>
+      <td>string</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>dimensions</td>
+      <td>One</td>
+      <td>&#42;&#42;Required&#42;&#42;. The number of dimensions for the output embedding vectors. Must match the tensor field definition in your schema. Valid values are <code>{`256`}</code>, <code>{`512`}</code>, <code>{`1024`}</code>, <code>{`1536`}</code>, or <code>{`2048`}</code>. See the <a href="https://docs.voyageai.com/docs/embeddings" aria-label="VoyageAI embeddings documentation">VoyageAI embeddings documentation</a> for model-specific dimension support.</td>
+      <td>integer</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>api-key-secret-ref</td>
+      <td>One</td>
+      <td>&#42;&#42;Required&#42;&#42;. Reference to the secret in Vespa's <a href="/en/security/secret-store" aria-label="secret store">secret store</a> containing the VoyageAI API key.</td>
+      <td>string</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>endpoint</td>
+      <td>Optional</td>
+      <td>VoyageAI API endpoint URL.</td>
+      <td>string</td>
+      <td>https://api.voyageai.com/v1/embeddings</td>
+    </tr>
+    <tr>
+      <td>truncate</td>
+      <td>Optional</td>
+      <td>Whether to truncate input text exceeding model limits. When enabled, text is automatically truncated. When disabled, requests with too-long text will fail.</td>
+      <td>boolean</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>quantization</td>
+      <td>Optional</td>
+      <td>Output quantization format for embedding vectors. Valid values are <code>{`auto`}</code>, <code>{`float`}</code>, <code>{`int8`}</code>, or <code>{`binary`}</code>. When set to <code>{`auto`}</code>, the embedder infers the appropriate quantization from the dimensions and cell type of the destination tensor in your schema. The <code>{`float`}</code> value also applies to <code>{`bfloat16`}</code> destination tensors. When using <code>{`binary`}</code> quantization, the destination tensor field must use <code>{`int8`}</code> cell type with 1/8 of the dimensions specified in the embedder configuration (e.g., 1024 dimensions → <code>{`tensor<int8>(x[128])`}</code>). See the <a href="https://docs.voyageai.com/docs/flexible-dimensions-and-quantization#quantization" aria-label="VoyageAI quantization documentation">VoyageAI quantization documentation</a> for details on quantization options and <a href="/en/rag/binarizing-vectors" aria-label="binarizing vectors">binarizing vectors</a> for more on binary quantization in Vespa.</td>
+      <td>string</td>
+      <td>auto</td>
+    </tr>
+    <tr>
+      <td>batching</td>
+      <td>Optional</td>
+      <td>Enables dynamic batching of concurrent embedding requests into single VoyageAI API calls. When enabled, the embedder collects concurrent requests and sends them as a single batch, reducing the number of API calls and improving throughput. <br/><br/>• <code>{`max-size`}</code> — Maximum number of requests to include in a single batch. <br/>• <code>{`max-delay`}</code> — Maximum time to wait for a full batch before sending a partial one (e.g., <code>{`200ms`}</code>).</td>
+      <td>element</td>
+      <td>disabled</td>
+    </tr>
+  </tbody>
+</table>
+
+## OpenAI Embedder
+
+Available since `Vespa 8.678`
+
+An embedder that uses the [OpenAI](https://platform.openai.com/docs/guides/embeddings) embeddings API to generate embeddings.
+
+The OpenAI embedder is configured in [services.xml](/en/reference/applications/services/services), within the `container` tag:
+
+```xml
+<container id="default" version="1.0">
+    <component id="openai" type="openai-embedder">
+        <model>text-embedding-3-small</model>
+        <api-key-secret-ref>openai_api_key</api-key-secret-ref>
+        <dimensions>1536</dimensions>
+        <endpoint>https://api.openai.com/v1/embeddings</endpoint>
+    </component>
+</container>
+```
+
+### OpenAI embedder reference config
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>model</td>
+      <td>One</td>
+      <td>&#42;&#42;Required&#42;&#42;. The OpenAI model to use, for example <code>{`text-embedding-3-small`}</code> or <code>{`text-embedding-3-large`}</code>. See the <a href="https://platform.openai.com/docs/guides/embeddings" aria-label="OpenAI embeddings documentation">OpenAI embeddings documentation</a> for the complete list of available models.</td>
+      <td>string</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>dimensions</td>
+      <td>One</td>
+      <td>&#42;&#42;Required&#42;&#42;. The number of dimensions for the output embedding vectors. Must match the tensor field definition in your schema. The destination tensor field must use <code>{`float`}</code> or <code>{`bfloat16`}</code> cell type — the OpenAI API does not support quantization.</td>
+      <td>integer</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>api-key-secret-ref</td>
+      <td>Optional</td>
+      <td>Reference to the secret in Vespa's <a href="/en/security/secret-store" aria-label="secret store">secret store</a> containing the OpenAI API key. When unset, requests are sent without an <code>{`Authorization`}</code> header.</td>
+      <td>string</td>
+      <td>"" (no auth)</td>
+    </tr>
+    <tr>
+      <td>endpoint</td>
+      <td>Optional</td>
+      <td>OpenAI API endpoint URL. Set this to target a specific OpenAI-compatible API.</td>
+      <td>string</td>
+      <td>https://api.openai.com/v1/embeddings</td>
+    </tr>
+    <tr>
+      <td>batching</td>
+      <td>Optional</td>
+      <td>Enables dynamic batching of concurrent embedding requests into single OpenAI API calls. When enabled, the embedder collects concurrent requests and sends them as a single batch, reducing the number of API calls and improving throughput.<br/><br/> • <code>{`max-size`}</code> — Maximum number of requests to include in a single batch. <br/>• <code>{`max-delay`}</code> — Maximum time to wait for a full batch before sending a partial one (e.g., <code>{`200ms`}</code>).</td>
+      <td>element</td>
+      <td>disabled</td>
+    </tr>
+    <tr>
+      <td>prepend</td>
+      <td>Optional</td>
+      <td>Strings prepended to the text input before sending the embedding request. Useful for OpenAI-compatible instruction-tuned models that expect a task-specific prefix.<br/><br/> • Element <code>{`<query>`}</code> - Optional query prepend instruction. <br/>• Element <code>{`<document>`}</code> - Optional document prepend instruction. <br/><br/><code>{`<prepend>`}</code><br/> <code>{`<query>query: </query>`}</code><br/> <code>{`<document>passage: </document>`}</code><br/> <code>{`</prepend>`}</code></td>
+      <td>Optional <code>{`<query> <document>`}</code> elements.</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+## Mistral Embedder
+
+Available since `Vespa 8.678`
+
+An embedder that uses the [Mistral](https://docs.mistral.ai/capabilities/embeddings/overview/) embeddings API to generate embeddings.
+
+The Mistral embedder is configured in [services.xml](/en/reference/applications/services/services), within the `container` tag:
+
+```xml
+<container id="default" version="1.0">
+    <component id="mistral" type="mistral-embedder">
+        <model>mistral-embed</model>
+        <api-key-secret-ref>mistral_api_key</api-key-secret-ref>
+        <dimensions>1024</dimensions>
+        <quantization>auto</quantization>
+    </component>
+</container>
+```
+
+### Mistral embedder reference config
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>model</td>
+      <td>One</td>
+      <td>&#42;&#42;Required&#42;&#42;. The Mistral model to use, for example <code>{`mistral-embed`}</code> or <code>{`codestral-embed`}</code>. See the <a href="https://docs.mistral.ai/capabilities/embeddings/overview/" aria-label="Mistral embeddings documentation">Mistral embeddings documentation</a> for the complete list of available models.</td>
+      <td>string</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>api-key-secret-ref</td>
+      <td>One</td>
+      <td>&#42;&#42;Required&#42;&#42;. Reference to the secret in Vespa's <a href="/en/security/secret-store" aria-label="secret store">secret store</a> containing the Mistral API key.</td>
+      <td>string</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>dimensions</td>
+      <td>One</td>
+      <td>&#42;&#42;Required&#42;&#42;. The number of dimensions for the output embedding vectors. Must match the tensor field definition in your schema. See the <a href="https://docs.mistral.ai/capabilities/embeddings/overview/" aria-label="Mistral embeddings documentation">Mistral embeddings documentation</a> for model-specific dimension support.</td>
+      <td>integer</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>quantization</td>
+      <td>Optional</td>
+      <td>Output quantization format for embedding vectors. Valid values are <code>{`auto`}</code>, <code>{`float`}</code>, <code>{`int8`}</code>, or <code>{`binary`}</code>. See the <code>{`quantization`}</code> row of the <a href="#voyageai-embedder-reference-config" aria-label="VoyageAI embedder reference config">VoyageAI embedder reference config</a> for details on <code>{`auto`}</code> resolution and the destination tensor layout required for <code>{`int8`}</code> and <code>{`binary`}</code>. Note that not all Mistral models support <code>{`int8`}</code> and <code>{`binary`}</code> quantization — see the <a href="https://docs.mistral.ai/capabilities/embeddings/overview/" aria-label="Mistral embeddings documentation">Mistral embeddings documentation</a> for per-model support.</td>
+      <td>string</td>
+      <td>auto</td>
+    </tr>
+    <tr>
+      <td>batching</td>
+      <td>Optional</td>
+      <td>Enables dynamic batching of concurrent embedding requests into single Mistral API calls. When enabled, the embedder collects concurrent requests and sends them as a single batch, reducing the number of API calls and improving throughput.<br/><br/>• <code>{`max-size`}</code> — Maximum number of requests to include in a single batch. <br/>• <code>{`max-delay`}</code> — Maximum time to wait for a full batch before sending a partial one (e.g., <code>{`200ms`}</code>).</td>
+      <td>element</td>
+      <td>disabled</td>
+    </tr>
+  </tbody>
+</table>
+
+## Huggingface tokenizer embedder
+
+The Huggingface tokenizer embedder is configured in [services.xml](/en/reference/applications/services/services), within the `container` tag:
+
+```xml
+<container version="1.0">
+    <component id="tokenizer" type="hugging-face-tokenizer">
+      <model url="https://huggingface.co/bert-base-uncased/raw/main/tokenizer.json"/>
+    </component>
+  </container>
+```
+
+### Huggingface tokenizer reference config
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>model</td>
+      <td>One To Many</td>
+      <td>Use to point to the <code>{`tokenizer.json`}</code> Huggingface tokenizer configuration file. Also supports <code>{`language`}</code>, which is only relevant if one wants to tokenize differently based on the document language. Use "unknown" for a model to be used for any language (i.e. by default).</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+  </tbody>
+</table>
+
+## Embedder ONNX reference config
+
+Vespa uses [ONNX Runtime](https://onnxruntime.ai/) to accelerate inference of embedding models. These parameters are valid for both [Bert embedder](#bert-embedder) and [Huggingface embedder](#huggingface-embedder).
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Occurrence</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>onnx-execution-mode</td>
+      <td>One</td>
+      <td>Low level ONNX execution model. Valid values are <code>{`parallel`}</code> or <code>{`sequential`}</code>. Only relevant for inference on CPU. See <a href="https://onnxruntime.ai/docs/performance/tune-performance/threading.html" aria-label="ONNX runtime documentation">ONNX runtime documentation</a> on threading.</td>
+      <td>string</td>
+      <td>sequential</td>
+    </tr>
+    <tr>
+      <td>onnx-interop-threads</td>
+      <td>One</td>
+      <td>Low level ONNX setting.Only relevant for inference on CPU.</td>
+      <td>numeric</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>onnx-intraop-threads</td>
+      <td>One</td>
+      <td>Low level ONNX setting. Only relevant for inference on CPU.</td>
+      <td>numeric</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>onnx-gpu-device</td>
+      <td>One</td>
+      <td>The GPU device to run the model on. See <a href="/en/operations/self-managed/vespa-gpu-container" aria-label="configuring GPU for Vespa container image">configuring GPU for Vespa container image</a>. Use <code>{`-1`}</code> to not use GPU for the model, even if the instance has available GPUs.</td>
+      <td>numeric</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+## SentencePiece embedder
+
+A native Java implementation of [SentencePiece](https://github.com/google/sentencepiece). SentencePiece breaks text into chunks independent of spaces, which is robust to misspellings and works with CJK languages. Prefer the [Huggingface tokenizer embedder](#huggingface-tokenizer-embedder) over this for better compatibility with Huggingface models.
+
+This is suitable to use in conjunction with [custom components](/en/applications/components), or the resulting tensor can be used in [ranking](/en/basics/ranking).
+
+To use the [SentencePiece embedder](https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/sentencepiece/SentencePieceEmbedder.java), add it to [services.xml](/en/reference/applications/services/services):
+
+```xml
+<container version="1.0">
+    <component id="mySentencePiece"
+             class="com.yahoo.language.sentencepiece.SentencePieceEmbedder"
+             bundle="linguistics-components">
+      <config name="language.sentencepiece.sentence-piece">;
+          <model>
+              <item>
+                <language>unknown</language>
+                <path>model/en.wiki.bpe.vs10000.model</path>
+              </item>
+          </model>
+        </config>
+    </component>
+  </container>
+```
+
+See the options available for configuring SentencePiece in [the full configuration definition](https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/resources/configdefinitions/language.sentencepiece.sentence-piece.def).
+
+## WordPiece embedder
+
+A native Java implementation of [WordPiece](https://github.com/google-research/bert#tokenization), which is commonly used with BERT models. Prefer the [Huggingface tokenizer embedder](#huggingface-tokenizer-embedder) over this for better compatibility with Huggingface models.
+
+This is suitable to use in conjunction with [custom components](/en/applications/components), or the resulting tensor can be used in [ranking](/en/basics/ranking).
+
+To use the [WordPiece embedder](https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/wordpiece/WordPieceEmbedder.java), add it to [services.xml](/en/reference/applications/services/services) within the `container` tag:
+
+```xml
+<container version="1.0">
+    <component id="myWordPiece">
+             class="com.yahoo.language.wordpiece.WordPieceEmbedder"
+             bundle="linguistics-components">
+      <config name="language.wordpiece.word-piece">
+        <model>
+          <item>
+            <language>unknown</language>
+            <path>models/bert-base-uncased-vocab.txt</path>
+          </item>
+        </model>
+      </config>
+    </component>
+  </container>
+```
+
+See the options available for configuring WordPiece in [the full configuration definition](https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/resources/configdefinitions/language.wordpiece.word-piece.def).
+
+WordPiece is suitable to use in conjunction with custom components, or the resulting tensor can be used in [ranking](/en/basics/ranking).
+
+## Using an embedder from Java
+
+When writing custom Java components (such as [Searchers](/en/applications/searchers) or [Document processors](/en/applications/document-processors#document-processors)), use embedders you have configured by [having them injected in the constructor](/en/applications/dependency-injection), just as any other component:
+
+```java
+class MyComponent {
+  @Inject
+  public MyComponent(ComponentRegistry<Embedder> embedders) {
+    // embedders contains all the embedders configured in your services.xml
+  }
+}
+```
+
+See a concrete example of using an embedder in a custom searcher in [LLMSearcher](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/java/ai/vespa/cloud/docsearch/LLMSearcher.java).
+
+## Custom Embedders
+
+Vespa provides a Java interface for defining components which can provide embeddings of text: [com.yahoo.language.process.Embedder](https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/process/Embedder.java).
+
+To define a custom embedder in an application and make it usable by Vespa (see [embedding a query text](/en/rag/embedding#embedding-a-query-text)), implement this interface and add it as a [component](/en/applications/developer-guide#developing-components) to [services.xml](/en/reference/applications/services/container):
+
+```xml
+<container version="1.0">
+    <component id="myEmbedder"
+      class="com.example.MyEmbedder"
+      bundle="the name in artifactId in pom.xml">
+        <config name='com.example.my-embedder'>
+            <model model-id="minilm-l6-v2"/>
+            <vocab path="files/vocab.txt"/>
+            <myValue>foo</myValue>
+        </config>
+    </component>
+</container>
+```

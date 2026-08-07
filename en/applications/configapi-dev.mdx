@@ -1,0 +1,343 @@
+---
+title: "Cloud Config API"
+sidebarTitle: "Java Config API"
+description: "This document describes how to use the C++ and Java versions of the Cloud config API (the 'config API'). This API is used internally in Vespa, and reading this document is not necessary in order to use Vespa or to develop Java components for the Vespa container. For this purpose, please refer to [Configuring components](/en/applications/configuring-components) instead."
+---
+
+Throughout this document, we will use as example an application serving up a configurable message.
+
+## Creating a Config Definition
+
+The first thing to do when deciding to use the config API is to define the config you want to use in your application. This is described in the [configuration file reference](/en/reference/applications/config-files). Here we will use the definition `motd.def` from the complete example at the end of the document:
+
+```text
+namespace=myproject
+
+message string default="NO MESSAGE"
+port int default=1337
+```
+
+## Generating Source Code and Accessing Config in Code
+
+Before you can access config in your program you will need to generate source code for the config definition. Simple steps for how you can generate API code and use the API are provided for [Java](/en/applications/configapi-dev#the-java-config-api). See also [javadoc](https://javadoc.io/doc/com.yahoo.vespa/config-lib))
+
+We also recommend that you read the [general guidelines](#guidelines) for examples of advanced usage and recommendations for how to use the API.
+
+## Config ID
+
+The config id specified when requesting config is essentially an identifier of the component requesting config. The config server contains a config object model, which maps a request for a given config name and config id to the correct configproducer instance, which will merge default values from the config definition with config from the object model and config set in `services.xml` to produce the final config instance.
+
+The config id is given to a service via the VESPA\_CONFIG\_ID environment variable. The [config sentinel](/en/operations/self-managed/config-sentinel) sets the environment variable to the id given by the config model. This id should then be used by the service to subscribe for config. If you are running multiple services, each of them will be assigned a **unique config id** for that service, and a service should not subscribe using any config id other than its own.
+
+If you need to get config for a services that is not part of the model (i.e. it is not specified in the services.xml), but that you want to specify values for in services.xml, use the config id `client`.
+
+## Schema Compatibility Rules
+
+A schema incompatibility occurs if the config class (for example `MotdConfig` in the C++ and Java sections above) was built from a different def-file than the one the server is seeing and using to serve config. Some such incompatibilities are automatically handled by the config system, others lead to error. This is useful to know during development/testing of a config schema.
+
+Let *S* denote a config definition called *motd* which the server is using, and *C* denote a config definition also called *motd* which the client is using, i.e. the one that created `MotdConfig` used when subscribing. The following is the system's behavior:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Compatible Changes</td>
+      <td>These schema mismatches are handled automatically by the configserver: <br /> - C is missing a config value that S has: The server will omit that value from the response.<br /> - C has an additional config value with a default value: The server will include that value in the response.<br /> - C and S both have a config value, but the default values differ: The server will use C's default value.</td>
+    </tr>
+    <tr>
+      <td>Incompatible Changes</td>
+      <td>These schema mismatches are not handled by the config server, and will typically lead to error in the subscription API because of missing values (though in principle some consumers of config may tolerate them): <br /> - C has an additional config value without a default value: The server will not include anything for that value.<br /> - C has the type of a config value changed, for example from string to int: The server will print an error message, and not include anything for that value. The user must use an entirely new name for the config if such a change must be made.</td>
+    </tr>
+  </tbody>
+</table>
+
+As with any data schema, it is wise to be conservative about changing it if the system will have new versions in the future. For a `def` schema, removing a config value constitutes a semantic change that may lead to problems when an older version of some config subscriber asks for config. In large deployments, the risk associated with this increases, because of the higher cost of a full restart of everything.
+
+Consequently, one should prefer creating a new config name, to removing a config value from a schema.
+
+## Creating a Deployable Application Package
+
+The application package consists of the following files:
+
+```
+app/services.xml
+app/hosts.xml
+```
+
+The services file contains the services that is handled by the config model plugin. The hosts file contains:
+```xml
+<hosts>
+  <host name="localhost">
+    <alias>node0</alias>
+  </host>
+</hosts>
+```
+
+## Setting Up a Running System
+
+To get a running system, first install the cloudconfig package, start the config server, then deploy the application: Prepare the application:
+
+$ vespa prepare /path/to/app/folder
+Activate the application:$ vespa activate /path/to/app/folder
+
+Then, start vespa. This will start the application and pass it its config id via the VESPA\_CONFIG\_ID environment variable.
+
+## Advanced Usage of the Config API
+
+For a simple application, having only 1 config may suffice. In a typical server application, however, the number of config settings can become large. Therefore, we **encourage** that you split the config settings into multiple logical classes. This section covers how you can use a ConfigSubscriber to subscribe to multiple configs and how you should group configs based on their dependencies. Configs can either be:
+
+- Independent static configs
+- Dependent static configs
+- Dependent dynamic configs
+
+We will give a few examples of how you can cope with these different scenarios. The code examples are given in a pseudo format common to C++ and Java, but they should be easy to convert to their language specific equivalents.
+
+### Independent Static Configs
+
+Independent configs means that it does not matter if one of them is updated independently of the other. In this case, you might as well use one ConfigSubscriber for each of the configs, but it might become tedious to check all of them. Therefore, the recommended way is to manage all of these configs using one ConfigSubscriber. In this setup, it is also typical to split the subscription phase from the config check/retrieval part. The subscribing part:
+
+```c++ C ++	
+ConfigSubscriber subscriber;
+ConfigHandle<FooConfig>::UP fooHandle = subscriber.subscribe<FooConfig>(...);
+ConfigHandle<BarConfig>::UP barHandle = subscriber.subscribe<BarConfig>(...);
+ConfigHandle<BazConfig>::UP bazHandle = subscriber.subscribe<BazConfig>(...);
+```
+```java Java	
+ConfigSubscriber subscriber;
+ConfigHandle<FooConfig> fooHandle = subscriber.subscribe(FooConfig.class, ...);
+ConfigHandle<BarConfig> barHandle = subscriber.subscribe(BarConfig.class, ...);
+ConfigHandle<BazConfig> bazHandle = subscriber.subscribe(BazConfig.class, ...);
+```
+
+And the retrieval part:
+
+```
+if (subscriber.nextConfig()) {
+    if (fooHandle->isChanged()) {
+        // Reconfigure foo
+    }
+    if (barHandle->isChanged()) {
+        // Reconfigure bar
+    }
+    if (bazHandle->isChanged()) {
+        // Reconfigure baz
+    }
+}
+```
+
+This allows you to perform the config fetch part either in its own thread or as part of some other event thread in your application.
+
+### Dependent Static Configs
+
+Dependent configs means that one of your configs depends on the value in another config. The most common is that you have one config which contains the config id to use when subscribing to the second config. In addition, your system may need that the configs are updated to the same **generation**.
+
+<Note>
+**Note:** 
+
+A generation is a monotonically increasing number which is increased each time an application is deployed with `vespa deploy`. Certain applications may require that all configs are of the same generation to ensure consistency, especially container-like applications. All configs subscribed to by a ConfigSubscriber are guaranteed to be of the same generation.
+</Note>
+
+The configs are static in the sense that the config id used does not change. The recommended way to approach this is to use a two phase setup, where you fetch the initial configs in the first phase, and then subscribe to both the initial and derived configs in order to ensure that they are of the same generation. Assume that the InitialConfig config contains two fields named *derived1* and *derived2*:
+
+```c++	C++
+ConfigSubscriber initialSubscriber;
+ConfigHandle<InitialConfig>::UP initialHandle = subscriber.subscribe<InitialConfig>(...);
+while (!subscriber.nextConfig()); // Ensure that we actually get initial config.
+std::auto_ptr<InitialConfig> initialConfig = initialHandle->getConfig();
+
+ConfigSubscriber subscriber;
+... = subscriber.subscribe<InitialConfig>(...);
+... = subscriber.subscribe<DerivedConfig>(initialConfig->derived1);
+... = subscriber.subscribe<DerivedConfig>(initialConfig->derived1);
+```
+
+```java Java	
+ConfigSubscriber initialSubscriber;
+ConfigHandle<InitialConfig> initialHandle = subscriber.subscribe(InitialConfig.class, ...);
+while (!subscriber.nextConfig()); // Ensure that we actually get initial config.
+InitialConfig initialConfig = initialHandle.getConfig();
+
+ConfigSubscriber subscriber;
+... = subscriber.subscribe(InitialConfig.class, ...);
+... = subscriber.subscribe(DerivedConfig.class, initialConfig.derived1);
+... = subscriber.subscribe(DerivedConfig.class, initialConfig.derived1);
+```
+
+You can then check the configs in the same way as for independent static configs, and be sure that all your configs are of the same generation. The reason why you need to create a new ConfigSubscriber is that **once you have called nextConfig(), you cannot add or remove new subscribers**.
+
+### Dependent Dynamic Configs
+
+Dynamic configs mean that the set of configs that you subscribe for may change between each deployment. This is the hardest case to solve, and how hard it is depends on how many levels of configs you have. The most common one is to have a set of bootstrap configs, and another set of configs that may change depending on the bootstrap configs (typically in an application that has plugins). To cover this case, you can use a class named `ConfigRetriever`. Currently, it is **only available in the C++ API**.
+
+The ConfigRetriever uses the same mechanisms as the ConfigSubscriber to ensure that you get a consistent set of configs. In addition, two more classes called `ConfigKeySet` and `ConfigSnapshot` are added. The ConfigRetriever takes in a set of configs used to bootstrap the system in its constructor. This set does not change. It then provides one method, `getConfigs(ConfigKeySet)`. The method returns a ConfigSnapshot of the next generation of bootstrap configs or derived configs.
+
+To create the ConfigRetriever, you must first populate a set of bootstrap configs:
+
+```xml
+ConfigKeySet bootstrapKeys;
+bootstrapKeys.add<BootstrapFooConfig>(configId);
+bootstrapKeys.add<BootstrapBarConfig>(configId);
+```
+
+The bootstrap configs are typically configs that will always be needed by your application. Once you have defined your set, you can create the retriever and fetch a ConfigSnapshot of the bootstrap configs:
+
+```
+ConfigRetriever retri ever(bootstrapKeys);
+ConfigSnapshot bootstrapConfigs = retriever.getConfigs();
+```
+
+The ConfigSnapshot contains the bootstrap config, and you may use that to fetch the individual configs. You need to provide the config id and the type in order for the snapshot to know which config to look for:
+
+```xml
+if (!bootstrapConfigs.empty()) {
+    std::auto_ptr<BootstrapFooConfig> bootstrapFoo = bootstrapConfigs.getConfig<BootstrapFooConfig>(configId);
+    std::auto_ptr<BootstrapBarConfig> bootstrapBar = bootstrapConfigs.getConfig<BootstrapBarConfig>(configId);
+```
+
+The snapshot returned is empty if the retriever was unable to get the configs. In that case, you can try calling the same method again.
+
+Once you have the bootstrap configs, you know the config ids for the other components that you should subscribe for, and you can define a new key set. Let's assume that bootstrapFoo contains an array of config ids we should subscribe for.
+
+```java
+ConfigKeySet pluginKeySet;
+for (size_t i = 0; i < (*bootstrapFoo).pluginConfigId.size; i++) {
+    pluginKeySet.add<PluginConfig>((*bootstrapFoo).pluginConfigId[i]);
+}
+```
+
+In this example we know the type of config requested, but this could be done in another way letting the plugin add keys to the set.
+
+Now that the derived configs have been added to the pluginKeySet, we can request a snapshot of them:
+
+```java
+ConfigSnapshot pluginConfigs = retriever.getConfigs(pluginKeySet);
+if (!pluginConfigs.empty()) {
+    // Configure each plugin with a config picked from the snapshot.
+}
+```
+And that's it. When calling the method without any key parameters, the snapshot returned by this method may be empty if **the config could not be fetched within the timeout**, or **the generation of configs has changed**. To check if you should call getBootstrapConfigs() again, you can use the `bootstrapRequired()` method. If it returns true, you will have to call getBootstrapConfigs() again, because the plugin configs have been updated, and you need a new bootstrap generation to match it. If it returns false, you may call getConfigs() again to try and get a new generation of plugin configs.
+
+We recommend that you use the retriever API if you have a use case like this. The alternative is to create your own mechanism using two ConfigSubscriber classes, but this is **not** recommended.
+
+### Advice on Config Modelling
+
+Regardless of which of these types of configs you have, it is recommended that you always fetch all the configs you need **before** you start configuring your system. This is because the user may deploy multiple different version of the config that may cause your components to get conflicting config values. A common pitfall is to treat dependent configs as independent, thereby causing inconsistency in your application when a config update for config A arrives before config B. The ConfigSubscriber was created to minimize the possibility of making this mistake, by ensuring that all of the configs comes from the same config reload.
+
+**Tip:** Set up your entire *tree* of configs in one thread to ensure consistency, and configure your system once all of the configs have arrived. This also maps best to the ConfigSubscriber, since it is not thread safe.
+
+## The Java config API
+
+Assumption: a [def file](/en/applications/configapi-dev), which is the schema for one of your configs, is created and put in `src/main/resources/configdefinitions/`.
+
+To generate source code for the def-file, invoke the `config-class-plugin` from *pom.xml*, in the `<build>`, `<plugins>` section:
+
+```xml
+<plugin>
+  <groupId>com.yahoo.vespa</groupId>
+  <artifactId>config-class-plugin</artifactId>
+  <version>${vespa.version}</version>
+  <executions>
+    <execution>
+      <id>config-gen</id>
+      <goals>
+        <goal>config-gen</goal>
+      </goals>
+    </execution>
+  </executions>
+</plugin>
+```
+
+The generated classes will be saved to `target/generated-sources/vespa-configgen-plugin`, when the `generate-sources` phase of the build is executed. The def-file [`motd.def`](/en/applications/configapi-dev) is used in this tutorial, and a class called `MotdConfig` was generated (in the package `myproject`). It is a subtype of `ConfigInstance`.
+
+When using only the config system (and not other parts of Vespa or the JDisc container), pull in that by using this in pom.xml:
+
+```xml
+<dependency>
+  <groupId>com.yahoo.vespa</groupId>
+  <artifactId>config</artifactId>
+  <version>${vespa.version}</version>
+  <scope>provided</scope>
+</dependency>
+```
+
+## Subscribing and getting config
+
+To retrieve the config in the application, create a `ConfigSubscriber`. A `ConfigSubscriber` is capable of subscribing to one or more configs. The example shown here uses simplified error handling:
+
+```java
+ConfigSubscriber subscriber = new ConfigSubscriber();
+ConfigHandle<MotdConfig> handle = subscriber.subscribe(MotdConfig.class, "motdserver2/0");
+if (!subscriber.nextConfig()) throw new RuntimeException("Config timed out.");
+if (handle.isChanged()) {
+  String message = handle.getConfig().message();
+  int port = handle.getConfig().port();
+}
+```
+
+Note that `isChanged()` always will be true after the first call to `nextConfig()`, it is included here to illustrate the API.
+
+In many cases one will do this from a thread which loops the `nextConfig()` call, and reconfigures your application if `isChanged()` is true.
+
+The second parameter to `subscribe()`, *"motdserver2/0"*, is the [config id](/en/applications/configapi-dev#config-id).
+
+If one `ConfigSubscriber` subscribes to multiple configs, `nextConfig()` will only return true if the configs are of the same generation, i.e. they are "in sync".
+
+See the [com.yahoo.config](https://javadoc.io/doc/com.yahoo.vespa/config-lib) javadoc for details. Example:
+
+```java
+ConfigSubscriber subscriber = new ConfigSubscriber();
+ConfigHandle<MotdConfig> motdHandle = subscriber.subscribe(MotdConfig.class, "motdserver2/0");
+ConfigHandle<AnotherConfig> anotherHandle = subscriber.subscribe(AnotherConfig.class, "motdserver2/0");
+if (!subscriber.nextConfig()) throw new RuntimeException("Config timed out.");
+// We now have a synchronized new generation for these two configs.
+if (motdHandle.isChanged()) {
+  String message = motdHandle.getConfig().message();
+  int port = motdHandle.getConfig().port();
+}
+if (anotherHandle.isChanged()) {
+  String myfield = anotherHandle.getConfig().getMyField();
+}
+```
+
+## Simplified subscription
+
+In cases like the first example above, where you only subscribe to one config, you may also subscribe using the `ConfigSubscriber.SingleSubscriber` interface. In this case, you define a `configure()` method from the interface, and call a special `subscribe()`. The method will start a dedicated config fetcher thread for you. The method will throw an exception in the user thread if initial configuration fails, and print a warning in the config thread if it fails afterwards. Example:
+
+```java
+public class MyConfigSubscriber implements ConfigSubscriber.SingleSubscriber<MotdConfig> {
+
+  public MyConfigSubscriber(String configId) {
+    new ConfigSubscriber().subscribe(this, MotdConfig.class, configId);
+  }
+
+  @Override
+  public void configure(MotdConfig config) {
+    // configuration logic here
+  }
+}
+```
+
+The disadvantage to using this is that one cannot implement custom error handling or otherwise track config changes. If needed, use the generic method above.
+
+## Unit testing config
+
+When instantiating a [ConfigSubscriber](https://javadoc.io/doc/com.yahoo.vespa/config/latest/com/yahoo/config/subscription/ConfigSubscriber.html), one can give it a [ConfigSource](https://javadoc.io/doc/com.yahoo.vespa/config/latest/com/yahoo/config/subscription/ConfigSource.html). One such source is a `ConfigSet`. It consists of a set of `Builder`s. This is an example of instantiating a subscriber using this<br /> - it uses 2 types of config, that were generated from files `app.def` and `string.def`:
+
+```java
+ConfigSet myConfigs = new ConfigSet();
+AppConfig.Builder a0builder = new AppConfig.Builder().message("A message, 0").times(88);
+AppConfig.Builder a1builder = new AppConfig.Builder().message("A message, 1").times(89);
+myConfigs.add("app/0", a0builder);
+myConfigs.add("app/1", a1builder);
+myConfigs.add("bar", new StringConfig.Builder().stringVal("StringVal"));
+ConfigSubscriber subscriber = new ConfigSubscriber(myConfigs);
+```
+
+To help with unit testing, each config type has a corresponding builder type. The `Builder` is mutable whereas the `ConfigInstance` is not. Use this to set up config fixtures for unit tests. The `ConfigSubscriber` has a `reload()` method which is used in tests to force the subscriptions into a new generation. It emulates a `vespa activate` operation after you have updated the `ConfigSet`.
+
+A full example can be found in [ConfigSetSubscriptionTest.java](https://github.com/vespa-engine/vespa/blob/master/config/src/test/java/com/yahoo/config/subscription/ConfigSetSubscriptionTest.java).

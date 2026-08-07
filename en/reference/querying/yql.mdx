@@ -1,0 +1,681 @@
+---
+title: "YQL Query Language Reference"
+sidebarTitle: "The YQL query language"
+---
+
+Vespa accepts unstructured human input and structured queries for application logic separately, then combines them into a single data structure for executing. Human input is parsed heuristically, while application queries are formulated in YQL.
+
+<Info>
+ **Note:** See the [Query Language Guide](/en/querying/query-language) for query examples
+</Info>
+
+A query URL looks like:
+
+```bash
+http://myhost.mydomain.com:8080/search/?yql=select%20%2A%20from%20sources%20%2A%20where%20text%20contains%20%22blues%22
+```
+
+In other words, `yql` contains:
+
+```bash
+select * from sources * where text contains "blues"
+```
+
+This [matches](/en/reference/schemas/schemas#match) all documents where the field named _text_ contains the word _blues_.
+
+Quote `"` and backslash `\` characters in text values must be escaped by a backslash, also see [how does backslash escapes work](/en/learn/faq#how-does-backslash-escapes-work).
+
+<Danger>
+ **Important:** There is no way to query for a field that is not set / equals `null` or `NaN`. Work around using a "magic" value (like MAXINT) that is not normally used in the documents.
+</Danger>
+
+## select
+
+_select_ is the list of [summary fields](/en/querying/document-summaries#selecting-summary-fields-in-yql) requested (a field with the `summary` index attribute). Vespa will hide other fields in the matching documents.
+
+```bash
+select price,isbn from sources * where title contains "madonna"
+```
+
+The above explicitly requests the fields "price" and "isbn" (from all sources). To request all fields, use an asterisk as field selection:
+
+```sql
+select * from sources * where title contains "madonna"
+```
+
+## from sources
+
+_from sources_ specifies which content [sources](/en/reference/api/query#model.sources) to query. Example:
+
+```sql
+select * from music where title contains "madonna"
+```
+
+queries all document types in the _music_ content cluster or federation source. Query in:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>all sources</td>
+      <td><code>{`select ... from sources * where ...`}</code></td>
+    </tr>
+    <tr>
+      <td>a set of sources</td>
+      <td><code>{`select ... from sources source1, source2 where ...`}</code></td>
+    </tr>
+    <tr>
+      <td>a single source</td>
+      <td><code>{`select ... from source1 where ...`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+In other words, _sources_ is used for querying some/all sources. If only a single source is queried, the _sources_ keyword is dropped. To restrict the query to only one schema (aka document type) use the [model.restrict](/en/reference/api/query#model.restrict) URL parameter. Also see [federation](/en/querying/federation).
+
+## where
+
+The `where` clause is a tree of operators:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>numeric</td>
+      <td>The following numeric operators are available: <code>{`= < > <= >= range(field, lower bound, upper bound)`}</code>.  where 500 &gt;= price where range(fieldname, 0, 5000000000L)  Numbers must be in the signed 32-bit range. Input 64-bit signed numbers using <code>{`L`}</code> as suffix.  For the <code>{`range`}</code> operator, one can also use the strings <code>{`Infinity`}</code> or <code>{`-Infinity`}</code>:  where (range(year, 2000, Infinity))  | Annotation | Effect | | --- | --- | | <a href="#bounds" aria-label="bounds">bounds</a> | Range: open or closed interval. | | <a href="#hitlimit" aria-label="hitLimit">hitLimit</a> | Used for &#42;capped range search&#42;. The <code>{`range()`}</code> query operator with <code>{`hitLimit`}</code> can be used to efficiently implement top-k selection for ranking a subset of the documents in the index. See <a href="/en/performance/practical-search-performance-guide#advanced-range-search-with-hitlimit" aria-label="example and use cases">example and use cases</a>. |  The <a href="/en/reference/schemas/schemas#weightedset" aria-label="weightedset">weightedset</a> field does not support filtering on weight. Solve this using the <a href="/en/reference/schemas/schemas#map" aria-label="map">map</a> type and <a href="#sameelement" aria-label="sameElement">sameElement</a> query operator - see <a href="/en/querying/query-language#map" aria-label="example">example</a>.</td>
+    </tr>
+    <tr>
+      <td>boolean</td>
+      <td>The boolean operator is: <code>{`=`}</code>  where alive = true</td>
+    </tr>
+    <tr>
+      <td>contains</td>
+      <td>The right-hand side argument of the contains operator is either a string literal, or a function, like <code>{`phrase`}</code>.  <code>{`contains`}</code> is the basic building block for text matching. The kind of <a href="/en/reference/schemas/schemas#match" aria-label="matching">matching</a> to be done depends on the field settings in the schema.  where title contains "madonna"  | Annotation | Effect | | --- | --- | | <a href="#stem" aria-label="stem">stem</a> | By default, the string literal is <a href="/en/linguistics/linguistics-opennlp#tokenization" aria-label="tokenized">tokenized</a> to match the field(s) searched. Explicitly control tokenization by using <a href="#stem" aria-label="stem">stem</a>:where title contains <pre><code>{`({stem: false}"madonna")`}</code></pre> |  The matched field must be an <a href="/en/basics/schemas#document-fields" aria-label="indexed field or attribute">indexed field or attribute</a>.  Fields inside structs are referenced using dot notation - e.g <code>{`mystruct.mystructfield`}</code>.</td>
+    </tr>
+    <tr>
+      <td>and</td>
+      <td><code>{`and`}</code> accepts other <code>{`and`}</code> statements, <code>{`or`}</code> statements, <a href="#userquery" aria-label="userQuery">userQuery</a>, logically inverted statements - and contains statements as arguments:  where title contains "madonna" and title contains "saint"</td>
+    </tr>
+    <tr>
+      <td>or</td>
+      <td><code>{`or`}</code> accepts other <code>{`or`}</code> statements, <code>{`and`}</code> statements, <a href="#userquery" aria-label="userQuery">userQuery</a> - and contains statements as arguments:  where title contains "madonna" or title contains "saint"</td>
+    </tr>
+    <tr>
+      <td>not</td>
+      <td>Use the <code>{`!`}</code> operator to match document that does &#42;not&#42; satisfy some condition:  where title contains "madonna" and !(title contains "saint")</td>
+    </tr>
+    <tr>
+      <td>phrase</td>
+      <td>Phrases are expressed as a function:  where text contains phrase("st", "louis", "blues")</td>
+    </tr>
+    <tr>
+      <td>near</td>
+      <td><code>{`near()`}</code> matches if all argument terms occur within the specified distance, in any order. Negative terms (prefixed with <code>{`!`}</code>) exclude matches where those terms appear within the exclusion distance.  where field contains near("a", "b", "c") where field contains <code>{``}</code><code>{`({distance: 5}near("web", "search"))`}</code><code>{``}</code> where field contains near("sql", "database", !"nosql")  | Annotation | Default | Description | | --- | --- | --- | | <a href="#distance" aria-label="distance">distance</a> | 2 | Maximum position difference for terms to match. | | exclusionDistance | (distance+1)/2 | Exclusion zone size around negative terms. |  Negative terms must come after all positive terms. For multi-value fields, setting <a href="/en/reference/schemas/schemas#rank-element-gap" aria-label="element-gap">element-gap</a> for the field in the rank profile enables distance calculation between adjacent elements.  Features below <code>{`near()`}</code> and <code>{`onear()`}</code> are filtered based on the spans for the operator match before they are exposed to the ranking features. Given the query  text contains <code>{``}</code><code>{`({distance:1}near("a","b"))`}</code><code>{``}</code>and two documents.  The text field in the first document is <code>{`"a a a a a a b b b b b b"`}</code>. The spans for the near match are <code>{`[[5,6]]`}</code>. Only the last occurrence of <code>{`"a"`}</code> and the first occurrence of <code>{`"b"`}</code> are kept.  The text field in the second document is <code>{`"a b c a b c a b c a b c"`}</code>. The spans for the near match are <code>{`[[0,1],[3,4],[6,7],[9,10]]`}</code>. All occurrences of <code>{`"a"`}</code> and <code>{`"b"`}</code> are kept.</td>
+    </tr>
+    <tr>
+      <td>onear</td>
+      <td><code>{`onear()`}</code> (ordered near) is like <code>{`near()`}</code>, but requires terms to appear in the same order as specified in the query. With distance set to (number of terms - 1), <code>{`onear()`}</code> is equivalent to <code>{`phrase()`}</code>.  where field contains onear("web", "search", "engine") where field contains <code>{``}</code><code>{`({distance: 5}onear("neural", "network"))`}</code><code>{``}</code> where field contains onear("java", "tutorial", !"script")  | Annotation | Default | Description | | --- | --- | --- | | <a href="#distance" aria-label="distance">distance</a> | 2 | Maximum position difference for terms to match. | | exclusionDistance | (distance+1)/2 | Exclusion zone size around negative terms. |  Negative terms must come after all positive terms. For multi-value fields, setting <a href="/en/reference/schemas/schemas#rank-element-gap" aria-label="element-gap">element-gap</a> for the field in the rank profile enables distance calculation between adjacent elements.</td>
+    </tr>
+    <tr>
+      <td>sameElement</td>
+      <td>The <code>{`sameElement()`}</code> operator lets you denote conditions that must match within the &#42;same&#42; element in multivalue fields containing structs or strings.  By default, sameElement uses <code>{`AND`}</code> to combine the conditions: &#42;All&#42; the conditions must match in the same element to produce a match.  For example, given this &#42;&#42;struct&#42;&#42;:  struct person <code>{``}</code><code>{`{     field first_name    type string {}     field last_name     type string {}     field year_of_birth type int {} }  field persons type array<person> {     indexing: summary     struct-field first_name    { indexing: attribute }     struct-field last_name     { indexing: attribute }     struct-field year_of_birth { indexing: attribute } }`}</code><code>{``}</code>  We can use this query:  where persons contains sameElement(first_name contains 'Joe', last_name contains 'Smith', year_of_birth &lt; 1940)  to return all documents containing a Joe Smith born before 1940 in the <code>{`persons`}</code> array.  Searching a &#42;&#42;map&#42;&#42; is done by treating it as an array of a struct with the field members <code>{`key`}</code> and <code>{`value`}</code>. For example, given this map:  <code>{``}</code><code>{`field identities type map<string, person> {     indexing: summary     struct-field key                 { indexing: attribute }     struct-field value.first_name    { indexing: attribute }     struct-field value.last_name     { indexing: attribute }     struct-field value.year_of_birth { indexing: attribute } }`}</code><code>{``}</code>  We can use this query:  where identities contains sameElement(key contains 'father', value.first_name contains 'Joe', value.last_name contains 'Smith', value.year_of_birth &lt; 1940)  to return all documents that have a Joe Smith born before 1940 keyed as a 'father'.  <code>{`sameElement()`}</code> may also be used to search &#42;&#42;array of string&#42;&#42; fields. Supported query operators inside sameElement() are <code>{`and`}</code>, <code>{`equiv`}</code>, <code>{`near`}</code>, <code>{`onear`}</code>, <code>{`or`}</code>, <code>{`rank`}</code> and <code>{`phrase`}</code>. <code>{`and`}</code> can be used with <code>{`!`}</code>.  For example given this field:  field chunks type <code>{``}</code><code>{`array<string> {     indexing: index | summary } `}</code><code>{``}</code>  We can use these queries:  where chunks contains sameElement("one" and "two") where chunks contains sameElement("one" and equiv("two","three")) where chunks contains <code>{``}</code><code>{`sameElement("one" and ({distance: 5}near("two","three",!"four"))) `}</code><code>{``}</code>where chunks contains sameElement("one" and phrase("two","three")) where chunks contains sameElement("one" and !"two") where chunks contains sameElement("one" or "two") where chunks contains sameElement(rank("one" and "two", "three"))  Features inside sameElement() for indexed fields are filtered based on the matching elements, e.g. <a href="/en/reference/ranking/rank-features#elementwise-bm25" aria-label="elementwise(bm25(descriptions),x,double)">elementwise(bm25(descriptions),x,double)</a> will only contain tensor cells based on the matching elements.  Use the <a href="#elementfilter" aria-label="`elementFilter`"><code>{`elementFilter`}</code></a> annotation to restrict matching to specific element indices. For example, given a field <code>{`my_numbers type array<int>`}</code>:  where<code>{``}</code><code>{`bash my_numbers contains ({elementFilter:[2]}sameElement("42"))`}</code><code>{``}</code>  This only matches the element at index 2 in the array field. Multiple indices can be given: <code>{`{elementFilter:[0, 2, 5]}`}</code>.  A shorthand form is also available:  where my_numbers[2] = 42  The shorthand form only supports a single index. Use the <a href="#elementfilter" aria-label="`elementFilter`"><code>{`elementFilter`}</code></a> annotation to match multiple indices.</td>
+    </tr>
+    <tr>
+      <td>equiv</td>
+      <td>For cases where two terms in the same field should produce exactly the same behavior when matched, the <code>{`equiv()`}</code> operator can be used. This behaves like a special case of <code>{`or`}</code>.  where fieldName contains equiv("A","B")  The matching logic of equiv is the same as OR, and an OR does not have the limitations that EQUIV does (below). The difference is in how matches are visible to ranking functions. All words that are children of an OR count for ranking, while with EQUIV, they look like a single word to ranking:  - Counts as only +1 for queryTermCount - Counts as 1 word for completeness measures - Proximity will not discriminate different words inside the EQUIV - Connectivity can be set between the entire EQUIV and the word before and after - Items inside the EQUIV are not directly visible to ranking features, so weight and connectivity on those will have no effect  Limitations on how <code>{`equiv`}</code> can be used in a query:  - <code>{`equiv`}</code> may not appear inside a phrase - It may only contain <code>{`TermItem`}</code> and <code>{`PhraseItem`}</code> instances. Operators like <code>{`and`}</code> cannot be placed inside <code>{`equiv`}</code> - <code>{`PhraseItems`}</code> inside <code>{`equiv`}</code> will rank like as if they have size 1  Learn how to use <a href="/en/linguistics/query-rewriting#equiv" aria-label="equiv">equiv</a>.</td>
+    </tr>
+    <tr>
+      <td>uri</td>
+      <td>Used to search for urls indexed using the <a href="/en/reference/schemas/schemas#uri" aria-label="uri field type">uri field type</a>.  where myUrlField contains uri("vespa.ai/foo")  Various subfields are supported to search components of the URL, see the field type definition.  | Annotation | Effect | | --- | --- | | <a href="#startanchor" aria-label="startAnchor">startAnchor</a> | Anchor uri.hostname at start. | | <a href="#endanchor" aria-label="endAnchor">endAnchor</a> | Anchor uri.hostname at end. |</td>
+    </tr>
+    <tr>
+      <td>fuzzy</td>
+      <td><a href="https://en.wikipedia.org/wiki/Levenshtein_distance" aria-label="Levenshtein">Levenshtein</a> edit distance search within a string or array&lt;string&gt; <a href="/en/reference/schemas/schemas#attribute" aria-label="attribute">attribute</a>.  where myStringAttribute contains (&#123;prefixLength:1, maxEditDistance:2&#125;fuzzy("parantesis"))  Annotations below are configuring <code>{`fuzzy`}</code>:  | Annotation | Effect | | --- | --- | | <a href="#maxeditdistance" aria-label="maxEditDistance">maxEditDistance</a> | An inclusive upper bound of edit distance between query and string attribute (default is 2). | | <a href="#prefixlength" aria-label="prefixLength">prefixLength</a> | Number of characters that are considered frozen, so the fuzzy match will be performed only with the suffix left. Default is 0 (i.e. <code>{`fuzzy`}</code> will match across whole query) | | <a href="#prefix" aria-label="prefix">prefix</a> | If <code>{`true`}</code>, a string is considered a match when it's possible to transform a &#42;prefix&#42; of the candidate string to the query string using at most <code>{`maxEditDistance`}</code> edits. See <a href="/en/querying/text-matching#fuzzy-prefix-match" aria-label="fuzzy prefix match">fuzzy prefix match</a>. Default is <code>{`false`}</code>, which means that the entire string is considered. |  Find an example in <a href="/en/querying/text-matching#fuzzy-match" aria-label="text matching">text matching</a>.  &#42;&#42;Important:&#42;&#42; Only string <a href="/en/reference/schemas/schemas#attribute" aria-label="attribute">attribute</a> fields in <a href="/en/reference/applications/services/content#document" aria-label="documents">documents</a> are supported (single, array or weightedset). Matching is optimized internally when <code>{`maxEditDistance`}</code> is 1 or 2. Setting <a href="#prefixlength" aria-label="prefixLength">prefixLength</a> greater than 0 narrows the match for the <a href="/en/reference/schemas/schemas#attribute" aria-label="fast-search">fast-search</a>, greatly reducing the number of terms that must be considered.</td>
+    </tr>
+    <tr>
+      <td>matches</td>
+      <td>Regular expression match is supported using <a href="https://en.wikibooks.org/wiki/Regular_Expressions/POSIX_Extended_Regular_Expressions" aria-label="posix extended syntax">posix extended syntax</a>, with the limitation that it is &#42;&#42;case-insensitive&#42;&#42;.  Example matching both <code>{`madonna`}</code>, <code>{`madona`}</code> and with any number of <code>{`n`}</code>s:  where attribute_field matches "mado[n]+a"  Find more examples in the <a href="/en/querying/text-matching#regular-expression-match" aria-label="text matching">text matching</a> guide.  &#42;&#42;Important:&#42;&#42; Only <a href="/en/reference/schemas/schemas#attribute" aria-label="attribute">attribute</a> fields in <a href="/en/reference/applications/services/content#document" aria-label="documents">documents</a> is supported. It is not optimized for performance. Having a prefix using the <code>{`^`}</code> will be faster than not having one. Additionally, fields that serve as both attributes and indexes are not compatible.</td>
+    </tr>
+    <tr>
+      <td>text</td>
+      <td>&#42;text()&#42; accepts any text and tokenizes it into a set of tokens to be searched in a given field or fieldSet. By default, the tokens are searched with a <a href="#weakand" aria-label="weakAnd">weakAnd</a> operator. You can override the default behavior via annotations: <code>{`text()`}</code> supports the same annotations as <a href="#userinput" aria-label="userInput()">userInput()</a>.  Example:        where text_field contains text("some text")         With annotations:        where text_field contains (&#123;language:'en'&#125;text("some text"))         The text argument can be given as a reference using "@parameterName":        yql=select &#42; from sources &#42; where text_field contains (@text)&amp;text=some text</td>
+    </tr>
+    <tr>
+      <td>userInput</td>
+      <td>&#42;userInput()&#42; parses text from end users or models that may contain query syntax for choosing the fields to search, specifying phrases and negative terms etc. Since the query in userInput can specify fields, there is no "contains field" prefix before the userInput operator.  yql=select &#42; from sources &#42; where userInput('some text')  The argument can be given as a reference using "@parameterName":  yql=select &#42; from sources &#42; where userInput(@text)&amp;text=some text  Both of these will result in the query  select &#42; from sources &#42; where weakAnd(default contains "some", default contains "text")  The default behavior may be overridden by annotations:  yql=select &#42; from sources &#42; where (&#123;grammar.syntax:'none',grammar.tokenization:'linguistics',grammar.composite:'near',distance:3&#125;userInput('some text'))  | Annotation | Effect | | --- | --- | | <a href="#grammar" aria-label="grammar">grammar</a> | Sets the query parse type to apply when interpreting the user input text.  For any value of <code>{`grammar`}</code> other than <code>{`raw`}</code> or <code>{`segment`}</code>, only the following annotations are applied:  - <a href="#defaultindex" aria-label="defaultIndex">defaultIndex</a> - <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> (for weakAnd)- <a href="#targethits" aria-label="targetHits">targetHits</a> (for weakAnd)- <a href="#distance" aria-label="distance">distance</a> (for near/oNear)- <a href="#ranked" aria-label="ranked">ranked</a> - <a href="#filter" aria-label="filter">filter</a> - <a href="#stem" aria-label="stem">stem</a> - <a href="#normalizecase" aria-label="normalizeCase">normalizeCase</a> - <a href="#accentdrop" aria-label="accentDrop">accentDrop</a> - <a href="#usepositiondata" aria-label="usePositionData">usePositionData</a>  E.g. if annotating <code>{`userInput`}</code> with <code>{`phrase`}</code>, a <code>{`filter`}</code> annotation will have effect, but not <code>{`language`}</code>.  See <a href="/en/reference/api/query#model.type.isYqlDefault" aria-label="isYqlDefault">isYqlDefault</a> on setting a default grammar in a request/query profile. | | <a href="#defaultindex" aria-label="defaultIndex">defaultIndex</a> | Same as <a href="/en/reference/api/query#model.defaultindex" aria-label="model.defaultIndex">model.defaultIndex</a> in the query API. | | <a href="#language" aria-label="language">language</a> | Language setting for the linguistics treatment of this userInput() call. | | <a href="#allowempty" aria-label="allowEmpty">allowEmpty</a> | Whether to allow empty input for query parsing and search terms. |  In addition, other annotations, like <a href="#stem" aria-label="stem">stem</a> or <a href="#ranked" aria-label="ranked">ranked</a>, will take effect as normal.  More examples can be found in the <a href="/en/querying/query-api#input-examples" aria-label="query API">query API</a> guide.</td>
+    </tr>
+    <tr>
+      <td>userQuery</td>
+      <td>&#42;userQuery()&#42; reads from <a href="/en/reference/api/query#model.querystring" aria-label="model.queryString">model.queryString</a> and parses the query using <a href="/en/reference/querying/simple-query-language" aria-label="simple query language">simple query language</a>. If set, <a href="/en/reference/api/query#model.filter" aria-label="model.filter">model.filter</a> is combined with &#42;model.queryString&#42; before the parsing.  The user query is first parsed, then the resulting tree is inserted into the corresponding place in the YQL query tree. Example:  $ vespa query 'select &#42; from sources &#42; where vendor contains "brick and mortar" AND price &lt; 50 AND userQuery()' &#92;   query="abc def -ghi" &#92;   type=all  This evaluates to a query where:  - the numeric field &#42;price&#42; must be less than 50 - &#42;vendor&#42; must match &#42;brick and mortar&#42; - the default index must contain the two terms &#42;abc&#42; and &#42;def&#42;, &#42;and not&#42; contain &#42;ghi&#42;.  Use <a href="/en/reference/api/query#model.defaultindex" aria-label="model.defaultIndex">model.defaultIndex</a> to specify a field or fieldset if not using &#42;default&#42; - see <a href="/en/querying/query-api#fieldset" aria-label="example">example</a>.</td>
+    </tr>
+    <tr>
+      <td>rank</td>
+      <td>The first, and only the first, argument of the &#42;rank()&#42; function determines whether a document is a match, but all arguments are used for calculating rank features. The <code>{`rank`}</code> operator is useful for boosting documents based on the presence of certain terms without impacting matching or retrieval logic.  where rank(a contains "A", b contains "B", c contains "C")  It's also useful in hybrid search use cases. See <a href="https://blog.vespa.ai/redefining-hybrid-search-possibilities-with-vespa/" aria-label="blog post">blog post</a> for usage examples. For example, retrieve using the <a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a> query operator as the first argument and have matching features calculated for the other arguments.  where rank(nearestNeighbor(field, queryVector), a contains "A", b contains "B", c contains "C")</td>
+    </tr>
+    <tr>
+      <td>in</td>
+      <td>The &#42;in&#42; operator is used to match a set of values in an integer or string field. A document is considered a match when at least one of the values matches the content of the field. This is an optimized shorthand for multiple OR conditions, and is similar to the IN operator in SQL. Available since Vespa 8.293.15 . Example:  where integer_field in (10, 20, 30) where string_field in ('germany', 'france', 'norway') Where <code>{`string_field`}</code> is a field with <code>{`match:word`}</code>. There is no <a href="/en/linguistics/linguistics.html" aria-label="linguistic">linguistic</a> processing like tokenization or stemming of the string values used in the &#42;in&#42; operator except lowercasing. See string <a href="/en/reference/schemas/schemas#match" aria-label="match">match</a>.field string_field type string &#123;     indexing: summary | index # or attribute     match: word     rank:filter     attribute: fast-search # if attribute   &#125;  Using the &#42;in&#42; operator against string fields with <code>{`match:text`}</code> will cause recall issues because the field contents will be tokenized during indexing while the &#42;in&#42; operator does not tokenize the values.  The argument before &#42;in&#42; is the name of the field or <a href="/en/reference/schemas/schemas#fieldset" aria-label="fieldset">fieldset</a> to search. The argument after &#42;in&#42; is a comma-separated list of values, enclosed in parentheses. String values must be single or double-quoted if passed inline in YQL  For multi-value fields (like arrays), the &#42;in&#42; operator works by checking if any element in the array matches any of the values in the set. This is similar to SQL's IN operator but more streamlined for array comparisons. Example:  where integer_array_field in (10, 20, 30)  If integer_array_field = [5, 10, 15], it will match because 10 is in the array. Similarly, if integer_array_field = [20, 25, 30], it will match because both 20 and 30 are in the array.  For faster query parsing use <a href="#parameter-substitution" aria-label="parameter substitution">parameter substitution</a> to submit the values as an additional request parameter. Quoting of string values are optional. Example:  where integer_field in (@integer_values)&amp;integer_values=10,20,30 where string_field in (@string_values)&amp;string_values=germany,france,norway  The &#42;in&#42; operator acts as a single term in the query tree, and does not provide any match information for text ranking features.  For a discussion of usage and examples refer to:  - <a href="/en/ranking/multivalue-query-operators#in-example" aria-label="multivalue query operators">multivalue query operators</a> - <a href="/en/performance/feature-tuning#multi-lookup-set-filtering" aria-label="multi-lookup set filtering">multi-lookup set filtering</a> - <a href="https://github.com/vespa-engine/system-test/tree/master/tests/search/in_operator" aria-label="in operator system test">in operator system test</a>  | Field type | Singlevalue or <a href="/en/querying/searching-multivalue-fields" aria-label="multivalue">multivalue</a> <a href="/en/basics/schemas#document-fields" aria-label="attribute or index field">attribute or index field</a> with basic type <a href="/en/reference/schemas/schemas#byte" aria-label="byte">byte</a>, <a href="/en/reference/schemas/schemas#int" aria-label="int">int</a>, <a href="/en/reference/schemas/schemas#long" aria-label="long">long</a> or <a href="/en/reference/schemas/schemas#string" aria-label="string">string</a>. String fields must have <code>{`match:word`}</code> or <code>{`match:exact`}</code>. | | --- | --- | | Query model | A set of values/tokens. | | Matching | Documents where the field contains at least one of the values in the query. | | Ranking | None. | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/NumericInItem.html" aria-label="NumericInItem">NumericInItem</a> and <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/StringInItem.html" aria-label="StringInItem">StringInItem</a>. |  &#42;&#42;Important:&#42;&#42; When using the &#42;in&#42; operator with an attribute field, set <a href="/en/content/attributes#fast-search" aria-label="fast-search">fast-search</a> and <a href="/en/reference/schemas/schemas#filter" aria-label="rank: filter">rank: filter</a> for best possible performance. Always use <code>{`match:word`}</code> for string fields.</td>
+    </tr>
+    <tr>
+      <td>dotProduct</td>
+      <td>&#42;dotProduct&#42; calculates the dot product between the weighted set in the query and a weighted set field in the document as its rank score contribution:  where dotProduct(description, &#123;"a":1, "b":2&#125;)  The result is stored as a <a href="/en/ranking/multivalue-query-operators#raw-scores-and-query-item-labeling" aria-label="raw score">raw score</a>.  A normal use case is a collection of weighted tokens produced by an algorithm, to match against a corpus containing weighted tokens produced by another algorithm in order to implement personalized content exploration. See example usage of &#42;dotProduct&#42; in <a href="/en/performance/practical-search-performance-guide#multi-valued-query-operators" aria-label="practical performance guide">practical performance guide</a> .  Refer to <a href="/en/ranking/multivalue-query-operators" aria-label="multivalue query operators">multivalue query operators</a> for a discussion of usage and examples.  Keys must be single or double-quoted if passed inline in YQL - alternatively, use <a href="#parameter-substitution" aria-label="parameter substitution">parameter substitution</a> to submit the weighted set with a simple format for faster query parsing - example: <code>{`where dotProduct(description, @myterms)`}</code>.  | Field type | Weighted set attribute with fast-search. Note: Also supported for regular attribute or index fields, but then with much weaker performance). | | --- | --- | | Query model | Weighted set with &#123;token, weight&#125; pairs | | Matching | Documents where the weighted set field contains at least one of the tokens in the query. | | Ranking | Dot product score between the weights of the matched query tokens and field tokens. This score is available using <a href="/en/reference/ranking/rank-features#rawScore(field)" aria-label="rawScore">rawScore</a> or <a href="/en/reference/ranking/rank-features#itemRawScore(label)" aria-label="itemRawScore">itemRawScore</a> rank features. | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/DotProductItem.html" aria-label="DotProductItem">DotProductItem</a> |</td>
+    </tr>
+    <tr>
+      <td>weightedSet</td>
+      <td>When using &#42;weightedSet&#42; to search a field, all tokens present in the searched field will be matched against the weighted set in the query. This means that using a weighted set to search a single-value attribute field will have similar semantics to using a normal term to search a weighted set field. The low-level matching information resulting from matching a document with a weighted set in the query will contain the weights of all the matched tokens in descending order. Each matched weight will be represented as a standard occurrence on position 0 in element 0.  where weightedSet(description, &#123;"a":1, "b":2&#125;)  &#42;weightedSet&#42; has similar semantics to <a href="#equiv" aria-label="equiv">equiv</a>, as it acts as a single term in the query. However, the restriction dictating that it contains a collection of weighted tokens directly enables specific back-end optimizations that improves performance for large sets of tokens compared to using the generic <a href="#equiv" aria-label="equiv">equiv</a> or <a href="#or" aria-label="or">or</a> operators.  Keys must be single or double-quoted if passed inline in YQL - alternatively, use <a href="#parameter-substitution" aria-label="parameter substitution">parameter substitution</a> to submit the weighted set with a simple format for faster query parsing - example: <code>{`where weightedSet(description, @myterms)`}</code>.  | Field type | Singlevalue or <a href="/en/querying/searching-multivalue-fields" aria-label="multivalue">multivalue</a> attribute or index field. (Note: Most use cases operates on a single value field). | | --- | --- | | Query model | Weighted set with &#123;token, weight&#125; pairs. | | Matching | Documents where the field contains at least one of the tokens in the query. For filtering use cases we recommend using the <a href="#in" aria-label="in operator">in operator</a> instead, as it is simpler to use and has slightly better performance. | | Ranking | The operator will act as a single term in the back-end. The query term weight is the weight assigned to the operator itself and the match weight is the largest weight among matching tokens from the weighted set. This operator does not produce a raw score. Due to better ranking and performance we recommend using <a href="#dotproduct" aria-label="dotProduct">dotProduct</a> instead. | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WeightedSetItem.html" aria-label="WeightedSetItem">WeightedSetItem</a> |</td>
+    </tr>
+    <tr>
+      <td>wand</td>
+      <td><code>{`wand`}</code> can be used to search for documents where weighted tokens in a field matches a subset of weighted tokens in the query. At the same time, it internally calculates the dot product between token weights in the query and the field. <code>{`wand`}</code> is guaranteed to return the top-k hits according to its internal dot product rank score. It is an operator that scales adaptively from <a href="#or" aria-label="or">or</a> to <a href="#and" aria-label="and">and</a>.  Note that total hit count becomes inaccurate when using wand.  <code>{`wand`}</code> optimizes the performance of using multiple threads per search in the backend, and is also called &#42;Parallel Wand&#42;.  <code>{`wand`}</code> also allows numeric arguments, then the search argument is an array of arrays of length two. In each pair, the first number is the search term, the second its weight:  where wand(description, [[11,1], [37,2]])  Keys must be single or double-quoted if passed inline in YQL - alternatively, use <a href="#parameter-substitution" aria-label="parameter substitution">parameter substitution</a> to submit the weighted set with a simple format for faster query parsing - example: <code>{`where wand(description, @myterms)`}</code>.  | Annotation | Effect | | --- | --- | | <a href="#scorethreshold" aria-label="scoreThreshold">scoreThreshold</a> | Minimum rank score for hits to include. | | <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> | Wanted number of hits exposed to the first-phase ranking function in total over the content nodes evaluating the query. | | <a href="#targethits" aria-label="targetHits">targetHits</a> | Wanted number of hits exposed to the first-phase ranking function per content node. Prefer using <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> over this. |  where (&#123;scoreThreshold: 0.13, totalTargetHits: 7&#125;wand(description, &#123;"a":1, "b":2&#125;))  Refer to <a href="/en/ranking/wand" aria-label="using wand">using wand</a> for introduction to the WAND algorithm and example usage of &#42;wand&#42; in <a href="/en/performance/practical-search-performance-guide#multi-valued-query-operators" aria-label="practical performance guide">practical performance guide</a> .  | Field type | Weighted set attribute with fast-search. Note: Also supported for regular attribute or index fields, but then with much weaker performance). | | --- | --- | | Query model | Weighted set with &#123;token, weight&#125; pairs. | | Matching | Documents where the weighted set field contains at least one of the tokens in the query and where the internal dot product score for this document, is larger than the worst among the current top-k best hits. This means that more than top-k documents are matched and returned for ranking. It also means that many documents are skipped, even they match several tokens in the query because the dot product score is too low. This skipping makes &#42;wand&#42; faster than <a href="#dotproduct" aria-label="dotProduct">dotProduct</a> in some cases. | | Ranking | Dot product score between the weights of the matched query tokens and field tokens. This score is available using <a href="/en/reference/ranking/rank-features#rawScore(field)" aria-label="rawScore">rawScore</a> or <a href="/en/reference/ranking/rank-features#itemRawScore(label)" aria-label="itemRawScore">itemRawScore</a> rank features. Note that the top-k best hits are only guaranteed to be returned when using this internal score as the final ranking expression. | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WandItem.html" aria-label="WandItem">WandItem</a> |</td>
+    </tr>
+    <tr>
+      <td>weakAnd</td>
+      <td><code>{`weakAnd`}</code> is sometimes called &#42;Vespa Wand&#42;. Unlike <a href="#wand" aria-label="wand">wand</a>, it accepts arbitrary word matches (across arbitrary fields) as arguments. Only a limited number of documents are returned for ranking (default is 100), but it does not guarantee to return the best k hits. This function can be seen as an optimized <a href="#or" aria-label="or">or</a>:  where weakAnd(a contains "A", b contains "B")  | Annotation | Effect | | --- | --- | | <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> | Wanted number of hits exposed to the first-phase ranking function in total over the content nodes evaluating the query. | | <a href="#targethits" aria-label="targetHits">targetHits</a> | Wanted number of hits exposed to the first-phase ranking function per content node. Prefer using <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> over this. |  where (&#123;totaltargetHits: 7&#125;weakAnd(a contains "A", b contains "B"))  Unlike <a href="#wand" aria-label="wand">wand</a>, <code>{`weakAnd`}</code> can be used to search across several fields of various types, but it does NOT guarantee to return the top-k best number of hits. It can however be combined with any ranking expression. Keep in mind that this expression should correlate with its simple internal ranking score that uses query term weight and inverse document frequency for matching terms.  Refer to <a href="/en/ranking/wand" aria-label="using wand">using wand</a> for a usage and examples.  | Field type | Multiple fields of all types (both attribute and index). | | --- | --- | | Query model | Arbitrary number of query items searching across different fields. | | Matching | Documents that matches at least one of the tokens in the query and where the internal operator score for this document is larger than the worst among the current top-k best hits. As with <a href="#wand" aria-label="wand">wand</a>, this means that typically more than top-k documents are matched and a lot of documents are skipped. | | Ranking | Internal ranking score based on query term weight and inverse document frequency for matching terms to find the top-k hits. This score is currently not available to the ranking framework. Matching terms are exposed to the ranking framework (same as when using <a href="#and" aria-label="and">and</a> or <a href="#or" aria-label="or">or</a>), so an arbitrary ranking expression can be used in combination with this operator. Note that the ranking expression used should correlate with this internal ranking score. <a href="/en/reference/ranking/rank-features#bm25" aria-label="bm25">bm25</a>, <a href="/en/reference/ranking/rank-features#nativeFieldMatch" aria-label="nativeFieldMatch">nativeFieldMatch</a> and <a href="/en/reference/ranking/rank-features#nativeDotProduct(field)" aria-label="nativeDotProduct">nativeDotProduct</a> rank features are good starting points. | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WeakAndItem.html" aria-label="WeakAndItem">WeakAndItem</a> |</td>
+    </tr>
+    <tr>
+      <td>geoLocation</td>
+      <td><code>{`geoLocation`}</code> matches a <a href="/en/reference/schemas/schemas#position" aria-label="position">position</a> inside a geographical circle, specified as latitude, longitude, and a maximum distance (radius). See also <a href="#geoboundingbox" aria-label="geoBoundingBox">geoBoundingBox</a>. Example:  where geoLocation(myfieldname, 63.5, 10.5, "200 km")  In this example we search for documents near 63.5° north, 10.5° east, and within a 200 km radius. So a document with a "myfieldname" position in Trondheim, Norway at N63°25'47;E10°23'36 would match. The first parameter is the name of the attribute field. The second parameter is the latitude (positive for north, negative for south). The third parameter is the longitude (positive for east, negative for west). The fourth parameter must be a string specifying the radius and its units, where the supported units/suffixes include "km", "m" (abbr. for meters), "miles", "mi" (abbr. for miles), "deg" (abbr. for degrees) and "d" (contextual abbr. for degrees). The "deg" / "d" unit / suffix gives radius the same units as latitude. Any negative number for radius (e.g. "-1 m") is interpreted as an "infinite" radius, letting any geographical position at all match the geoLocation operator.  The position attribute in the schema could look like:  field myfieldname type position &#123;     indexing: attribute | summary &#125;  Arrays of positions are also possible:  field myfieldname type array&lt;position&gt; &#123;     indexing: attribute &#125;  | Annotation | Effect | | --- | --- | | <a href="#label" aria-label="label">label</a> | Label for referring to this term during ranking. |  Properties:  | Field type | position attribute (single-valued or array). | | --- | --- | | Query parameters | Field name, latitude, longitude, radius. | | Matching | Returns documents inside the given geo circle. | | Ranking | Use <code>{`closeness(myfieldname)`}</code>, or <code>{`distance(myfieldname)`}</code> in ranking calculations. See <a href="/en/reference/ranking/rank-features#closeness(name)" aria-label="closeness">closeness</a> and <a href="/en/reference/ranking/rank-features#distance(name)" aria-label="distance">distance</a> documentation. | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/GeoLocationItem.html" aria-label="GeoLocationItem">GeoLocationItem</a> |</td>
+    </tr>
+    <tr>
+      <td>geoBoundingBox</td>
+      <td><code>{`geoBoundingBox`}</code> requires a <a href="/en/reference/schemas/schemas#position" aria-label="position">position</a> to be inside a geographical rectangle; specified as 4 numbers (in degrees). The 4 numbers must be in a specific order: south-western corner (minimum latitude, minimum longitude) followed by north-eastern corner (maximum latitude, maximum longitude). Examples:  where geoBoundingBox(myfieldname, 63.25, 10.01, 63.45, 10.61) where geoBoundingBox(myfieldname, -23.12, -43.85, -22.59, -42.89)  In the first example we search for documents inside a rectangular map view around Trondheim, Norway. So a document with a "myfieldname" position at <a href="https://www.google.com/maps/place/63%C2%B025&#x27;50.0%22N+10%C2%B023&#x27;42.0%22E" aria-label="63°25&#x27;50&quot;N 10°23&#x27;42&quot;E">63°25'50"N 10°23'42"E</a> would match. The second example surrounds <a href="https://www.google.com/maps/place/22%C2%B059&#x27;13.0%22S+43%C2%B012&#x27;10.0%22W" aria-label="Rio de Janeiro">Rio de Janeiro</a>, Brazil.  - The first parameter is the name of the attribute field. - The 2nd parameter is the minimum (southern) latitude (positive for north, negative for south). - The 3rd parameter is the minimum (western) longitude (positive for east, negative for west). - The 4th parameter is the maximum (northern) latitude (positive for north, negative for south). - The 5th parameter is the maximum (eastern) longitude (positive for east, negative for west).  See the <a href="#geolocation" aria-label="geoLocation">geoLocation</a> operator for more details about positions. Note that there is no ranking contribution from this operator; if you want to get the distance to the center of the box, you need an additional <code>{`geoLocation`}</code> item with that point.  Properties:  | Field type | position attribute (single-valued or array). | | --- | --- | | Query parameters | Field name, southern, western, northern, eastern limits. | | Matching | Returns documents inside the given geo bounding box. | | Ranking | None. | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/GeoLocationItem.html" aria-label="GeoLocationItem">GeoLocationItem</a> |</td>
+    </tr>
+    <tr>
+      <td>nearestNeighbor</td>
+      <td><code>{`nearestNeighbor`}</code> matches the top-k nearest neighbors in a multidimensional vector space. Points in the vector space are specified as <a href="/en/ranking/tensor-user-guide" aria-label="tensors">tensors</a> with one indexed dimension, where the size of that dimension is equal to the dimensionality of the vector space.  The document vectors are stored in a <a href="/en/reference/schemas/schemas#tensor" aria-label="tensor field attribute">tensor field attribute</a>, and the query vector is sent with the query request. The following tensor field types are supported:  - Single vector per document: Tensor type with one indexed dimension. Example: <code>{`tensor<float>(x[3])`}</code> - Multiple vectors per document: Tensor type with one or more mapped dimensions and one indexed dimension. Examples: <code>{`tensor<float>(m{},x[3])`}</code>, <code>{`tensor<float>(m{},n{},x[3])`}</code>  Euclidean distance is used as the default <a href="/en/reference/schemas/schemas#distance-metric" aria-label="distance metric">distance metric</a> and the exact nearest neighbors are returned. When storing multiple vectors per document, the vector that is closest to the query vector is used when calculating the distance between the document and the query. If an <a href="/en/reference/schemas/schemas#index-hnsw" aria-label="HNSW index">HNSW index</a> is specified on the tensor field, the approximate nearest neighbors are returned. Example:  where (&#123;totaltargetHits: 10&#125;nearestNeighbor(doc_vector, query_vector))&amp;input.query(query_vector)=[3,5,7]&amp;ranking=semantic  In this example we search for the top 10 nearest neighbors in a 3-dimensional vector space. &#42;totalTargetHits&#42; specifies the top-k nearest neighbors to expose to a user defined <code>{`semantic`}</code> <a href="/en/basics/ranking" aria-label="rank profile">rank profile</a>. The <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> annotation is required. The first parameter of &#42;nearestNeighbor&#42; is the name of the tensor field attribute containing the document vectors (&#42;doc_vector&#42;).  The second parameter is the name of the tensor sent with the query request (&#42;query_vector&#42;). Specifying &#42;query_vector&#42; as the name means the query request must set this tensor as &#42;input.query(query_vector)&#42; - see the <a href="/en/reference/api/query#ranking.features" aria-label="reference">reference</a>. The tensor type of the &#42;&#42;input query vector must be defined&#42;&#42; in the rank profile:  rank-profile semantic &#123;     inputs &#123;         query(query_vector) tensor&lt;float&gt;(x[3])     &#125;     first-phase: closeness(field, doc_vector) &#125;  Also see <a href="../../ranking/ranking-expressions-features#query-feature-types" aria-label="defining query feature types">defining query feature types</a>. Failure to define the query input tensor in the schema will fail the request:    Expected 'query(query_vector)' to be a tensor, but it is the string '[3,5,7]'  The document tensor field attribute is defined as follows:  field doc_vector type tensor&lt;float&gt;(x[3]) &#123;     indexing: attribute | summary &#125;  The example above does not define HNSW <code>{`index`}</code> and the search for neighbors will be exact.  See <a href="/en/querying/nearest-neighbor-search" aria-label="Nearest Neighbor Search">Nearest Neighbor Search</a>, <a href="/en/querying/approximate-nn-hnsw" aria-label="Approximate Nearest Neighbor Search using HNSW Index">Approximate Nearest Neighbor Search using HNSW Index</a> and <a href="/en/querying/nearest-neighbor-search-guide" aria-label="Nearest Neighbor Search Guide">Nearest Neighbor Search Guide</a> for more detailed examples.  | Annotation | Effect | | --- | --- | | <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> | Specifies the number of hits nearestNeighbor should expose to <a href="/en/basics/ranking" aria-label="ranking">ranking</a> in total over the content nodes evaluating the query. Note that more or less hits may actually be produced. Setting target hits is required. | | <a href="#mintargethits" aria-label="minTargetHits">minTargetHits</a> | Specifies the &#42;minimum&#42; target hits to produce in this nearest neighbor operator. The default value is 100. Exploring too little in a graph leads to bad quality, and this parameter protects against that when totalTargetHits leads to some node with little content otherwise getting a low targetHits. | | <a href="#targethits" aria-label="targetHits">targetHits</a> | Specifies the target hits &#42;per node&#42;. Prefer using <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> over this. | | <a href="#approximate" aria-label="approximate">approximate</a> | The optional <code>{`approximate`}</code> annotation may be set to <code>{`false`}</code> to not use an approximate <a href="/en/reference/schemas/schemas#index-hnsw" aria-label="HNSW index">HNSW index</a>. This is especially useful to compare exact and approximate results in order to perform tuning of HNSW parameters. This annotation is default <code>{`true`}</code> when an HNSW index is specified, otherwise it is always <code>{`false`}</code>. Setting this to <code>{`false`}</code> might trigger <a href="../../performance/graceful-degradation.html" aria-label="graceful query degradation">graceful query degradation</a>. Adjust <a href="#timeout" aria-label="timeout">timeout</a> as needed. | | <a href="#hnsw-exploreadditionalhits" aria-label="hnsw.exploreAdditionalHits">hnsw.exploreAdditionalHits</a> | Tune how many extra nodes in the HNSW graph (in addition to <code>{`totalTargetHits`}</code>) that should be explored before selecting the best hits. Default is <code>{`0`}</code>. Increasing this parameter increases the accuracy of the approximate search, at the cost of more distance computations. | | <a href="#label" aria-label="label">label</a> | Use to mark the query operator with a label that can be referred to from the ranking expression in the rank profile. See the <a href="/en/reference/ranking/rank-features#closeness(dimension,name)" aria-label="closeness">closeness</a> and <a href="/en/reference/ranking/rank-features#distance(dimension,name)" aria-label="distance">distance</a> rank features. Useful when having multiple <code>{`nearestNeighbor`}</code> operators in the same query, e.g., when the schema has multiple vector fields. See <a href="/en/querying/nearest-neighbor-search-guide#multiple-nearest-neighbor-search-operators-in-the-same-query" aria-label="nearest neighbor search guide">nearest neighbor search guide</a> for usage example. | | <a href="#distancethreshold" aria-label="distanceThreshold">distanceThreshold</a> | Use to filter out hits with a higher distance than a threshold. See <a href="/en/querying/nearest-neighbor-search-guide#strict-filters-and-distant-neighbors" aria-label="nearest neighbor search guide">nearest neighbor search guide</a> for usage example. |  Properties:  | Field type | Tensor attribute with one indexed dimension of size N or with one or more mapped dimensions and one indexed dimension of size N. | | --- | --- | | Query model | Tensor with one indexed dimension of size N. | | Matching | Returns documents where the distance (according to the <a href="/en/reference/schemas/schemas#distance-metric" aria-label="distance metric">distance metric</a> used) between the document tensor and the query tensor is less than the greatest distance among the current top-k best hits. This means that typically more than top-k documents are matched and returned for ranking. This is similar to the behavior of <a href="#wand" aria-label="wand">wand</a>. When an <a href="/en/reference/schemas/schemas#index-hnsw" aria-label="HNSW index">HNSW index</a> is used, the top-k best hits are calculated before regular matching happens, taking the rest of the query filters into account. | | Ranking | Calculates a closeness score that is defined as <code>{`1 / (1 + d)`}</code>, where <code>{`d`}</code> is the distance between the document tensor and query tensor. This score is available using <a href="/en/reference/ranking/rank-features#rawScore(field)" aria-label="rawScore">rawScore</a>, <a href="/en/reference/ranking/rank-features#itemRawScore(label)" aria-label="itemRawScore">itemRawScore</a>, or <a href="/en/reference/ranking/rank-features#closeness(dimension,name)" aria-label="closeness">closeness</a> rank features. The raw distance is available using the <a href="/en/reference/ranking/rank-features#distance(dimension,name)" aria-label="distance">distance</a> rank feature. | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/NearestNeighborItem.html" aria-label="NearestNeighborItem">NearestNeighborItem</a> |</td>
+    </tr>
+    <tr>
+      <td>nonEmpty</td>
+      <td>&#42;nonEmpty&#42; takes as its only argument an arbitrary search expression. It will then perform a set of checks on that expression. If all the checks pass, the result is the same expression, otherwise the query will fail. The checks are as follows: <br/> 1. No empty search term <br/> 2. No empty operators, like phrases without terms <br/> 3. No null markers (NullItem) from e.g. failed query parsing <pre><code>{`=select * from sources * where bar contains "a" and nonEmpty(bar contains "bar" and foo contains @foo)&foo=`}</code></pre> Note how "foo" is empty in this case, which will force the query to fail. If "foo" contained a searchable term, the query would not have failed.</td>
+    </tr>
+    <tr>
+      <td>predicate</td>
+      <td>&#42;predicate()&#42; specifies a predicate query - see <a href="/en/schemas/predicate-fields" aria-label="predicate fields">predicate fields</a>. It takes three arguments: the predicate field to search, a map of attributes, and a map of range attributes:  <pre><code>{`predicate(predicate_field,{"gender":"Female"},{"age":20L})`}</code></pre>  Due to a quirk in YQL-parsing, one cannot specify an empty map, use the number 0 instead. <pre><code>{`where predicate(predicate_field,0,{"age":20L})`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>true</td>
+      <td>Matches all documents of any type. Care must be taken when using this since processing all documents as matches is expensive. At minimum, consider restricting to only one schema where you know the corpus isn't too big, see the <a href="/en/reference/api/query#model.restrict" aria-label="model.restrict">model.restrict</a> URL parameter.</td>
+    </tr>
+    <tr>
+      <td>false</td>
+      <td>Does not match any document at all. Not useful in itself, but could potentially be used as a placeholder in the query tree.</td>
+    </tr>
+  </tbody>
+</table>
+
+## order by
+
+Sort using `order by`. Add `asc` or `desc` after the name of an [attribute](/en/content/attributes) to set sort order - ascending order is default. Add another sorting attributes to get a secondary sort, that will be a tiebreaker for the primary ordering attribute. This is typically used to get a predictable ordering when the primary ordering attribute has the same value for multiple documents.
+
+where title contains "madonna" order by price asc, releasedate desc
+
+Sorting function, locale and strength are defined using the annotations "function", "locale" and "strength", as in:
+
+```bash
+where title contains "madonna" order by {function: "uca", locale: "en\_US", strength: "IDENTICAL"}other desc, {function: "lowercase"}something
+```
+
+<Info>
+**Note:** [match-phase](/en/reference/schemas/schemas#match-phase) is enabled when sorting - refer to the [sorting reference](/en/reference/querying/sorting-language).
+</Info>
+The [rank profile](/en/basics/ranking) determines the rank score each document will get. Results are ordered by that value by default, but `order by` overrides that ordering. Vespa does not optimize away the rank score computation in this case, it is still executed, even if the model score is thrown away. Use the built-in rank-profile *unranked* for optimal performance of sorting queries.
+
+To do a primary ordering on the rank score, and a secondary sort on an attribute, use `'[relevance]'` as the first order by attribute. See [Special sorting attributes](/en/reference/querying/sorting-language#special-sorting-attributes) for more details.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Annotation</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#function" aria-label="function">function</a></td>
+      <td>Sort function, default UCA.</td>
+    </tr>
+    <tr>
+      <td><a href="#locale" aria-label="locale">locale</a></td>
+      <td>Locale identifier for the <a href="#function" aria-label="UCA sort function">UCA sort function</a>.</td>
+    </tr>
+    <tr>
+      <td><a href="#strength" aria-label="strength">strength</a></td>
+      <td>Strength setting for the <a href="#function" aria-label="UCA sort function">UCA sort function</a>.</td>
+    </tr>
+  </tbody>
+</table>
+
+## limit / offset
+
+To specify a slice / limit the number of hits returned / do pagination, use `limit` and/or `offset`. This can also be controlled by using [native execution parameters](/en/reference/api/query#native-execution-parameters).
+
+<Danger>
+**Important:** Values set in YQL takes precedence over [hits/offset](/en/reference/api/query#hits). Values for hits/offset in query profiles are also overridden by YQL, e.g., `limit 100` overrides `<field name="hits" overridable="false">50</field>`.
+</Danger>
+
+Limited by [maxHits](/en/reference/api/query#hits) (default 400) and [maxOffset](/en/reference/api/query#offset) (default 1000) - these can be configured in a [queryProfile](/en/querying/query-profiles).
+
+Example: This returns two hits (if there are sufficiently many hits matching the query), skipping the 29 first documents
+
+<Card>
+where title contains "madonna" limit 31 offset 29
+</Card>
+## timeout
+
+Set query timeout in milliseconds using `timeout`. This can also be controlled by using the native execution parameter [timeout](/en/reference/api/query#timeout). YQL specified values takes precedence.:
+
+<Card>
+where title contains "madonna" timeout 70
+</Card>
+Only literal numbers are valid, i.e. setting another unit is not supported.
+
+<Note>
+**Note:** The value is in milliseconds, whereas the native execution parameter [timeout](/en/reference/api/query#timeout) is in seconds
+</Note>
+## Parameter substitution
+
+Use parameter substitution to separate the YQL string from user input values. E.g., the [text(value)](#text) query operator supports parameter substitution for the `value` parameter:
+
+<Card>
+... where default contains text(@userinput)&userinput=free+text
+</Card>
+
+The query operators [field in (value)](#in), [dotProduct(field, value)](#dotproduct), [weightedSet(field, value)](#weightedset) and [wand(field, value)](#wand) support parameter substitution for the `value` parameter.
+
+The `value` string can be passed in one of the following forms (quotes can be skipped unless the keys contain `,` or `:`.):
+
+- List: `value, ...`. For the [in](#in) operator only.
+- Array: `[[key, value], ...]`. For [dotproduct](#dotproduct), [weightedset](#weightedset) and [wand](#wand).
+- Map: `{key: value, ...}`. For [dotproduct](#dotproduct), [weightedset](#weightedset) and [wand](#wand).
+
+See the [query API guide](/en/querying/query-api#parameter-substitution) for examples.
+
+## Annotations
+
+Terms and phrases can be annotated to manipulate the behavior. Add an annotation using `{}`:
+
+```
+where text contains ({distance: 5}near("a", "b")) and text contains ({distance:2}near("c", "d"))
+```
+
+Note that the annotation is enclosed by parentheses to scope the annotation to the operator.
+
+All annotations are supported by the string arguments to functions like and phrase() and near() and also the string argument to the "contains" operator. Some annotations are also supported by the functions which are handled like leaf nodes internally in the query tree: phrase(), near(), onear(), range(), equiv(), dotProduct(), weightedSet(), weakAnd(), wand() and nearestNeighbor().
+
+Refer to [SelectTestCase.java](https://github.com/vespa-engine/vespa/blob/master/container-search/src/test/java/com/yahoo/select/SelectTestCase.java) for sample usage.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Annotation</th>
+      <th>Default</th>
+      <th>Values</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>accentDrop</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>Remove accents from this term if it is the setting for this field. Refer to <a href="/en/linguistics/linguistics-opennlp#normalization" aria-label="linguistics">linguistics</a>.</td>
+    </tr>
+    <tr>
+      <td>allowEmpty</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td>Whether to allow empty input for query parsing and query terms in <a href="#text" aria-label="text">text</a>/<a href="#userinput" aria-label="userInput">userInput</a>. If <code>{`true`}</code>, a NullItem instance is inserted in the proper place in the query tree. If <code>{`false`}</code>, the query will fail if the user provided input can not be parsed or is empty.</td>
+    </tr>
+    <tr>
+      <td>andSegmenting</td>
+      <td></td>
+      <td>true|false</td>
+      <td>Force phrase or AND operator if re-segmenting (e.g. in stemming) this term results in multiple terms. Default is choosing from language settings.</td>
+    </tr>
+    <tr>
+      <td>annotations</td>
+      <td></td>
+      <td>map</td>
+      <td>Map of <code>{`string: string`}</code>. Custom annotations. No special semantics inside the YQL layer. Example: <code>{``}</code><code>{` annotations : {cox: "another"}`}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>approximate</td>
+      <td></td>
+      <td>boolean</td>
+      <td>Used in <a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a>. The optional &#42;approximate&#42; annotation may be set to <code>{`false`}</code> to disallow usage of an approximate <a href="/en/reference/schemas/schemas#index-hnsw" aria-label="HNSW index">HNSW index</a>. This is especially useful to compare exact and approximate results in order to perform tuning of other parameters. This annotation is default <code>{`true`}</code> when an HNSW index is specified, otherwise it is always <code>{`false`}</code>.</td>
+    </tr>
+    <tr>
+      <td>ascending</td>
+      <td></td>
+      <td>boolean</td>
+      <td>Ascending hit order. Used by <a href="#hitlimit" aria-label="hitLimit">hitLimit</a>.</td>
+    </tr>
+    <tr>
+      <td>bounds</td>
+      <td><code>{`closed`}</code></td>
+      <td>enum</td>
+      <td>A <a href="#numeric" aria-label="numeric">numeric</a> interval is by default a closed interval. If the lower bound is exclusive, set to <code>{`leftOpen`}</code>. If the upper bound is exclusive, set to <code>{`rightOpen`}</code>. If both bounds are exclusive, set the annotation to <code>{`open`}</code>. Example:  <code>{``}</code><code>{`where ({bounds:"rightOpen"}range(year, 2000, 2018))`}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>connectivity</td>
+      <td></td>
+      <td>map</td>
+      <td>Map of <code>{`id: int, weight: double`}</code> of explicit connectivity between this item and the item with the given <a href="#id" aria-label="id">id</a> - see <a href="/en/ranking/nativerank#weight-significance-and-connectedness" aria-label="text matching and ranking">text matching and ranking</a>. Example:  <code>{``}</code><code>{`connectivity: {id: 4, weight: 0.8}`}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>descending</td>
+      <td></td>
+      <td>boolean</td>
+      <td>Descending hit order. Used by <a href="#hitlimit" aria-label="hitLimit">hitLimit</a>.</td>
+    </tr>
+    <tr>
+      <td>defaultIndex</td>
+      <td><code>{`default`}</code></td>
+      <td>Any searchable field in the schema.</td>
+      <td>Used by <a href="#userinput" aria-label="userInput">userInput</a>. Same as <a href="/en/reference/api/query#model.defaultindex" aria-label="model.defaultIndex">model.defaultIndex</a> in the query API. If <a href="#grammar" aria-label="grammar">grammar</a> is set to <code>{`raw`}</code> or <code>{`segment`}</code>, this will be the field searched.</td>
+    </tr>
+    <tr>
+      <td>distance</td>
+      <td>2</td>
+      <td>int</td>
+      <td>The &#42;distance&#42; annotation sets the maximum position difference to count as a match, see <a href="#near" aria-label="near">near</a> / <a href="#onear" aria-label="onear">onear</a>. All matching terms must fit within positions [P, P+distance] where P is the first term's position. Default is 2. <code>{``}</code><code>{` where text contains ({distance: 5}near("a", "b"))`}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>elementFilter</td>
+      <td></td>
+      <td>list of int</td>
+      <td>Used with <a href="#sameelement" aria-label="sameElement">sameElement</a>. Restricts matching in an array field to specific indices. A non-empty list makes sameElement match if and only if there is a match at one or more of the specified indices.  where my_numbers contains <code>{``}</code><code>{`({elementFilter:[0, 2, 5]}sameElement("42")) `}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>distanceThreshold</td>
+      <td>+infinity</td>
+      <td>double</td>
+      <td>Used in <a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a>. The <code>{`distanceThreshold`}</code> annotation may be used to filter away hits with a higher distance than the given threshold from the results. Note that one will never get more hits with <code>{`distanceThreshold`}</code> than you would get without it - to get more hits, increase <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a>, too. The units for the threshold depends on the <a href="/en/reference/schemas/schemas#distance-metric" aria-label="distance metric">distance metric</a> used.</td>
+    </tr>
+    <tr>
+      <td>endAnchor</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>The <code>{`hostname`}</code> subfield of <a href="#uri" aria-label="uri">uri</a> supports anchoring to the start and/or end of the hostname, controlled by the <code>{`startAnchor`}</code> and <code>{`endAnchor`}</code> annotations. Anchoring to the end is on by default while anchoring to the start is not. Hence  where myUrlField.hostname contains uri("vespa.ai")  will match &#42;vespa.ai&#42; and &#42;docs.vespa.ai&#42;, while  <code>{``}</code><code>{`where myUrlField.hostname contains ({startAnchor: true}uri("vespa.ai")) `}</code><code>{``}</code> will only match vespa.ai.</td>
+    </tr>
+    <tr>
+      <td>filter</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td>Regard this term as a "filter" term and not a term from the end user. Terms that are annotated with "filter:true" are not bolded. See also <a href="/en/reference/api/query#model.filter" aria-label="model.filter">model.filter</a>. Bolding of terms is controlled by <a href="/en/reference/schemas/schemas#bolding" aria-label="schema:bolding">schema:bolding</a>.</td>
+    </tr>
+    <tr>
+      <td>function</td>
+      <td></td>
+      <td></td>
+      <td>Default sort function for strings is <code>{`uca`}</code>. Field sort specification can be configured in the <a href="/en/reference/schemas/schemas#sorting" aria-label="schema">schema</a>, values in the query overrides the schema settings.  Numeric fields are numerically sorted.  | Function | Description | | --- | --- | | <code>{`uca`}</code> | This sorting is based on the <a href="https://icu.unicode.org/" aria-label="icu">icu</a> library that follows the <a href="https://unicode.org/reports/tr10/" aria-label="Universal Collation Algorithm">Universal Collation Algorithm</a>. The specifications of <a href="https://unicode-org.github.io/icu-docs/apidoc/dev/icu4j/com/ibm/icu/util/ULocale.html" aria-label="locale">locale</a> and <a href="https://unicode-org.github.io/icu-docs/apidoc/dev/icu4j/com/ibm/icu/text/Collator.html" aria-label="strength">strength</a> are identical to how <a href="https://icu.unicode.org/" aria-label="icu">icu</a> specifies them.  Both <a href="#locale" aria-label="locale">locale</a> and <a href="#strength" aria-label="strength">strength</a> are optional, however <code>{`strength`}</code> requires <code>{`locale`}</code>.  The <a href="#locale" aria-label="locale">locale</a> query annotation will override locale-setting in the <a href="/en/reference/schemas/schemas#sorting" aria-label="schema">schema</a>. If <code>{`locale`}</code> is missing from both, the <code>{`lowercase`}</code> function will be used by default. | | <code>{`lowercase`}</code> | This improves the sorting by first lowercasing and normalising the strings before sorting. This is slightly more correct and might be enough for the use case. It is not that much more costly than <code>{`raw`}</code> sort, and less expensive than <code>{`uca`}</code>. | | <code>{`raw`}</code> | Raw byteorder is a simple and fast ordering based on memcmp of utf8 for strings and correct sort order compliant binary rep for other fields is done. However, that is not correct for anything except computers, looking only at the binary representation. |</td>
+    </tr>
+    <tr>
+      <td>grammar</td>
+      <td><code>{`weakAnd`}</code></td>
+      <td><code>{`raw`}</code>, <code>{`segment`}</code> and all values accepted for the <a href="/en/reference/api/query#model.type" aria-label="model.type">model.type</a> argument in the query API.</td>
+      <td>How to parse <a href="#userinput" aria-label="userInput">userInput</a>. <code>{`raw`}</code> will treat the user input as a string to be matched without any processing, <code>{`segment`}</code> will do a first pass through the linguistic libraries, while the rest of the values will treat the string as a query to be parsed.  The individual model.type settings can also be set, using <code>{`grammar.composite`}</code>, <code>{`grammar.tokenization`}</code>, <code>{`grammar.syntax`}</code>, and <code>{`grammar.profile`}</code>—refer to the <a href="/en/reference/api/query#model.type" aria-label="model.type">model.type</a> documentation.  See also <a href="/en/querying/query-api#input-examples" aria-label="userInput examples">userInput examples</a>.</td>
+    </tr>
+    <tr>
+      <td>hitLimit</td>
+      <td></td>
+      <td>int</td>
+      <td><a href="#numeric" aria-label="Numeric">Numeric</a> operations support <code>{`hitLimit`}</code>. This is used for &#42;capped range search&#42;. An alternative to using negative and positive values for hitLimit is always using a positive number of hits (as a negative number of hits does not make much sense) and combine this with either of the <a href="#ascending" aria-label="ascending">ascending</a> and <a href="#descending" aria-label="descending">descending</a> annotations (but not both). Example: <code>{`{hitLimit: 38, descending: true}`}</code> would be equivalent to setting it to -38, i.e. only populate with 38 hits and start from upper boundary, i.e. descending order.  Note that <code>{`hitLimit`}</code> will limit the number of documents that are considered. This is a powerful optimisation that must be used with care, particularly in combination with other filters. The set of documents to be considered will be limited upfront by only selecting the N best according to the range query and the hitLimit annotation, for further query evaluation.  <code>{`hitLimit`}</code> is not exact, but "at least". In addition, it will only kick in if the attribute has <a href="/en/reference/schemas/schemas#attribute" aria-label="fast-search">fast-search</a>. It will look up the upper or lower bound in the range in the dictionary and scan in ascending or descending order and select entries until it has satisfied hitLimit. You will get all documents for all the dictionary entries selected.  See the <a href="/en/performance/practical-search-performance-guide#advanced-range-search-with-hitlimit" aria-label="practical-search-performance-guide">practical-search-performance-guide</a> for an example.</td>
+    </tr>
+    <tr>
+      <td>hnsw.exploreAdditionalHits</td>
+      <td></td>
+      <td></td>
+      <td>Used in <a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a>. When using an <a href="/en/reference/schemas/schemas#index-hnsw" aria-label="HNSW index">HNSW index</a>, the optional <code>{`hnsw.exploreAdditionalHits`}</code> annotation can be used to tune how many extra nodes in the graph (in addition to <code>{`totalTargetHits`}</code>) should be explored before selecting the best hits. Using a greater number here gives better quality, but worse performance.</td>
+    </tr>
+    <tr>
+      <td>id</td>
+      <td></td>
+      <td>int</td>
+      <td>Unique ID used for e.g. <a href="#connectivity" aria-label="connectivity">connectivity</a>.</td>
+    </tr>
+    <tr>
+      <td>implicitTransforms</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>Implicit term transformations (field defaults). If <code>{`implicitTransforms`}</code> is true, the settings for the field in the schema will be honored in term transforms, e.g. if the field has stemming, this term will be stemmed. If <code>{`implicitTransforms`}</code> is false, the search backend will receive the term exactly as written in the initial YQL expression. This is in other words a top level switch to turn off all other <a href="/en/linguistics/linguistics-opennlp#stemming" aria-label="stemming">stemming</a>, accent removal, Unicode <a href="/en/linguistics/linguistics-opennlp#normalization" aria-label="normalizations">normalizations</a> and so on.</td>
+    </tr>
+    <tr>
+      <td>label</td>
+      <td></td>
+      <td>string</td>
+      <td>Used by <a href="#geolocation" aria-label="geoLocation">geoLocation</a> and <a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a>. Label for referring to this term/operator during ranking.</td>
+    </tr>
+    <tr>
+      <td>language</td>
+      <td></td>
+      <td>RFC 3066 language code</td>
+      <td>Language setting for the linguistics handling of <a href="#text" aria-label="text">text</a> and <a href="#userinput" aria-label="userInput">userInput</a>, also see <a href="/en/reference/api/query#model.language" aria-label="model.language">model.language</a> in the query API reference.</td>
+    </tr>
+    <tr>
+      <td>locale</td>
+      <td></td>
+      <td></td>
+      <td>Used by the <a href="#function" aria-label="UCA sort function">UCA sort function</a>. An identifier following <a href="https://www.unicode.org/reports/tr35/#Unicode_Language_and_Locale_Identifiers" aria-label="unicode locale identifiers">unicode locale identifiers</a>, e.g. <code>{`en_US`}</code>.</td>
+    </tr>
+    <tr>
+      <td>maxEditDistance</td>
+      <td>2</td>
+      <td>int</td>
+      <td>Used in <a href="#fuzzy" aria-label="fuzzy">fuzzy</a>. An inclusive upper bound of edit distance between query and string attribute.</td>
+    </tr>
+    <tr>
+      <td>nfkc</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>NFKC <a href="/en/linguistics/linguistics-opennlp#normalization" aria-label="normalization">normalization</a>.</td>
+    </tr>
+    <tr>
+      <td>normalizeCase</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>Normalize casing of this term if it is the setting for this field.</td>
+    </tr>
+    <tr>
+      <td>origin</td>
+      <td></td>
+      <td>map</td>
+      <td>Map of <code>{`original: string, offset: int, length: int`}</code>. The (sub-)string which produced this term. Default unset. Example: <code>{``}</code><code>{` origin: {original: "abc", offset: 1, length: 2}`}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>prefix</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td>Do <a href="/en/reference/schemas/schemas#prefix" aria-label="prefix matching">prefix matching</a> for this term, e.g. search for "word&#42;".</td>
+    </tr>
+    <tr>
+      <td>substring</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td>Do substring matching for this word if available in the index. ("Search for "&#42;word&#42;".") Only supported for <a href="/en/performance/streaming-search" aria-label="streaming search">streaming search</a>.</td>
+    </tr>
+    <tr>
+      <td>prefixLength</td>
+      <td>0</td>
+      <td>int</td>
+      <td>Used in <a href="#fuzzy" aria-label="fuzzy">fuzzy</a>. Number of characters that are considered frozen, so the fuzzy match will be performed with the suffix left.</td>
+    </tr>
+    <tr>
+      <td>ranked</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>Include this term for ranking calculation. Setting ranked to false can speed up query evaluation. Read more about <a href="/en/reference/schemas/schemas#rank" aria-label="schema reference">schema reference</a>. <a href="/en/ranking/ranking-expressions-features#dumping-rank-features-for-specific-documents" aria-label="Example">Example</a></td>
+    </tr>
+    <tr>
+      <td>scoreThreshold</td>
+      <td></td>
+      <td>double</td>
+      <td>A threshold in <a href="#wand" aria-label="wand">wand</a> for the minimum score of hits to include as matches.</td>
+    </tr>
+    <tr>
+      <td>significance</td>
+      <td></td>
+      <td>double</td>
+      <td>Significance value for text ranking features - see <a href="/en/ranking/nativerank#weight-significance-and-connectedness" aria-label="text matching and ranking">text matching and ranking</a>.</td>
+    </tr>
+    <tr>
+      <td>startAnchor</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td>See <a href="#endanchor" aria-label="endAnchor">endAnchor</a>.</td>
+    </tr>
+    <tr>
+      <td>stem</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>Stem this term if it is the setting for this field.</td>
+    </tr>
+    <tr>
+      <td>strength</td>
+      <td><code>{`PRIMARY`}</code></td>
+      <td>- <code>{`PRIMARY`}</code> - <code>{`SECONDARY`}</code> - <code>{`TERTIARY`}</code> - <code>{`QUATERNARY`}</code> - <code>{`IDENTICAL`}</code></td>
+      <td>Used by the <a href="#function" aria-label="UCA sort function">UCA sort function</a>. Default is <code>{`PRIMARY`}</code>, which only sorts on primary differentiating characteristics; this means that letters in uppercase/lowercase or with differences in accents only are considered equal.</td>
+    </tr>
+    <tr>
+      <td>suffix</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td>Do &#42;suffix matching&#42; for this term, e.g. search for "&#42;word".</td>
+    </tr>
+    <tr>
+      <td>totalTargetHits</td>
+      <td>100</td>
+      <td>int</td>
+      <td>Used with <a href="#wand" aria-label="wand">wand</a> and <a href="#weakand" aria-label="weakAnd">weakAnd</a>, where the default is 100, and with <a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a>, where it has no default. This sets the wanted number of hits exposed to the first-phase ranking function in total over the content nodes evaluating the query (a &#42;group&#42;). If additional second phase ranking is used, do not set <code>{`totalTargetHits`}</code> less than the configured rank-profile's <a href="/en/reference/schemas/schemas#secondphase-total-rerank-count" aria-label="total-rerank-count">total-rerank-count</a>.  See examples in <a href="/en/querying/nearest-neighbor-search" aria-label="nearest neighbor search">nearest neighbor search</a>.</td>
+    </tr>
+    <tr>
+      <td>minTargetHits</td>
+      <td>100</td>
+      <td>int</td>
+      <td>Used with <a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a>. Specifies the &#42;minimum&#42; target hits to produce in this nearest neighbor operator. The default value is 100. Exploring too little in a graph leads to bad quality, and this parameter protects against that when totalTargetHits leads to some node with little content otherwise getting a low targetHits.</td>
+    </tr>
+    <tr>
+      <td>targetHits</td>
+      <td>100</td>
+      <td>int</td>
+      <td>Sets target hits per node. Prefer using <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> over this.</td>
+    </tr>
+    <tr>
+      <td>usePositionData</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>Use term position data for text ranking features such as <a href="/en/ranking/nativerank" aria-label="nativeRank">nativeRank</a>. This is &#42;term&#42; position, not to be confused with <a href="/en/querying/geo-search" aria-label="geo searches">geo searches</a>. Setting "usePositionData:false" can improve query performance.</td>
+    </tr>
+    <tr>
+      <td>weight</td>
+      <td>100</td>
+      <td>int</td>
+      <td>Term weight, used in some text ranking features - see <a href="/en/ranking/nativerank#weight-significance-and-connectedness" aria-label="text matching and ranking">text matching and ranking</a>.  <code>{``}</code><code>{`where title contains ({weight:200}"heads")`}</code><code>{``}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+### Annotations of sub-expressions
+
+Consider the following query:
+
+```sql
+select * from sources * where ({stem: false}(foo contains "a" and bar contains "b")) or foo contains ({stem: false}"c")
+```
+
+The "stem" annotation controls whether a given term should be stemmed if its field is configured as a stemmed field (default is "true"). The "AND" operator itself has no internal API for whether its operands should be stemmed or not, but we can still annotate as such, because when the value of a given annotation is determined, the expression tree is followed from the term in question and up through its ancestors. Traversing the tree stops when a value is found (or there is nothing more to traverse). In other words, none of the terms in this example will be stemmed.
+
+How annotations behave may be easier to understand of expressing a boolean query in the style of an S-expression:
+
+```sql
+(AND term1 term2 (OR term3 term4) (OR term5 (AND term6 term7)))
+```
+
+The annotation scopes would then be as follows, i.e. annotations on which elements will be checked when determining the settings for a given term:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>term1</td>
+      <td>term1 itself, and the first AND</td>
+    </tr>
+    <tr>
+      <td>term2</td>
+      <td>term2 itself, and the first AND</td>
+    </tr>
+    <tr>
+      <td>term3</td>
+      <td>term3 itself, the first OR and the first AND</td>
+    </tr>
+    <tr>
+      <td>term4</td>
+      <td>term4 itself, the first OR and the first AND</td>
+    </tr>
+    <tr>
+      <td>term5</td>
+      <td>term5 itself, the second OR and the first AND</td>
+    </tr>
+    <tr>
+      <td>term6</td>
+      <td>term6 itself, the second AND, the second OR and the first AND</td>
+    </tr>
+    <tr>
+      <td>term7</td>
+      <td>term7 itself, the second AND, the second OR and the first AND</td>
+    </tr>
+  </tbody>
+</table>
+
+## Query properties
+
+Use YQL variable syntax to initialize words in phrases and as single terms. This removes the need for caring about quoting a term in YQL, as well as URL quoting. The term will be used _exactly_ as it is in the URL. As an example, look at a query with a YQL argument, and the properties _animal_ and _syntaxExample_:
+
+```bash
+yql=select * from sources * where foo contains @animal and foo contains phrase(@animal, @syntaxExample, @animal)&animal=panda&syntaxExample=syntactic
+```
+
+This YQL expression will then access the query properties _animal_ and _syntaxExample_ and evaluate to:
+
+```sql
+select * from sources * where (foo contains "panda" AND foo contains phrase("panda", "syntactic", "panda"))
+```
+
+## YQL in query profiles
+
+YQL requires quoting to be included in a URL. Since YQL is well suited to application logic, while not being intended for end users, a solution to this is storing the application's YQL queries into different [query profiles](/en/querying/query-profiles). To add a default query profile, add _search/query-profiles/default.xml_ to the [application package](/en/reference/applications/application-packages):
+
+```xml
+<query-profile id="default">
+    <field name="yql">select * from sources * where default contains "latest" or userQuery()</field>
+</query-profile>
+```
+
+This will add _latest_ as an _OR term_ to all queries not having an explicit query profile parameter. The important thing to note is how it is not necessary to URL-quote anything in the query profiles files. They operate independently of the HTTP parsing as such.
+
+## Query rewriting in Searchers
+
+Searchers which modifies the textual YQL statement (not recommended) should be annotated with `@Before("ExternalYql")`. Searchers modifying query tree produced from an input YQL statement should annotate with `@After("ExternalYql")`.
+
+## Grouping
+
+Group / aggregate results by adding a grouping expression after a `|` - [read more](/en/querying/grouping).
+
+```sql
+select * from sources * where sddocname contains 'purchase' | all(group(customer) each(output(sum(price))))
+```
