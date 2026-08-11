@@ -62,9 +62,11 @@ $ vespa auth cert -a my-tenant.my-app.my-instance path/to/application/package
 ### Options
 
 ```
-  -f, --force    Force overwrite of existing certificate and private key
-  -h, --help     help for cert
-  -N, --no-add   Do not add certificate to the application package
+  -f, --force       Force changes without prompting (overwrite when creating, prune when pruning)
+  -h, --help        help for cert
+      --new-key     Appends a new certificate if certificate already exists. Useful for rotating credentials
+  -N, --no-add      Do not add certificate to the application package
+      --prune-old   Remove all but the newest certificate from the certificate file. Useful after completing credential rotation
 ```
 
 ### Options inherited from parent commands
