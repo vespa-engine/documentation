@@ -351,6 +351,19 @@ $ vespa query \
 curl -H "Authorization: Bearer $TOKEN" $ENDPOINT
 ```
 
+Vespa CLI will automatically use a token if the `VESPA_CLI_DATA_PLANE_TOKEN` environment variable is set. This can be done by running:
+
+```
+$ export VESPA_CLI_DATA_PLANE_TOKEN=$TOKEN
+```
+
+Then there is no need to manually specify the token in the header:
+
+```
+vespa query \
+  'yql=select * from music where album contains "head"'
+```
+
 #### Using a browser
 
 In Vespa guides, curl is used in examples, like:
