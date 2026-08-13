@@ -1228,6 +1228,54 @@ tensor&lt;float&gt;(dim{},off{}):{ {dim:v1,off:0}:1.0, {dim:v2,off:1}:1.0, {dim:
     </p>
   </td></tr>
 
+<tr><td>bm25(field: <em>name</em>, label: <em>label</em>)</td>
+  <td>0</td>
+  <td>
+    <p id="bm25(field,label)">
+    As <a href="#bm25">bm25(<em>name</em>)</a>, but only over the query terms carrying the given
+    <a href="../../ranking/multivalue-query-operators.html#raw-scores-and-query-item-labeling">query item label</a>.
+    Use it to score a labeled subset of the query.
+    </p>
+    <p>
+    A label which is not an identifier or an integer must be quoted:
+    </p>
+<pre>
+bm25(field: myfield, label: "title-terms")
+</pre>
+    <p>
+    Only terms which both carry the label and search <em>name</em> contribute; the feature is 0 when no
+    such term matches the document.
+    </p>
+  </td></tr>
+
+<tr><td>bm25_for_labels(<em>name</em>)</td>
+  <td><code>tensor&lt;double&gt;(label{}):{}</code></td>
+  <td>
+    <p id="bm25_for_labels">
+    A <code>tensor&lt;float&gt;(label{})</code> holding one
+    <a href="#bm25">bm25</a> score per
+    <a href="../../ranking/multivalue-query-operators.html#raw-scores-and-query-item-labeling">query item label</a>
+    in the <a href="../schemas/schemas.html#indexing-index">indexed string field</a> <em>name</em>,
+    which must have <em>enable-bm25</em> set.
+    Each cell is labeled with the query item label and holds the sum of the BM25 scores of that label's
+    terms in <em>name</em>. This makes it possible to rank on the labeled parts of the query individually
+    without adding one <a href="#bm25(field,label)">bm25(field, label)</a> feature per label:
+    </p>
+<pre>
+reduce(bm25_for_labels(myfield), max, label)          # score of the best scoring labeled clause
+sum(bm25_for_labels(myfield) * query(label_weights))  # weight the labels from the query
+</pre>
+    <p>
+    A label gets a cell only if it actually scores, that is when at least one term carrying it searches
+    <em>name</em> and matches the document. Terms without a label are never included, so
+    <code>reduce(bm25_for_labels(<em>name</em>), sum, label)</code> equals <code>bm25(<em>name</em>)</code>
+    only when every scoring term carries exactly one label.
+    </p>
+    {% include note.html content="A single label can be extracted with
+    <code>bm25_for_labels(myfield){label:mylabel}</code>, but
+    <code>bm25(field: myfield, label: mylabel)</code> is faster since it avoids computing the tensor." %}
+  </td></tr>
+
 <tr>
   <td>elementwise(bm25(field),dimension,cell_type)</td>
   <td><code>tensor&lt;cell_type&gt;(dimension{}):{}</code></td>

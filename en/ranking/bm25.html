@@ -378,3 +378,78 @@ preparation is still ongoing:
 <pre>
 /state/v1/custom/component/documentdb/mydoctype/subdb/ready/index
 </pre>
+
+
+<h2 id="scoring-labeled-parts-of-the-query">Scoring labeled parts of the query</h2>
+<p>
+<code>bm25(content)</code> sums the contribution of every query term searching <em>content</em>.
+When a query is built from several parts, it is often useful to score those parts separately.
+This is done by attaching a
+<a href="multivalue-query-operators.html#raw-scores-and-query-item-labeling">label</a>
+to the query items, using the <a href="../reference/querying/yql.html#label">label</a> annotation in
+YQL, and referring to that label from the rank profile:
+</p>
+<pre>
+select * from example where
+    ({label:"must"}content contains "vespa") and
+    ({label:"nice"}(content contains "ranking" or content contains "relevance"))
+</pre>
+<p>
+A label set on an operator enclosing others, as on the <em>or</em> above, is inherited by every term
+inside it, so a label can be given per clause instead of per term.
+</p>
+<p>
+The <a href="../reference/ranking/rank-features.html#bm25">bm25(field: <em>fieldname</em>, label: <em>label</em>)</a>
+rank feature scores only the terms carrying the given label:
+</p>
+<pre>
+rank-profile labeled {
+  first-phase {
+    expression: bm25(field: content, label: must) + 0.5 * bm25(field: content, label: nice)
+  }
+}
+</pre>
+
+
+<h3 id="one-score-per-label">One score per label</h3>
+<p>
+With many labels, or when the labels are not known when the schema is written,
+use <a href="../reference/ranking/rank-features.html#bm25_for_labels">bm25_for_labels(field)</a> instead.
+It returns a <code>tensor&lt;float&gt;(label{})</code> with one cell per label that scores in the field,
+holding the sum of the BM25 scores of that label's terms:
+</p>
+<pre>
+rank-profile labels {
+  inputs {
+    query(label_weights) tensor&lt;float&gt;(label{})
+  }
+  first-phase {
+    expression: sum(bm25_for_labels(content) * query(label_weights))
+  }
+  match-features {
+    bm25_for_labels(content)
+  }
+}
+</pre>
+<p>
+For the query above, the match feature might be returned as:
+</p>
+<pre>
+"bm25_for_labels(content)": {
+  "type": "tensor&lt;float&gt;(label{})",
+  "cells": {
+    "must": 0.7568,
+    "nice": 0.3213
+  }
+}
+</pre>
+<p>
+Other typical uses are <code>reduce(bm25_for_labels(content), max, label)</code> to rank by the best
+scoring labeled part, or feeding the tensor to a machine-learned model.
+A label only gets a cell when it actually scores, and terms without a label are not included at all,
+so <code>reduce(bm25_for_labels(content), sum, label)</code> equals <code>bm25(content)</code> only when
+every scoring term carries exactly one label.
+</p>
+{% include note.html content="A single label can be picked out with
+<code>bm25_for_labels(content){label:must}</code>, but <code>bm25(field: content, label: must)</code>
+is faster, as it does not compute the full tensor." %}
