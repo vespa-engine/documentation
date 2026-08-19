@@ -1,0 +1,53 @@
+---
+title: "プラガブルフレームワークの使用"
+description: "多くのライブラリーは、Service Provider Interface (SPI) によるプラガブルなアーキテクチャーを提供しています。"
+---
+
+## トラブルシューティングとアプリケーションの設定
+
+プラガブルフレームワークのライブラリーは、通常 `Class.forName("…")` を介して、実行時に動的にクラスをロードすることに依存しています。ロードされるクラスのパッケージがユーザーバンドルでインポートされていない場合、次のエラーが発生します。
+
+```java
+java.lang.ClassNotFoundException: com.sun.imageio.plugins.jpeg.JPEGImageReaderSpi not found by my-bundle [29]
+at
+org.apache.felix.framework.BundleWiringImpl.findClassOrResourceByDelegation(BundleWiringImpl.java:1532)
+```
+
+上記の例は [Image I/O framework](https://docs.oracle.com/javase/6/docs/technotes/guides/imageio/) を使用した場合のものです。この場合、見つからないクラスが `com.sun` パッケージのものであり、これは SDK で利用可能であることに注目してください。
+
+### 不足しているパッケージのインポート
+
+`ClassNotFoundException` は、バンドルがそのパッケージをインポートしていないことを意味します。クラスが `Class.forName("…")` ステートメント内の文字列からのみ参照されているため、[bundle-plugin](/ja/applications/bundles#maven-bundle-plugin) は通常インポートを追加していません。そのため、バンドルの pom.xml に明示的な `importPackage` を追加します:
+
+```xml highlight={8}
+<build>
+    <plugins>
+        <plugin>
+            <groupId>com.yahoo.vespa</groupId>
+            <artifactId>bundle-plugin</artifactId>
+            ...
+            <configuration>
+                <importPackage>com.sun.imageio.plugins.jpeg</importPackage>
+                ...
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+```
+
+`importPackage` 設定オプションは、カンマ区切りのパッケージリストを受け取ります。pom.xml に複数の `importPackage` 要素を追加した場合、有効になるのはそのうちの 1 つだけです。
+
+### 不足しているパッケージをコンテナーからエクスポートする
+
+前述のとおり、この例で不足しているパッケージは SDK の一部です。このような場合は、不足しているパッケージをエクスポートするようにコンテナーに指示する必要があります。[クラスターモード](/ja/operations/self-managed/multinode-systems#aws-ecs)で実行している場合、これは `services.xml` で行います:
+
+```xml
+<container version="1.0">
+    <config name="search.config.qr-start">
+        <jdisc>
+            <export_packages>com.sun.imageio.plugins.jpeg</export_packages>
+        </jdisc>
+    </config>
+    ...
+</container>
+```

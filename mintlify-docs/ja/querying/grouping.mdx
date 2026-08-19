@@ -1,0 +1,1724 @@
+---
+title: "グルーピングと集約"
+---
+
+## グルーピングのインターフェース
+
+[グルーピングのサンプルデータ](https://github.com/vespa-engine/sample-apps/blob/master/examples/part-purchases-demo/ext/feed.jsonl)に対してリクエストを実行してみてください:
+
+```js
+all( group(customer) each(output(sum(price))) )
+```
+
+Vespaのグルーピング言語はリスト処理言語であり、クエリーのヒットをどのようにグルーピング、集約し、結果セットとして提示するかを記述します。グルーピングステートメントは、クエリーに一致したすべてのマッチのリストを入力として受け取り、それをグルーピング/集約します。出力を生成するために、複数のネストされた並列の方法で処理されることもあります。これは論理的な仕様であり、実行方法を示すものではありません。クエリーのすべてのマッチのリストをどこかに実体化するのはコストが高すぎるため、代わりに実行は分散されます。
+
+*select*パラメーターの設定方法については[クエリーAPIリファレンス](../reference/api/query#select)を、詳細については[グルーピングリファレンス](../reference/querying/grouping-language)を参照してください。グルーピングで使用するフィールドは、ドキュメントのスキーマで[attribute](../content/attributes)として定義されている必要があります。グルーピングは[ページネーション](#pagination)のための継続オブジェクトをサポートしています。
+
+[Grouping Results](https://github.com/vespa-engine/sample-apps/tree/master/examples/part-purchases-demo)サンプルアプリケーションは実践的な例です。
+
+## グルーピング言語の構造
+
+グルーピングの構造を定義する操作は次のとおりです:
+
+-   `all(statement)`: ネストされたステートメントを、入力リスト全体に対して1回実行します。
+-   `each(statement)`: ネストされたステートメントを、入力リストの各要素に対して実行します。
+-   `group(specification)`: グルーピング仕様に従って、入力リストをリストのリストに変換します。
+-   `output`: 構造内の現在の位置で何らかの値を出力します。
+
+これらの操作の並列およびネストされた組み合わせが、計算の構造とそれが生成する結果の構造の両方を定義します。たとえば、`all(group(customer) each(output(count())))`は、すべてのマッチを受け取り、顧客IDでグルーピングし、各グループについてグループ内のヒット数を出力します。
+
+Vespaは、グルーピングプログラムをコンテントノード上で分散実行し、必要に応じて複数のフェーズでコンテナーノード上で結果をマージします。このようなプログラムを分散データセット上で実現するには、通常の検索クエリーよりも多くのネットワークラウンドトリップが必要になるため、これらのクエリーは通常のクエリーよりもコストが高くなる場合があります。リソース使用量の制御方法については、[defaultMaxGroups](../reference/api/query#grouping.defaultmaxgroups)などを参照してください。
+
+## 例で学ぶグルーピング
+
+このドキュメント全体を通して、エンジン部品の購入のインデックスを想定します:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>日付</th>
+      <th>価格</th>
+      <th>税</th>
+      <th>品目</th>
+      <th>顧客</th>
+      <th>支払済み</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2006-09-06 09:00:00</td>
+      <td>$1 000</td>
+      <td>0.24</td>
+      <td>Intake valve</td>
+      <td>Smith</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>2006-09-07 10:00:00</td>
+      <td>$1 000</td>
+      <td>0.12</td>
+      <td>Rocker arm</td>
+      <td>Smith</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>2006-09-07 11:00:00</td>
+      <td>$2 000</td>
+      <td>0.24</td>
+      <td>Spring</td>
+      <td>Smith</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>2006-09-08 12:00:00</td>
+      <td>$3 000</td>
+      <td>0.12</td>
+      <td>Valve cover</td>
+      <td>Jones</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>2006-09-08 10:00:00</td>
+      <td>$5 000</td>
+      <td>0.24</td>
+      <td>Intake port</td>
+      <td>Jones</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>2006-09-08 11:00:00</td>
+      <td>$8 000</td>
+      <td>0.12</td>
+      <td>Head</td>
+      <td>Brown</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>2006-09-09 12:00:00</td>
+      <td>$1 300</td>
+      <td>0.24</td>
+      <td>Coolant</td>
+      <td>Smith</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>2006-09-09 10:00:00</td>
+      <td>$2 100</td>
+      <td>0.12</td>
+      <td>Engine block</td>
+      <td>Jones</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>2006-09-09 11:00:00</td>
+      <td>$3 400</td>
+      <td>0.24</td>
+      <td>Oil pan</td>
+      <td>Brown</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>2006-09-09 12:00:00</td>
+      <td>$5 500</td>
+      <td>0.12</td>
+      <td>Oil sump</td>
+      <td>Smith</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>2006-09-10 10:00:00</td>
+      <td>$8 900</td>
+      <td>0.24</td>
+      <td>Camshaft</td>
+      <td>Jones</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>2006-09-10 11:00:00</td>
+      <td>$1 440</td>
+      <td>0.12</td>
+      <td>Exhaust valve</td>
+      <td>Brown</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>2006-09-10 12:00:00</td>
+      <td>$2 330</td>
+      <td>0.24</td>
+      <td>Rocker arm</td>
+      <td>Brown</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>2006-09-10 10:00:00</td>
+      <td>$3 770</td>
+      <td>0.12</td>
+      <td>Spring</td>
+      <td>Brown</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>2006-09-10 11:00:00</td>
+      <td>$6 100</td>
+      <td>0.24</td>
+      <td>Spark plug</td>
+      <td>Smith</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>2006-09-11 12:00:00</td>
+      <td>$9 870</td>
+      <td>0.12</td>
+      <td>Exhaust port</td>
+      <td>Jones</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>2006-09-11 10:00:00</td>
+      <td>$1 597</td>
+      <td>0.24</td>
+      <td>Piston</td>
+      <td>Brown</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>2006-09-11 11:00:00</td>
+      <td>$2 584</td>
+      <td>0.12</td>
+      <td>Connection rod</td>
+      <td>Smith</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>2006-09-11 12:00:00</td>
+      <td>$4 181</td>
+      <td>0.24</td>
+      <td>Rod bearing</td>
+      <td>Jones</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>2006-09-11 13:00:00</td>
+      <td>$6 765</td>
+      <td>0.12</td>
+      <td>Crankshaft</td>
+      <td>Jones</td>
+      <td>false</td>
+    </tr>
+  </tbody>
+</table>
+
+## 基本的なグルーピング
+
+例: *顧客ごとの購入の合計金額を返す* - 手順:
+
+<Steps>
+<Step>
+すべてのドキュメントを選択します:
+
+```js
+/search/?yql=select * from sources * where true
+```
+</Step>
+<Step>
+すべてのヒットのリストを受け取ります:
+
+```js
+all(...)
+```
+</Step>
+<Step>
+同じ顧客IDを持つすべてのヒットのリストのリストに変換します:
+
+```js
+group(customer)
+```
+</Step>
+<Step>
+同じ顧客のヒットのリストそれぞれに対して:
+each(...)
+</Step>
+<Step>
+そのヒットのリスト内のすべての品目についての価格の合計(アグリゲーター)を出力します:
+
+```js
+output(sum(price))
+```
+</Step>
+</Steps>
+
+
+最終的なクエリーは、各顧客のすべての購入の価格の合計を生成します:
+
+```js
+/search/?yql=select * from sources * where true limit 0 |
+  all( group(customer) each(output(sum(price))) )
+```
+
+ここでは、グルーピングの出力のみを取得するためにlimitをゼロに設定しています。URLエンコードした同等のクエリー:
+
+```js
+/search/?yql=select%20%2A%20from%20sources%20%2A%20where%20true%20limit%200%20%7C%20
+  all%28%20group%28customer%29%20each%28output%28sum%28price%29%29%29%20%29
+```
+
+結果:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>GroupId</th>
+      <th>Sum(price)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Brown</td>
+      <td>$20 537</td>
+    </tr>
+    <tr>
+      <td>Jones</td>
+      <td>$39 816</td>
+    </tr>
+    <tr>
+      <td>Smith</td>
+      <td>$19 484</td>
+    </tr>
+  </tbody>
+</table>
+
+例: *[日付ごと](#time-and-date)の購入価格の合計:*
+
+```js
+select (…) | all(group(time.date(date)) each(output(sum(price))))
+```
+
+注: 上記の例では、*すべての*ドキュメントが評価されます。次のように、クエリーを変更してフィルターを追加してください(これによりレイテンシーを削減できます。URLエンコードを忘れずに):
+
+```js
+/search/?yql=select * from sources * where customer contains "smith"
+```
+
+## グループの順序付けと制限
+
+多くのシナリオでは、大量のグループが生成され、表示や処理には多すぎる場合があります。これは、グループを順序付けし、返すグループ数を制限することで対処します。
+
+`order`句は、1つ以上の式のリストを受け取ります。`order`の各引数の先頭には、昇順/降順を表すプラス/マイナスを付けます。
+
+`max`と`precision`を使用してグループ数を制限します。後者は、グローバルな結果にマージするためにコンテントノードごとに返されるグループ数です。ドキュメント分布の偏りが大きいほど、正確な結果を得るにはより高い`precision`が必要になります。
+
+暗黙的な制限は、[grouping.defaultMaxGroups](../reference/api/query#grouping.defaultmaxgroups)クエリーパラメーターで指定できます。クエリーで`max`が明示的に指定された場合、この値は常に上書きされます。クエリーパラメーターが設定されている状態ですべてのグループを取得するには、`max(inf)`を使用します。
+
+`precision`が指定されていない場合、デフォルトで`max`に係数を掛けた値になります。この係数は、[grouping.defaultPrecisionFactor](../reference/api/query#grouping.defaultprecisionfactor)クエリーパラメーターで上書きできます。
+
+例: グローバルに最良の2つのグループを見つけるには、正しいグループを得るために各ノードから何件のサンプルを取得する必要があるかについて、根拠のある推測を行います。これが`precision`です。初期係数として3は、ほとんどのユースケースで十分に良好であることが実証されています。しかし、顧客「Jones」のデータが3つの異なるコンテントノードに分散していた場合、「Jones」は1つのノードでのみ上位2件に入っているかもしれません。しかし、データの分布に基づき、必要な数の5.67倍のグループを取得すれば、少なくとも99.999%の信頼度で正しい答えが得られると以前のテストで結論付けています。そこで、マージ時には単純に6倍の数のグループを使用します。
+
+ただし、1つ例外があります。`order`制約がない場合、`precision`は不要です。その場合、ローカルの順序はグローバルの順序と同じになります。マージ操作の後で順序が変わることはありません。
+
+### 例
+
+例: *購入数が最も多い2人の顧客について、それぞれの合計を返す:*
+
+```js
+select (…) | all(group(customer) max(2) precision(12) order(-count())
+    each(output(sum(price))))
+```
+
+## グループごとのヒット
+
+`summary`を使用してヒットのフィールドを出力し、`max`を使用してグループごとのヒット数を制限します。
+
+暗黙的な制限は、[grouping.defaultMaxHits](../reference/api/query#grouping.defaultmaxhits)クエリーパラメーターで指定できます。クエリーで`max`が明示的に指定された場合、この値は常に上書きされます。クエリーパラメーターが設定されている状態ですべてのヒットを取得するには、`max(inf)`を使用します。
+
+### 例
+
+例: 顧客ごとに最も高価な3つの部品を返します:
+
+```js
+/search/?yql=select * from sources * where true |
+             all(group(customer) each(max(3) each(output(summary()))))
+```
+
+上記の例における順序付けに関する注意:
+
+-   `order`句は*グループ*の順序付けのための指示であり、*ヒット*の順序付けのためのものではありません。ここではグループに対するorder句がないため、デフォルトの順序付け`-max(relevance())`が使用されます。*\-*はソート順を表し、*\-*は降順(高いスコアが先)を意味します。この場合、クエリーは「すべてのドキュメント」なので、すべてのグループの関連度は等しく、グループの順序はランダムになります。
+-   グループ内のヒットを順序付けるには、ランキングを使用します。クエリーに`ranking=pricerank`を追加して、pricerank [ランクプロファイル](../basics/ranking)を使用し、価格でランク付けします:
+    
+    ```sd
+    rank-profile pricerank inherits default {
+        first-phase {
+            expression: attribute(price)
+        }
+    }
+    ```
+    
+
+## グループ内のフィルター
+
+`filter`句を使用して、グループ内に保持する値を選択します。詳細は[リファレンス](../reference/querying/grouping-language#filtering-groups)を参照してください。
+
+### 例
+
+例: 価格が1000を超えた`Bonn.*`について、顧客ごとの価格を合計します。
+
+```js
+/search/?yql=select * from sources * where true |
+             all(group(customer) filter(regex("Bonn.*", attributes{"sales_rep"}) and not range(0, 1000, price)) each(output(sum(price)) each(output(summary()))))
+```
+
+多くのファセット検索UIでは、フィルタリングの問題がよく発生します。ユーザーが顧客名などのファセットオプションをクリックした場合、結果はその顧客でフィルタリングされていても、すべての顧客を表示し続けたいはずです。
+
+一方で、別のファセットの別のオプション(品目名など)がある場合、顧客名などの他のファセットオプションには、その品目名に一致する結果のみを含めたいはずです。つまり、ファセットオプションをクリックすると、そのフィルターは他のすべて(他のファセットオプションと結果リスト)に適用されるべきですが、自分自身には適用されないべきです。
+
+顧客と品目の両方を選択した場合に、ユーザーが期待するUIは次のようになります:
+
+<Frame>
+![](/assets/img/ecommerce-facets.png)
+</Frame>
+
+これを実装するには、フィルターの組み合わせごとに1つのグルーピング式が必要です。この場合、メインの結果リスト用に1つ、顧客ファセット用に1つ、品目ファセット用に1つです。この目的でグルーピングフィルターを使用するのは、別々のクエリーを実行してそちらでフィルタリングするよりも**はるかに遅い**です。
+
+```js
+/search/?yql=select * from sources * where true |
+    all( group(1) filter(regex('Brown',customer) and regex('Rocker arm',item)) each(output(count())  each(output(summary())) ) ) |
+    all( group(customer) filter(regex('Rocker arm',item)) each(output(count()) ) ) |
+    all( group(item) filter(regex('Brown',customer)) each(output(count()) ) )
+```
+
+ブーリアンのアトリビュートフィールドを直接使ってフィルタリングするには、`istrue`を使用します。たとえば、各顧客が支払い済みの購入数を出力したい場合、次のように表現できます:
+
+```js
+/search/?yql=select * from sources * where true |
+    all(group(customer) filter(istrue(is_paid)) each(output(count())))
+```
+
+まだ支払われていない購入数を調べるには、`not istrue(is_paid)`のように`istrue`の前に`not`を付けます。
+
+## グルーピングクエリーのグローバル制限
+
+計算量と帯域幅の観点でコストが高くなりすぎる可能性のあるクエリーの実行を制限するには、[grouping.globalMaxGroups](../reference/api/query#grouping.globalmaxgroups)クエリーパラメーターを使用します。このしきい値を超える結果を返す可能性のあるクエリーは、事前に失敗させられます。この制限は、クエリーが最悪の場合に返す可能性のあるグループとヒットの総数と比較されます。
+
+### 例
+
+次のクエリーは5グループと0ヒットを返す可能性があります。`grouping.globalMaxGroups < 5`の場合、拒否されます
+
+```js
+select (…) | all(group(item) max(5) each(output(count())))
+```
+
+次のクエリーは5グループと35ヒットを返す可能性があります。`grouping.globalMaxGroups < 5+5*7`の場合、拒否されます。
+
+```js
+select (…) | all(
+    group(customer) max(5)
+      each(
+        output(count()) max(7)
+          each(output(summary()))
+      )
+  )
+```
+
+次のクエリーは6グループと30ヒットを返す可能性があります。`grouping.globalMaxGroups < 2*(3+3*5)`の場合、拒否されます。
+
+```js
+select (…) |
+all(
+    all(group(item) max(3)
+      each(output(count()) max(5)
+        each(output(summary()))))
+    all(group(customer) max(3)
+      each(output(count()) max(5)
+        each(output(summary())))))
+```
+
+### グループ/ヒットのデフォルト制限との組み合わせ
+
+`grouping.globalMaxGroups`の制限は、`max`のないグルーピングステートメントに対して[grouping.defaultMaxGroups](../reference/api/query#grouping.defaultmaxgroups)/ [grouping.defaultMaxHits](../reference/api/query#grouping.defaultmaxhits)の値を利用します。`defaultMaxGroups=5`かつ`defaultMaxHits=7`と仮定すると、以下の2つのクエリーは同一であり、`globalMaxGroups < 5+5*7`の場合はどちらも拒否されます。
+
+```js
+select (…) |
+all(
+  group(customer) max(5)
+    each(
+      output(count()) max(7)
+        each(output(summary()))
+    )
+)
+text
+select (…) |
+all(
+  group(customer)
+    each(
+      output(count())
+        each(output(summary()))
+    )
+)
+```
+
+`max`のないグルーピングを`defaultMaxGroups=-1`/`defaultMaxHits=-1`と組み合わせた場合、`globalMaxGroups=-1`でない限り拒否されます。これは、このクエリーが無制限の結果を生成するためです。`defaultMaxGroups=-1`なら無限の数のグループを、`defaultMaxHits=-1`なら無限の数のサマリーを生成します。クエリーが数千のグループとサマリーを返すと、意図しないDoS(サービス拒否)という重大な結果につながりかねません。これが、`globalMaxGroups=-1`の設定がリスクを伴う理由です。
+
+### 推奨設定
+
+ベストプラクティスは、グルーピングで常に`max`を指定することです。これにより、クエリー結果の最悪の場合のカーディナリティーを容易に見積もることができます。パフォーマンスにも良い影響があります。`globalMaxGroups`は、全体の最悪の場合の結果カーディナリティーに多少の余裕を加えた値に設定してください。一部のグルーピングが`max`を使用しておらず、デフォルト値が低すぎる場合は、クエリープロファイルで`defaultMaxGroups`/`defaultMaxHits`を上書きしてください。
+
+```xml
+<query-profile id="default">
+    <field name="grouping.defaultMaxGroups">20</field>
+    <field name="grouping.defaultMaxHits">100</field>
+    <field name="grouping.globalMaxGroups">8000</field>
+  </query-profile>
+```
+
+## パフォーマンスと正確性
+
+グルーピングはデフォルトで、正確性よりもパフォーマンスを優先するようにチューニングされています。完全な正確性は達成できない場合があります。[デフォルト以外の順序付け](#ordering-and-limiting-groups)を使用するクエリーの結果は近似になる可能性があり、正確性は、パフォーマンスを犠牲にして`precision`値を大きくすることで部分的にしか達成できません。
+
+[グルーピングセッションキャッシュ](../reference/querying/grouping-language#grouping-session-cache)はデフォルトで有効です。これを無効にすると、特に`order`と`max`を使用するクエリーで正確性が向上します。ただし、多階層のグルーピング式のコストは増加します。
+
+`max`を`order`と組み合わせて使用する場合は、[precision](#ordering-and-limiting-groups)値を大きくすることを検討してください。デフォルトのprecisionでは、ユースケースに必要な正確性を達成できない場合があります。
+
+## ネストされたグループ
+
+グループはネストできます。ネストの深さやどの階層で提示する情報にも制限がないため、優れたドリルダウン機能を実現できます。例: 顧客、次に日付でグルーピングして、各顧客が1日あたりいくら使ったかを求めます:
+
+```js
+select (…) | all(group(customer) each(group(time.date(date)) each(output(sum(price)))))
+```
+
+これを使用して、顧客ごとにすべての品目をクエリーし、各顧客の最も高価なヒットを表示し、日付ごとの購入のサブグループを表示します。任意のネスト階層の任意のグループ内のヒットを表示するには、[summary](#hits-per-group)句を使用します。各顧客の価格の合計を、総計と日ごとの内訳の両方で含めます:
+
+```js
+/search/?yql=select * from sources * where true limit 0|
+             all(group(customer)
+                 each(max(1) output(sum(price)) each(output(summary())))
+                      each(group(time.date(date))
+                      each(max(10) output(sum(price)) each(output(summary())))))
+        &ranking=pricerank
+```
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>GroupId</th>
+      <th>sum(price)</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Brown</td>
+      <td>$20 537</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-08 11:00</td>
+      <td>$8 000</td>
+      <td>0.12</td>
+      <td>Head</td>
+      <td>Brown</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>GroupId</td>
+      <td>Sum(price)</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-08</td>
+      <td>$8 000</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-08 11:00</td>
+      <td>$8 000</td>
+      <td>0.12</td>
+      <td>Head</td>
+      <td>Brown</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-09</td>
+      <td>$3 400</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-09 11:00</td>
+      <td>$3 400</td>
+      <td>0.12</td>
+      <td>Oil pan</td>
+      <td>Brown</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-10</td>
+      <td>$7 540</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-10 10:00</td>
+      <td>$3 770</td>
+      <td>0.12</td>
+      <td>Spring</td>
+      <td>Brown</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-10 12:00</td>
+      <td>$2 330</td>
+      <td>0.24</td>
+      <td>Rocker arm</td>
+      <td>Brown</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-10 11:00</td>
+      <td>$1 440</td>
+      <td>0.12</td>
+      <td>Exhaust valve</td>
+      <td>Brown</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-11</td>
+      <td>$1 597</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-11 10:00</td>
+      <td>$1 597</td>
+      <td>0.24</td>
+      <td>Piston</td>
+      <td>Brown</td>
+    </tr>
+    <tr>
+      <td>Jones</td>
+      <td>$39 816</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-11 12:00</td>
+      <td>$9 870</td>
+      <td>0.12</td>
+      <td>Exhaust port</td>
+      <td>Jones</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>GroupId</td>
+      <td>Sum(price)</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-08</td>
+      <td>$8 000</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-08 10:00</td>
+      <td>$5 000</td>
+      <td>0.24</td>
+      <td>Intake port</td>
+      <td>Jones</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-08 12:00</td>
+      <td>$3 000</td>
+      <td>0.12</td>
+      <td>Valve cover</td>
+      <td>Jones</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-09</td>
+      <td>$2 100</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-09 10:00</td>
+      <td>$2 100</td>
+      <td>0,12</td>
+      <td>Engine block</td>
+      <td>Jones</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-10</td>
+      <td>$8 900</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-10 10:00</td>
+      <td>$8 900</td>
+      <td>0.24</td>
+      <td>Camshaft</td>
+      <td>Jones</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-11</td>
+      <td>$20 816</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-11 12:00</td>
+      <td>$9 870</td>
+      <td>0.12</td>
+      <td>Exhaust port</td>
+      <td>Jones</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-11 13:00</td>
+      <td>$6 765</td>
+      <td>0.12</td>
+      <td>Crankshaft</td>
+      <td>Jones</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-11 12:00</td>
+      <td>$4 181</td>
+      <td>0.24</td>
+      <td>Rod bearing</td>
+      <td>Jones</td>
+    </tr>
+    <tr>
+      <td>Smith</td>
+      <td>$19 484</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-10 11:00</td>
+      <td>$6 100</td>
+      <td>0.24</td>
+      <td>Spark plug</td>
+      <td>Smith</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>GroupId</td>
+      <td>Sum(price)</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-06</td>
+      <td>$1 000</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-06 09:00</td>
+      <td>$1 000</td>
+      <td>0.24</td>
+      <td>Intake valve</td>
+      <td>Smith</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-07</td>
+      <td>$3 000</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-07 11:00</td>
+      <td>$2 000</td>
+      <td>0.24</td>
+      <td>Spring</td>
+      <td>Smith</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-07 10:00</td>
+      <td>$1 000</td>
+      <td>0.12</td>
+      <td>Rocker arm</td>
+      <td>Smith</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-09</td>
+      <td>$6 800</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-09 12:00</td>
+      <td>$5 500</td>
+      <td>0.12</td>
+      <td>Oil sump</td>
+      <td>Smith</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-09 12:00</td>
+      <td>$1 300</td>
+      <td>0.24</td>
+      <td>Coolant</td>
+      <td>Smith</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-10</td>
+      <td>$6 100</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-10 11:00</td>
+      <td>$6 100</td>
+      <td>0.24</td>
+      <td>Spark plug</td>
+      <td>Smith</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>2006-09-11</td>
+      <td>$2 584</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>日付</td>
+      <td>価格</td>
+      <td>税</td>
+      <td>品目</td>
+      <td>顧客</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2006-09-11 11:00</td>
+      <td>$2 584</td>
+      <td>0.12</td>
+      <td>Connection rod</td>
+      <td>Smith</td>
+    </tr>
+  </tbody>
+</table>
+
+## 構造化グルーピング
+
+構造化グルーピングは、structまたはmapの配列に対するネストされたグルーピングです。この場合、配列の各要素はサブドキュメントとして扱われ、個別にグルーピングできます。詳細は[multivalue attributes](../reference/querying/grouping-language#multivalue-attributes)に対するグルーピングのリファレンスを参照してください。また、一致する要素のみが考慮されるように[グループをフィルタリング](../reference/querying/grouping-language#filtering-groups)することも可能です。例:
+
+```js
+select (…) | all(group(attributes.value) filter(regex("delivery_method",attributes.key)) each(output(sum(price)) each(output(summary()))))
+```
+
+## 範囲グルーピング
+
+上記の例では、顧客や日付のような個別の値で結果をグルーピングしています。価格でグルーピングするには:
+
+```js
+select (…) | all(group(price) each(each(output(summary()))))
+```
+
+これは価格ごとに1つのグループを生成します。価格の*範囲*でグルーピングするには、価格の範囲を圧縮する方法があります。これにより、`$0` - `$999`の価格はバケット0に、`$1 000` - `$2 000`はバケット1に、というように格納されます:
+
+```js
+select (…) | all(group(price/1000) each(each(output(summary()))))
+```
+
+代替手段は[バケット式](../reference/querying/grouping-language#bucket-expressions)を使用することです。バケットはグループごとの範囲と考えてください。価格でグルーピングし、グループの幅を1000にします:
+
+```js
+select (…) | all(group(fixedwidth(price,1000)) each(each(output(summary()))))
+```
+
+グループサイズを個別に設定するには`predefined`を使用します(以下の2つは同等です):
+
+```js
+select (…) |
+all(
+  group(predefined(price,
+    bucket(0,1000),
+    bucket(1000,2000),
+    bucket(2000,5000),
+    bucket(5000,inf)))
+  each(each(output(summary())))
+)
+```
+
+これは文字列でも機能します - JonesとSmithを2番目のグループに入れます:
+
+```js
+select (…) | all(group(predefined(customer, bucket(-inf,"Jones"), bucket("Jones", inf))) each(each(output(summary()))))
+```
+
+... あるいはJonesを独自のグループに入れます:
+
+```js
+select (…) | all(group(predefined(customer, bucket<-inf,"Jones">, bucket["Jones"], bucket<"Jones", inf>)) each(each(output(summary()))))
+```
+
+式がdoubleまたはfloatに評価される場合は、バケット定義に小数を使用します:
+
+```js
+select (…) 
+| all(
+  group(predefined(tax,
+      bucket(0.0, 0.2),
+      bucket(0.2, 0.5),
+      bucket(0.5, inf)))
+    each(
+      each(output(summary()))
+    )
+)
+```
+
+## ページネーション
+
+グルーピングは、グルーピングステートメントへのアノテーションとして渡される[継続](../reference/querying/grouping-language#continuations)オブジェクトをサポートしています。`continuations`アノテーションは、グルーピング結果で返される0個以上の継続文字列のリストです。たとえば、次の結果があるとします:
+
+```json expandable
+{
+    "root": {
+        "children": [
+            {
+                "children": [
+                    {
+                        "children": [
+                            {
+                                "fields": {
+                                    "count()": 7
+                                },
+                                "value": "Jones",
+                                "id": "group:string:Jones",
+                                "relevance": 1.0
+                            }
+                        ],
+                        "continuation": {
+                            "next": "BGAAABEBEBC",
+                            "prev": "BGAAABEABC"
+                        },
+                        "id": "grouplist:customer",
+                        "label": "customer",
+                        "relevance": 1.0
+                    }
+                ],
+                "continuation": {
+                    "this": "BGAAABEBCA"
+                },
+                "id": "group:root:0",
+                "relevance": 1.0
+            }
+        ],
+        "fields": {
+            "totalCount": 20
+        },
+        "id": "toplevel",
+        "relevance": 1.0
+    }
+}
+```
+
+元のselectに*this*継続を渡すことで、同じ結果を再現できます:
+
+```js
+select (…) | { 'continuations':['BGAAABEBCA'] }all(…)
+```
+
+顧客の次のページを表示するには、ルートグループの*this*継続と、顧客リストの*next*継続を渡します:
+
+```js
+select (…) | { 'continuations':['BGAAABEBCA', 'BGAAABEBEBC'] }all(…)
+```
+
+顧客の前のページを表示するには、ルートグループの*this*継続と、顧客リストの*prev*継続を渡します:
+
+```js
+select (…) | { 'continuations':['BGAAABEBCA', 'BGAAABEABC'] }all(…)
+```
+
+`continuations`アノテーションは、継続文字列の順序付きリストです。これらは置換によって結合されるため、後で指定された継続は、先に指定された継続と共有される状態を置き換えます。また、`continuations`アノテーションを使用する場合は、常に*this*継続を最初の要素として渡してください。
+
+<Note>
+**注:**
+
+継続は、ヒットの順序が安定している場合に最も効果的に機能します。これは[ランキング](../basics/ranking)や[順序付け](../reference/querying/grouping-language#order)を使用することで実現できます。同じランクスコアや順序付けに使用される同じ値を持つ複数のドキュメントが存在する場合に順序を安定させるには、[random.match](../reference/ranking/rank-features#random)や各ドキュメントに格納されたランダムなdouble値のようなタイブレーカーの追加が必要になることがあります。
+</Note>
+
+## 式
+
+単にアトリビュート値でグルーピングするだけでなく、`group`句には任意の複雑な式を含めることができます。網羅的なリストについては[グルーピングリファレンス](../reference/querying/grouping-language)の`group`を参照してください。例:
+
+-   すべてを選択します。たとえば、`group("all") each(output(sum(price)))`は総売上を返します
+-   サブ式の最小値または最大値を選択します
+-   サブ式の加算、減算、乗算、除算、さらには剰余
+-   サブ式に対するビット演算
+-   サブ式の結果の連結
+
+1日の時間帯ごとに購入の価格を合計します:
+
+```js
+select (…) | all(group(mod(div(date,mul(60,60)),24)) each(output(sum(price))))
+```
+
+これらの種類の式は`output`操作の中でも使用できます。グルーピングされた購入の合計価格を単純に計算する代わりに、顧客ごとの税引き後の合計収入を計算します:
+
+```js
+select (…) | all(group(customer) each(output(sum(mul(price,sub(1,tax))))))
+```
+
+式の有効性は現在のネスト階層に依存することに注意してください。たとえば、`sum(price)`はヒットのグループに対して有効な式ですが、`price`は有効ではありません。一般的なルールとして、式内の各演算子は、単一のヒットに適用されるか、グループ全体で値を集約するかのいずれかです。
+
+## Search Container API
+
+テキスト表現の代わりに、プログラマティックAPIを使用してグルーピングリクエストを実行できます。これにより、複数のグルーピングリクエストを並列に実行でき、`yql`パラメーターと競合しません - 例:
+
+```js expandable
+@Override
+public Result search(Query query, Execution execution) {
+    // Create grouping request.
+    GroupingRequest request = GroupingRequest.newInstance(query);
+    request.setRootOperation(new AllOperation()
+            .setGroupBy(new AttributeValue("foo"))
+            .addChild(new EachOperation()
+                .addOutput(new CountAggregator().setLabel("count"))));
+
+    // Perform grouping request.
+    Result result = execution.search(query);
+
+    // Process grouping result.
+    Group root = request.getResultGroup(result);
+    GroupList foo = root.getGroupList("foo");
+    for (Hit hit : foo) {
+        Group group = (Group)hit;
+        Long count = (Long)group.getField("count");
+        // TODO: Process group and count.
+    }
+
+    // Pass results back to calling searcher.
+    return result;
+}
+```
+
+完全なリファレンスについては、[APIドキュメント](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/grouping/package-summary)を参照してください。
+
+## TopN / 全コーパス
+
+シンプルなグルーピング: 各グループ内のドキュメント数をカウントします:
+
+```js
+select * from purchase where true | all( group(customer) each(output(count())) )
+```
+
+2つの並列グルーピング:
+
+```js
+select * from purchase where true | all(
+  all(
+      group(customer) each(output(count()))
+  )
+  all(
+      group(item) each(output(count()))
+  )
+)
+```
+
+各コンテントノードで上位1000件のヒットのみがグルーピングされます。精度は低くなりますが、速度は向上します:
+
+```js
+select * from purchase where true limit 0 |
+  all(
+    max(1000)
+    all(
+      group(customer)
+      each(output(count()))
+    )
+  )
+```
+
+## グループの選択
+
+グループを選択する前にモジュロ3の演算を行います:
+
+```js
+select * from purchase where true limit 0 |
+  all(
+    group(price % 3)
+    each(output(count()))
+  )
+```
+
+グループを選択する前に`price + tax * price`を計算します:
+
+```js
+select * from purchase where true limit 0 | all(
+  group(price + tax * price)
+  each(output(count()))
+)
+```
+
+## グループの順序付け
+
+グループを選択する前にモジュロ5の演算を行います - その後、グループはアトリビュート「tax」の集約された合計で順序付けられます:
+
+```js
+select * from purchase where true limit 0 | all(
+  group(price % 5)
+  order(sum(tax))
+  each(output(count()))
+)
+```
+
+グループを選択する前に`price + tax * price`を計算します。順序は各グループ内のアトリビュート「price」の最大値によって決まります:
+
+```js
+select * from purchase where true limit 0 |
+  all(
+    group(price + tax * price)
+    order(max(price))
+    each(output(count()))
+  )
+```
+
+グループの平均関連度を取得し、グループ数を掛けて累積カウントを求めます:
+
+```js
+select * from purchase where true limit 0 |
+  all(
+  group(customer)
+  order(avg(relevance()) * count())
+  each(output(count()))
+)
+```
+
+次のように、order句でアトリビュートを直接参照することはできません:
+
+```js
+select * from purchase where true limit 0 |
+  all(
+  group(customer)
+  order(price * count())
+  each(output(count()))
+)
+```
+
+しかし、次のようにすることはできます:
+
+```js
+select * from purchase where true limit 0 | all(
+  group(customer)
+  order(max(price) * count())
+  each(output(count()))
+)
+```
+
+アルファベット順の順序付けも同様の方法で機能します:
+
+```js
+select * from purchase where true limit 0 | all(
+  group(customer)
+  order(max(customer))
+  each(output(count()))
+)
+```
+
+<Note>
+**注:**
+
+非ASCII文字のフォールディング動作は、[unicode collation](../reference/querying/grouping-language#other-expressions)で制御できます。
+</Note>
+
+## 集約値の収集
+
+各グループ内のドキュメント数をカウントし、各グループ内の最良のヒットを返すシンプルなグルーピング:
+
+```js
+select * from purchase where true limit 0 | 
+  all(
+  group(customer)
+  each(
+    max(1)
+    each(output(summary()))
+  )
+)
+```
+
+さらにアトリビュート「price」の合計も返します:
+
+```js
+select * from purchase where true limit 0 | 
+  all( group(customer) each(max(1) output(count(), sum(price)) each(output(summary()))) )
+```
+
+さらに、アトリビュート「customer」、「price」、「tax」の連結に対するMD5の最上位64ビットのXORも返します:
+
+```js
+select * from purchase where true limit 0 | 
+  all(group(customer) each(max(1) output(count(), sum(price), xor(md5(cat(customer, price, tax), 64))) each(output(summary()))))
+```
+
+分位数を返すことも可能です。たとえば、価格のp50とp90:
+
+```js
+select * from purchase where true limit 0 |
+  all(group(customer) each(output(quantiles([0.5,0.9], price))))
+```
+
+## グルーピング
+
+「customer」アトリビュートに対する単一階層のグルーピング。最大5グループを返し、完全なヒットカウントと上位69件のヒットも返します。
+
+```js
+select * from purchase where true limit 0 | all(group(customer) max(5) each(max(69) output(count()) each(output(summary()))))
+```
+
+「customer」と「item」アトリビュートに対する2階層のグルーピング:
+
+```js
+select * from purchase where true limit 0 | all(group(customer) max(5) each(output(count()) all(group(item) max(5) each(max(69) output(count()) each(output(summary()))))))
+```
+
+「customer」、「item」、「attributes.key(coupon)」アトリビュートに対する3階層のグルーピング:
+
+```js
+select * from purchase where true limit 0 | all(group(customer) max(1) each(output(count()) all(group(item) max(1) each(output(count()) max(1) all(group(attributes.key) max(1) each(output(count()) each(output(summary()))))))))
+```
+
+上記と同様ですが、階層2でも最良のヒットを収集します:
+
+```js
+select * from purchase where true limit 0 | all(group(customer) max(5) each(output(count()) all(group(item) max(5) each(output(count()) all(max(1) each(output(summary()))) all(group(attributes.key) max(5) each(max(69) output(count()) each(output(summary()))))))))
+```
+
+上記と同様ですが、階層1でも最良のヒットを収集します:
+
+```js
+select * from purchase where true limit 0 | all(group(customer) max(5) each(output(count()) all(max(1) each(output(summary()))) all(group(item) max(5) each(output(count()) all(max(1) each(output(summary()))) all(group(attributes.key) max(5) each(max(69) output(count()) each(output(summary()))))))))
+```
+
+上記と同様ですが、各階層で異なるドキュメントサマリーを使用します:
+
+```js
+select * from purchase where true limit 0 |
+  all( group(customer) max(5) each(output(count())
+     all(max(1) each(output(summary(complexsummary))))
+     all(group(item) max(5) each(output(count())
+         all(max(1) each(output(summary(simplesummary))))
+         all(group(price) max(5) each(max(69) output(count())
+             each(output(summary(fastsummary)))))) )
+```
+
+すべての階層でカウントとヒット収集を行う深いグルーピング:
+
+```js
+select * from purchase where true limit 0 |
+  all( group(customer) max(5) each(output(count())
+     all(max(1) each(output(summary())))
+     all(group(item) each(output(count())
+         all(max(1) each(output(summary())))
+         all(group(price) each(output(count())
+             all(max(1) each(output(summary())))))))) )
+```
+
+## 時刻と日付
+
+フィールド(以下では`time`ですが、任意の名前を付けられます)は、秒単位の解像度(unixタイムスタンプ/エポック)の[long](../reference/schemas/schemas#long)である必要があります。すべての時刻関数については[リファレンス](../reference/querying/grouping-language#time-expressions)を参照してください。
+
+年でグルーピング:
+
+```js
+select * from purchase where true limit 0 | all(group(time.year(date)) each(output(count())))
+```
+
+年、次に月でグルーピング:
+
+```js
+select * from purchase where true limit 0 |
+  all( group(time.year(date)) each(output(count())
+     all(group(time.monthofyear(date)) each(output(count())))) )
+```
+
+`predefined`アグリゲーターを使用して*今日*、*昨日*、*先週*、*先月*をグルーピングし、さらにそれぞれの中で各日を個別にグルーピングします:
+
+```js
+select * from purchase where true limit 0 |
+  all( 
+    group(
+      predefined((now() - date) / (60 * 60 * 24),
+      bucket(0,1),
+      bucket(1,2),
+      bucket(3,7),
+      bucket(8,31))
+      )
+    each(output(count())
+      all(max(2) each(output(summary())))
+      all(group((now() - date) / (60 * 60 * 24)) 
+        each(output(count())
+          all(max(2) each(output(summary())))
+        )
+      )
+    ) 
+  )
+```
+
+### グルーピングにおけるタイムゾーン
+
+`timezone`クエリーパラメーターを使用すると、各時刻関数をタイムゾーンオフセット付きに書き換えることができます。[リファレンス](../reference/api/query#timezone)を参照してください。例:
+
+```bash
+$ vespa query "select * from purchase where true | \
+               all( group(time.hourofday(date)) each(output(count()))" \
+              "timezone=America/Los_Angeles"
+```
+
+このクエリーは、`purchase`からすべてのドキュメントを選択し、購入が行われた時間帯(`America/Los_Angeles`のローカル時刻に調整)でグルーピングし、各時間帯に何件の購入が該当するかをカウントします。
+
+## 地理的距離
+
+[position](../reference/schemas/schemas#position)フィールドから指定した地点までの大圏距離を計算するには、`geo_distance`を使用します。出力単位を選択するには`.km`または`.miles`を付加します。この関数は`position`フィールドと`array<position>`フィールドの両方で機能します。配列の場合は、最小距離が返されます。[リファレンス](../reference/querying/grouping-language#geo_distance)を参照してください。
+
+ある地点からの距離を100 kmのバケットにグルーピングします:
+
+```js
+select * from purchase where true limit 0 |
+  all( group(fixedwidth(geo_distance(attribute(location), 63.4, 10.4).km, 100.0)) each(output(count())) )
+```
+
+顧客ごとの最小距離と最大距離を出力します:
+
+```js
+select * from purchase where true limit 0 |
+  all( group(customer) each(output(min(geo_distance(attribute(location), 63.4, 10.4).km),
+                                    max(geo_distance(attribute(location), 63.4, 10.4).km))) )
+```
+
+## ユニークなグループのカウント
+
+`count`アグリゲーターをグループのリストに適用すると、すべてのグループを明示的に取得することなく、ユニークなグループ数を求めることができます。このカウントは、count-distinct問題のためのアルゴリズムであるHyperLogLog++を使用した推定値であることに注意してください。正確なカウントを得るには、すべてのグループを明示的に取得し、カスタムコンポーネント内、またはVespaを呼び出す中間層でそれらをカウントする必要があります。これはネットワーク負荷が高く、ユニークなグループが多い場合には現実的ではないかもしれません。
+
+このアグリゲーターのもう1つのユースケースは、指定した式に一致するユニークなインスタンス数のカウントです。
+
+グループ数の推定値を出力します。これはアトリビュート「customer」のユニークな値の数と等価です:
+
+```js
+select * from purchase where true limit 0 | all( group(customer) each(output(count())) )
+```
+
+アトリビュート「item」のユニークな文字列長の数の推定値を出力します:
+
+```js
+select * from purchase where true limit 0 | all(group(strlen(item)) each(output(count())))
+```
+
+各グループの「price」アトリビュートの合計に加えて、ユニークなグループの総数の正確なカウントを出力します。内側のeachによってすべてのグループが返されるためです。
+
+```js
+select * from purchase where true limit 0 | all(group(customer) output(count()) each(output(sum(price))))
+```
+
+`max`句は、返されるグループ数を制限するために使用します。このクエリーは上位3グループの合計を出力します。`count`句は推定グループ数(3を超える可能性あり)を出力します。ここではグループ数がmaxで制限されるため、`count`は推定値になります。一方、上の例ではmaxで制限されていません:
+
+```js
+select * from purchase where true limit 0 | all(group(customer) max(3) output(count()) each(output(sum(price))))
+```
+
+トップレベルのグループ数を出力し、上位10グループについて、アトリビュート「item」のユニークな値の数を出力します:
+
+```js
+select * from purchase where true limit 0 | all(group(customer) max(10) output(count()) each(group(item) output(count())))
+```
+
+## ユニークなグループのカウント - 複数値フィールド
+
+[複数値](/ja/querying/searching-multivalue-fields)アトリビュートとは、[weighted set](../reference/schemas/schemas#weightedset)、[array](../reference/schemas/schemas#array)、または[map](../reference/schemas/schemas#map)のことです。ほとんどのグルーピング関数は、複数値アトリビュートの要素を、あたかも別々のドキュメント内の個別の値であるかのように、単純に個別に処理します。structやmapの配列に対してグルーピングする場合は、構造を保持するためにスコーピングが使用されます。配列/map内の各エントリーは個別のサブドキュメントとして扱われるため、ドキュメントが2回以上カウントされることがあります。詳細は[#33646](https://github.com/vespa-engine/vespa/issues/33646)を参照してください。
+
+これは、グルーピングの階層を1つ追加し、各ドキュメントで一意となるフィールドでグルーピングすることで解決できます(ドキュメントIDでのグルーピングはサポートされていません)。その後、ユニークなグループをカウントすることで、ユニークなドキュメント数を求めることができます:
+
+```js
+select * from purchase where true limit 0 | all(group(customer) each(group(item) output(count())))
+```
+
+## インプレッション予測
+
+特定のユーザーのインプレッションログを使用して、ランクスコアから広告が獲得するであろうインプレッション数へのマッピングを行う関数を作成できます - 例:
+
+```js
+Score   Integer (# impressions for this user)
+0.200   0
+0.210   1
+0.220   2
+0.240   3
+0.320   4
+0.420   5
+0.560   6
+0.700   7
+0.800   8
+0.880   9
+0.920  10
+0.940  11
+0.950  12
+```
+
+最初の列(ランクスコア。0インプレッションのランクスコアも含む)だけを*impressions*という名前の配列アトリビュートに格納しておくと、グルーピング操作[interpolatedlookup(impressions, relevance())](../reference/querying/grouping-language#interpolatedlookup)を使用して、特定の広告がこの特定のユーザーに何回表示されたであろうかを求めることができます。
+
+つまり、特定のユーザー/広告/入札の組み合わせでランクスコアが0.420の場合、`interpolatedlookup(impressions, relevance())`は5.0を返します。入札を上げてランクスコアが0.490になった場合、代わりに戻り値として5.5が得られます。
+
+この文脈では、5.5というカウントは単一ユーザーの過去に対しては意味がありませんが、予測として使用できる、より多くの情報を提供します。これをより多くの異なるユーザーにわたって合計することで、その広告の将来のインプレッション総数を予測できます。
+
+## 全ドキュメントに対する集約
+
+グルーピングはデータ分析に便利です。全ドキュメントセットに対して集約するには、定数(ここでは1)を使用して(*すべての*ドキュメントを持つ)*1つの*グループを作成します - 例:
+
+```js
+select rating from restaurant where true | all(group(1) each(output(avg(price))))
+```
+
+すべてのドキュメントが対象フィールドの値を持っていることを確認してください。そうでない場合はNaNが使用され、最終結果もNaNになります:
+
+```json
+{
+    "id": "group:long:1",
+    "relevance": 0.0,
+    "value": "1",
+    "fields": {
+        "avg(rating)": "NaN"
+    }
+}
+```
+
+## NaNを持つフィールドのカウント
+
+[アトリビュート](../content/attributes)フィールドの値がないドキュメントの数をカウントします(厳密には、この例では未設定または0未満です。以下のバケット式を参照してください)。念のため、クエリーのタイムアウトは長めに設定してください。例として、*price*というフィールドを分析します:
+
+```js
+select rating from restaurant where true | all( group(predefined(price, bucket[-inf, 0>, bucket[0, inf>)) each(output(count())) )
+```
+
+出力例。*rating*が`-inf`のドキュメントを2件カウントしています:
+
+```json expandable
+"children": [
+    {
+        "id": "group:long_bucket:-9223372036854775808:0",
+        "relevance": 0.0,
+        "limits": {
+            "from": "-9223372036854775808",
+            "to": "0"
+        },
+        "fields": {
+            "count()": 2
+        }
+    },
+    {
+        "id": "group:long_bucket:0:9223372036854775807",
+        "relevance": 0.0,
+        "limits": {
+            "from": "0",
+            "to": "9223372036854775807"
+        },
+        "fields": {
+            "count()": 8
+        }
+    }
+]
+```
+
+指定した条件を満たすドキュメントのIDを全コーパスからエクスポートする方法については、[フィールド値の分析](../writing/visiting#analyzing-field-values)を参照してください。
+
+## NaNを持つフィールドの一覧表示
+
+これは上記のNaNのカウントと似ていますが、カウントを集約する代わりに、各ヒットについて[ドキュメントサマリー](../reference/schemas/schemas#document-summary)を出力します:
+
+```js
+select rating from restaurant where true |
+    all( group(predefined(price, bucket[-inf, 0>, bucket[0, inf>))
+    order(max(price))
+    max(1)
+    each( max(100) each(output(summary()))) )
+```
+
+注:
+
+-   関心があるのは最初のグループだけなので、`max(price)`で順序付けし、`max(1)`を使用して最初のグループのみを取得します
+-   結果セットのサイズを制限するために`max(100)`を使用しています。詳細は[grouping.defaultmaxhits](../reference/api/query#grouping.defaultmaxhits)を参照してください。
+-   結果セットを反復処理するには、[継続トークン](#pagination)を使用します。
+
+## Mapフィールドに対するグルーピング
+
+サンプルデータでは、レコードは次のようになっています:
+
+```json
+{
+  "fields": {
+    "attributes": {
+      "delivery_method": "Curbside Pickup",
+      "sales_rep": "Bonnie",
+      "coupon": "SAVE10"
+    },
+    "customer": "Smith",
+    "date": 1157526000,
+    "item": "Intake valve",
+    "price": "1000",
+    "tax": "0.24"
+  }
+}
+```
+
+mapフィールドの[スキーマ定義](../reference/schemas/schemas#map)は次のとおりです:
+
+```js
+field attributes type map<string, string> {
+    indexing: summary
+    struct-field key   { indexing: attribute }
+    struct-field value { indexing: attribute }
+}
+```
+
+これにより、キー(`delivery_method`、`sales_rep`、`coupon`)と値(ここでは各値をカウント)の両方でグルーピングできます。リンクを試して出力を確認してください:
+
+```js
+select * from purchase where true limit 0 |
+    all(
+      group(attributes.key)
+      each( group(attributes.value) each(output(count())))
+    )
+```
+
+より興味深い例は、営業担当者ごとの合計を確認することです:
+
+```js
+select * from purchase where true limit 0 |
+    all(
+      group(attributes.key)
+      each( group(attributes.value) each(output(sum(price))))
+    )
+```

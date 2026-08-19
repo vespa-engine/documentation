@@ -77,25 +77,84 @@ Update operations
 Unless otherwise noted, these formats are used both for returned values in read operations, and as input in write operations (put operations and field assign update operations).
 
 
-|     |       |
-| :--- | :--- |
-| string |  <CodeBlock>```json "name": "Polly" ```</CodeBlock>  Feeding in an empty string ("") for a field will have the same effect as not feeding a value for that field, and the field will not be rendered in the document API and in document summaries. |
-| int | <CodeBlock>```json "age": 42 ```</CodeBlock> |
-| long | <CodeBlock>```json "current_time_ms": 1742837807000 ```</CodeBlock> |
-| bool | *true* or *false*:  <CodeBlock>```json "alive": false ```</CodeBlock> |
-| byte | <CodeBlock>```json "tinynumber": 128 ```</CodeBlock> |
-| float | <CodeBlock>```json "weight": 123.4567 ```</CodeBlock> |
-| double | <CodeBlock>```json "weight": 123.4567 ```</CodeBlock> |
-| position | A position is encoded as a lat/lng object:  <CodeBlock>```json "mypos": {     "lat": 37.4181488,     "lng": -122.0256157 } ```</CodeBlock>  See [Geo Search](/en/querying/geo-search) for details. |
-| predicate | A [predicate](/en/reference/schemas/schemas#predicate) is represented with a string:  <CodeBlock>```json "predicate_field": "gender in [Female] and age in [20..30] and pos in [1..4]" ```</CodeBlock> |
-| raw | The content of a [raw](/en/reference/schemas/schemas#raw) field is represented as a base64-encoded string:  <CodeBlock>```json "raw_field": "VW5rbm93biBhcnRpc3QgZnJvbSB0aGUgbW9vbg==" ```</CodeBlock>  When used as *summary* field it will be rendered as a base64-encoded string. |
-| uri | A URI is a string:  <CodeBlock>```json "url": "https://www.yahoo.com/" ```</CodeBlock> |
-| array | Arrays are represented as JSON arrays.  <CodeBlock>```json "int_array_field": [     123,     456,     789 ]  "string_array_field": [     "item 1",     "item 2",     "item 3" ] ```</CodeBlock>  An array of struct is represented as a JSON array of JSON objects matching the defined struct field:  <CodeBlock>```json "array_of_struct_field": [    { "first_name": "Chris", "last_name": "Martin" },    { "first_name": "James", "last_name": "Hetfield" },    { "first_name": "Diana", "last_name": "Krall" } ] ```</CodeBlock>  Feeding in an empty array (\[\]) for a field will have the same effect as not feeding a value for that field, and the field will not be rendered in the document API and in document summaries. |
-| weightedset | Weighted sets are represented as maps where the value is the weight. Note, even if the key is not a string as such, it will be represented as a string in the JSON format. <CodeBlock> ```json "int_weighted_set": {     "123": 2,     "456": 78 }  "string_weighted_set": {     "item 1": 143,     "item 2": 6 } ``` </CodeBlock> Feeding in an empty weightedset ({}) for a field will have the same effect as not feeding a value for that field, and the field will not be rendered in the document API and in document summaries. |
-| tensor | **Indexed tensors short form:** An array where the values are ordered in the standard value order, where indexes of dimensions to the right are incremented before indexes to the left, where dimensions are ordered alphabetically (such that, e.g. with a tensor with dimensions x,y the "y" values for each value of "x" are adjacent): <CodeBlock> ```json "tensorfield": [ 2.0, 3.0, 5.0, 7.0 ] ``` </CodeBlock>  The cells array can optionally be nested in an object under the key "values". This is how tensor values are returned [by default](/en/reference/api/document-v1#format.tensors), along with another key "type" containing the tensor type. <br/><br/>  **Short form for tensors with a single mapped dimension**: A map with the dimension key as key and the value as value.<CodeBlock>  ```json "tensorfield": {     "a": 2.0,     "b": 3.0 } ``` </CodeBlock> The cells object can optionally be nested in an object under the key "cells". This is how tensor values are returned [by default](/en/reference/api/document-v1#format.tensors), along with another key "type" containing the tensor type.<br/> **Mixed tensors short form:** If the tensor has a single sparse dimension: A map where the key is the value of that dimension and the value is a nested array containing the values of the dense subspace within that key.   If the tensor has multiple sparse dimensions: An array nested in a "blocks" element where the elements consist of a map with the keys "address" and "values", where "address" is a map with the sparse dimensions and their values (as in cells), and "values" is a nested array containing the values of the dense subspace within that address.<br/><br/>  Example - single sparse dimension:  <br/><br/> <CodeBlock> ```json "tensorfield": {     "x1":[2.0,3.0],     "x2":[4.0,5.0] } ``` </CodeBlock>  Example - multiple sparse dimensions: <CodeBlock>  ```json "tensorfield": {   "blocks": [     {"address":{"x":"x1","y":"y2"},"values":[2.0,3.0]},     {"address":{"x":"x2","y":"y2"},"values":[4.0,5.0]}   ] } ``` </CodeBlock>  This is how tensor values are returned [by default](/en/reference/api/document-v1#format.tensors), along with another key "type" containing the tensor type. <br/><br/>  **Cell values as binary data** For dense and mixed tensors it's possible to fill the cell values directly from binary data sent in as a string of hexadecimal digits. The simplest possible case is if you have a vector with `int8` cell value type: <CodeBlock> ```json "tensorfield": {     "values": "FF00118022FE" } ``` </CodeBlock> This can be used to represent the value `tensor<int8>(x[6]):[-1,0,17,-128,34,-2]`. <br/><br/> For other cell types, it's possible to take the bits of the floating-point value, interpreted directly as an unsigned integer of appropriate width (16, 32, or 64 bits) and use the hex dump (respectively 4, 8, or 16 hex digits per cell) in a string. For "float" cells (32-bit IEE754 floating-point) a simple snippet for converting a cell could look like this: <CodeBlock> ```python import struct def float_to_hex(f: float):     return format(struct.unpack('=I', struct.pack('=f', f))[0], '08X') ``` </CodeBlock> As an advanced combination example, if you have a tensor with type `tensor<float>(tag{},x[3])` this input could be used, shown with corresponding output: <CodeBlock> ```json "mixedtensor": {     "foo": "3DE38E393E638E393EAAAAAB",     "bar": "3EE38E393F0E38E43F2AAAAB",     "baz": "3F471C723F638E393F800000" } "mixedtensor":{   "type":"tensor<float>(tag{},x[3])",   "blocks":{     "foo":[0.1111111119389534,0.2222222238779068,0.3333333432674408],     "bar":[0.4444444477558136,0.5555555820465088,0.6666666865348816],     "baz":[0.7777777910232544,0.8888888955116272,1.0]   } } ```</CodeBlock>  **Verbose:** [Tensor](/en/ranking/tensor-user-guide) fields may be represented as an array of cells: <CodeBlock> ```json "tensorfield": [     { "address": { "x": "a", "y": "0" }, "value": 2.0 },     { "address": { "x": "a", "y": "1" }, "value": 3.0 },     { "address": { "x": "b", "y": "0" }, "value": 4.0 },     { "address": { "x": "b", "y": "1" }, "value": 5.0 } ] ```</CodeBlock>  This works for any tensor but is verbose, so shorter forms specific to various tensor types are also supported. Use the shortest form applicable to your tensor type for the best possible performance. <br/> The cells array can optionally be nested in an object under the key "cells". This is how tensor values are returned [by default](/en/reference/api/document-v1#format.tensors), along with another key "type" containing the tensor type. |
-| struct | <CodeBlock>```"mystruct": {     "intfield": 123,     "stringfield": "foo" } ```</CodeBlock> |
-| map | The JSON dictionary key must be a string, even if the map key type in the schema is not a string: <CodeBlock> ```json "int_to_string_map": {     "123": "foo",     "456": "bar",     "789": "foobar" } ```</CodeBlock>  Feeding in an empty map ({}) for a field will have the same effect as not feeding a value for that field, and the field will not be rendered in the document API and in document summaries. |
-| reference | String with document ID referring to a [parent document](/en/schemas/parent-child): <CodeBlock> ```json "artist_ref": "id:mynamespace:artists::artist-1" ```</CodeBlock> |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>string</td>
+      <td><pre><code>{`"name": "Polly"`}</code></pre>  Feeding in an empty string ("") for a field will have the same effect as not feeding a value for that field, and the field will not be rendered in the document API and in document summaries.</td>
+    </tr>
+    <tr>
+      <td>int</td>
+      <td><pre><code>{`"age": 42`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>long</td>
+      <td><pre><code>{`"current_time_ms": 1742837807000`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>bool</td>
+      <td>&#42;true&#42; or &#42;false&#42;:  <pre><code>{`"alive": false`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>byte</td>
+      <td><pre><code>{`"tinynumber": 128`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>float</td>
+      <td><pre><code>{`"weight": 123.4567`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>double</td>
+      <td><pre><code>{`"weight": 123.4567`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>position</td>
+      <td>A position is encoded as a lat/lng object:  <pre><code>{`"mypos": {     "lat": 37.4181488,     "lng": -122.0256157 }`}</code></pre>  See <a href="/en/querying/geo-search" aria-label="Geo Search">Geo Search</a> for details.</td>
+    </tr>
+    <tr>
+      <td>predicate</td>
+      <td>A <a href="/en/reference/schemas/schemas#predicate" aria-label="predicate">predicate</a> is represented with a string:  <pre><code>{`"predicate_field": "gender in [Female] and age in [20..30] and pos in [1..4]"`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>raw</td>
+      <td>The content of a <a href="/en/reference/schemas/schemas#raw" aria-label="raw">raw</a> field is represented as a base64-encoded string:  <pre><code>{`"raw_field": "VW5rbm93biBhcnRpc3QgZnJvbSB0aGUgbW9vbg=="`}</code></pre>  When used as &#42;summary&#42; field it will be rendered as a base64-encoded string.</td>
+    </tr>
+    <tr>
+      <td>uri</td>
+      <td>A URI is a string:  <pre><code>{`"url": "https://www.yahoo.com/"`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>array</td>
+      <td>Arrays are represented as JSON arrays.  <pre><code>{`"int_array_field": [     123,     456,     789 ]  "string_array_field": [     "item 1",     "item 2",     "item 3" ]`}</code></pre>  An array of struct is represented as a JSON array of JSON objects matching the defined struct field:  <pre><code>{`"array_of_struct_field": [    { "first_name": "Chris", "last_name": "Martin" },    { "first_name": "James", "last_name": "Hetfield" },    { "first_name": "Diana", "last_name": "Krall" } ]`}</code></pre>  Feeding in an empty array ([]) for a field will have the same effect as not feeding a value for that field, and the field will not be rendered in the document API and in document summaries.</td>
+    </tr>
+    <tr>
+      <td>weightedset</td>
+      <td>Weighted sets are represented as maps where the value is the weight. Note, even if the key is not a string as such, it will be represented as a string in the JSON format. <pre><code>{`"int_weighted_set": {     "123": 2,     "456": 78 }  "string_weighted_set": {     "item 1": 143,     "item 2": 6 }`}</code></pre> Feeding in an empty weightedset (&#123;&#125;) for a field will have the same effect as not feeding a value for that field, and the field will not be rendered in the document API and in document summaries.</td>
+    </tr>
+    <tr>
+      <td>tensor</td>
+      <td>&#42;&#42;Indexed tensors short form:&#42;&#42; An array where the values are ordered in the standard value order, where indexes of dimensions to the right are incremented before indexes to the left, where dimensions are ordered alphabetically (such that, e.g. with a tensor with dimensions x,y the "y" values for each value of "x" are adjacent): <pre><code>{`"tensorfield": [ 2.0, 3.0, 5.0, 7.0 ]`}</code></pre>  The cells array can optionally be nested in an object under the key "values". This is how tensor values are returned <a href="/en/reference/api/document-v1#format.tensors" aria-label="by default">by default</a>, along with another key "type" containing the tensor type. <br/><br/>  &#42;&#42;Short form for tensors with a single mapped dimension&#42;&#42;: A map with the dimension key as key and the value as value.<pre><code>{`"tensorfield": {     "a": 2.0,     "b": 3.0 }`}</code></pre> The cells object can optionally be nested in an object under the key "cells". This is how tensor values are returned <a href="/en/reference/api/document-v1#format.tensors" aria-label="by default">by default</a>, along with another key "type" containing the tensor type.<br/> &#42;&#42;Mixed tensors short form:&#42;&#42; If the tensor has a single sparse dimension: A map where the key is the value of that dimension and the value is a nested array containing the values of the dense subspace within that key.   If the tensor has multiple sparse dimensions: An array nested in a "blocks" element where the elements consist of a map with the keys "address" and "values", where "address" is a map with the sparse dimensions and their values (as in cells), and "values" is a nested array containing the values of the dense subspace within that address.<br/><br/>  Example - single sparse dimension:  <br/><br/> <pre><code>{`"tensorfield": {     "x1":[2.0,3.0],     "x2":[4.0,5.0] }`}</code></pre>  Example - multiple sparse dimensions: <pre><code>{`"tensorfield": {   "blocks": [     {"address":{"x":"x1","y":"y2"},"values":[2.0,3.0]},     {"address":{"x":"x2","y":"y2"},"values":[4.0,5.0]}   ] }`}</code></pre>  This is how tensor values are returned <a href="/en/reference/api/document-v1#format.tensors" aria-label="by default">by default</a>, along with another key "type" containing the tensor type. <br/><br/>  &#42;&#42;Cell values as binary data&#42;&#42; For dense and mixed tensors it's possible to fill the cell values directly from binary data sent in as a string of hexadecimal digits. The simplest possible case is if you have a vector with <code>{`int8`}</code> cell value type: <pre><code>{`"tensorfield": {     "values": "FF00118022FE" }`}</code></pre> This can be used to represent the value <code>{`tensor<int8>(x[6]):[-1,0,17,-128,34,-2]`}</code>. <br/><br/> For other cell types, it's possible to take the bits of the floating-point value, interpreted directly as an unsigned integer of appropriate width (16, 32, or 64 bits) and use the hex dump (respectively 4, 8, or 16 hex digits per cell) in a string. For "float" cells (32-bit IEE754 floating-point) a simple snippet for converting a cell could look like this: <pre><code>{`import struct def float_to_hex(f: float):     return format(struct.unpack('=I', struct.pack('=f', f))[0], '08X')`}</code></pre> As an advanced combination example, if you have a tensor with type <code>{`tensor<float>(tag{},x[3])`}</code> this input could be used, shown with corresponding output: <pre><code>{`"mixedtensor": {     "foo": "3DE38E393E638E393EAAAAAB",     "bar": "3EE38E393F0E38E43F2AAAAB",     "baz": "3F471C723F638E393F800000" } "mixedtensor":{   "type":"tensor<float>(tag{},x[3])",   "blocks":{     "foo":[0.1111111119389534,0.2222222238779068,0.3333333432674408],     "bar":[0.4444444477558136,0.5555555820465088,0.6666666865348816],     "baz":[0.7777777910232544,0.8888888955116272,1.0]   } }`}</code></pre>  &#42;&#42;Verbose:&#42;&#42; <a href="/en/ranking/tensor-user-guide" aria-label="Tensor">Tensor</a> fields may be represented as an array of cells: <pre><code>{`"tensorfield": [     { "address": { "x": "a", "y": "0" }, "value": 2.0 },     { "address": { "x": "a", "y": "1" }, "value": 3.0 },     { "address": { "x": "b", "y": "0" }, "value": 4.0 },     { "address": { "x": "b", "y": "1" }, "value": 5.0 } ]`}</code></pre>  This works for any tensor but is verbose, so shorter forms specific to various tensor types are also supported. Use the shortest form applicable to your tensor type for the best possible performance. <br/> The cells array can optionally be nested in an object under the key "cells". This is how tensor values are returned <a href="/en/reference/api/document-v1#format.tensors" aria-label="by default">by default</a>, along with another key "type" containing the tensor type.</td>
+    </tr>
+    <tr>
+      <td>struct</td>
+      <td><pre><code>{`"mystruct": {     "intfield": 123,     "stringfield": "foo" }`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>map</td>
+      <td>The JSON dictionary key must be a string, even if the map key type in the schema is not a string: <pre><code>{`"int_to_string_map": {     "123": "foo",     "456": "bar",     "789": "foobar" }`}</code></pre>  Feeding in an empty map (&#123;&#125;) for a field will have the same effect as not feeding a value for that field, and the field will not be rendered in the document API and in document summaries.</td>
+    </tr>
+    <tr>
+      <td>reference</td>
+      <td>String with document ID referring to a <a href="/en/schemas/parent-child" aria-label="parent document">parent document</a>: <pre><code>{`"artist_ref": "id:mynamespace:artists::artist-1"`}</code></pre></td>
+    </tr>
+  </tbody>
+</table>
 
 
 ## Empty fields

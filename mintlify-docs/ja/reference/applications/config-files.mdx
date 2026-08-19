@@ -1,0 +1,207 @@
+---
+title: "カスタム設定ファイル・リファレンス"
+sidebarTitle: "設定ファイル"
+---
+
+
+これは、設定定義ファイルのリファレンスです。[Vespa コンテナー](/ja/applications/containers)向けの[設定可能なコンポーネント](/ja/applications/configuring-components)を持つアプリケーションの開発に役立ちます。個々のコンポーネントの設定は、services.xml 内のコンポーネントのスコープに [`<config>`](#services-xml-での汎用設定) 要素を定義することで提供できます。
+
+## 設定定義ファイル
+
+設定定義ファイルは、アプリケーションのソースコードの一部であり、*.def* サフィックスを持ちます。各ファイルは、1 つの設定タイプの内容とセマンティクスを定義し、文書化します。Vespa の組み込みの *.def* ファイルは `$VESPA_HOME/share/vespa/configdefinitions/` にあります。
+
+### パッケージ
+
+package は必須のステートメントで、そのファイルを表すために生成される Java クラスのパッケージを定義するために使用されます。[コンテナー・コンポーネント](/ja/applications/components)の開発者には、設定可能なコンポーネントを含むバンドル間の競合を避けるため、設定クラスをエクスポートする必要のあるバンドルごとに個別のパッケージを使用することを推奨します。package はコメント以外の最初の行でなければならず、小文字とドットのみを含むことができます:
+
+```bash
+package=com.mydomain.mypackage
+```
+
+### パラメーター名
+
+設定定義ファイルには、次の形式の行が含まれます:
+
+```bash
+parameterName type [default=value] [range=[min,max]]
+```
+
+可読性のため、パラメーター名には camelCase を推奨します。
+
+### パラメーターの型
+
+*.def* ファイルの変数でサポートされている型:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>int</th>
+      <th>32 ビット符号付き整数値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>long</td>
+      <td>64 ビット符号付き整数値</td>
+    </tr>
+    <tr>
+      <td>double</td>
+      <td>64 ビット IEEE 浮動小数点値</td>
+    </tr>
+    <tr>
+      <td>enum</td>
+      <td>列挙型。パラメーターの有効な値を表す文字列のセットです。例: <br/><br/><code>{`foo enum {BAR, BAZ, QUUX} default=BAR`}</code></td>
+    </tr>
+    <tr>
+      <td>bool</td>
+      <td>ブール(true/false)値</td>
+    </tr>
+    <tr>
+      <td>string</td>
+      <td>文字列値。デフォルト値は引用符(" ")で囲む必要があり、内部の引用符はバックスラッシュでエスケープする必要があります。同様に、改行は <code>{`\\n`}</code> にエスケープする必要があります</td>
+    </tr>
+    <tr>
+      <td>path</td>
+      <td>アプリケーション・パッケージ内の物理的なファイルまたはディレクトリへのパス。これにより、コンテナー・コンポーネントからアプリケーション・パッケージ内のファイルにアクセスできるようになります。パスは<a href="/ja/basics/applications" aria-label="アプリケーション・パッケージ">アプリケーション・パッケージ</a>のルートからの相対パスです。path パラメーターはデフォルト値を持てませんが、オプションにすることはできます(型の後に &#42;optional&#42; キーワードを使用)。オプションの path は設定する必要がなく、その場合は空の値になります。この設定にアクセスするコンポーネントが構築される際に、内容は <code>{`java.nio.file.Path`}</code> インスタンスとして、&#42;optional&#42; キーワードが使用されている場合は <code>{`Optional<Path>`}</code> として利用できます。</td>
+    </tr>
+    <tr>
+      <td>url</td>
+      <td><code>{`path`}</code> と同様に、ダウンロードされてコンテナー・コンポーネントで利用可能になるファイルの任意の URL。この設定にアクセスするコンポーネントが構築される際に、ファイルの内容は java.io.File インスタンスとして利用できます。ファイルのダウンロードに時間がかかる場合、それを参照する設定でコンテナーが起動するのにも時間がかかることに注意してください。<a href="/ja/applications/configuring-components#adding-files-to-the-component-configuration" aria-label="そのような url の内容の変更に関する注記">そのような url の内容の変更に関する注記</a>も参照してください。</td>
+    </tr>
+    <tr>
+      <td>model</td>
+      <td>機械学習モデルへのポインター。これは model-id、url、または path にでき、これらの複数を単一の設定値として指定でき、デプロイ環境に応じていずれかが使用されます:  <br/><br/>• model-id が指定されていて、アプリケーションが Vespa Cloud にデプロイされている場合、model-id が使用されます。 <br/>• それ以外の場合、URL が指定されていれば、それが使用されます。 <br/>• それ以外の場合、path が使用されます。 <br/><br/> オプションの <code>{`secret-ref`}</code> 属性を指定することで、ベアラートークン認証で保護されたリモート URL を使用することもできます。<a href="/ja/reference/rag/embedding#private-model-hub" aria-label="プライベートな Huggingface モデルの使用">プライベートな Huggingface モデルの使用</a>を参照してください。 <br/><br/> 受け取り側では、この設定値はどのように解決されたかにかかわらず、単にファイルパスとして表されます。これにより、コンテキストに応じて適切なものが使用されるように、複数の方法でモデルを参照することが容易になります。これらの設定値を設定するための特別な構文は、<a href="/ja/applications/configuring-components#adding-files-to-the-component-configuration" aria-label="設定へのファイルの追加">設定へのファイルの追加</a>に記載されています。</td>
+    </tr>
+    <tr>
+      <td>reference</td>
+      <td>別の設定への config id(Vespa 内部での使用のみ)</td>
+    </tr>
+  </tbody>
+</table>
+
+### 構造体(struct)
+
+構造体(struct)は、自然にひとまとまりになる複数のパラメーターをグループ化するために使用されます。構造体は、構造体名と各メンバー名の間に '.' を追加することで宣言します:
+
+```bash
+basicStruct.foo string
+basicStruct.bar int
+```
+
+### 配列
+
+配列は、パラメーター名に角括弧を追加することで宣言します。配列は単純な値を含むことも、子を持つこともできます。子は、単純なパラメーター、構造体、他の配列、またはそれらの組み合わせにできます。任意の複雑な構造を任意の深さまで構築できます。例:
+
+```bash
+intArr[] int                        # Integer value array
+row[].column[] int                  # Array of integer value arrays
+complexArr[].foo string             # Complex array that contains
+complexArr[].bar double             # … two simple parameters
+complexArr[].coord.x int            # … and a struct called 'coord'
+complexArr[].coord.y int
+complexArr[].coord.depths[] double  # … that contains a double array
+```
+
+単純な値の配列であっても、配列はデフォルト値を持てないことに注意してください。子を持つ配列は単純な値を含むことができず、その逆も同様です。上記の例では、`intArr` と `row.column` は子を持つことができず、`row` と `complexArr` は値を含むことができません。
+
+### マップ
+
+マップは、パラメーター名に波括弧を追加することで宣言します。ここでも任意の複雑な構造がサポートされています。例:
+
+```bash
+myMap{} int
+complexMap{}.nestedMap{}.id int
+complexMap{}.nestedMap{}.name string
+```
+
+## services.xml での汎用設定
+
+`services.xml` には 4 種類の要素があります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>個別サービス要素</th>
+      <th>(例: &#42;searcher&#42;、&#42;handler&#42;、&#42;searchnode&#42;) - サービスを作成しますが、サービスを作成する子要素を持ちません</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;サービスグループ要素&#42;&#42;</td>
+      <td>(例: &#42;content&#42;、&#42;container&#42;、&#42;document-processing&#42;) - サービスのグループを作成し、すべてのタイプの子要素を持つことができます</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;専用設定要素&#42;&#42;</td>
+      <td>(例: &#42;accesslog&#42;) - サービスまたはサービスのグループを設定し、他の専用設定要素のみを子として持つことができます</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;汎用設定要素&#42;&#42;</td>
+      <td>常に &#42;config&#42; という名前です</td>
+    </tr>
+  </tbody>
+</table>
+
+汎用設定要素は、1 つ以上のサービスの作成につながるほとんどの要素(つまり、サービスグループ要素と個別サービス要素)に追加できます。設定は、その要素とすべての子孫要素によって作成されるすべてのサービスに適用されます。
+
+例えば、*container* に *config* を追加すると、その設定はそのクラスター内のすべてのコンテナー・コンポーネントに適用されます。より深いレベルの設定が優先されるため、この設定は、例えば *handler* や *server* 要素で同じ設定値を設定することで、個々のコンポーネントに対して上書きできます。
+
+次の設定定義があり、その名前が `type-examples.def` だとします:
+
+```bash
+package=com.mydomain
+
+stringVal string
+myArray[].name string
+myArray[].type enum {T1, T2, T3} default=T1
+myArray[].intArr[] int
+myMap{} string
+basicStruct.foo string
+basicStruct.bar int default=0 range=[-100,100]
+boolVal bool
+myFile path
+myUrl url
+myOptionalPath path optional
+```
+
+この設定のすべての値を `services.xml` で設定するには、目的の要素に次の xml を追加します(名前は *`<package>.<設定定義ファイル名>`* にする必要があります):
+
+```xml expandable
+<config name="com.mydomain.type-examples">
+  <stringVal>val</stringVal>
+  <myArray>
+    <item>
+      <name>elem_0</name>
+      <type>T2</type>
+      <intArr>
+        <item>0</item>
+        <item>1</item>
+      </intArr>
+    </item>
+    <item>
+      <name>elem_1</name>
+      <type>T3</type>
+      <intArr>
+        <item>0</item>
+        <item>1</item>
+      </intArr>
+    </item>
+  </myArray>
+  <myMap>
+    <item key="key1">val1</item>
+    <item key="key2">val2</item>
+  </myMap>
+  <basicStruct>
+    <foo>str</foo>
+    <bar>3</bar>
+  </basicStruct>
+  <boolVal>true</boolVal>
+  <myFile>components/file1.txt</myFile>
+  <myUrl>/en/reference/query-api-reference.html</myUrl>
+</config>
+```
+
+パラメーター定義の各 '.' が、xml の子要素に対応することに注意してください。デフォルト値を保持したい場合、*.def* ファイルですでにデフォルトを持つ値を設定する必要はありません。したがって、上記の例では、`basicStruct.bar` と `myArray[].type` は、アプリケーションのデプロイ時にエラーを発生させることなく、xml で省略できました。
+
+### 配列の設定
+
+*配列* への値の割り当ては、`<item>` 要素を使用して行います。これにより、指定した設定値が、services 内のより上位の xml 要素や Vespa 自体に由来する既存の配列要素を上書きしないことが保証されます。

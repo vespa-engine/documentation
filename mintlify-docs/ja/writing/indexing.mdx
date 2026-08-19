@@ -1,0 +1,146 @@
+---
+title: "インデクシング"
+---
+
+[概要](/ja/learn/overview)を参照してください。主要なインデックス設定は[スキーマ](/ja/basics/schemas)です。
+
+[services.xml](/ja/reference/applications/services/services)は、インデクシングをノードにどのように分散するかを設定します。完全な例については[multinode-HA](https://github.com/vespa-engine/sample-apps/blob/master/examples/operations/multinode-HA/services.xml)を参照してください:
+
+```xml
+<container id="feed" version="1.0">
+    <document-api />
+    <document-processing />
+    <nodes count="2" />
+</container>
+```
+
+ドキュメント処理をドキュメントAPIエンドポイントと同じノード上で実行するには、`document-api`と`document-processing`の両方を設定することが重要です。これにより、他のノードへのネットワークホップを回避できます(スループットの向上のため)。通常、インデクシングの前処理もこれらのノード上で実行します。完全な例については[document-processingリファレンス](/ja/reference/applications/services/content#document-processing)を参照してください。
+
+## 日付のインデクシング
+
+Vespaには「date」フィールド型はありません。ベストプラクティスは[long](/ja/reference/schemas/schemas#long)フィールドを使用することです。ソースデータ内の日付が文字列の場合、[to_epoch_second](/ja/reference/writing/indexing-language#to_epoch_second)を使用してlongフィールドに変換できます:
+
+```js
+schema docs {
+
+    document docs {
+        field date_string type string {
+            indexing: summary
+        }
+    }
+
+    field date type long {
+        indexing: input date_string | to_epoch_second | attribute | summary
+    }
+
+    field last_modified type long {
+        indexing: now | attribute | summary
+    }
+}
+```
+
+この合成された`date`フィールドは、クエリーや[グルーピング](/ja/querying/grouping)で使用できます:
+
+```json
+"fields": {
+    "last_modified": 1695995429,
+    "date": 1703437243,
+    "date_string": "2023-12-24T17:00:43.000Z"
+}
+```
+
+<Note>
+**注:**
+
+上記の`date`フィールドと`last_modified`フィールドは、その内容がドキュメント入力から生成されるため、`document`セクションの外に配置されています。すべてのフィールドをダンプするには`vespa visit --field-set "[all]"`を使用してください。
+</Note>
+
+現在時刻を取得するために[now](/ja/reference/writing/indexing-language#now)がどのように使用されているかに注目してください。
+
+## 実行値の例
+
+実行値(この式に渡される値)に明示的にアクセスすることは、連結などの式の一部として使用する場合に便利です。この例では、タイトルとセンテンスの配列を持つドキュメントがあり、各センテンスの先頭にドキュメントのタイトル(とスペース)を付加してから、埋め込みベクトルのセット(2次元のmixedテンソルで表現)に変換します。
+
+```js
+input mySentenceArray | for_each { input title . " " . _ } | embed | attribute my2dTensor | index my2dTensor
+```
+
+## 選択(||)の例
+
+choice式は、式がnullを返す可能性がある場合に代替値を提供するために使用します。
+
+```js
+(input myField1 || "") . " " . (input myField2 || "") | embed | attribute | index
+```
+
+この例では2つのフィールドが連結されますが、どちらかのフィールドが空の場合は、代わりに空文字列が使用されます。空文字列の代替が提供されていない場合、いずれかの入力フィールドが欠けていると埋め込みは生成されません。
+
+## select_inputの例
+
+`select_input`式は、入力ドキュメント内のどのフィールドが空でないかに基づいて、実行するステートメントを選択するために使用します:
+
+```js
+select_input {
+    CX:   input CX | set_var CX;
+    CA:   input CA . " " . input CB | set_var CX;
+}
+```
+
+このステートメントは、CXが空でない限り`input CX | set_var CX;`を実行します。CXが空の場合は、CAが空でない限り`input CA . " " . input CB | set_var CX;`を実行します。
+
+## switchの例
+
+switch式は、他のプログラミング言語におけるswitch文と同様に動作します。switch式の各caseは、文字列とステートメントで構成されます。実行値が各文字列と比較され、一致した場合、対応するステートメントが実行されます。オプションのデフォルト操作(`default:`で指定)をswitchの最後に追加できます:
+
+```js
+input mt | switch {
+    case "audio": input fa | index;
+    case "video": input fv | index;
+    default: 0 | index;
+};
+```
+
+## インデクシングステートメントの例
+
+インデクシングステートメントを使用すると、複数のドキュメントフィールドから1つのインデックス構造フィールドを生成できます。たとえば、次のインデックスステートメント:
+
+```js
+input field1 . input field2 | attribute field2;
+```
+
+は、*field1*と*field2*を結合して*field2*という名前のアトリビュートを生成します。複数のフィールドを結合するインデクシングステートメントを含むドキュメントを部分更新する場合、次のルールが適用されます:
+
+- *すべての*ソース値がソースドキュメント更新内で利用可能なアトリビュートのみが更新されます
+- 上記のルールを適用した結果、更新されるアトリビュートが*1つもない*場合(に限り)、そのドキュメント更新はインデックス時に失敗します
+
+例: スキーマに次のインデクシングステートメントがある場合
+
+```js
+input field1 | attribute field1;
+input field1 . input field2 | attribute field2;
+```
+
+さまざまな部分更新に対して次のことが起こります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>部分更新に含まれるフィールド</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>field1</td>
+      <td>field1が更新されます</td>
+    </tr>
+    <tr>
+      <td>field2</td>
+      <td>更新は失敗します</td>
+    </tr>
+    <tr>
+      <td>field1とfield2</td>
+      <td>field1とfield2が更新されます</td>
+    </tr>
+  </tbody>
+</table>

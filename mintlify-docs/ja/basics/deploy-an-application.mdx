@@ -1,0 +1,111 @@
+---
+title: アプリケーションのデプロイ
+description: "以下の手順に従って、Vespa アプリケーションを Vespa Cloud の [dev ゾーン](/ja/operations/environments#dev)に(無料で)デプロイします。"
+---
+
+{/* If you change this also make the same change in deploy-an-application-{shell,java} */}
+
+**このガイドの別バージョン:**
+
+- [pyvespa を使用してアプリケーションをデプロイする](https://vespa-engine.github.io/pyvespa/getting-started-pyvespa-cloud.html) — Python 開発者向け
+- [Java コンポーネントを持つアプリケーションをデプロイする](/ja/basics/deploy-an-application-java)
+- [Vespa CLI を使わずにアプリケーションをデプロイする](/ja/basics/deploy-an-application-shell)
+- [アプリケーションをローカルにデプロイする](/ja/basics/deploy-an-application-local)
+- [Java コンポーネントを持つアプリケーションをローカルにデプロイする](/ja/basics/deploy-an-application-local-java)
+
+## セットアップ
+
+<Steps>
+  <Step>
+    Vespa Cloud に[テナント](/ja/learn/tenant-apps-instances)を作成します:
+  
+    [console.vespa-cloud.com](https://console.vespa-cloud.com/) にアクセスして、テナントを作成します(すでに持っている場合は不要です)。
+  </Step>
+
+  <Step>
+    [Homebrew](https://brew.sh/) を使用して [Vespa CLI](/ja/clients/vespa-cli) をインストールします:
+
+    ```bash
+    brew install vespa-cli
+    ```
+
+    Windows を使用している、または Homebrew がない場合は、[Vespa CLI](/ja/clients/vespa-cli) のページから直接ダウンロードしてください。
+  </Step>
+
+  <Step title="Vespa クライアントの設定">
+    ```bash
+    export VESPA_CLI_HOME=$PWD/.vespa
+    vespa config set target cloud
+    vespa config set application vespa-team.autotest
+    ```
+
+      `vespa-team` の代わりにステップ 1 のテナント名を使用してください。このガイドの他のステップでも同様に置き換えてください。
+  </Step>
+
+  <Step title="Vespa Cloud のコントロールプレーンへのアクセスを取得">
+    ```bash
+    vespa auth login
+    ```
+
+    コマンドの指示に従って認証を行います。
+  </Step>
+
+  <Step>
+    **サンプル[アプリケーション](/ja/basics/applications)をクローンします:**
+
+    ```bash
+    vespa clone album-recommendation myapp && cd myapp
+    ```
+
+    クローンできる他のサンプルアプリについては [sample-apps](https://github.com/vespa-engine/sample-apps) を参照してください。
+  </Step>
+
+  <Step>
+    **[データプレーンへのアクセス](/ja/security/guide#data-plane)のための証明書をアプリケーションに追加します:**
+
+    ```bash
+    vespa auth cert app
+    ```
+
+    ここで書き込まれる `.pem` ファイルのパスをメモしておくとよいでしょう。
+  </Step>
+</Steps>
+
+手順: 
+
+<Steps>
+  <Step>
+    アプリケーションを[デプロイ](/ja/basics/applications#deploying-applications)します:
+
+    ```bash
+    vespa deploy --wait 600 ./app
+    ```
+
+    初回のデプロイは、ノードのプロビジョニングのため数分かかることがあります。
+  </Step>
+
+  <Step>
+    [ドキュメント](/ja/schemas/documents)を[フィード](/ja/writing/reads-and-writes)します:
+
+    ```bash
+    vespa feed dataset/documents.jsonl
+    ```
+  </Step>
+
+  <Step>
+    [クエリー](/ja/querying/query-api)を実行します:
+
+    ```bash
+    vespa query "select * from music where album contains 'head'"
+    ```
+
+    ```bash
+    vespa query \
+      "select * from music where true" \
+      "ranking=rank_albums" \
+      "ranking.features.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+    ```
+  </Step>
+</Steps>
+
+おめでとうございます。最初の Vespa アプリケーションのデプロイが完了しました! [dev ゾーン](/ja/operations/environments#dev)のアプリケーションインスタンスは、デフォルトでは最後のデプロイから 14 日間動作し続けます。これは[コンソール](https://console.vespa-cloud.com/)で管理できます。

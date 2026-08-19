@@ -1,0 +1,40 @@
+---
+title: "GCP における Vespa Cloud Enclave のアーキテクチャー"
+sidebarTitle: "GCP アーキテクチャー"
+---
+
+### アーキテクチャー
+
+テナントの GCP プロジェクト内の各 Vespa Cloud Enclave は、Vespa Cloud の[ゾーン](/ja/operations/zones)に対応します。テナントの GCP プロジェクト内では、1 つの Enclave は 1 つの [VPC](https://cloud.google.com/vpc/) に収められます。
+
+<Frame>
+![Enclave のアーキテクチャー](/assets/img/vespa-cloud-enclave-gcp.png)
+</Frame>
+
+#### コンピュート・インスタンス、ロード・バランサー、Cloud Storage バケット
+
+Vespa Cloud ゾーン内の Configuration Server は、デプロイされている Vespa アプリケーションに基づいて、コンピュート・インスタンス(図中の「Vespa Hosts」)の作成または破棄を決定します。Configuration Server はまた、デプロイされた Vespa アプリケーションとの通信に必要な Network Load Balancer もセットアップします。
+
+各 Vespa Host は、Cloud Storage バケット(「Log Archive」)へ定期的にログを同期します。このバケットは Enclave に対して「ローカル」であり、テナントの GCP プロジェクト内で Terraform モジュールによってプロビジョニングされます。
+
+#### ネットワーキング
+
+Enclave の VPC はネットワーク的に厳しく制限されています。Vespa Host はパブリック IPv4 アドレスを持たず、VPC 内に [NAT ゲートウェイ](https://cloud.google.com/nat/docs/overview)はありません。Vespa Host はパブリック IPv6 アドレスを持ち、アウトバウンド接続を行うことができます。インバウンド接続は許可されません。アウトバウンド IPv6 接続は、Configuration Server との通信のブートストラップと、運用メトリクスを Vespa Cloud に報告するために使用されます。
+
+Vespa Host が起動すると、Configuration Server への暗号化トンネルをセットアップします。セットアップ後、Configuration Server と Vespa Host の間のすべての通信はこのトンネル上で行われます。
+
+### セキュリティー
+
+Vespa Cloud の運用チームは、顧客アカウントに属するリソースへの直接アクセス権を*持ちません*。可能なアクセスは、Vespa 自体を稼働させるために必要な管理 API を通じたもののみです。たとえばインシデントのデバッグなどで必要になった場合、直接アクセスはテナント自身によってのみ Vespa チームに付与できます。直接アクセスの有効化は、Enclave モジュールで `enable_ssh` 入力を true に設定することで行います。詳細は [Enclave モジュールの入力](https://registry.terraform.io/modules/vespa-cloud/enclave/google/latest/?tab=inputs)のドキュメントを参照してください。
+
+Enclave と Vespa Cloud Configuration Server の間のすべての通信は、証明書に埋め込まれた識別情報を用いた [mTLS](https://en.wikipedia.org/wiki/Mutual_authentication#mTLS) によって暗号化・認証・認可されます。mTLS 通信は [Athenz](https://www.athenz.io/) サービスによって実現されています。
+
+保存されるすべてのデータは、[Cloud Key Management](https://cloud.google.com/security-key-management) を使用して保存時に暗号化されます。すべての鍵は、テナントの GCP プロジェクト内でテナントによって管理されます。
+
+テナントの GCP プロジェクト内にプロビジョニングされるリソースは、テナントが実行する Terraform モジュールによって、あるいは Vespa Cloud ゾーン内のオーケストレーション・サービスによってプロビジョニングされます。
+
+リソースは、Terraform モジュールで定義された [`vespa_cloud_provisioner_role`](https://github.com/vespa-cloud/terraform-google-enclave/blob/main/main.tf) IAM ロールを使用して、Vespa Cloud Configuration Server によってプロビジョニングされます。
+
+Enclave を対象にアプリケーションをデプロイできるのは、その GCP プロジェクトを登録したテナントのみです。
+
+Vespa Cloud のセキュリティーに関するより一般的な情報は、[ホワイトペーパー](/ja/security/whitepaper)を参照してください。

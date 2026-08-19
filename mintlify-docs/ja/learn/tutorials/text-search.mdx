@@ -1,0 +1,692 @@
+---
+title: "テキスト検索チュートリアル"
+---
+
+このチュートリアルでは、シンプルなテキスト検索アプリケーションをセットアップする手順を説明します。最後まで進めると、Vespa でテキストドキュメントをインデックスし、テキストクエリーで検索できるようになります。ここで構築するアプリケーションは、機械学習(ML)モデルに基づくランキング関数の作成など、他のチュートリアルの土台となります。
+
+主な目標は、[BM25](/ja/ranking/bm25) [^1] や [nativeRank](/ja/reference/ranking/nativerank) のようなシンプルなテキストスコアリング機能に基づくテキスト検索アプリをセットアップすることです。
+
+<Warning>
+**前提条件:**
+
+- x86_64 または arm64 上の Linux、macOS、または Windows 10 Pro。[Podman Desktop](https://podman.io/) または [Docker Desktop](https://www.docker.com/products/docker-desktop/) がインストールされ、エンジンが起動していること。
+  - あるいは、Podman デーモンを起動します:
+
+    ```bash
+    $ podman machine init --memory 6000
+    $ podman machine start
+    ```
+
+- システム制限やその他の設定については、[Docker コンテナー](/ja/operations/self-managed/docker-containers)を参照してください。
+- Haswell(2013 年)より古い CPU の場合は、[CPU サポート](/ja/operations/self-managed/cpu-support)を参照してください。
+- メモリ: Docker/Podman 専用に最低 4 GB の RAM。[メモリの推奨事項](/ja/operations/self-managed/node-setup#memory-settings)。
+- ディスク: `NO_SPACE` を回避してください。vespaengine/vespa コンテナーイメージ + データ用の余裕分のディスク容量が必要です。[詳細はこちら](/ja/writing/feed-block)。
+- [Vespa CLI](/ja/clients/vespa-cli) をインストールするための [Homebrew](https://brew.sh/)。または、[Github releases](https://github.com/vespa-engine/vespa/releases) から Vespa CLI をダウンロードしてください。
+- Python3
+- `curl`
+</Warning>
+
+
+## vespa-cli のインストール
+
+このチュートリアルでは、Vespa のデプロイ、フィード、クエリーに [Vespa-CLI](/ja/clients/vespa-cli) を使用します。以下では、[HomeBrew](https://brew.sh/) を使って `vespa-cli` をダウンロードおよびインストールしますが、[GitHub](https://github.com/vespa-engine/vespa/releases) から OS/CPU アーキテクチャに合わせたバイナリをダウンロードすることもできます。
+
+```bash
+$ brew install vespa-cli
+```
+
+このチュートリアルで使用するスクリプトは、`vespa clone` を使って [sample-apps リポジトリ](https://github.com/vespa-engine/sample-apps/tree/master/text-search)から取得します。
+
+```bash
+$ vespa clone text-search text-search && cd text-search
+```
+
+このリポジトリには完成した Vespa アプリケーションが含まれていますが、以下では学習のためにすべてをゼロから構築していきます。
+
+
+## データセット
+
+このチュートリアルでは、[MS MARCO](https://microsoft.github.io/msmarco/) というデータセットを使用します。MS MARCO は、検索に関連する深層学習研究の進展を支援する目的で Microsoft が公開した大規模データセットのコレクションです。MS MARCO データセットには多くのタスクが関連付けられていますが、ここではテキストクエリーに対して関連するドキュメントを返すエンドツーエンドの検索アプリケーションを構築します。このチュートリアル用に、約 1000 件のドキュメントを含む小さなデータセットのサンプルを `ext/sample` ディレクトリに用意しています。
+
+サンプルデータは Vespa の [JSON フィードフォーマット](/ja/reference/schemas/document-json-format)に変換する必要があります。次のステップでは、サンプルファイルからドキュメント、クエリー、関連性判定を抽出します:
+
+```bash
+$ ./scripts/convert-msmarco.sh
+```
+
+スクリプトを実行すると、以下のような行を含むファイル `dataset/documents.jsonl` が得られます:
+
+```json
+{
+    "put": "id:msmarco:msmarco::D1555982",
+    "fields": {
+        "id": "D1555982",
+        "url": "https://answers.yahoo.com/question/index?qid=20071007114826AAwCFvR",
+        "title": "The hot glowing surfaces of stars emit energy in the form of electromagnetic radiation",
+        "body": "Science   Mathematics Physics The hot glowing surfaces of stars emit energy in the form of electromagnetic radiation ... "
+    }
+}
+```
+
+`vespa.json` に加えて、サンプリングされたクエリーの一覧と、各クエリーに関連するドキュメント ID を含む `test-queries.tsv` ファイルもあります。
+
+
+## Vespa アプリケーション・パッケージの作成
+
+[Vespa アプリケーション・パッケージ](/ja/basics/applications)は、Vespa システムの動作を定義する一連の設定ファイルと、オプションの Java コンポーネントから構成されます。基本的なテキスト検索アプリケーションを作成するために必要な最小限のファイルセットとして、`msmarco.sd` と `services.xml` を定義しましょう。
+
+このチュートリアルでは、リポジトリにあるものを使うのではなく、新しい Vespa アプリケーションを作成するので、このアプリケーション用のディレクトリを作成します:
+
+```bash
+$ mkdir -p app/schemas
+```
+
+
+### スキーマ
+
+[スキーマ](/ja/basics/schemas)はドキュメントタイプの設定です。1 つの Vespa アプリケーションは、ドキュメントタイプを持つ複数のスキーマを持つことができます。このアプリケーションでは、`schemas/msmarco.sd` という名前のファイルに保存する必要があるスキーマ `msmarco` を定義します。以下を `text-search/app/schemas/msmarco.sd` に書き込んでください:
+
+```sd expandable
+schema msmarco {
+    document msmarco {
+        field language type string {
+            indexing: "en" | set_language
+        }
+        field id type string {
+            indexing: attribute | summary
+            match: word
+        }
+        field title type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+        field body type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+    }
+    fieldset default {
+        fields: title, body, url
+    }
+    document-summary minimal {
+        summary id {  }
+    }
+    document-summary debug-tokens {
+        summary url {}
+        summary url-tokens {
+            source: url
+            tokens
+        }
+        from-disk
+    }
+    rank-profile default {
+        first-phase {
+            expression: nativeRank(title, body, url)
+        }
+    }
+    rank-profile bm25 inherits default {
+        first-phase {
+            expression: bm25(title) + bm25(body) + bm25(url)
+        }
+    }
+}
+```
+
+ここでは多くのことが行われています。詳しく見ていきましょう。
+
+
+#### ドキュメントタイプとフィールド
+
+`document` セクションには、ドキュメントのフィールド、その型、そして Vespa がそれらをどのようにインデックスし、[マッチ](/ja/reference/schemas/schemas#match)させるかが含まれています。
+
+フィールドプロパティ `indexing` は、フィールドの*インデクシングパイプライン*を設定します。詳細については、[スキーマ - インデクシング](/ja/basics/schemas#document-fields)を参照してください。[string](/ja/reference/schemas/schemas#string) データ型は、非構造化テキストと構造化テキストの両方を表現するために使用され、[index と attribute](/ja/querying/text-matching#index-and-attribute) には大きな違いがあります。上記のスキーマには、わかりやすさのために `attribute` と `index` プロパティのデフォルトの `match` モードが含まれています。
+
+`index: enable-bm25` を含めることで、`title`、`body`、`url` に対して [BM25](/ja/ranking/bm25) の使用を有効にしている点に注意してください。language フィールドは、msmarco データセットに含まれていない唯一のフィールドです。データセットが英語であるため、その値を "en" にハードコードしています。`set_language` を使用すると、自動言語検出を回避し、他のテキストフィールドを処理する際にこの値が使用されます。詳細は[リンギスティクス](/ja/linguistics/linguistics)を参照してください。
+
+
+#### 複数フィールドを横断してマッチングするためのフィールドセット
+
+[Fieldset](/ja/reference/schemas/schemas#fieldset) を使用すると、複数のフィールドを横断して検索できます。`fieldset` を定義しても、インデクシングやストレージのオーバーヘッドは発生しません。フィールドまたはフィールドセットを検索するクエリー処理は *1 種類*の変換を使用するため、フィールドセットでグループ化される string フィールドは、同じ[マッチ](/ja/reference/schemas/schemas#match)設定と[言語処理](/ja/linguistics/linguistics)設定を共有する必要があります。
+
+
+#### 検索レスポンスの内容を制御するドキュメントサマリー
+
+次に、2 つの[ドキュメントサマリー](/ja/querying/document-summaries)を定義します。ドキュメントサマリーは、[レスポンス](/ja/reference/querying/default-result-format)でどのフィールドが利用可能かを制御します。`debug-tokens` ドキュメントサマリーを含めているのは、テキストが検索可能なトークンにどのように変換されるかを可視化する方法を後で示すためです。
+
+
+#### マッチしたドキュメントの順序を決定するランキング
+
+スコア計算とランキングフェーズの名前付きコレクションである[ランクプロファイル](/ja/basics/ranking)は、数多く定義できます。
+
+このチュートリアルでは、`default` が [nativeRank](/ja/reference/ranking/nativerank) を使用するように定義します。さらに、[bm25](/ja/ranking/bm25) を使用する `bm25` rank-profile も用意しています。どちらも Vespa におけるテキストスコアリングの [rank-features](/ja/reference/ranking/rank-features) の例です。
+
+
+### サービス仕様
+
+[services.xml](/ja/reference/applications/services/services) は、Vespa アプリケーションを構成するサービス、つまりどのサービスを実行し、サービスごとに何台のノードを使用するかを定義します。以下を `text-search/app/services.xml` に書き込んでください:
+
+```xml expandable
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
+
+    <container id="text_search" version="1.0">
+        <search />
+        <document-processing />
+        <document-api />
+    </container>
+
+    <content id="msmarco" version="1.0">
+        <min-redundancy>1</min-redundancy>
+        <documents>
+            <document type="msmarco" mode="index" />
+            <document-processing cluster="text_search" />
+        </documents>
+        <nodes>
+            <node distribution-key="0" hostalias="node1" />
+        </nodes>
+    </content>
+</services>
+```
+
+```
+Paste the above into file text-search/app/services.xml
+```
+
+上記の要素に関するいくつかの注記:
+
+- `<container>` は、ドキュメント、クエリー、結果の処理を行う[コンテナークラスター](/ja/applications/containers)を定義します
+- `<search>` は[クエリーエンドポイント](/ja/querying/query-api)をセットアップします。デフォルトのポートは 8080 です。
+- `<document-api>` はフィード用の[ドキュメントエンドポイント](/ja/reference/api/document-v1)をセットアップします。
+- `<content>` は、ドキュメントの保存方法と検索方法を定義します
+- `<min-redundancy>` は、各ドキュメントのコピーをいくつ保持するかを示します。
+- `<documents>` は、*スキーマ*内のドキュメントタイプをコンテント・クラスターに割り当てます。コンテント・クラスターの容量は node 要素を追加することで増やせます。[エラスティシティ](/ja/content/elasticity)を参照してください。(コンテント・クラスターのセットアップの詳細については、[リファレンス](/ja/reference/applications/services/content)も参照してください。)
+- `<nodes>` は、コンテント・クラスターのホストを定義します。
+
+
+## アプリケーション・パッケージのデプロイ
+
+アプリケーション・パッケージの作成が完了したら、デプロイできます。[Vespa クイックスタートガイド](/ja/basics/deploy-an-application-local)と同様の設定を使用します。
+
+Vespa コンテナーを起動します:
+
+```bash
+$ docker run --detach --name vespa-msmarco --hostname vespa-msmarco \
+  --publish 8080:8080 --publish 19071:19071 \
+  vespaengine/vespa
+```
+
+2 つのポートを公開している点に注意してください。:8080 はドキュメントの書き込みとクエリーを行うデータプレーンのポートで、19071 はアプリケーションをデプロイできるコントロールプレーンです。
+
+ローカルコンテナーを使用するように Vespa CLI を設定します:
+
+```bash
+$ vespa config set target local
+```
+
+コンテナーの起動には少し時間がかかることがあります。`vespa status` を使用して、設定サービスが実行されていることを確認してください。
+
+```bash
+$ vespa status deploy --wait 300
+```
+
+次に、`app` ディレクトリから Vespa アプリケーションをデプロイします:
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+
+## データのフィード
+
+Vespa にフィードするデータは、スキーマ内のドキュメントタイプと一致している必要があります。[データセットのセクション](#dataset)で説明した `convert-msmarco.sh` スクリプトによって生成されるファイル `vespa.json` は、すでに Vespa が期待する適切なフォーマットのデータになっています:
+
+```bash
+$ vespa feed -t http://localhost:8080 dataset/documents.jsonl
+```
+
+
+## データのクエリー
+
+このセクションでは、[Vespa クエリー言語](/ja/querying/query-language)を使ってデータを検索するさまざまな方法を示します。すべての例で `vespa-cli` クライアントを使用します。このツールは HTTP API を使用しており、`-v` を渡すと、同等の `curl` による API リクエストが表示されます。
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where default contains text(@user-query)' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en'
+```
+
+このクエリーでは YQL の [text()](/ja/reference/querying/yql#text) を組み合わせています。これは、ユーザーやモデルからのフリーテキストをアプリケーションロジックと組み合わせるための堅牢な方法です。インデクシングにおける `set_language` と同様に、[language](/ja/linguistics/linguistics#querying-with-language) API パラメーターを使ってクエリーの言語を指定します。これにより、クエリーとドキュメントテキストの両方で対称的な言語処理が保証されます。短いクエリー文字列に対する自動言語検出は不正確であり、クエリーとドキュメントテキストの処理が非対称になる可能性があります。
+
+以下は、小さなデータセットのサンプルを使用した場合の、上記クエリーの部分的な出力です:
+
+```json expandable
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 562
+        },
+        "children": [
+            {
+                "id": "id:msmarco:msmarco::D2977840",
+                "relevance": 0.20676669550322158,
+                "source": "msmarco",
+                "fields": {
+                    "sddocname": "msmarco",
+                    "body": "<sep />After The Cut released a piece explaining <hi>what</hi> the  <hi>dad</hi> <hi>bod</hi>  <hi>is</hi> last week  the internet pretty much exploded into debate over the trend  <sep />",
+                    "documentid": "id:msmarco:msmarco::D2977840",
+                    "id": "D2977840",
+                    "title": "What Is A  Dad Bod   An Insight Into The Latest Male Body Craze To Sweep The Internet",
+                    "url": "http://www.huffingtonpost.co.uk/2015/05/05/what-is-a-dadbod-male-body_n_7212072.html"
+                }
+            }
+        ]
+    }
+}
+```
+
+示されているとおり、コーパス内の 996 件のドキュメントのうち 562 件がクエリーにマッチしました。`first-phase` ランキング式は、マッチしたすべてのドキュメントをスコアリングします。
+
+いくつかの重要な観察ポイント:
+
+- クエリーでは、どのフィールドを検索するかを指定しませんでした。クエリー項でフィールドが指定されていない場合、Vespa はデフォルトで `default` という名前のフィールドセットまたはフィールドを使用します。今回の場合:
+
+```sd
+fieldset default {
+    fields: title, body, url
+}
+```
+
+- `what is dad bod` に対するクエリーは、これら 3 つのフィールドすべてを横断して検索します。
+- スキーマに `default` フィールドセットを定義していなければ、クエリーでフィールドが指定されていないため、上記のクエリーはヒット数ゼロを返すことになります。
+- ヒットの `relevance` は、ランクプロファイルによって計算されたスコアを保持します。Vespa はデフォルトで `default` を使用します。今回の場合:
+
+```sd
+rank-profile default {
+    first-phase {
+        expression: nativeRank(title, body, url)
+    }
+}
+```
+
+[text](/ja/reference/querying/yql#text) 演算子に対してクエリー演算子アノテーションを使うことで、さまざまなマッチングの側面を制御できます。たとえば、text 演算子が生成するヒット数を設定できます:
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where title contains ({targetHits:100}text(@user-query))' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en'
+```
+
+フリーテキストクエリーを title フィールドに限定したため、上記のクエリーがマッチするドキュメント数が `totalCount:116` と少なくなっている点に注意してください。[grammar](/ja/reference/querying/yql#grammar) を変更することで、ユーザークエリーのテキストがどのようにクエリー実行プランに解析されるかを指定できます。次の例では、`grammar:"all"` を使用して、*すべて*のクエリー項が title フィールドにマッチするドキュメントのみを取得したいことを指定しています。
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where title contains ({grammar:"all"}text(@user-query))' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en'
+```
+
+`all` を使用したこのクエリーは、1 件のドキュメントにのみマッチします。ヒットの relevance が上記の例と同じであることに注意してください。2 種類のクエリーの違いは、マッチングの指定にあります。
+
+`text` を使用して、複数のフィールド(またはフィールドセット)を検索するクエリーを構築できます:
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where title contains ({grammar:"all"}text(@user-query)) or url contains ({grammar:"all"}text(@user-query))' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en'
+```
+
+
+### クエリー項によるブースティング
+
+あるフィールドがクエリー項にマッチした場合に、クエリー時のブーストを加えたいことがあります。以下では [rank](/ja/reference/querying/yql#rank) クエリー演算子を使用します。rank クエリー演算子を使うと、最初のオペランドで取得(リトリーブ)を行い、残りのオペランドはランキングにのみ影響を与えることができます。
+
+以下のクエリー時の項ブースティングのアプローチは、`nativeRank` テキストスコアリング機能を使用するという文脈におけるものである点に注意してください。
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where rank(default contains text(@user-query), url contains ({weight:1000, significance:1.0}"www.answers.com"))' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en'
+```
+
+上記は、ユーザークエリーを default フィールドセットに対してマッチさせ、2 番目のオペランドのマッチフィーチャーを生成します。ランキングにさらされるドキュメント数は以前と同じなので、*取得(リトリーバル)*や*マッチング*は変わりません。`rank` 演算子は、ブースティングに関するさまざまなユースケースの実装に使用できます。
+
+
+#### フリーテキストとフィルターの組み合わせ
+
+`text` 演算子はアプリケーションロジックと組み合わせることができます。`text` を他のクエリー時制約と組み合わせる方法を示すために、`url` フィールドにアプリケーション固有のクエリーフィルターを追加します。`ranked:false` を追加して、この特定の項が relevance の計算に寄与しないことを Vespa に伝え、`filter:true` を追加して、この項が[太字表示/ハイライトや動的スニペット](/ja/querying/document-summaries#dynamic-snippets)に使用されないようにします。
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where default contains text(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en'
+```
+
+フィルターに `ranked:false` を使用したため、`relevance` が同じままである点に注意してください。[クエリートレーシング](/ja/querying/query-api#query-tracing)を追加して、何が起きているのかを見てみましょう:
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where default contains text(@user-query) and url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
+  'user-query=what is dad bod' \
+  'trace.level=3' \
+  'language=en'
+```
+
+トレース出力から次のことがわかります:
+
+```
+query=[AND (WEAKAND(100) default:what default:is default:dad default:bod) |url:'huffingtonpost co uk']
+```
+
+`text` の部分が [weakAnd](/ja/ranking/wand) クエリー演算子に変換され、この演算子が `url` フィールドのフレーズ検索('huffingtonpost co uk')と AND 結合されている点に注意してください。また、クエリー項に `default` というプレフィックスが付くフィールドスコーピングにも注目してください。さらに、句読点文字(.)がトークン化の一環として削除されている点にも注意してください。特定の文字列でフィルタリングしたいという一般的なパターンであるとしましょう。その場合は、フレーズマッチングを避けるために別のフィールドを作成すべきです。フレーズマッチングは単一トークンの検索よりもコストが高くなります。
+
+
+### エンドユーザーのクエリー構文のサポート
+
+アプリケーションによっては、エンドユーザーやモデルが特定のフィールドを検索したり、フレーズをマッチさせたりできるようにしたい場合があります。そのためには、`text` の代わりに `userInput` YQL 演算子を使用できます:
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where userInput(@user-query)' \
+  'user-query=title:"dad bod"' \
+  'hits=3' \
+  'language=en'
+```
+
+userInput に渡される文字列が検索対象のフィールドを指定できるため、YQL 側にはフィールドを指定する「field contains」の部分がない点に注意してください。サポートされているさまざまなエンドユーザークエリー言語や設定可能なその他のパラメーターについては、[userInput() のドキュメント](/ja/reference/querying/yql#userinput)を参照してください。
+
+
+### トークン文字列マッチングのデバッグ
+
+クエリートレーシングを、[tokens](/ja/reference/schemas/schemas#tokens) を使用するサマリーと組み合わせると、マッチングのデバッグに役立ちます。
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where url contains ({filter:true,ranked:false}"huffingtonpost.co.uk")' \
+  'trace.level=0' \
+  'language=en' \
+  'summary=debug-tokens'
+```
+
+```json expandable
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 562
+        },
+        "children": [
+            {
+                "id": "index:msmarco/0/59444ddd06537a24953b73e6",
+                "relevance": 0.0,
+                "source": "msmarco",
+                "fields": {
+                    "sddocname": "msmarco",
+                    "url": "http://www.huffingtonpost.co.uk/2015/05/05/what-is-a-dadbod-male-body_n_7212072.html",
+                    "url-tokens": [
+                        "http",
+                        "www",
+                        "huffingtonpost",
+                        "co",
+                        "uk",
+                        "2015",
+                        "05",
+                        "05",
+                        "what",
+                        "is",
+                        "a",
+                        "dadbod",
+                        "male",
+                        "body",
+                        "n",
+                        "7212072",
+                        "html"
+                    ]
+                }
+            }
+        ]
+    }
+}
+```
+
+これにより、入力の `url` フィールドがどのようにトークン化されインデックスされたかを知ることができます。これらがクエリーがマッチできるトークンです。`:`、`,`、`.`、`/`、`_`、`-` のような句読点文字が、テキストのトークン化の一環として削除されている点に注意してください。
+
+観察ポイント:
+
+- この項は `ranked:false` を使用しているため、relevance は 0.0 です。
+- 「://」はマッチできません。これらは `match:text` では検索可能な文字ではないためです。
+- `dadbod` は url 内のトークンです。単一のトークン `dadbod` として表現されているため、`dad` や `bod` にはマッチできません。
+
+言語処理におけるステミングの影響を示すために、同様の例を実行してみましょう:
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where url contains ({filter:true,ranked:false}"http")' \
+  'summary=debug-tokens' \
+  'language=en'
+```
+
+```json
+{
+    "url": "http://www.ourbabynamer.com/meaning-of-Anika.html",
+    "url-tokens": [
+        "http",
+        "www",
+        "ourbabynamer",
+        "com",
+        "meaning",
+        "of",
+        "anika",
+        "html"
+    ]
+}
+```
+
+`https` に対するクエリーが `http` にマッチする点に注意してください。これは、クエリー上の「https」が `http` にステミングされるためです。クエリー側でステミングを無効にして `https` を直接検索すると、結果は 0 件になります。
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where url contains ({filter:true,ranked:false,stem:false}"https")' \
+  'summary=debug-tokens' \
+  'language=en'
+```
+
+同様に、https を http にステミングしない別の言語タグを渡した場合も、結果は 0 件になります:
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where url contains ({filter:true,ranked:false}"https")' \
+  'summary=debug-tokens' \
+  'language=de'
+```
+
+
+## ランキング
+
+前のセクションでは、フリーテキスト検索のマッチング、リンギスティクス、そしてビジネスロジックとフリーテキストのユーザークエリーを組み合わせる方法を扱いました。すべての例では、Vespa の [nativeRank](/ja/ranking/nativerank) テキストスコアリング機能を使用する `default` rank-profile を使用していました。
+
+フリーテキスト検索では、[BM25](/ja/ranking/bm25) のような他のテキストスコアリング関数を使用できます。マッチングの機能(または制限)はすべてそのまま適用され、フィールドセットやフィールドも使用できます。違いはテキストスコアリング関数にあり、BM25 は nativeRank とは異なります。
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where default contains text(@user-query)' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en' \
+  'ranking=bm25'
+```
+
+`nativeRank` のテキストスコアが 0 から 1 の範囲に正規化されるのに対し、BM25 は上限がないことが上記で示されています。クエリー(マッチング)の際に、同じクエリー内で両方のフィーチャーを計算するよう Vespa に指示できます。
+
+スキーマを修正し、新しい rank-profile `combined` を追加します:
+
+```sd expandable
+schema msmarco {
+    document msmarco {
+        field language type string {
+            indexing: "en" | set_language
+        }
+        field id type string {
+            indexing: attribute | summary
+            match: word
+        }
+        field title type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+        field body type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+    }
+    fieldset default {
+        fields: title, body, url
+    }
+    document-summary minimal {
+        summary id {  }
+    }
+    document-summary debug-tokens {
+        summary url {}
+        summary url-tokens {
+            source: url
+            tokens
+        }
+        from-disk
+    }
+    rank-profile default {
+        first-phase {
+            expression: nativeRank(title, body, url)
+        }
+    }
+    rank-profile bm25 inherits default {
+        first-phase {
+            expression: bm25(title) + bm25(body) + bm25(url)
+        }
+    }
+
+    rank-profile combined inherits default {
+        first-phase {
+            expression: bm25(title) + bm25(body) + bm25(url) + nativeRank(title) + nativeRank(body) + nativeRank(url)
+        }
+        match-features {
+            bm25(title)
+            bm25(body)
+            bm25(url)
+            nativeRank(title)
+            nativeRank(body)
+            nativeRank(url)
+        }
+    }
+}
+```
+
+その後、`app` ディレクトリから Vespa アプリケーションを再デプロイします:
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+ランクプロファイルの追加や削除はライブ変更です。ドキュメントのスコアリング方法にのみ影響し、インデクシングやマッチングの方法には影響しないためです。
+
+新しい rank-profile でクエリーを実行します:
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where default contains text(@user-query)' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en' \
+  'ranking=combined'
+```
+
+これにより、次のような結果が生成されます:
+
+```json expandable
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 562
+        },
+        "children": [
+            {
+                "id": "id:msmarco:msmarco::D2977840",
+                "relevance": 25.482783473796484,
+                "source": "msmarco",
+                "fields": {
+                    "matchfeatures": {
+                        "bm25(body)": 19.51565699523739,
+                        "bm25(title)": 4.978933753876959,
+                        "bm25(url)": 0.3678926381724701,
+                        "nativeRank(body)": 0.3010929113058281,
+                        "nativeRank(title)": 0.24814575272673867,
+                        "nativeRank(url)": 0.07106142247709807
+                    },
+                    "sddocname": "msmarco",
+                    "documentid": "id:msmarco:msmarco::D2977840",
+                    "id": "D2977840",
+                    "title": "What Is A  Dad Bod   An Insight Into The Latest Male Body Craze To Sweep The Internet",
+                    "url": "http://www.huffingtonpost.co.uk/2015/05/05/what-is-a-dadbod-male-body_n_7212072.html"
+                }
+            }
+        ]
+    }
+}
+```
+
+rank-profile で `match-features` を使用すると、ヒットに `matchfeatures` フィールドが追加される点に注意してください。ここには、マッチしたドキュメントから計算されたすべてのフィーチャーがあり、最終的な `relevance` スコアは(この場合は)これらのフィーチャーの合計です。このクエリーとランキングの例は、フィールドセットを介して一連のフィールドを検索する単一のクエリーに対して、異なる種類のテキストスコアリングフィーチャーを計算し、それらの組み合わせを使用できることを示しています。
+
+次に、マッチングを title フィールドに限定した以下の例を考えてみましょう:
+
+```bash
+$ vespa query \
+  'yql=select * from msmarco where title contains text(@user-query)' \
+  'user-query=what is dad bod' \
+  'hits=3' \
+  'language=en' \
+  'ranking=combined'
+```
+
+今度は、`body` や `url` のフィーチャーは得られません。これらはクエリーにマッチしなかったためです。
+
+
+## 次のステップ
+
+[ML によるテキスト検索の改善](/ja/learn/tutorials/text-search-ml)をチェックしてください。
+
+
+## クリーンアップ
+
+[ML によるテキスト検索の改善](/ja/learn/tutorials/text-search-ml)ガイドに進まない場合は、コンテナー(およびデータ)を停止して削除できます:
+
+```bash
+$ docker rm -f vespa-msmarco
+```
+
+[^1]: Robertson, Stephen and Zaragoza, Hugo and others, 2009. The probabilistic relevance framework: BM25 and beyond. Foundations and Trends in Information Retrieval.

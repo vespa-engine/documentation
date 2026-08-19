@@ -1,0 +1,930 @@
+---
+title: "ランク・フィーチャー・リファレンス"
+sidebarTitle: "Rank features"
+---
+
+これはVespaのランク・フィーチャーの一覧です。これらのフィーチャーはドキュメントのランキング時に利用でき、[ランキング式](/ja/reference/ranking/ranking-expressions)によって完全なランク・スコアに組み合わせられます。フィーチャーは、手書きの式に適した粗い粒度のフィーチャーと、機械学習に適した細かい粒度のフィーチャーの組み合わせです。
+
+[ランキング・フレームワークの概要](/ja/basics/ranking)と[ランク・フィーチャー設定パラメーター](/ja/reference/ranking/rank-feature-configuration)も参照してください。注意事項:
+
+- 型: すべてのランク・フィーチャー値はdoubleまたはテンソルです。整数は正確な整数値のdoubleに変換されます。文字列値はハッシュ関数を使用して正確な整数値のdoubleに変換されます。ランキング式内の文字列リテラルも同じハッシュ関数を使用して変換されるため、文字列値の等価性テストが可能です。 
+- _正規化_されたフィーチャーは0と1の間の値を取り、0が常に最小値、1が最大値です。正規化されたフィーチャーは、[ランキング式](/ja/reference/ranking/ranking-expressions)によって完全な正規化スコアへとより簡単に組み合わせられるため、通常は正規化されたフィーチャーを優先すべきです。 
+- クエリーは、その値をクエリーとともにフィーチャーとして送信することで、_任意_のランク・フィーチャー値をオーバーライドできます。 
+- 一部のフィーチャーにはパラメーターがあります。パラメーターを _"_ で引用符囲みすることは常に許可されています。ネストされた引用符は許可されておらず、 _\_ でエスケープする必要があります。フィーチャー名としてパースできるパラメーターは引用符なしのままにできます。例: _foo(bar(baz(5.5)))_、_foo("bar(\"baz(\\\"5.5\\\")\")")_、_foo("need quote")_
+
+## フィーチャー一覧
+### クエリー・フィーチャー
+
+- **query(value)**<br/>
+	デフォルト: 0
+
+	クエリーとともに送信されるアプリケーション固有のフィーチャーです。[クエリー・フィーチャーの使用](/ja/ranking/ranking-expressions-features#using-query-variables)を参照してください。
+- **term(n).significance**<br/>
+	デフォルト: 0
+
+	タームの重要度(significance)を表す正規化された数値(0.0から1.0の間)です。他の多くのテキスト・マッチング・ランク・フィーチャーで乗数または重み付けファクターとして使用されます。
+
+	各ノードはローカル・コーパスからsignificance値を推定するため、グローバルな正確さのためには、理想的にはコンテナー内のSearcherによって設定されるべきです。[significance用のJava API](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/TaggableItem.html#setSignificance\(double\))または[significance用のYQLアノテーション](/ja/reference/querying/yql#significance)を使用してください。
+
+	フォールバックとして、Robertson-Sparck-Jonesのターム重み付けに基づくsignificanceが使用されます。これは対数的で、希少なタームの1.0から、一般的なターム(観測されるすべてのドキュメントに出現するターム)の0.5まで下がります。
+
+	「希少」とは頻度が0.000001以下と定義されている点に注意してください。これはタームのドキュメント頻度(観測可能なすべてのドキュメントのうち、そのタームを含むドキュメントの数)であるため、同一の検索プロセス内に実際に大量のドキュメント(最低100万件)が存在するまでは、フォールバックとして1.0を得ることはできません。
+	[numTerms](/ja/reference/ranking/rank-feature-configuration#term)の設定を参照してください。
+- **term(n).weight**<br/>
+	デフォルト: 100
+
+	クエリーで指定された、このクエリー・タームにマッチすることの重要度
+- **term(n).connectedness**<br/>
+	デフォルト: 0.1
+
+	このタームがクエリー内の直前のタームとどれだけ強く結びついているかを表す正規化された強度です。[connectivity用のJava API](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/TaggableItem.html#setConnectivity\(com.yahoo.prelude.query.Item,double\))または[connectivity用のYQLアノテーション](/ja/reference/querying/yql#connectivity)を使用して、[Searcher](/ja/applications/searchers)内でクエリー・タームに割り当てる必要があります。
+- **queryTermCount**<br/>
+	デフォルト: 0
+
+	このクエリー内のタームの総数です。すべてのフィールドにおけるユーザー・タームと合成タームの両方を含みます。
+
+### ドキュメント・フィーチャー
+
+ - **fieldLength(name)**<br/>
+	デフォルト: 1000000
+
+	1つ以上のクエリー・タームがこのフィールドにマッチした場合はこのフィールド内のターム数、どのクエリー・タームもこのフィールドにマッチしなかった場合は1000000です。
+- **queryTermDocumentFrequency(name)**<br/>
+	デフォルト: 空のテンソル
+
+	[インデックス](/ja/reference/schemas/schemas#indexing-index)フィールド*name*を検索する各クエリー・タームについて、[BM25](/ja/ranking/bm25)が使用するドキュメント頻度を保持する`tensor<double>(term{})`です。ドキュメント頻度とは、そのタームを含むドキュメントの数であり、BM25の逆ドキュメント頻度(IDF)コンポーネントへの入力です。このフィーチャーは、デバッグ用途、および[BM25F](https://github.com/vespa-engine/sample-apps/tree/master/examples/bm25f)や[Bayesian BM25](https://github.com/vespa-engine/sample-apps/tree/master/examples/bayesian_bm25)などのカスタム・テキスト・ランキング式での使用のために公開されています。
+
+	このテンソルは*name*を検索するクエリー・タームごとに1つのセルを持ちます。フィールドを検索しないタームは含まれません。各セルにはクエリー内のタームのインデックス(0から始まる文字列)がラベル付けされ、ラベルは番号が振り直されるのではなく、元のクエリー・タームのインデックスを保持します。複数のフィールドを検索するタームの場合、セルには特定のフィールド(ここでは`name`)の頻度が保持されます。
+
+	例: ターム0とターム2が`content`フィールドを検索するクエリー(ターム1は別のフィールドを検索)の場合、`queryTermDocumentFrequency(content)`は次のようになります:
+
+  ```bash
+	tensor<double>(term{}):{ {term:0}:1200.0, {term:2}:57.0 }
+  ```
+	各値は、[significanceモデル](/ja/ranking/significance)が存在する場合はクエリーが提供するオーバーライド値であり、そうでない場合はローカルのコンテント・ノードのインデックス統計(BM25が使用するのと同じ値)です。このドキュメント頻度から導出される[term(n).significance](/ja/reference/ranking/rank-features#term(n).significance)も参照してください。
+
+	*name*は設定済みのインデックス・フィールドでなければなりません。未知のフィールドや非インデックス・フィールドを参照することは設定エラーであり、どのクエリー・タームもフィールドを検索しない場合、テンソルは空になります。
+  <Info>
+	**注:** この値は、significanceモデルによってオーバーライドされない限り、コンテント・ノードごとの統計であるため、ノード間で異なる場合があります。[ストリーミング検索](/ja/performance/streaming-search)では、オーバーライドされていない値は0です。
+  </Info>
+
+- **attribute(name)**<br/>
+
+	デフォルト: null
+
+	[テンソル](/ja/reference/schemas/schemas#tensor)または単一値の*数値*属性の値、あるいは未設定の場合はnull/NaNです。値が未定義かどうかをチェックするには*isNan()*を使用してください。ランキング式で未定義値を使用すると、未定義の動作につながります。
+- **attribute(name,n)**<br/>
+	デフォルト: 0
+
+	指定した名前の*数値*配列属性のインデックスn(0起点)にある値です。インデックス番号は明示的でなければならず、[式関数](/ja/reference/schemas/schemas#function-rank)の出力にはできない点に注意してください。配列属性内のアイテムの順序は、入力フィードでの順序と同じです。アイテムが部分更新で追加された場合、既存のアイテム・リストの末尾に追加されます。
+- **attribute(name,key).weight**<br/>
+	デフォルト: 0
+
+	weighted set属性内の指定したキーに見つかった重み
+- **attribute(name,key).contains**<br/>
+	デフォルト: 0
+
+	指定したキーがweighted set属性に存在する場合は1、そうでない場合は0
+- **attribute(name).count**<br/>
+	デフォルト: 0
+
+	指定した名前の属性内の要素数です。
+- **tensorFromWeightedSet(source,dimension)**<br/>
+	デフォルト: 空のテンソル
+
+	指定した整数または文字列のweighted set属性から、1つのマップド・ディメンションを持つ`tensor<double>`を作成します。属性は完全なフィーチャー名`attribute(name)`として指定します。*dimension*パラメーターは省略可能です。省略した場合、ディメンション名は属性名になります。
+	例: 次のweighted setが与えられた場合:
+
+  ```bash
+	{key1:0, key2:1, key3:2.5}
+  ```
+	*tensorFromWeightedSet(attribute(myField), dim)*は次を生成します:
+  ```bash
+	tensor<double>(dim{}):{ {dim:key1}:0.0, {dim:key2}:1.0, {dim:key3}:2.5} }
+  ```
+  <Info>
+	**注:** これは一時的なテンソルを作成するため、構築コストがかかり、追加のメモリにアクセスします。テンソル評価は、すべてのテンソルのセル型が等しい場合に最も効率的です。最適化を有効にするには[cell\_cast](/ja/reference/ranking/ranking-expressions#cell_cast)を使用してください。また、セットから作成する代わりに、スキーマ内でフィールドをネイティブのテンソルに複製することでパフォーマンスを向上できます。
+  </Info>
+
+- **tensorFromLabels(attribute,dimension)**<br/>
+	デフォルト: 空のテンソル
+
+	指定した単一値または配列属性から、1つのマップド・ディメンションを持つ`tensor<double>`を作成します。値は整数または文字列でなければなりません。属性は完全なフィーチャー名`attribute(name)`として指定します。*dimension*パラメーターは省略可能です。省略した場合、ディメンション名は属性名になります。
+	例: 次の配列値を含む属性フィールド`myField`が与えられた場合:
+
+  ```bash
+	[v1, v2, v3]
+  ```
+	*tensorFromLabels(attribute(myField), dim)*は次を生成します:
+  ```bash
+	tensor<double>(dim{}):{ {dim:v1}:1.0, {dim:v2}:1.0, {dim:v3}:1.0} }
+  ```
+	パフォーマンスに関する注意事項は*tensorFromWeightedSet*を参照してください。
+
+- **tensorFromStructs(attribute,key,value,type)**<br/>
+	デフォルト: 空のテンソル
+
+	指定した`array<struct>`属性から、1つのマップド・ディメンションを持つ`tensor<type>`を作成します。キーはstructフィールド*key*から、値はstructフィールド*value*から取得されます。結果のテンソルは、*key*フィールドにちなんで名付けられた1つのマップド・ディメンションを持ちます。*type*パラメーターは必須で、`float`または`double`でなければなりません。
+
+	例: フィールド`name`(string)と`price`(float)を持つ`array<struct>`属性`items`が与えられた場合:
+
+  ```bash
+	tensorFromStructs(attribute(items), name, price, float)
+  ```
+  ```bash
+	tensor<float>(name{}):{ {name:apple}:1.5, {name:banana}:0.75, {name:cherry}:2.25 }
+  ```
+
+	例: 整数キーとfloat値:
+  ```bash
+	tensorFromStructs(attribute(ids), id, score, double)
+  ```
+  ```bash
+	tensor(id{}):{ {id:100}:10.5, {id:200}:20.75, {id:300}:30.25 }
+  ```
+	この関数は少なくとも4つの引数を取ります。複数の*key*引数を使用して複数のマップド・ディメンションを得ることが可能です。上記の`struct`が`region`フィールドも含んでいた場合、
+
+  ```bash
+	tensorFromStructs(attribute(items), name, region, price, float)
+  ```
+	を使用して`tensor<float>(name{},region{})`を得ることができ、地域ごとに異なるリンゴの価格を持つことが可能になります。
+	
+  *詳細:* 空または欠落した配列は、要求された型の空のテンソルになります。最初の引数は`attribute(...)`ソースでなければなりません。キー(多次元の場合はキーの組み合わせ)が一意であることを保証するのはアプリケーションの責任です。
+	
+  パフォーマンスに関する注意事項は*tensorFromWeightedSet*を参照してください。
+
+### フィールド・マッチ・フィーチャー - 正規化
+
+fieldMatchフィーチャーは、クエリーがフィールドのテキストにマッチする度合いの優れた尺度を提供しますが、計算コストが高いため、多くの場合[second-phase](/ja/ranking/phased-ranking)のランキング式にのみ適しています。このランク・フィーチャー・セットを計算するアルゴリズムの詳細については、[string segment match](/ja/reference/ranking/string-segment-match)ドキュメントを参照してください。fieldMatch(_name_).absoluteOccurrenceのような細かい粒度のサブ・フィーチャーを使用した場合でも、一般的なトップレベルのfieldMatch(_name_)フィーチャーを使用するのと同じ計算量とコストがかかる点に注意してください。
+
+- **fieldMatch(name)**<br/>
+	デフォルト: 0
+
+	このクエリーとフィールドがマッチした度合いの正規化された尺度です(デフォルトで、この長い名前は`match`です)。より細かい粒度のfieldmatchフィーチャーを独自に組み合わせる関数を作成したくない場合は、これを使用してください。
+
+- **fieldMatch(name).proximity**<br/>
+	デフォルト: 0
+
+	正規化された近接度(proximity)です。マッチしたタームが*各セグメント内で*近い場合は1に近い値となり、セグメント内で遠く離れている場合は0に近い値となります。相対的により強く結びついたタームほど、この値に大きく影響します。これは、このフィールドに対するクエリー・タームのabsoluteProximity/平均connectednessです。
+
+	すべてのタームが遠く離れている場合、proximityは1になりますが、セグメント数は多くなる点に注意してください。proximityはセグメント内の近さのみを対象としており、トータルのスコアはセグメント数も考慮に入れる必要があります。
+
+- **fieldMatch(name).completeness**<br/>
+	デフォルト: 0
+
+	正規化された総合的な完全度(completeness)です。フィールドの完全度の方がより重要です:
+
+	queryCompleteness *         ( 1 - [fieldCompletenessImportance](/ja/reference/ranking/rank-feature-configuration#fieldMatch) )         + [fieldCompletenessImportance](/ja/reference/ranking/rank-feature-configuration#fieldMatch) * fieldCompleteness
+- **fieldMatch(name).queryCompleteness**<br/>
+	デフォルト: 0
+
+	フィールド内でマッチしたクエリー・トークンの正規化された比率:
+
+	`matches/query terms searching this field`
+- **fieldMatch(name).fieldCompleteness**<br/>
+	デフォルト: 0
+
+	フィールド内でマッチしたクエリー・トークンの正規化された比率:
+
+	`matches/fieldLength`
+- **fieldMatch(name).orderness**<br/>
+	デフォルト: 0
+
+	選択されたセグメントにおいてタームの順序がどれだけ一致しているかの正規化された指標:
+
+	`1-outOfOrder/pairs`
+- **fieldMatch(name).relatedness**<br/>
+	デフォルト: 0
+
+	異なるタームが互いに関連している(同じセグメント内に出現する)度合いの正規化された尺度:
+
+	`1-(segments-1)/(matches-1)`
+- **fieldMatch(name).earliness**<br/>
+	デフォルト: 0
+
+	このフィールド内で最初のセグメントがどれだけ早く出現するかの正規化された尺度です。
+
+- **fieldMatch(name).longestSequenceRatio**<br/>
+	デフォルト: 0
+
+	最長シーケンスの相対的なサイズの正規化された指標:
+
+	`longestSequence/matches`
+
+- **fieldMatch(name).segmentProximity**<br/>
+	デフォルト: 0
+
+	フィールド内のセグメントの近さ(広がりの逆数)の正規化された指標:
+
+	`1-segmentDistance/fieldLength`
+
+- **fieldMatch(name).unweightedProximity**<br/>
+	デフォルト: 0
+
+	タームのconnectednessを考慮しない、マッチしたタームの正規化された近接度です。この数値は、マッチしたすべてのタームが順番に連続している場合は1に近く、互いに遠く離れているか順序が乱れている場合は0に近くなります。
+  
+- **fieldMatch(name).absoluteProximity**<br/>
+	デフォルト: 0
+
+	クエリー・タームのconnectednessで重み付けされた、マッチしたタームの正規化された近接度を返します。この数値は、マッチしたすべてのタームがデフォルト以下のconnectednessを持つ場合は0.1、順番に連続していて高いconnectednessを持つ場合は1に近く、セグメント内で互いに遠く離れているか順序が乱れている場合は0に近くなります。
+
+- **fieldMatch(name).occurrence**<br/>
+	デフォルト: 0
+
+	クエリーのタームの出現回数の正規化された尺度を返します。これは、*絶対的な回数として、またはフィールドの総コンテンツに対する相対値として*クエリー・タームの出現が多い場合は1、まったくない場合は0です。
+
+	これは、通常のテキストを含むフィールドでの出現に適しています。
+
+- **fieldMatch(name).absoluteOccurrence**<br/>
+	デフォルト: 0
+  
+	クエリーのタームの出現回数の正規化された尺度を返します:
+
+	$$
+	\frac{\underset{\text{all query terms}}{\sum} \left(\right. m i n \left(\right. \text{number of occurrences of the term} , m a x O c c u r r e n c e s \left.\right) \left.\right)}{\left(\right. \text{query term count} \times 100 \left.\right)}
+	$$
+
+	これは、クエリー・タームの出現が多い場合は1、まったくない場合は0です。
+
+	この数値はフィールド長に対する相対値ではないため、マッチしたターム間の相対的な重要性を表すために出現回数を使用する用途(すなわち、通常のテキストではなくキーワードを含むフィールド)に適しています。
+
+- **fieldMatch(name).weightedOccurrence**<br/>
+	デフォルト: 0
+
+	タームの重みで重み付けされた、クエリーのタームの出現回数の正規化された尺度を返します。この数値は、絶対的な回数として、またはフィールドの総コンテンツに対する相対値として、高い重みを持つクエリー・タームの出現が多い場合は1に近く、まったくない場合は0です。
+
+- **fieldMatch(name).weightedAbsoluteOccurrence**<br/>
+	デフォルト: 0
+
+	重みを考慮した、クエリーのタームの出現回数の正規化された尺度を返します。より高い重みを持つクエリー・タームの出現は、より低い重みのタームよりも大きな影響を持ちます。
+	これは、高い重みを持つタームの出現が多い場合は1、まったくない場合は0です。
+
+	この数値はフィールド長に対する相対値ではないため、マッチしたターム間の相対的な重要性を表すために出現回数を使用する用途(すなわち、通常のテキストではなくキーワードを含むフィールド)に適しています。
+
+- **fieldMatch(name).significantOccurrence**<br/>
+	デフォルト: 0
+
+	タームのsignificanceで重み付けされた、クエリーのタームの出現回数の正規化された尺度を、*絶対的な回数として、またはフィールドの総コンテンツに対する相対値として*返します。
+
+	この数値は、高いsignificanceを持つタームの出現が多い場合は1、まったくない場合は0です
+
+### フィールド・マッチ・フィーチャー - 正規化かつクエリー全体に対する相対値
+- **fieldMatch(name).weight**<br/>
+	デフォルト: 0
+
+	クエリー全体に対する、このマッチの正規化された重み: *マッチした*すべてのタームの重みの合計/すべての*クエリー*・タームの重みの合計。すべてのクエリー・タームがマッチした場合は1です。どのタームもマッチしなかった場合、またはマッチの重みがゼロの場合は0です。
+
+	クエリーのすべてのタームにわたるこの数値の合計は常に1であるため、各フィールドの正規化されたランク・フィーチャーに同じフィールドのこの数値を掛けたものをすべてのフィールドにわたって合計すると、正規化された数値が得られます。
+
+	これはフィールド内でマッチしたクエリー・タームの数に応じてスケールする点に注意してください。そうならないコンポーネントが必要な場合は、matchesで割ってください。
+
+- **fieldMatch(name).significance**<br/>
+	デフォルト: 0
+
+	クエリー全体に対する、このマッチのタームの正規化されたsignificanceを返します: *マッチした*すべてのタームのsignificanceの合計/すべての*クエリー*・タームのsignificanceの合計。すべてのクエリー・タームがマッチした場合は1です。どのタームもマッチしなかった場合、またはマッチしたすべてのタームのsignificanceがゼロの場合、この数値はゼロです。
+
+	この指標はweightと同じ特性を持ちます。
+  
+	単一タームのsignificanceがどのように計算されるかについては、[term(n).significance](/ja/reference/ranking/rank-features#term(n).significance)フィーチャーを参照してください。
+- **fieldMatch(name).importance**<br/>
+	デフォルト: 0
+
+	significanceとweightの平均を返します。これらの指標と同じ特性を持ちます。
+### フィールド・マッチ・フィーチャー - 非正規化
+
+- **fieldMatch(name).segments**<br/>
+	デフォルト: 0
+
+	クエリーにできる限り完全にマッチするために必要な、フィールド・テキストのセグメント数
+- **fieldMatch(name).matches**<br/>
+	デフォルト: 0
+
+	このフィールド内でマッチしたクエリー・タームの総数
+- **fieldMatch(name).degradedMatches**<br/>
+	デフォルト: 0
+
+	このフィールド内でマッチした劣化(degraded)クエリー・タームの数です。劣化タームとは、計算中に出現情報が利用できないタームです。劣化マッチの数はマッチの総数以下です。
+- **fieldMatch(name).outOfOrder**<br/>
+	デフォルト: 0
+
+	マッチしたフィールド・セグメント*内*の、順序が乱れたトークン・シーケンスの総数
+- **fieldMatch(name).gaps**<br/>
+	デフォルト: 0
+
+	フィールド・セグメント内の位置ジャンプ(後方または前方)の総数
+- **fieldMatch(name).gapLength**<br/>
+	デフォルト: 0
+
+	セグメント内のすべてのギャップの合計長
+- **fieldMatch(name).longestSequence**<br/>
+	デフォルト: 0
+
+	フィールド内でマッチした、連続かつ順序どおりの最長シーケンスのサイズ
+- **fieldMatch(name).head**<br/>
+	デフォルト: 0
+
+	最初にマッチしたセグメントの開始位置より前にあるフィールド内のトークン数
+- **fieldMatch(name).tail**<br/>
+	デフォルト: 0
+
+	最後にマッチしたセグメントの終了位置より後にあるフィールド内のトークン数
+- **fieldMatch(name).segmentDistance**<br/>
+	デフォルト: 0
+
+	クエリーへのマッチを構成するすべてのセグメント間の距離の合計です。*フィールド*内で隣接する各セグメントの*開始位置*を隔てるトークン位置の数の合計として測定されます。
+
+### クエリーとフィールドの類似度
+ - **fieldTermMatch(name,n).firstPosition**<br/>
+	デフォルト: 1000000
+
+	このインデックス・フィールドにおける、このクエリー・タームの最初の出現位置です。[numTerms](/ja/reference/ranking/rank-feature-configuration#fieldTermMatch)の設定
+- **fieldTermMatch(name,n).occurrences**<br/>
+	デフォルト: 0
+
+	このインデックス・フィールドにおける、このクエリー・タームの出現回数
+
+- **matchCount(name)**<br/>
+	デフォルト: 0
+
+	クエリー内のいずれかのタームがこのインデックス/属性フィールドにマッチした回数を返します。
+
+- **matches(name)**<br/>
+	デフォルト: 0
+
+	指定した名前のインデックス/属性フィールドがクエリーにマッチした場合は1を返します。
+- **matches(name,n)**<br/>
+	デフォルト: 0
+
+	指定した名前のインデックス/属性フィールドが、位置*n*のクエリー・タームにマッチした場合は1を返します。
+- **termDistance(name,x,y).forward**<br/>
+	デフォルト: 1000000
+
+	このインデックス・フィールドにおける、ターム*x*とターム*y*の出現間の最小距離です。ターム*x*はターム*y*より前に出現します。
+
+- **termDistance(name,x,y).forwardTermPosition**<br/>
+	デフォルト: 1000000
+
+	forward距離に使用される、このインデックス・フィールドにおけるターム*x*の出現位置です。
+- **termDistance(name,x,y).reverse**<br/>
+	デフォルト: 1000000
+
+	このインデックス・フィールドにおける、ターム*y*とターム*x*の出現間の最小距離です。ターム*y*はターム*x*より前に出現します。
+- **termDistance(name,x,y).reverseTermPosition**<br/>
+	デフォルト: 1000000
+
+	reverse距離に使用される、このインデックス・フィールドにおけるターム*y*の出現位置です。
+
+### クエリー・タームとフィールドのマッチ・フィーチャー
+
+- **fieldTermMatch(name,n).firstPosition**<br/>
+	デフォルト: 1000000
+
+	このインデックス・フィールドにおける、このクエリー・タームの最初の出現位置です。[numTerms](/ja/reference/ranking/rank-feature-configuration#fieldTermMatch)の設定
+- **fieldTermMatch(name,n).occurrences**<br/>
+	デフォルト: 0
+
+	このインデックス・フィールドにおける、このクエリー・タームの出現回数
+- **matchCount(name)**<br/>
+	デフォルト: 0
+
+	クエリー内のいずれかのタームがこのインデックス/属性フィールドにマッチした回数を返します。
+- **matches(name)**<br/>
+	デフォルト: 0
+
+	指定した名前のインデックス/属性フィールドがクエリーにマッチした場合は1を返します。
+- **matches(name,n)**<br/>
+	デフォルト: 0
+
+	指定した名前のインデックス/属性フィールドが、位置*n*のクエリー・タームにマッチした場合は1を返します。
+- **termDistance(name,x,y).forward**<br/>
+	デフォルト: 1000000
+
+	このインデックス・フィールドにおける、ターム*x*とターム*y*の出現間の最小距離です。ターム*x*はターム*y*より前に出現します。
+- **termDistance(name,x,y).forwardTermPosition**<br/>
+	デフォルト: 1000000
+
+	forward距離に使用される、このインデックス・フィールドにおけるターム*x*の出現位置です。
+- **termDistance(name,x,y).reverse**<br/>
+	デフォルト: 1000000
+
+	このインデックス・フィールドにおける、ターム*y*とターム*x*の出現間の最小距離です。ターム*y*はターム*x*より前に出現します。
+- **termDistance(name,x,y).reverseTermPosition**<br/>
+	デフォルト: 1000000
+
+	reverse距離に使用される、このインデックス・フィールドにおけるターム*y*の出現位置
+
+### インデックスされた複数値文字列フィールド用フィーチャー
+- **elementCompleteness(name).completeness**<br/>
+	デフォルト: 0
+
+	要素の重みを考慮した上で、この出力に対して最も高い値を生成するフィールド内の要素についての、fieldCompletenessとqueryCompletenessの重み付き組み合わせです。重み付けは[elementCompleteness(name).fieldCompletenessImportance](/ja/reference/ranking/rank-feature-configuration#elementCompleteness)を使用して調整できます。
+- **elementCompleteness(name).fieldCompleteness**<br/>
+	デフォルト: 0
+
+	最もよくマッチした要素のフィールド完全度です。これは次のように計算されます:
+
+	`max( (number of query terms matched in the element) /       (element size), 1.0)`.
+- **elementCompleteness(name).queryCompleteness**<br/>
+	デフォルト: 0
+
+	最もよくマッチした要素のクエリー完全度です。これは次のように計算されます:
+
+	`(sum of weight for query terms matched in the element) /       (sum of weight for query terms searching the field)`.
+- **elementCompleteness(name).elementWeight**<br/>
+	デフォルト: 0
+
+	最もよくマッチした要素の重みです。デフォルトから始まります。すなわち、負の重みは0を返します。
+- **elementSimilarity(name)**<br/>
+	デフォルト: 0
+
+	クエリーと個々のフィールド要素との間の類似度を集約したものです。`textSimilarity`フィーチャーで使用されるのと同じサブ・スコアが、フィールド内の個々の要素ごとに計算されます。最終出力は、組み合わされた要素類似度尺度(類似度尺度は`textSimilarity`フィーチャーのデフォルト出力と同じ方法で組み合わされます)に要素の重みを掛けたものの最大値として計算されます。要素の重みは、配列の場合は1、インデックスされたweighted setの場合は与えられた重みです。
+
+	これは柔軟なフィーチャーです。各要素のサブ・スコアの組み合わせ方や、要素スコアの集約方法は設定可能です。単一のフィールドから複数のシグナルを取得したい場合は、追加の出力を加えることもできます。このフィーチャーをカスタマイズするには[elementSimilarity](/ja/reference/ranking/rank-feature-configuration#elementSimilarity)を使用してください。
+### 属性マッチ・フィーチャー - 正規化
+ - **attributeMatch(name)**<br/>
+	デフォルト: 0
+
+	このクエリーとフィールドがマッチした度合いの正規化された尺度です。これは現在、completenessと同じです。属性の用途によっては、これが適切な指標である場合もあれば、そうでない場合もある点に注意してください。属性がアイテムの数(タグなど)を表すweighted setである場合、`normalizedWeight`の方がおそらくより適切な指標です。
+- **attributeMatch(name).completeness**<br/>
+	デフォルト: 0
+
+	正規化された総合的な完全度です。フィールドの完全度の方がより重要です:
+	
+  queryCompleteness * ( 1 - [fieldCompletenessImportance](/ja/reference/ranking/rank-feature-configuration#attributeMatch) +        [fieldCompletenessImportance](/ja/reference/ranking/rank-feature-configuration#attributeMatch) * fieldCompleteness )`
+- **attributeMatch(name).queryCompleteness**<br/>
+	デフォルト: 0
+
+	この属性のクエリー完全度:
+	`matches/the number of query terms searching this attribute`
+- **attributeMatch(name).fieldCompleteness**<br/>
+	デフォルト: 0
+
+	フィールド内でマッチしたクエリー・トークンの正規化された比率です。配列の場合: `matches/array length` weighted setの場合: `sum of weight of matched terms/sum of weights of entire set`。これは大きなweighted setに対しては計算コストが比較的高くなります。
+- **attributeMatch(name).normalizedWeight**<br/>
+	デフォルト: 0
+
+	weighted set内のほとんどのマッチの属性重みが([maxWeight](/ja/reference/ranking/rank-feature-configuration#attributeMatch)に対して)高い場合は1に近く、そうでない場合は0となる数値
+- **attributeMatch(name).normalizedWeightedWeight**<br/>
+	デフォルト: 0
+
+	weighted set内のほとんどのマッチの属性重みが([maxWeight](/ja/reference/ranking/rank-feature-configuration#attributeMatch)に対して)高い場合は1に近く、高い重みを持つクエリー・タームがより大きな影響を持ち、そうでない場合は0となる数値
+- **closeness(dimension,name)**<br/>
+	デフォルト: 0
+
+	[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor)クエリー・オペレーターとともに使用します。ドキュメント・テンソル内のベクトルがクエリーで与えられたベクトルに近い場合に1に近くなる数値です。ドキュメントとクエリーのテンソルにおいて、ベクトルを表すインデックスド・ディメンションは同一でなければなりません。
+	- *dimension*: *name*のディメンションを指定します。これは文字列`field`または文字列`label`のいずれかでなければなりません。
+		`field`を使用する場合、与える名前は適切な型のテンソル属性を持つフィールドでなければなりません。ドキュメント・タイプがベクトル・フィールドを1つしか持たない場合によく使用されます。[例](/ja/querying/nearest-neighbor-search#minimal-example)を参照してください。
+		`label`を使用する場合、クエリーには、与えられた*name*にマッチする[label](/ja/reference/querying/yql#label)を持つ[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor)クエリー・アイテムが含まれていると想定されます。これは複数のベクトル・フィールドを持つ場合に便利で、`closeness()`は該当フィールドが設定されたnearestNeighborオペレーターにマップされます。[例](/ja/querying/nearest-neighbor-search-guide#using-label)。
+	- *name*: フィールド名またはラベルの値。
+
+  <Info>
+	**注:** `closeness()`は、nearestNeighborオペレーターでマッチしたベクトル**のみ**に基づいて計算されます。つまり、nearestNeighbor検索が近似である場合、`closeness()`の値は必ずしも`closest()`ランク・フィーチャーが返すのと同じベクトルに基づいて計算されるとは限りません。`closest()`は指定された*すべて*のドキュメント・ベクトルに基づいて計算されるためです。
+  </Info>
+	出力値は次のとおりです 
+	$$
+	closeness(dimension, name) = \frac{1.0}{1.0 + distance(dimension, name)}
+	$$
+	テンソル・フィールドがドキュメントごとに複数のベクトルを保存している場合、上記の計算にはドキュメントのベクトルとクエリー・ベクトルとの間の最小距離が使用されます。
+- **freshness(name)**<br/>
+	デフォルト: 0
+
+	属性*name*のタイムスタンプが、[maxAge](/ja/reference/ranking/rank-feature-configuration#freshness)と比較して現在時刻に近い(新しい)場合に1に近くなる数値:
+
+	`max( 1-age(name)/maxAge , 0 )`
+
+	経過時間に対して線形にスケールします。[freshnessプロット](#freshness)を参照してください。
+- **freshness(name).logscale**<br/>
+	デフォルト: 0
+
+	対数形状のfreshnessです。これも1から0まで変化しますが、[freshnessプロット](/ja/reference/ranking/rank-features#freshness)のような形になります。この関数は`-log(age(name) + scale)`に基づき、次のように計算されます:
+
+	$$ 
+	\frac{l o g \left(\right. m a x A g e + s c a l e \left.\right) - l o g \left(\right. a g e \left(\right. n a m e \left.\right) + s c a l e \left.\right)}{l o g \left(\right. m a x A g e + s c a l e \left.\right) - l o g \left(\right. s c a l e \left.\right)}
+	$$
+
+	ここで、scaleは[halfResponseとmaxAge](/ja/reference/ranking/rank-feature-configuration#freshness)を使用して次のように定義されます:
+
+	$$
+	\frac{- h a l f R e s p o n s e^{2}}{2 \times h a l f R e s p o n s e - m a x A g e}
+	$$
+
+	`age(name) == halfResponse`のとき、関数の出力は0.5です。
+### 属性マッチ・フィーチャー - 正規化かつクエリー全体に対する相対値
+ 
+- **attributeMatch(name).weight**<br/>
+	デフォルト: 0
+
+	これはfieldMatch(*name*).weightと同じセマンティクスを持ちます。
+- **attributeMatch(name).significance**<br/>
+	デフォルト: 0
+
+	これはfieldMatch(*name*).significanceと同じセマンティクスを持ちます。
+- **attributeMatch(name).importance**<br/>
+	デフォルト: 0
+
+	significanceとweightの平均を返します。これらの指標と同じ特性を持ちます。
+
+### 属性マッチ・フィーチャー - 非正規化
+
+- **attributeMatch(name).matches**<br/>
+	デフォルト: 0
+
+	この属性内でマッチしたクエリー・タームの数
+- **attributeMatch(name).totalWeight**<br/>
+	デフォルト: 0
+
+	weighted set属性内でマッチした属性キーの重みの合計
+- **attributeMatch(name).averageWeight**<br/>
+	デフォルト: 0
+
+	totalWeight/matches
+- **attributeMatch(name).maxWeight**<br/>
+	デフォルト: 0
+
+	weighted set属性内でマッチした属性キーの重みの最大値
+- **closest(name)**<br/>
+	デフォルト: {}
+
+	[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor)クエリー・オペレーターと、ドキュメントごとに複数のベクトルを保存するテンソル・フィールド属性*name*とともに使用します。このフィーチャーは、1つ以上のマップド・ディメンションと、値1.0を持つ1つのポイントを持つテンソルを返します。そのポイントのラベルは、最近傍検索でどのドキュメント・ベクトルがクエリー・ベクトルに最も近かったかを示します。
+	*nearestNeighbor*オペレーターとともに使用される型`tensor<float>(m{},x[3])`のテンソル・フィールドが与えられた場合、このフィーチャーの出力例は次のとおりです:
+
+  ```bash
+	tensor<float>(m{}):{ 3: 1.0 }
+  ```
+	この例では、マップドの*m*ディメンションでラベル*3*を持つドキュメント・ベクトルがクエリー・ベクトルに最も近かったことを示します。
+- **closest(name,label)**<br/>
+	デフォルト: {}
+
+	[label](/ja/ranking/multivalue-query-operators#raw-scores-and-query-item-labeling) *label*でタグ付けされた[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor)クエリー・オペレーターと、ドキュメントごとに複数のベクトルを保存するテンソル・フィールド属性*name*とともに使用します。
+	詳細は[closest(name)](/ja/reference/ranking/rank-features#closest(name))を参照してください。
+- **distance(dimension,name)**<br/>
+	デフォルト: doubleの最大値
+	[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor)クエリー・オペレーターとともに使用します。ドキュメント内のポイント・ベクトルが、クエリー内のマッチするポイント・ベクトルに近い場合に0に近くなる数値です。ドキュメントのベクトルとクエリーのベクトルは、N次元空間内のポイントを表す、サイズNのインデックスド・ディメンションを1つ持つ同じテンソル型でなければなりません。
+	- *dimension*: *name*のディメンションを指定します。これは文字列`field`または文字列`label`のいずれかでなければなりません。
+		`field`を使用する場合、与える名前は適切な型のテンソル属性を持つフィールドでなければなりません。ドキュメント・タイプがベクトル・フィールドを1つしか持たない場合によく使用されます。[例](/ja/querying/nearest-neighbor-search#minimal-example)を参照してください。
+		`label`を使用する場合、クエリーには、与えられた*name*にマッチする[label](/ja/reference/querying/yql#label)を持つ[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor)クエリー・アイテムが含まれていると想定されます。これは複数のベクトル・フィールドを持つ場合に便利で、`distance()`は該当フィールドが設定されたnearestNeighborオペレーターにマップされます。[例](/ja/querying/nearest-neighbor-search-guide#using-label)。
+	- *name*: フィールド名またはラベルの値。
+
+	出力値は使用される[距離メトリック](/ja/reference/schemas/schemas#distance-metric)によって異なります。デフォルトは、「n」次元のクエリー・ポイント「d」とドキュメントのテンソル・フィールド内のポイント「d」との間のユークリッド距離です: 
+	
+	$$ 
+	d i s t a n c e = \sqrt{\sum_{i = 1}^{n} \left(\right. q_{i} - d_{i} \left.\right)^{2}}
+	$$
+
+
+	テンソル・フィールドがドキュメントごとに複数のベクトルを保存している場合、上記の計算にはドキュメントのベクトルとクエリー・ベクトルとの間の最小距離が使用されます。
+- **age(name)**<br/>
+	デフォルト: 10B
+
+	この名前を持つ属性に保存されたUNIX時間値を基準とした、ドキュメントの経過時間(秒)
+### 複数のフィールドと属性を組み合わせるフィーチャー
+- **match**<br/>
+	デフォルト: 0
+
+	検索対象のすべてのフィールドと属性のfieldMatchスコアとattributeMatchスコアの正規化された平均です。各フィールドと属性の寄与は、その*weight*設定によって重み付けされます。
+- **match.totalWeight**<br/>
+	デフォルト: 0
+
+	クエリーが検索するすべてのフィールドと属性のweight設定の合計
+- **match.weight.name**<br/>
+	デフォルト: 100
+
+	フィールドまたは属性の(スキーマの)weight設定
+
+### ランク・スコア
+
+- **bm25(field)**<br/>
+	デフォルト: 0
+
+	指定した[インデックスされた文字列フィールド](/ja/reference/schemas/schemas#indexing-index)に対して[Okapi BM25](https://en.wikipedia.org/wiki/Okapi_BM25)ランキング関数を計算します。このフィーチャーは計算コストが低く、nativeRankより約3〜4倍高速でありながら、品質面でも優れたランク・スコアを提供します。このフィーチャーは、テキスト・ドキュメントをランク付けする際のfirst phaseランキング関数での使用に適した候補です。bm25フィーチャーで使用するには、フィールドを有効化する必要がある点に注意してください。フィールド定義の[index](/ja/reference/schemas/schemas#index)セクションで*enable-bm25*フラグを設定してください。より詳細な情報については[BM25リファレンス](/ja/ranking/bm25)を参照してください。
+- **elementwise(bm25(field),dimension,cell\_type)**<br/>
+	デフォルト: tensor(dimension{}):{}
+	指定した*複数値*の[インデックスされた文字列フィールド](/ja/reference/schemas/schemas#indexing-index)の各要素に対して[Okapi BM25](https://en.wikipedia.org/wiki/Okapi_BM25)ランキング関数を計算し、マッチした各要素のbm25スコアを含む、単一のマップド・ディメンションを持つテンソルを作成します。要素のインデックス(0起点)がディメンションのラベルとして使用されます。このフィーチャーは[bm25](#bm25)より計算コストが高く、*enable-bm25*フラグを必要とせず、[ランク・プロパティ](/ja/reference/ranking/rank-feature-configuration#elementwise-bm25)でチューニングできます。
+
+	*cell\_type*パラメーターは、ランク・プロパティを設定する場合を除き、省略できます(デフォルト値は`double`です)。
+	
+  例: `content`フィールドが型`array<string>`で、クエリー・タームが要素2と5で見つかった場合、サマリー・フィーチャーとしてのフィーチャー`elementwise(bm25(content),x,float)`は次のように表示されることがあります:
+
+  ```bash
+	"elementwise(bm25(content),x,float)": {
+	  "type": "tensor(x{})",
+	  "cells": {
+	    "2": 0.5112776,
+	    "5": 0.1021805
+	  }
+	}
+  ```
+- **nativeRank**<br/>
+	デフォルト: 0
+
+	Vespaが低コストで計算する、十分に良好なランク・スコアです。この値はfirst phaseランキング関数の適切な候補であり、デフォルトのランク・プロファイルで使用されるデフォルトです。この関数が計算する値はVespaのバージョン間で変わる可能性があります。詳細は[native rankリファレンス](/ja/reference/ranking/nativerank)を参照してください。
+- **nativeRank(field,...)**<br/>
+	デフォルト: 0
+
+	*nativeRank*と同じですが、指定したフィールドのセットのみが計算に使用されます。
+- **nativeFieldMatch**<br/>
+	デフォルト: 0
+
+	インデックス・フィールドにおけるクエリー・タームのマッチの良さを捉えます。*nativeRank*で使用されます。詳細は[native rankリファレンス](/ja/reference/ranking/nativerank)を参照してください。
+- **nativeFieldMatch(field,...)**<br/>
+	デフォルト: 0
+
+	*nativeFieldMatch*と同じですが、指定したインデックス・フィールドのセットのみが計算に使用されます。
+- **nativeProximity**<br/>
+	デフォルト: 0
+
+	インデックス・フィールドにおいてマッチしたクエリー・タームがどれだけ近くに出現するかを捉えます。*nativeRank*で使用されます。詳細は[native rankリファレンス](/ja/reference/ranking/nativerank)を参照してください。
+- **nativeProximity(field,...)**<br/>
+	デフォルト: 0
+
+	*nativeProximity*と同じですが、指定したインデックス・フィールドのセットのみが計算に使用されます。
+- **nativeAttributeMatch**<br/>
+	デフォルト: 0
+
+	属性フィールドにおけるクエリー・タームのマッチの良さを捉えます。*nativeRank*で使用されます。詳細は[native rankリファレンス](/ja/reference/ranking/nativerank)を参照してください。
+- **nativeAttributeMatch(field,...)**<br/>
+	デフォルト: 0
+
+	*nativeAttributeMatch*と同じですが、指定した属性フィールドのセットのみが計算に使用されます。
+- **nativeDotProduct(field)**<br/>
+	デフォルト: 0
+
+	指定したフィールドについて、クエリー・タームの重みとマッチの重みの間のスパース・ドット積を計算します。例: weighted set文字列フィールドX:
+
+  ```bash
+	"X": {
+	    "x": 10,
+	    "y": 20,
+	    "z": 30
+	}
+  ```
+	クエリー(x!2 OR y!4)に対して、そのドキュメントのnativeDotProduct(X)フィーチャーの値は100(10\*2+20\*4)になります。
+  <Info>
+	**注:** `nativeDotProduct`および`nativeDotProduct(field)`はドット積の計算としては最適ではありません。[dotProduct(name,vector)](/ja/reference/ranking/rank-features#dotProduct(name,vector))の使用を検討してください。
+  </Info>
+- **nativeDotProduct**<br/>
+	デフォルト: 0
+
+	上記と同様にクエリー・タームの重みとマッチの重みの間のスパース・ドット積を計算しますが、すべてのターム/フィールドの組み合わせが対象です。
+- **firstPhase**<br/>
+	デフォルト: 0
+
+	第1フェーズで計算されたランク・スコアの値(first phaseのランキング式では利用不可)
+- **secondPhase**<br/>
+	デフォルト: 0
+
+	第2フェーズで計算されたランク・スコアの値(first phaseおよびsecond phaseのランキング式では利用不可)
+- **firstPhaseRank**<br/>
+	デフォルト: doubleの最大値
+
+	second phaseで再ランク付けするドキュメントを選択する際の、コンテント・ノード内におけるfirst phase後のドキュメントの順位です。first phase後の最良のドキュメントの順位は1、2番目に良いドキュメントは2、というようになります。second phaseランキングに選択されなかったドキュメントや、サポートされていないケース([ストリーミング検索](/ja/performance/streaming-search#differences-in-streaming-search)、[サマリー・フィーチャー](/ja/reference/schemas/schemas#summary-features)、first phaseの式)では、このフィーチャーはデフォルト値を返します。複数ノード構成では、複数のドキュメントが同じ*firstPhaseRank*値を持つことがあります。
+- **firstPhaseMax**<br/>
+	デフォルト: -infinity
+
+	コンテント・ノード上でマッチしたすべてのヒットの中での、first-phaseランク・スコアの最大値です。各コンテント・ノードでローカルに計算されるため、ノードごとに異なる結果になる場合があります。
+- **relevanceScore**<br/>
+	デフォルト: -
+
+	第1フェーズ、または(定義されている場合)第2フェーズで計算されたランク・スコアの値(first phaseおよびsecond phaseのランキング式では利用不可)(8.559.30以降)。
+### グローバル・フィーチャー
+- **globalSequence**<br/>
+	デフォルト: n/a
+
+	(1 `<<` 48) - (LocalDocumentId `<<` 16 || [distribution-key](/ja/reference/applications/services/content#node))として計算されるグローバルなシーケンス番号です。これによりドキュメントにグローバルなシーケンスが与えられます。これはドキュメントの安定した順序付けを低コストで実現する方法です。この値の範囲が大きい点に注意してください。また、システムが安定していない場合、例えば新しいノードの参加やノードの削除によってドキュメントが移動する場合、ドキュメントが別のレプリカで見つかる可能性があるため、もはや安定しなくなる点にも注意してください。真のグローバルな順序付けが必要な場合は、ドキュメントに一意の数値IDを[属性](/ja/reference/schemas/schemas#attribute)フィールドとして割り当て、[attribute(name)](/ja/reference/ranking/rank-features#attribute(name))フィーチャーを使用することを推奨します。
+- **now**<br/>
+	デフォルト: n/a
+
+	クエリーが実行された時刻のUNIX時間(エポックからの秒数)
+- **num_docs_indexed**<br/>
+	デフォルト: n/a
+
+	タームごとのドキュメント頻度オーバーライドが存在しない場合に、[BM25](/ja/ranking/bm25)の総ドキュメント数として使用されるローカルのドキュメント数です。これはBM25の逆ドキュメント頻度の計算で使用される*N*の項です。
+  <Info>
+	**注:** この値はローカルで計算されるコンテント・ノードごとの統計であり、クラスター全体の値では*ありません*。ノード間で異なる場合があります。[ストリーミング検索](/ja/performance/streaming-search)では、このフィーチャーは1を返します。
+  </Info>
+
+- **random**<br/>
+	デフォルト: n/a
+
+	ランク評価中にドキュメントごとに1回抽選される、`[0,1>`の範囲の擬似乱数です。デフォルトでは、現在時刻(マイクロ秒)がシード値として使用されます。ユーザーはランク・プロファイルで[random.seed](/ja/reference/ranking/rank-feature-configuration#random)を設定することでシード値を指定できます。複数の独立した乱数が必要な場合は、`random(foo)`、`random(bar)`のようにフィーチャーに名前を付けられます。
+- **random.match**<br/>
+	デフォルト: n/a
+
+	特定のヒットに対して安定した、`[0,1>`の範囲の擬似乱数です。つまり、あるヒットは(単一ノード上では)常に同じランダム・スコアを受け取ります。異なるクエリー間でスコアを変える必要がある場合は、クエリーに依存するシード値を指定してください。デフォルトのシード値は1024です。ユーザーはクエリー・パラメーター[rankproperty.random.match.seed=`<value>`](/ja/reference/api/query#ranking.properties)を追加することでシード値を指定できます。複数の独立した乱数が必要な場合は、`random(foo).match`、`random(bar).match`のようにフィーチャーに名前を付けられます。
+- **randomNormal(mean,stddev)**<br/>
+	デフォルト: 0.0,1.0
+
+	[random](/ja/reference/ranking/rank-features#random)と同じですが、与えられたmeanとstddevパラメーターを使用して、乱数がガウス分布から抽選されます。パラメーターなしで呼び出すことができ、その場合はデフォルト値が想定されます。シードは*random*と同様に設定されます。同じパラメーターで複数の独立した乱数が必要な場合は、`randomNormal(0.0,1.0,foo)`、`randomNormal(0.0,1.0,bar)`のようにフィーチャーに名前を付けられます。*randomNormal*のパラメーターが同じでない場合は、追加の名前を与える必要はありません。例えば`randomNormal(0.0, 0.1)`と`randomNormal(0.0, 0.5)`は2つの独立した値になります。
+- **randomNormalStable(mean,stddev)**<br/>
+	デフォルト: 0.0,1.0
+
+	[randomNormal](/ja/reference/ranking/rank-features#randomNormal(mean,stddev))と同じですが、[random.match](/ja/reference/ranking/rank-features#random.match)と同様に、生成される数値は特定のヒットに対して安定しています。
+- **constant(name)**<br/>
+	デフォルト: n/a
+
+	[constant](/ja/reference/schemas/schemas#constant)テンソル値を返します。
+### マッチ・オペレーター・スコア
+
+[Raw scoresとクエリー・アイテムのラベリング](/ja/ranking/multivalue-query-operators#raw-scores-and-query-item-labeling)を参照してください 
+
+- **rawScore(field)**<br/>
+	デフォルト: 0
+
+	このフィールドに対してマッチ・オペレーターが生成したすべてのraw scoreの合計です。
+- **itemRawScore(label)**<br/>
+	デフォルト: 0
+
+	指定したラベルを持つクエリー・アイテムが生成したraw scoreです。
+
+### ジオ検索
+これらのフィーチャーは、地理座標間の距離、すなわち緯度/経度のペアで定義される地球表面上のポイント間の距離に基づくランキングのためのものです。メインのドキュメントは[ジオ検索](/ja/querying/geo-search)を参照してください。
+
+<Info>
+**注:** これらのフィーチャーの一部は、[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor)クエリー・オペレーターで使用されるフィーチャーと同じ名前を持っています。混同しないよう注意してください!
+</Info>
+
+- **closeness(name)**<br/>
+	デフォルト: 0
+
+	属性*name*内の位置が、[maxDistance](/ja/reference/ranking/rank-feature-configuration#closeness)と比較してクエリーの位置に近い場合に1に近くなる数値:
+
+	`max(1-distance(name)/maxDistance , 0)`
+
+	距離に対して線形にスケールします。[closenessプロット](/ja/reference/ranking/rank-features#closeness)を参照してください。
+- **closeness(name).logscale**<br/>
+	デフォルト: 0
+
+	対数形状のcloseness です。通常のclosenessと同様に1から0まで変化しますが、[closenessプロット](/ja/reference/ranking/rank-features#closeness)のような形になります。この関数は`log(distance + scale)`に基づく対数的な減衰であり、次のように計算されます:
+
+	$$
+	c l o s e n e s s \left(\right. n a m e \left.\right) . l o g s c a l e = \frac{l o g \left(\right. m a x D i s t a n c e + s c a l e \left.\right) - l o g \left(\right. d i s t a n c e \left(\right. n a m e \left.\right) + s c a l e \left.\right) \left.\right)}{\left(\right. l o g \left(\right. m a x D i s t a n c e + s c a l e \left.\right) - l o g \left(\right. s c a l e \left.\right) \left.\right)}
+	$$
+
+	ここで、scaleは[halfResponseとmaxDistance](/ja/reference/ranking/rank-feature-configuration#closeness)を使用して次のように定義されます:
+
+	$$
+	s c a l e = \frac{h a l f R e s p o n s e^{2}}{\left(\right. m a x D i s t a n c e - 2 \times h a l f R e s p o n s e \left.\right)}
+	$$
+
+	`distance(name) == halfResponse`のとき、関数の出力は0.5です。halfResponseは`maxDistance/2`より小さくすべきです。これは、近くにいるときに一定の距離が加わることの方が、すでに遠くにいるときに同じ距離が加わることよりも重要である、ということを意味するためです。
+- **distance(name)**<br/>
+	デフォルト: 6400M
+
+	クエリーの位置から指定した位置属性までのユークリッド距離を、100万分の1度(約10cm)単位で表したものです。クエリー内に複数の位置がある場合、実際に*name*を検索するアイテムが優先されます。また、複数のクエリー・アイテムが*name*を検索する場合、*name*が位置の配列である場合、あるいはその両方の場合は、見つかった最も近い距離が返されます。
+- **distance(name).km**<br/>
+	デフォルト: 711648.5
+
+	上記と同じですが、スケールされており、「マイクロ度」の代わりにキロメートルを距離の単位として使用します。
+- **distance(name).index**<br/>
+	デフォルト: -1
+
+	見つかった最も近い位置の配列インデックスです。*name*が`array<position>`型の場合に便利です。
+- **distance(name).latitude**<br/>
+	デフォルト: 90
+
+	見つかった最も近い位置の緯度(地理的な南北の座標)です。-90.0(南極)から+90.0(北極)の範囲です。*name*が`array<position>`型の場合に便利です。
+- **distance(name).longitude**<br/>
+	デフォルト: -180
+
+	見つかった最も近い位置の経度(地理的な東西の座標)です。-180.0(最西端)から+180.0(最東端)の範囲です。*name*が`array<position>`型の場合に便利です。
+- **distanceToPath(name).distance**<br/>
+	デフォルト: 6400M
+
+	クエリーで与えられた2次元空間内のパスから、指定した位置属性までのユークリッド距離を100万分の1度単位で表したものです。これは例えば、ある道路に最も近い場所を見つけるのに便利です。クエリーのパスは、[rankproperty.distanceToPath(*name*).path](/ja/reference/api/query#ranking.properties)クエリー・パラメーターで、同じく100万分の1度単位の構文`"(x1,y1,x2,y2,..)"`を使用して設定します。[distance to path](/ja/querying/geo-search#distance-to-path)の例を参照してください。パスに沿った最も近いポイントは*交点(intersection)*と呼ばれます。
+
+	<Info>
+	**注:** 複数の位置を持つドキュメントの場合、ランキングの目的には最も近い位置のみが使用されます。
+	</Info>
+- **distanceToPath(name).traveled**<br/>
+	デフォルト: 1
+
+	交点に到達するまでにクエリーのパスに沿って移動した正規化された距離です(0.0はパスの開始点、0.5は中間、1.0はパスの終点を示します)。
+- **distanceToPath(name).product**<br/>
+	デフォルト: 0
+
+	交差したパス・セグメントと交点からドキュメントへのベクトルとのクロス積です。ドキュメントがパス要素`A->B`に最も近いと判定された場合、交差したパス・セグメントのベクトルは`[ B.x - A.x, B.y - A.y ]`です。さらに、そのパス要素との交差がドキュメント位置`D`に対してポイント`I`で発生した場合、交点からドキュメントへのベクトルは`[ I.x - D.x, I.y - D.y]`です。これは例えば、この値の符号を見ることで、ドキュメントがパスのどちら側に存在するかを調べるのに便利です。
+### ユーティリティ・フィーチャー
+- **foreach(dimension, variable, feature, condition, operation)**<br/>
+	デフォルト: n/a
+
+	*foreach*は、フィーチャー出力値のセットを反復処理し、それらに対して演算を実行します。条件がtrueと評価された値のみが演算の対象となります。この演算の結果が返されます。
+
+	- *dimension*: 何を反復処理するかを指定します。以下が指定できます:
+		- *terms*: すべてのクエリー・タームのインデックス。0から[maxTerms](/ja/reference/ranking/rank-feature-configuration#foreach)まで。
+		- *fields*: すべてのインデックス・フィールド名。
+		- *attributes*: すべての属性フィールド名。
+	- *variable*: 反復処理する各アイテムを「格納」する変数の名前です。
+	- *feature*: 出力値を使用したいフィーチャーの名前です。フィーチャー名の一部として*variable*を使用し、反復処理する各アイテムごとに、この*variable*が実際のアイテムに置き換えられます。変数の置き換えは単純な文字列置換であるため、フィーチャー名と衝突しない変数名を使用すべきである点に注意してください。
+	- *condition*: その値を演算の対象とすべきかどうかを判断するために、各フィーチャー出力値に対して使用される条件です。条件は以下が指定できます:
+		- *\>a*: フィーチャー出力が数値aより大きい場合に使用します。
+		- *`<a`*: フィーチャー出力が数値aより小さい場合に使用します。
+		- *true*: すべてのフィーチャー出力値を使用します。
+	- *operation*: フィーチャー出力値に対して実行したい演算です。以下が指定できます:
+		- *sum*: 値の合計を計算します。
+    	- *product*: 値の積を計算します。
+    	- *average*: 値の平均を計算します。
+    	- *max*: 値の最大値を求めます。
+    	- *min*: 値の最小値を求めます。
+    	- *count*: 値の数をカウントします。
+
+	例えば、すべてのインデックス・フィールドに対する*fieldMatch*フィーチャーの平均スコアを、0より大きいスコアのみを対象として計算したいとします。その場合、*foreach*フィーチャーを次のように設定できます:
+
+	`foreach(fields,N,fieldMatch(N), ">0", average)`.
+  
+	条件*`>a`*および*`<a`*を使用する場合、引数は引用符で囲む必要がある点に注意してください。
+
+	*rankingExpression*フィーチャーを使用することで、*foreach*フィーチャー内でランキング式を指定することもできます。*rankingExpression*フィーチャーは、最初で唯一のパラメーターとして式を取り、その式を評価した結果を出力します。例えば、すべてのインデックス・フィールドに対する*fieldMatch*フィーチャー・スコアの2乗の平均スコアを計算したいとします。その場合、*foreach*フィーチャーを次のように設定できます:
+	`foreach(fields, N, rankingExpression("fieldMatch(N)*fieldMatch(N)"), true, average)`
+
+	*rankingExpression*フィーチャーに渡す式は引用符で囲む必要がある点に注意してください。
+
+- **dotProduct(name,vector)**<br/>
+	デフォルト: 0
+
+  <Info>
+	**注:** ほとんどのドット積のユース・ケースは、[テンソル](/ja/ranking/tensor-user-guide)を使用する方がうまく解決できます。
+  </Info>
+	指定したweighted set属性で表されるベクトルと、クエリーとともに送られたベクトルとのスパース・ドット積です。
+	weighted setの代わりに配列を使用することで、通常の完全なドット積を計算することもできます。非ゼロ値が5〜10%を超える完全なベクトルがドキュメントにある場合、この方がはるかに高速です。また、整数の重みに限定されることもありません。配列ではすべての数値データ型が使用できるため、浮動小数点を完全にサポートしています。32ビット浮動小数点型が最も高速に実行されます。
+	- *name*: weighted setの文字列/整数属性、または数値の配列属性の名前です。
+	- *vector*: クエリーとともに送られるベクトルの名前です。
+	
+weighted set内の一意の文字列/整数はそれぞれディメンションに対応し、対応する重みはそのディメンションのベクトル成分です。クエリー・ベクトルは、[rankproperty.dotProduct.*vector*](/ja/reference/api/query#ranking.properties)クエリー・パラメーターで、構文`{d1:c1,d2:c2,…}`を使用して設定します。ここで、*d1*と*d2*はweighted set内の文字列/整数にマッチするディメンション、*c1*と*c2*はベクトル成分(浮動小数点数)です。weighted setとクエリー・ベクトルのディメンション数は同じである必要はありません。ドット積の計算時には、weighted setとクエリー・ベクトルの両方に存在するディメンションのみを使用します。
+
+配列を使用する場合、ディメンションは0から始まる正の整数です。クエリーがスパースな場合、指定されていないすべてのディメンションはゼロになります。各ドキュメントの配列サイズの範囲外のディメンションも同様です。
+
+ある特定のドキュメントについて、次のweighted set文字列属性Xがあるとします:
+
+  ```bash
+	"X": {
+	    "x": 10,
+	    "y": 20
+	}
+  ```
+
+クエリー・ベクトルrankproperty.dotProduct.Y=`{x:2,y:4}`でフィーチャーdotProduct(X,Y)を使用した結果は、このドキュメントに対して100(10\*2+20\*4)になります。
+
+配列は`[w1 w2 w3 …]`として、またはweighted setで既にサポートされているようにスパース形式`{d1:c1,d2:c2,…}`として渡せます。
+
+  <Info>
+	**注:** クエリー・ベクトルがクエリーと同じになる場合は、クエリー・タームに重みをアノテーションして([term weight](/ja/reference/querying/simple-query-language#term-weight)を参照)、代わりにnativeDotProductフィーチャーを使用する方が優れています。これはより効率的に実行され、WANDオペレーターが生成する結果と最終的なrelevanceスコアとの相関を改善します。
+  </Info>
+  <Info>
+	**注:** dotProductフィーチャーを使用する場合、検索にも使用するのでない限り、[fast-search](/ja/content/attributes#fast-search)は不要です。dotProductクエリー・オペレーターを使用する場合は、fast-searchを使用してください。
+  </Info>
+
+- **tokenInputIds(length, input\_1, input\_2, ...)**<br/>
+	デフォルト: n/a
+
+	Transformerモデルへのトークン・シーケンス入力を生成するための便利な関数です。ディメンション`d0[1], d1[length]`を持つテンソルを作成します。ここで、`d0`はバッチ・ディメンション、`d1`はトークン・シーケンスの最大長です。入力はトークン・シーケンスを表すゼロパディングされたテンソルであると想定します。結果は次のトークン・シーケンスです:
+
+	`CLS + input_1 + SEP + input_2 + SEP + ... + 0's`
+	- *length*: トークン・シーケンスの最大長
+	- *input\_N*: 入力の取得元。少なくとも1つ必要です。
+
+	入力は通常、クエリー、ドキュメント属性、または定数から取得されます。例えば、`tokenInputIds(128, query(my_input), attribute(my_field))`で、入力の型が次の場合:
+
+	- `query(my_input): tensor(d0[32])`
+	- `attribute(my_field): tensor(d0[128])`
+
+	CLSトークン`101`、クエリーからのトークン、SEPトークン`102`、ドキュメント・フィールドからのトークン、SEPトークン`102`、そして残りは0で構成される、型`d0[1],d1[128]`のテンソルが作成されます。
+
+- **customTokenInputIds(start\_sequence\_id, sep\_sequence\_idlength, input\_1, input\_2, ...)**<br/>
+	デフォルト: n/a
+
+	Transformerモデルへのトークン・シーケンス入力を生成するための便利な関数です。ディメンション`d0[1], d1[length]`を持つテンソルを作成します。ここで、`d0`はバッチ・ディメンション、`d1`はトークン・シーケンスの最大長です。入力はトークン・シーケンスを表すゼロパディングされたテンソルであると想定します。結果は次のトークン・シーケンスです:
+	`start_sequence_id + input_1 + sep_sequence_id + input_2 + sep_sequence_id + ... + 0's`
+	- *start\_sequence\_id*開始シーケンスID、通常は*1*
+	- *sep\_sequence\_id*セパレーター・シーケンスID、通常は*2*
+	- *length*: トークン・シーケンスの最大長
+	- *input\_N*: 入力の取得元。少なくとも1つ必要です。
+
+入力は通常、クエリー、ドキュメント属性、または定数から取得されます。例えば、`customTokenInputIds(1,2,128, query(my_input), attribute(my_field))`で、入力の型が次の場合:
+	- `query(my_input): tensor(d0[32])`
+	- `attribute(my_field): tensor(d0[128])`
+- **tokenTypeIds(length, input\_1, input\_2, ...)**<br/>
+	デフォルト: n/a
+
+	Transformerモデルへのトークン・シーケンス入力を生成するための便利な関数です。`tokenInputIds`と同様に、型`d0[1],d1[length]`のテンソルを作成します。これは、CLSおよびSEPトークンを含む最初の入力にはゼロ、残りの入力(最後のSEPトークンまでを含む)には1、テンソルの残りには0を持つマスクを表します。
+- **tokenAttentionMask(length, input\_1, input\_2, ...)**<br/>
+	デフォルト: n/a
+
+	Transformerモデルへのトークン・シーケンス入力を生成するための便利な関数です。`tokenInputIds`と同様に、型`d0[1],d1[length]`のテンソルを作成します。これは、設定されているすべてのトークン(CLSとSEPおよびすべての入力)には1、残りには0を持つマスクを表します。
+
+## 選択されたランキング関数のグラフ
+
+### closeness
+
+<Frame>
+ ![Closeness logscaleプロット](/assets/img/relevance/closeness-logscale.png)
+</Frame>
+
+上のプロットは、デフォルトのmaxDistanceである1000 kmを使用した場合の、closeness距離ランク・フィーチャーの取りうる出力を示しています。_linear(x)_のグラフはデフォルトのcloseness出力を示し、その他のグラフはscaleDistanceパラメーターのさまざまな値に対するlogscale出力です: 9013.305(1 km)、45066.525(5 km - デフォルト値)、901330.5(100 km)。これらの値は、halfResponseパラメーターの次の値に対応します: 276154.903(30.64 km)、593861.739(65.89 km)、2088044.581(231.66 km)。
+
+### freshness
+
+<Frame>
+ ![Freshness logscaleプロット](/assets/img/relevance/freshness-logscale.png)
+</Frame>
+
+上のプロットは、デフォルトのmaxAgeである7776000秒(90日)を使用した場合の、freshnessランク・フィーチャーの取りうる出力を示しています。_linear(x)_のグラフはデフォルトのfreshness出力を示し、その他のグラフはhalfResponseパラメーターのさまざまな値に対するlogscale出力です: 172800秒(2日)、604800秒(7日 - デフォルト値)、1209600秒(14日)。

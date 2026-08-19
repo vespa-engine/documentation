@@ -1,0 +1,261 @@
+---
+title: "services.xml"
+---
+
+
+*services.xml* は、アプリケーションが持つべきクラスターとその機能を指定します。[アプリケーション・パッケージ](/ja/basics/applications)のルートに配置します。
+
+要素:
+
+<Card>
+[services \[version\]](#services)<br/>
+&ensp;&ensp;&ensp;[container &ensp;&ensp;\[version\]](/ja/reference/applications/services/container) - コンテナー・クラスターを指定する<br/>
+&ensp;&ensp;&ensp;[content   &ensp;&ensp;&ensp;\[version\]](/ja/reference/applications/services/content) - コンテント・クラスターを指定する<br/>
+&ensp;&ensp;&ensp;[admin     &ensp;&ensp;&ensp;&ensp;&ensp;\[version\]](/ja/reference/applications/services/admin) - コントロールプレーンの設定(必要になることは稀)<br/>
+&ensp;&ensp;&ensp;[routing   &ensp;&ensp;&ensp;&ensp;\[version\] - コンテントのルーティング方法(必要になることは稀)](/ja/writing/document-routing#routing-services)<br/>
+</Card>
+
+## `<services>`
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>version</td>
+      <td>必須</td>
+      <td>number</td>
+      <td></td>
+      <td>このバージョンのVespaでは1.0</td>
+    </tr>
+  </tbody>
+</table>
+
+任意のサブ要素(*container* または *content* のいずれかが1つ以上必須):
+
+- [`<container>`](/ja/reference/applications/services/container)
+- [`<content>`](/ja/reference/applications/services/content)
+- [`<admin>`](/ja/reference/applications/services/admin)
+- [`<routing>`](/ja/writing/document-routing#routing-services)
+
+このドキュメントの残りの部分では、複数のservicesタグ内で使用されるタグについて説明します。
+
+## `<nodes>`
+
+*nodes* 要素はクラスターのハードウェア・リソースを設定するため、コンテナー・クラスターとコンテント・クラスターの両方で使用されます。このタグは、Vespa Cloudとセルフマネージド・インスタンスで動作が異なります:
+
+- Vespa Cloud: ノード数は *count* 属性で指定し、各ノードのリソースは [resource](#resources) 子要素で指定します。
+- セルフマネージド: *nodes* はノードごとに [node](#node) 子要素を持ちます。*services.xml* で参照されるノードは、*hostalias* を使って [hosts.xml](/ja/reference/applications/hosts) で定義されている必要があります。
+
+両方を指定して、アプリケーション・パッケージを両方の環境で機能するようにすることも可能です。また、開発のためにどちらのタイプをもう一方の環境にデプロイすることも常に可能です: nodesタグにVespa Cloud向けの内容がある場合、セルフホスト環境では単一ノードのクラスターとして解釈され、その逆も同様です。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>型</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;count&#42;&#42;</td>
+      <td>整数または範囲</td>
+      <td></td>
+      <td>Vespa Cloud: クラスターのノード数。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;exclusive&#42;&#42;</td>
+      <td>boolean</td>
+      <td>false</td>
+      <td>任意。Vespa Cloud: trueの場合、共有ホストへの配置が本来許可される場合(一部の環境のコンテント・ノードに限られます)でも、これらのノードが共有ホストに配置されることはありません。ノードが排他的に割り当てられる場合、リソースはホストのリソースと正確に一致する必要があります。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;groups&#42;&#42;</td>
+      <td>整数または範囲</td>
+      <td></td>
+      <td>Vespa Cloudのコンテント・ノードのみ、任意: 整数または範囲。コンテント・ノードを分割するグループ数を設定します。各グループはノードを均等に分け持ち、コーパスとインデックスの1つ以上の完全なコピーを保持します。各クエリーは1つのグループにのみルーティングされます - <a href="/ja/content/elasticity#grouped-distribution" aria-label="grouped distribution">グループ分散</a>を参照してください。これにより、単一グループの場合よりも高いクエリー負荷へのスケーリングが可能になります。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;group-size&#42;&#42;</td>
+      <td>整数または範囲</td>
+      <td></td>
+      <td>Vespa Cloudのコンテント・ノードのみ、任意: 整数または範囲。範囲のどちらかの値を省略(空文字列に置き換え)して片側だけの制限を作ることができます。これは <code>{`groups`}</code> を明示的に設定する代わりに設定できます: 使用されるグループ・サイズは、どの <code>{`count`}</code> に対しても、常にこれらの制限内(両端を含む)になります。</td>
+    </tr>
+  </tbody>
+</table>
+
+*groups* も *group-size* も設定されていない場合、すべてのノードは単一のグループに属します。詳細は[トポロジー](/ja/performance/topology-and-resizing)をお読みください。
+
+範囲は `[lower-limit, upper-limit]` という構文で表現します。両方の制限は範囲に含まれます。範囲として設定された値は[オートスケーリング](/ja/operations/autoscaling)されます。
+
+## `<resources>`
+
+Vespa Cloudの [nodes](#nodes) 配下: クラスター内の各ノードが持つべきリソースを指定します。
+
+リソースは、デプロイ先に応じて、[AWS](/ja/performance/instance-types/aws-instance-types)、[GCP](/ja/performance/instance-types/gcp-instance-types)、[Azure](/ja/performance/instance-types/azure-instance-types) のノード・フレーバーと一致する必要があります。例外: リモート・ディスクを使用する場合は、最大サイズより小さい任意の数を指定できます。
+
+**サブ要素:** [`<gpu>`](#gpu)
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>型</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;vcpu&#42;&#42;</td>
+      <td>floatまたは範囲</td>
+      <td>2</td>
+      <td>CPU(仮想スレッド)</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;memory&#42;&#42;</td>
+      <td>floatまたは範囲。それぞれ "Gb" などのバイト単位を後ろに付ける</td>
+      <td>コンテナー・クラスターでは8 Gb、コンテント・クラスターでは16 Gb</td>
+      <td>メモリ</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;disk&#42;&#42;</td>
+      <td>floatまたは範囲。それぞれ "Gb" などのバイト単位を後ろに付ける</td>
+      <td>コンテナー・クラスターでは50、コンテント・クラスターでは300</td>
+      <td>ディスク容量。コアダンプ/ヒープダンプを格納できるよう、ディスク容量はコンテント・ノードではメモリ・サイズの3倍、コンテナー・ノードでは2倍より大きくすべきです。ディスク・サイズが明示的に指定されていない場合、Vespa Cloudはデフォルトのディスク・サイズを選択します。デフォルト値は、最小のディスク対メモリ比率を満たすために自動的に増やされることがあります。ディスクとメモリの両方が明示的に指定されている場合、Vespa Cloudは同じ最小比率を強制します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;storage-type&#42;&#42;</td>
+      <td>string (enum)</td>
+      <td><code>{`any`}</code></td>
+      <td>使用するストレージのタイプ。ネットワーク・ストレージのIO操作が不十分な場合や、IOパフォーマンスのばらつきが大きすぎる場合に、ローカル・ストレージを指定するのに便利です:<br/><br/> • <code>{`local`}</code>: ノード・ローカルのストレージが必要。 <br/>• <code>{`remote`}</code>: ネットワーク・ストレージを使用しなければならない。<br/> • <code>{`any`}</code>: リモートとローカルのどちらのストレージも使用可能。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;disk-speed&#42;&#42;</td>
+      <td>string (enum)</td>
+      <td><code>{`fast`}</code></td>
+      <td>必要なディスク速度のカテゴリー:<br/><br/> • <code>{`fast`}</code>: SSD相当のディスク速度が必要<br/> • <code>{`slow`}</code>: 回転ディスクの速度を想定したサイジング <br/>• <code>{`any`}</code>: パフォーマンスがディスク速度に依存しない(コンテナー・クラスターに適していることが多い)。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;architecture&#42;&#42;</td>
+      <td>string (enum)</td>
+      <td><code>{`any`}</code></td>
+      <td>ノードのCPUアーキテクチャー:<br/><br/> • <code>{`x86_64`}</code> <br/>• <code>{`arm64`}</code><br/> • <code>{`any`}</code>: 利用可能な任意のアーキテクチャーを使用する。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;max-cost-factor&#42;&#42;</td>
+      <td>float >= 1.0</td>
+      <td><code>{`1.0`}</code></td>
+      <td>これらのリソースで指定された内容と正確に一致するタイプが現在プロビジョニングできない場合に、指定より大きなマシン・タイプのプロビジョニングを許可するために使用します。この数値は、プロビジョニングされるホストの、定価で測った最大の超過度合いを指定します。たとえば、これを2に設定すると、必要なリソースの最大2倍のコストのマシンがプロビジョニングされる可能性があります。<br/><br/> 利用可能な場合は常に完全一致が優先され、完全に一致するリソースが利用可能になると、システムはバックグラウンドでそちらへ移行します。これは、Vespaクラスターのコンテナー・ノードが利用できるリソースには影響せず、リソースは常にリソース指定と一致します。これは <a href="/ja/operations/enclave/enclave" aria-label="enclave">enclave</a> でデプロイされたアプリケーションでのみ設定できます。</td>
+    </tr>
+  </tbody>
+</table>
+
+範囲は `[lower-limit, upper-limit]` という構文で表現します。両方の制限は範囲に含まれます。範囲として設定された値は[オートスケーリング](/ja/operations/autoscaling)されます。
+
+## `<node>`
+
+セルフマネージド・システムの [nodes](#nodes) 配下: クラスターのメンバーとなるべきノードを指定します。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>hostalias</td>
+      <td>必須</td>
+      <td>string</td>
+      <td></td>
+      <td><a href="/ja/reference/applications/hosts" aria-label="hosts.xml">hosts.xml</a> で完全なホスト名にマッピングされている必要があるホスト名</td>
+    </tr>
+  </tbody>
+</table>
+
+## `<gpu>`
+
+Vespa Cloudの [resources](#resources) 配下: プロビジョニングするGPUリソースを宣言します。
+
+制限事項:
+
+- AWSゾーンでのみ利用可能
+- コンテナー・クラスターでのみ有効
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>型</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;count&#42;&#42;</td>
+      <td>整数</td>
+      <td>GPUの数</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;memory&#42;&#42;</td>
+      <td>整数。"Gb" などのバイト単位を後ろに付ける</td>
+      <td>GPUあたりのメモリ量。利用可能なGPUメモリの総量は、この数値に <code>{`count`}</code> を掛けたものです。</td>
+    </tr>
+  </tbody>
+</table>
+
+例:
+
+```xml
+<nodes count="2">
+    <resources vcpu="4" memory="16Gb" disk="125Gb">
+        <gpu count="1" memory="16Gb"/>
+    </resources>
+</nodes>
+```
+
+## ゾーン固有の設定
+
+次のような設定を表現するには、*デプロイメント・バリアント* を使用します:
+
+```xml
+<nodes deploy:environment="prod"
+       deploy:region="aws-use1-az4"
+       count="20">
+    <resources vcpu="4" memory="16Gb" disk="125Gb"/>
+</nodes>
+```
+
+詳細とその他のオプションについては、[デプロイメント・バリアント](/ja/operations/deployment-variants)を参照してください。
+
+## `<config>` を使った汎用設定
+
+*services.xml* のほとんどの要素は、*config* という名前のサブ要素を受け付けます。*config* 要素はXML構造のさまざまなレベルに含めることができ、下位レベルのものが上位レベルの値をオーバーライドします(以下に例)。*config* 要素には *name* 属性を含める必要があり、これは名前空間を含む、対象の設定オプションの完全な名前を与えます。この名前は、Vespaに同梱されている設定定義、または[アプリケーション・パッケージ](../config-files.html)の一部である設定定義のどちらも参照できます。汎用設定の完全な例については、[アプリケーション・パッケージ](/ja/reference/applications/config-files#generic-configuration-in-services-xml)のリファレンスを参照してください。
+
+```xml
+<container id="default" version="1.0">
+    <handler id="com.yahoo.vespatest.ConfiguredHandler">
+        <config name="vespatest.response">
+            <response>configured string</response>
+        </config>
+    </handler>
+</container>
+```
+
+## モジュラー設定
+
+一部の機能は、アプリケーション・パッケージのサブディレクトリにあるXMLファイルを使って設定できます。これは、これらのXMLファイルにある設定が、*services.xml* にインライン記述されたかのように使用されることを意味します。これは [search chain](/ja/reference/applications/services/search#chain)、[docproc chain](/ja/reference/applications/services/docproc)、[ルーティング・テーブル](/ja/writing/document-routing#routing-services)でサポートされています。

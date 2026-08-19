@@ -1,0 +1,253 @@
+---
+title: "手順: attributeからindexへの変更"
+sidebarTitle: "attributeからindexへの変更手順"
+---
+
+`index` と `attribute` の間の変更は、パフォーマンスを最適化するための一般的なフィールド変更操作です。インデックス構造との間で安全にデータを移行するには、[再インデックス](/ja/operations/reindexing)機能を使用します。
+
+attributeからindexへの変更は、「attributeの削除」と「indexの追加」と見なせます。フィールドのattributeの側面が削除されると、デプロイ後、そのフィールドのデータはクエリーできなくなります。再インデックスのプロセスがフィールドのインデックス構造にデータを投入しますが、これにはコーパスのサイズに応じた時間がかかります。
+
+もう1つのアプローチは、移行期間中attributeとindexの両方で運用し、データをクエリー可能な状態に保つことです。この手順の要点は、`index` を追加し、再インデックスを実行してから、`attribute` の側面を削除することです:
+
+```js
+# field configuration at start
+field artist type string {
+    indexing: summary | attribute
+}
+
+->
+
+# intermediate step to populate index structure, keeping the data in the attribute
+field artist type string {
+    indexing: summary | attribute | index
+    match: word
+    stemming: none
+}
+
+->
+
+# final configuration, migrated to index
+field artist type string {
+    indexing: summary | index
+    match: word
+    stemming: none
+}
+```
+
+<Note>
+**注:** 
+
+フィールドがフィルターとしてのみ使用される(つまりランキングに使用されない)場合は、`rank: filter` の追加を検討してください。[feature-tuning](/ja/performance/feature-tuning) の例を参照してください。
+</Note>
+
+## 手順
+
+<Steps>
+<Step>
+[クイックスタート](/ja/basics/deploy-an-application-local)を使ってこれをテストします。実行前に `artist` フィールドをattributeに変更しておきます。また、`src/main/application/validation-overrides.xml` に[バリデーション・オーバーライド](/ja/reference/applications/validation-overrides)を追加します:
+
+```xml
+<validation-overrides>
+    <allow until="2021-08-30">indexing-change</allow>
+</validation-overrides>
+```
+</Step>
+<Step>
+クイックスタートを実行し、ドキュメントのフィード後に停止します。クエリーを実行して、データがクエリーできることを検証します:
+
+```bash
+$ curl "http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20artist%20contains%20%22Coldplay%22"
+```
+
+[現在のインデックス構造をダンプ](#appendix)して、`artist` がattributeであることを確認することもできます。
+</Step>
+<Step>
+フィールドにindexの側面とmatch/stemmingの設定を追加し、デプロイして出力を観察します
+
+```js expandable
+field artist type string {
+    indexing: summary | attribute | index
+        match    : word
+        stemming : none
+}
+
+$ (cd src/main/application && zip -r - .) |   curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+
+{
+  "log": [
+    {
+      "time": 1628239290150,
+      "level": "WARNING",
+      "message": "Change(s) between active and new application that may require re-index:\nindexing-change:
+                  Consider re-indexing document type 'music' in cluster 'music' because:\n
+                  1) Document type 'music': Field 'artist' changed: add index aspect,
+                  indexing script: '{ input artist | summary artist | attribute artist; }' ->
+                                   '{ input artist | exact | summary artist | attribute artist | index artist; }'\n"
+    }
+  ],
+  "tenant": "default",
+  "url": "http://localhost:19071/application/v2/tenant/default/application/default/environment/prod/region/default/instance/default",
+  "message": "Session 3 for tenant 'default' prepared and activated.",
+  "configChangeActions": {
+    "restart": [],
+    "refeed": [],
+    "reindex": [
+      {
+        "name": "indexing-change",
+        "documentType": "music",
+        "clusterName": "music",
+        "messages": [
+          "Document type 'music': Field 'artist' changed:
+             add index aspect, indexing script:
+               '{ input artist | summary artist | attribute artist; }'
+             ->
+               '{ input artist | exact | summary artist | attribute artist | index artist; }'"
+        ],
+        "services": [
+          {
+            "serviceName": "searchnode",
+            "serviceType": "searchnode",
+            "configId": "music/search/cluster.music/0",
+            "hostName": "vespa-container"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+</Step>
+<Step>
+新しい設定のgenerationがコンフィグ・サーバー上で有効化されるのを待ちます - 通常これはすぐに行われます。その後、コンフィグ・サーバーが再インデックスをready状態にするまで最大3分ほど待ちます。これは `reindexing` エンドポイントを使って追跡します:
+
+```json expandable
+$ while true; do
+    curl http://localhost:19071/application/v2/tenant/default/application/default/environment/prod/region/default/instance/default/reindexing | jq .
+    sleep 10
+  done
+
+{
+  "enabled": true,
+  "clusters": {
+    "music": {
+      "pending": {
+        "music": 3
+      },
+      "ready": {
+        "music": {}
+      }
+    }
+  }
+}
+
+...
+
+{
+  "enabled": true,
+  "clusters": {
+    "music": {
+      "pending": {},
+      "ready": {
+        "music": {
+          "readyMillis": 1628665589516
+        }
+      }
+    }
+  }
+}
+```
+</Step>
+<Step>
+readyになったら、再度デプロイして再インデックスを開始し、完了するまで待ちます(前のステップのループを使用します):
+
+```json expandable
+$ (cd src/main/application && zip -r - .) |   curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+
+...
+
+{
+  "enabled": true,
+  "clusters": {
+    "music": {
+      "pending": {},
+      "ready": {
+        "music": {
+          "readyMillis": 1628665589516
+        }
+      }
+    }
+  }
+}
+
+...
+
+{
+  "enabled": true,
+  "clusters": {
+    "music": {
+      "pending": {},
+      "ready": {
+        "music": {
+          "readyMillis": 1628665589516,
+          "startedMillis": 1628668739973,
+          "endedMillis": 1628668740536,
+          "state": "successful"
+        }
+      }
+    }
+  }
+}
+```
+</Step>
+<Step>
+この時点でインデックス構造をダンプすると、artistがindexとattributeの両方にあることが分かり、vespa.logにもエントリーがあります。クエリーがまだ動作することを検証します:
+
+```bash
+$ docker exec vespa /usr/bin/sh -c 'vespa-logfmt | grep Reindexer'
+[2021-08-11 07:59:00.535] INFO    : container-clustercontroller Container.ai.vespa.reindexing.Reindexer
+                                    Completed reindexing of datatype music (code: 1412693671) after PT0.558683S
+
+$ curl "http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20artist%20contains%20%22Coldplay%22"
+```
+
+</Step>
+<Step>
+これでデータはインデックスのデータ構造に再インデックスされたので、attributeなしでデプロイします。(インデックス・ファイルの変化を観察してください。"artist" はindexのみに存在します)。再起動後にクエリーをテストします:
+
+```js
+field artist type string {
+    indexing: summary | index
+        match    : word
+        stemming : none
+}
+
+$ (cd src/main/application && zip -r - .) |   curl --header Content-Type:application/zip --data-binary @- \
+  localhost:19071/application/v2/tenant/default/prepareandactivate
+
+$ curl "http://localhost:8080/search/?ranking=rank_albums&yql=select%20%2A%20from%20sources%20%2A%20where%20artist%20contains%20%22Coldplay%22"
+```
+
+</Step>
+<Step>
+オプション: Vespaを再起動します - 再起動によりattributeからメモリーが回収されます:
+
+```bash
+$ docker exec vespa sh -c 'vespa-stop-services && vespa-start-services'
+```
+</Step>
+</Steps>
+
+注意事項:
+
+- 上記のmatch/stemmingの設定は、attributeのデフォルト設定と同じ値に設定しています
+
+## 付録
+
+attributeとindexのデータを調べる(トラブルシューティング時に役立ちます)には、[vespa-proton-cmd](/ja/reference/operations/self-managed/tools#vespa-proton-cmd) を使用し、その後ファイルを一覧表示します:
+
+```bash
+$ docker exec vespa vespa-proton-cmd --local triggerFlush
+$ docker exec vespa find /opt/vespa/var/db/vespa/search/cluster.music/n0/documents/music/0.ready
+```

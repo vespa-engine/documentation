@@ -1,0 +1,492 @@
+---
+title: "ランキング式"
+---
+
+
+これは、アプリケーション固有のランキング関数を構成するために使用される_ランキング式_の完全なリファレンスです。ランキング式の使い方の例と概要については、[ランキングの概要](/ja/basics/ranking)を参照してください。
+
+ランキング式は、通常の関数表記に似たシンプルな言語で記述します。ランキング式のアトムは_ランク・フィーチャー_と_定数_です。これらのアトムは、スカラーとテンソルに対する_算術演算_やその他の_組み込み関数_によって組み合わせることができます。
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>ランク・フィーチャー</td>
+      <td>ランク・フィーチャーは、クエリー/ドキュメントの組み合わせごとに Vespa が計算または参照する名前付きの値です。ランキング式で利用可能なすべてのランク・フィーチャーの一覧については、<a href="/ja/reference/ranking/rank-features" aria-label="ランク・フィーチャーのリファレンス">ランク・フィーチャーのリファレンス</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>定数</td>
+      <td>定数は、浮動小数点数、ブーリアン(true/false)、または引用符で囲まれた文字列のいずれかです。ランキング式はスカラーとテンソルしか扱えないため、文字列とブーリアンは直ちにスカラーに変換されます - true は 1.0 に、false は 0.0 に、文字列はそのハッシュ値になります。つまり、&#42;&#42;文字列は等価比較にしか使えず&#42;&#42;、テンソルからスライスするキーをパラメーター化するといった他の用途には正しく動作しません。</td>
+    </tr>
+  </tbody>
+</table>
+
+## 算術演算
+
+基本的な数学演算は中置記法で表現します:
+
+```bash
+a + b * c
+```
+
+算術演算はスカラーに加えて任意のテンソルに対しても機能し、セルの結合にその算術演算を使ってテンソルを join する短縮形です。例えば `tensorA * tensorB` は `join(tensorA, tensorB, f(a,b)(a * b))` と同じです。
+
+すべての算術演算子を優先順位の高い順に示します:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>算術演算子</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>^</td>
+      <td>べき乗</td>
+    </tr>
+    <tr>
+      <td>%</td>
+      <td>剰余</td>
+    </tr>
+    <tr>
+      <td>/</td>
+      <td>除算</td>
+    </tr>
+    <tr>
+      <td>&#42;</td>
+      <td>乗算</td>
+    </tr>
+    <tr>
+      <td>-</td>
+      <td>減算</td>
+    </tr>
+    <tr>
+      <td>+</td>
+      <td>加算</td>
+    </tr>
+    <tr>
+      <td>&amp;&amp;</td>
+      <td>And: 両方の引数がゼロ以外なら 1、それ以外は 0。</td>
+    </tr>
+    <tr>
+      <td>||</td>
+      <td>Or: いずれかの引数がゼロ以外なら 1、それ以外は 0。</td>
+    </tr>
+  </tbody>
+</table>
+
+## 数学スカラー関数
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>関数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>acos(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の逆余弦</td>
+    </tr>
+    <tr>
+      <td>asin(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の逆正弦</td>
+    </tr>
+    <tr>
+      <td>atan(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の逆正接</td>
+    </tr>
+    <tr>
+      <td>atan2(&#42;y&#42;, &#42;x&#42;)</td>
+      <td>&#42;y / x&#42; の逆正接。両方の引数の符号を使用して正しい象限を決定します。</td>
+    </tr>
+    <tr>
+      <td>bit(&#42;x&#42;, &#42;y&#42;)</td>
+      <td>値 &#42;x&#42; のビット &#42;y&#42; の値を返します(int8 値用)</td>
+    </tr>
+    <tr>
+      <td>ceil(&#42;x&#42;)</td>
+      <td>&#42;x&#42; 以上の最小の整数値</td>
+    </tr>
+    <tr>
+      <td>cos(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の余弦</td>
+    </tr>
+    <tr>
+      <td>cosh(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の双曲線余弦</td>
+    </tr>
+    <tr>
+      <td>elu(&#42;x&#42;)</td>
+      <td>値 &#42;x&#42; に対する Exponential Linear Unit 活性化関数</td>
+    </tr>
+    <tr>
+      <td>erf(&#42;x&#42;)</td>
+      <td>値 &#42;x&#42; に対するガウス誤差関数</td>
+    </tr>
+    <tr>
+      <td>exp(&#42;x&#42;)</td>
+      <td>底 e の指数関数。</td>
+    </tr>
+    <tr>
+      <td>fabs(&#42;x&#42;)</td>
+      <td>(浮動小数点)数 &#42;x&#42; の絶対値</td>
+    </tr>
+    <tr>
+      <td>floor(&#42;x&#42;)</td>
+      <td>&#42;x&#42; 以下の最大の整数値</td>
+    </tr>
+    <tr>
+      <td>fmod(&#42;x&#42;, &#42;y&#42;)</td>
+      <td>&#42;x / y&#42; の剰余</td>
+    </tr>
+    <tr>
+      <td>isNan(&#42;x&#42;)</td>
+      <td>&#42;x&#42; が NaN の場合は 1.0、それ以外は 0.0 を返します</td>
+    </tr>
+    <tr>
+      <td>ldexp(&#42;x&#42;, &#42;exp&#42;)</td>
+      <td>&#42;x&#42; に 2 の &#42;exp&#42; 乗を掛けます</td>
+    </tr>
+    <tr>
+      <td>log(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の底 e の対数</td>
+    </tr>
+    <tr>
+      <td>log10(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の底 10 の対数</td>
+    </tr>
+    <tr>
+      <td>max(&#42;x&#42;, &#42;y&#42;)</td>
+      <td>&#42;x&#42; と &#42;y&#42; の大きい方</td>
+    </tr>
+    <tr>
+      <td>min(&#42;x&#42;, &#42;y&#42;)</td>
+      <td>&#42;x&#42; と &#42;y&#42; の小さい方</td>
+    </tr>
+    <tr>
+      <td>pow(&#42;x&#42;, &#42;y&#42;)</td>
+      <td>&#42;x&#42; の &#42;y&#42; 乗を返します</td>
+    </tr>
+    <tr>
+      <td>relu(&#42;x&#42;)</td>
+      <td>値 &#42;x&#42; に対する Rectified Linear Unit 活性化関数</td>
+    </tr>
+    <tr>
+      <td>sigmoid(&#42;x&#42;)</td>
+      <td>値 &#42;x&#42; に対するシグモイド(ロジスティック)活性化関数</td>
+    </tr>
+    <tr>
+      <td>sin(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の正弦</td>
+    </tr>
+    <tr>
+      <td>sinh(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の双曲線正弦</td>
+    </tr>
+    <tr>
+      <td>sqrt(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の平方根</td>
+    </tr>
+    <tr>
+      <td>tan(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の正接</td>
+    </tr>
+    <tr>
+      <td>tanh(&#42;x&#42;)</td>
+      <td>&#42;x&#42; の双曲線正接</td>
+    </tr>
+    <tr>
+      <td>hamming(&#42;x&#42;, &#42;y&#42;)</td>
+      <td>&#42;x&#42; と &#42;y&#42; の(8 ビット整数とみなした)ハミング(ビット単位)距離。</td>
+    </tr>
+  </tbody>
+</table>
+
+`x` と `y` には任意のランキング式を指定できます。
+
+## if 関数
+
+`if` 関数は、条件の真偽値に基づいて 2 つのサブ式のいずれかを選択します。
+
+```bash
+if (expression1operatorexpression2, trueExpression, falseExpression)
+```
+
+最初の引数で与えられた条件が真であれば引数 2 の式が使用され、そうでなければ引数 3 が使用されます。4 つの式には任意のランキング式を指定できます。ランキング式の if 関数で使用できる条件演算子:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>ブール演算子</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&lt;=</td>
+      <td>以下</td>
+    </tr>
+    <tr>
+      <td>&lt;</td>
+      <td>より小さい</td>
+    </tr>
+    <tr>
+      <td>==</td>
+      <td>等しい</td>
+    </tr>
+    <tr>
+      <td>~=</td>
+      <td>近似的に等しい</td>
+    </tr>
+    <tr>
+      <td>&gt;=</td>
+      <td>以上</td>
+    </tr>
+    <tr>
+      <td>&gt;</td>
+      <td>より大きい</td>
+    </tr>
+  </tbody>
+</table>
+
+メンバーシップ演算子 `in` は、少し変形した if 構文を使用します:
+
+```bash
+if (expression1in[expression2, expression3, ..., expressionN], trueExpression, falseExpression)
+```
+
+expression1 が expression2 から expressionN のいずれかと等しい場合は trueExpression が使用され、そうでない場合は falseExpression が使用されます。
+
+## switch 関数
+
+<Info>
+  **注:** Vespa 8.626.55 から利用可能
+</Info>
+
+`switch` 関数は、値のマッチングに基づいて複数のサブ式から選択します。複数の選択肢から選ぶ場合に、`if` 文の連鎖よりも読みやすい代替手段を提供します。
+
+```bash
+switch (discriminant) {
+    case value1: result1,
+    case value2: result2,
+    ...
+    default: defaultResult
+}
+```
+
+`discriminant` 式は、各 `case` の値の式と順番に等価比較されます。マッチが見つかると、対応する結果の式が評価されて返されます。どの case にもマッチしない場合は、`default` の結果が返されます。すべての式には任意のランキング式を指定できます。少なくとも 1 つの `case` を指定する必要があります。`default` は必須です。
+
+## foreach 関数
+
+foreach 関数は厳密には式言語の一部ではなく、[ランク・フィーチャー](/ja/reference/ranking/rank-features#foreachdimensionvariablefeatureconditionoperation)として実装されています。
+
+## テンソル関数
+
+ランキング式では、次の一連のテンソル関数を使用できます。関数は、プリミティブ関数と、プリミティブ関数を用いて実装できる便利関数にグループ化されています。
+
+### プリミティブ関数
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>関数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;map(  tensor, f(x)(expr)   )&#42;&#42;</td>
+      <td><code>{`f(x)(expr)`}</code> で定義されたラムダ関数を各セルに適用した新しいテンソルを返します。  引数: <br/><br/> - <code>{`tensor`}</code>: テンソル式。例えば <code>{`attribute(tensor_field)`}</code> <br/> - <code>{`f(x)(expr)`}</code>: 引数を 1 つ取る<a href="#lambda-functions-in-primitive-functions" aria-label="ラムダ関数">ラムダ関数</a>。 <br/><br/> <code>{`tensor`}</code> の各セルでラムダ関数内の式を評価した新しいテンソルを返します。 <br/><br/> 例: <code>{``}</code><code>{`bash map(t, f(x)(x*x)) `}</code><code>{``}</code> <br/><br/> <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEcBXAgJwE8AKAFwEoSZGpCIJIPArQDOWNgB5oAGywBDHgD4uAD0QAWALp84iAAzEAjMQBMxAMz7IQiAF8hz0hmrlcDIh+GUaE50DAC2KjgA+gRaKqE4in7BECJhEVws7Nz8xGDQ2nzaAHpWfALBrhiVYPogzkA" aria-label="playground example map">playground example map</a></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;map_subspaces(  tensor,  f(x)(expr)   )&#42;&#42;</td>
+      <td><code>{`f(x)(expr)`}</code> で定義されたラムダ関数を各密(dense)部分空間に適用した新しいテンソルを返します。 <br/> 引数: <br/><br/> - <code>{`tensor`}</code>: テンソル式。例えば <code>{`attribute(tensor_field)`}</code> <br/> - <code>{`f(x)(expr)`}</code>: 引数を 1 つ取る<a href="#lambda-functions-in-primitive-functions" aria-label="ラムダ関数">ラムダ関数</a>。<code>{`tensor`}</code> の各密部分空間でラムダ関数を評価した新しいテンソルを返します。これは、密な<a href="#tensor" aria-label="テンソルジェネレーター">テンソルジェネレーター</a>式を使って混合テンソルを変換できるようにする高度な機能です。 <br/> 例: <br/> <code>{``}</code><code>{` map_subspaces(tensor(x{},y[3]):{a:[1,2,3]},f(d)(tensor(z[2])(d{y:(z)}+d{y:(z+1)})))`}</code><code>{``}</code> <br/> <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEcBXAgJwE8AKAFwEoSZGpCIJIPArQDOWNgB4AlrR4AOAHxcAHsAC+xDogBMAXT5xgAQziIAjAFZiAWhsA2YzshCIOoXqHVyXAYiUhooSjQvOgZmWhwLAGMAawB9ACMFHikUgHdMgAsUgFsLHBSpZjSpeISCKUEwiBEGErKKqpq6rhZ2bn5iaC4AEz5eSRl5JVUNA1dTLgyeYeAOOC4OAHoVPj0AdkcOAFJtvlPPMJ8MS7BjEB0gA" aria-label="playground example for map_subspaces">playground example for map_subspaces</a></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;filter_subspaces(  tensor,  f(x)(expr)   )&#42;&#42;</td>
+      <td><code>{`f(x)(expr)`}</code> で定義されたラムダ関数が true を返す部分空間のみを含む新しいテンソルを返します。 <br/> 引数: <br/> - <code>{`tensor`}</code>: テンソル式。少なくとも 1 つのマップされた次元を持つ必要があります。 <br/> - <code>{`f(x)(expr)`}</code>: 引数を 1 つ取る<a href="#lambda-functions-in-primitive-functions" aria-label="ラムダ関数">ラムダ関数</a>。 <br/> <code>{`f(x)(expr)`}</code> で定義されたラムダ関数が true を返す部分空間のみを含む新しいテンソルを返します。通常、スパーステンソル内の不要な値を取り除くために使用します。例: <code>{``}</code><code>{` filter_subspaces(tensor(x{}):{a:1,b:2,c:3,d:4},f(value)(value>2)) # tensor(x{}):{c:3,d:4} `}</code><code>{``}</code> <br/><br/> <a href="https://docs.vespa.ai/playground/#N4IgZiBcDaoPYAcogMYgDQiZUAXZABLgBYCmBAjgK4CGANgJa4CeBcYB9dBKxVAdgGsAziAC+Y9PGwhSGLFFD9kuAIzy5kELlL9hcAE4AeMHTg1cAPgAUvAYOBiAlDgAMkVQGZ0qyAHZ0ACZIAFZ0Tw8wgBZIT1d0EMhAsXFJaWQ0TGw8QgA5AgZhAgATZn4aAFsGNAkpEERkOSzFEGUtXI1kT1S6hq1MhRxtQjAGfmK2A2LSAzGAczYOFFI6OlFa9K0mwaUVQM7+lboAfUNpg2s1dAIKmgAPJx7N1Hls4a0bmkFyGk-hQQIYEMRDIBAARqRhLgCB0NvUZNs3m1tN1MJptIEjLC0vCMq8WvgPsUDIhOKsCMIqGDhAgaMsimASRUQeRbv8QRZOAZyGB6MI5HC+rJ8UNkbgogdwAw6DoDMdKdTafTLt5AdZhE51U5HoKZAM3oSQDw4BUwWMedLZaQJmyAQB3JjESYMOZjehEXT6AyA4Hcykyp64rYi3ZaXAhSXigBUalSAF0xEA" aria-label="playground example for filter_subspaces">playground example for filter_subspaces</a></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;reduce(  tensor, aggregator, dim1, dim2, ...   )&#42;&#42;</td>
+      <td>次元 dim1、dim2 などにわたって <code>{`aggregator`}</code> を適用した新しいテンソルを返します。次元が指定されていない場合は、すべての次元にわたって集約します。 <br/>  引数: <br/>  - <code>{`tensor`}</code>: テンソル式。 <br/> - <code>{`aggregator`}</code>: 使用するアグリゲーター。下記を参照。 <br/> - <code>{`dim1, dim2, ...`}</code>: 集約する次元。省略可能。 <br/> 次元 <code>{`dim1`}</code>、<code>{`dim2`}</code> などにわたってアグリゲーターを適用した新しいテンソルを返します。次元が指定されていない場合は、すべての次元にわたって集約します。 <br/> 利用可能なアグリゲーター: <br/> - <code>{`avg`}</code>: 算術平均 <br/> - <code>{`count`}</code>: 要素数 <br/>  - <code>{`max`}</code>: 最大値 <br/>  - <code>{`median`}</code>: 中央値 <br/> - <code>{`min`}</code>: 最小値  <br/>  - <code>{`prod`}</code>: 全値の積 <br/> - <code>{`sum`}</code>: 全値の和 <br/>  例: <br/>  <code>{``}</code><code>{` reduce(t, sum)         # Sum all values in tensor reduce(t, count, x)    # Count number of cells along dimension x `}</code><code>{``}</code> <br/>  <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEcBXAgJwE8AKAFwEoSZGpCIJIPArQDOWNgB5oAGywBDHgD4uAD0QAWALp84iAAzEAjMQBMxAMz7IQiAF8hz0hmrlcDIh+GUaE50DGwEACbMAMYEAPpSzAC2sQRaKok4in7BECKhEdEEXCzs3PzEYAmJAsGuGHVg+iDOQA" aria-label="playground example reduce">playground example reduce</a></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;join(  tensor1,  tensor2,  f(x,y)(expr)   )&#42;&#42;</td>
+      <td><code>{`tensor1`}</code> と <code>{`tensor2`}</code> の&#42;自然結合&#42;から構築された新しいテンソルを返します。結果のセルは <code>{`f(x,y)(expr)`}</code> から計算された値を持ち、<code>{`x`}</code> は <code>{`tensor1`}</code> の、<code>{`y`}</code> は <code>{`tensor2`}</code> のセル値です。 <br/>  引数: <br/>  - <code>{`tensor1`}</code>: テンソル式。 <br/>  - <code>{`tensor2`}</code>: テンソル式。 <br/>  - <code>{`f(x,y)(expr)`}</code>: 引数を 2 つ取る<a href="#lambda-functions-in-primitive-functions" aria-label="ラムダ関数">ラムダ関数</a>。  <code>{`tensor1`}</code> と <code>{`tensor2`}</code> の&#42;自然結合&#42;から構築された新しいテンソルを返します。結果のセルは <code>{`f(x,y)(expr)`}</code> から計算された値を持ち、<code>{`x`}</code> は <code>{`tensor1`}</code> の、<code>{`y`}</code> は <code>{`tensor2`}</code> のセル値です。 <br/>  形式的には、<code>{`join`}</code> の結果は、<code>{`tensor1`}</code> と <code>{`tensor2`}</code> の次元の和集合を次元とする新しいテンソルです。セルは、共通の次元で等しい値を持つセルのすべての組み合わせの集合です。  例: <br/> <code>{``}</code><code>{` join(t1, t2, f(x,y)(x * y)) `}</code><code>{``}</code> <br/> <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEcBXAgJwE8AKAFwEoSZGpCIJIPArQDOWNgB5oAGywBDHgD4uAD2ABfPnGDAtcAAy6EARgB0p4mhOWLYAEy3dkIRF1DdpDNTkuAxE-sKUaF50DGo8bACWAEbMErwCYTSEDBLSsgrKapo6fhx6BkYmdhxmzgDMtvbGZsTVTggALA0OcJYtNQgArF1Nva3OAGzunpk+GH5CgZjBYqFRFPiL5PRiAFZY8fQZwqJQewdcLOzc-PaxCcmpN2DQ2i182mAAVGAcfAJRs1QgIAuiBdEA" aria-label="playground example join">playground example join</a></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;merge(  tensor1,  tensor2,  f(x,y)(expr)   )&#42;&#42;</td>
+      <td>両方の引数のすべてのセルからなる新しいテンソルを返します。両方の引数が同じセルに値を提供する場合には、ラムダ関数を使用して単一の値を生成します。 <br/>  引数: <br/>  - <code>{`tensor1`}</code>: テンソル式。 <br/>  - <code>{`tensor2`}</code>: テンソル式。 <br/> - <code>{`f(x,y)(expr)`}</code>: 引数を 2 つ取る<a href="#lambda-functions-in-primitive-functions" aria-label="ラムダ関数">ラムダ関数</a>。 <br/>  両方の引数のすべてのセルを持つ新しいテンソルを返します。ラムダは、両方の引数が同じセルに値を持つ場合にのみ、単一の値を生成するために呼び出されます。 <br/>  引数のテンソルは同じ型でなければならず、それが結果のテンソルの型になります。例: <code>{``}</code><code>{` merge(t1, t2, f(left,right)(right)) `}</code><code>{``}</code> <br/>  <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEcBXAgJwE8AKAFwEoSZGpCIJIPArQDOWNlwDWBDsAC+xAB6IATAF0+cYAEM4iAIzFdxAEYmAzMQAsOlZCEQVQtUOrlcDIqQ0UJRobnQMhjw8bACWVswSvAKBQYQMEtKyCkqqGtp6BjaIAKzEAGw6xADGJgDsxAAczq5BHhheGD6YfmIBYRT4XeT0YgC27ADmBAD6BOqGozgANn2paWOTBFws7Nz8xGCR0XEJW-tg0Fwr0DzEsRMAFvxc9098AmFtqF86ICpAA" aria-label="playground example merge">playground example merge</a></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;tensor(  tensor-type-spec  )(expr)&#42;&#42;</td>
+      <td>型仕様と式 <code>{`expr`}</code> に従って新しいテンソルを生成します。  引数:  - <code>{`tensor-type-spec`}</code>: <a href="/ja/reference/ranking/tensor#tensor-type-spec" aria-label="インデックス付きテンソルの型仕様。">インデックス付きテンソルの型仕様。</a> - <code>{`(expression)`}</code>: テンソルの生成方法を表現する<a href="#lambda-functions-in-primitive-functions" aria-label="ラムダ関数">ラムダ関数</a>。  型仕様と式 <code>{`expr`}</code> に従って新しいテンソルを生成します。テンソル型はインデックス付きテンソル(例: <code>{`tensor<float>(x[10])`}</code>)でなければなりません。<code>{`expr`}</code> 内の式は各セルで評価されます。式の引数は、暗黙的に型仕様で定義された次元の名前になります。 <br/>   変換テンソルの作成に便利です。 <br/> 例: <br/>  <code>{``}</code><code>{` tensor<float>(x[3])(x) `}</code><code>{``}</code> <br/> <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gHMDaCAnAQwBcCB9VgO4kyNSEQSQetAM5Y2ACgAeiAMwBdAJRKNkERAC+I-aQzVyuBkROjKaPXQbNWnHvwIDeAJmE1M4qFKybAA80AA2WNwAfEqInmrEAJ5xmkpgALzpYIk69oYYxiJmmBYSVvYU+MXk9BJcPr6EDIFysQAsmnCIAIwAdAAMxGCeA0Mqo2BtA2q6vvmohaYVpU3W5LbVDhJO7Nx8grzQbFgAtrwctFhcABbsvC1sDb5izSxB8tApWlzAinDQAGpuvpcnMjCg1CB9EA" aria-label="playground generate examples">playground generate examples</a></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;rename(  tensor, dim-to-rename, new-names   )&#42;&#42;</td>
+      <td>テンソル内の 1 つ以上の次元の名前を変更します。 <br/>   引数: <br/>  - <code>{`tensor`}</code>: テンソル式。 <br/>  - <code>{`dim-to-rename`}</code>: 名前を変更する次元、または次元のリスト。 <br/>  - <code>{`new-names`}</code>: 上記で列挙した次元の新しい名前。1 つ以上の次元の名前が変更された新しいテンソルを返します。例: <br/>  <code>{``}</code><code>{` rename(t1,x,z)`}</code><code>{``}</code> <br/>  <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gBcSybIiEmDaBnLAJwAUAD2ABfYgE9xASjjBgwuAAYpKsQgCMAOlVolqyXE0awy3cX3G1y0+b2LrRk1t1jIrCGNYTW1crgMRKQ0UJRonnQM-NwAhgC2BAD6BMIJOAA2wZEQ7NFxiYKMxMLEAF4yHqHeGL4Y-piBnNmhFPgN5PScMbQJyanpWUmMAO5YLKG5HFA9fUXEIlIyCwCWxABWMpWRNai7ALogYkA" aria-label="playground rename examples">playground rename examples</a></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;concat(  tensor1,  tensor2,  dim   )&#42;&#42;</td>
+      <td>次元 <code>{`dim`}</code> に沿って 2 つのテンソルを連結します。 <br/>  引数: <br/>  - <code>{`tensor1`}</code>: テンソル式。 <br/> - <code>{`tensor2`}</code>: テンソル式。 <br/> - <code>{`dim`}</code>: 連結する次元。 <br/>  2 つのテンソル <code>{`tensor1`}</code> と <code>{`tensor2`}</code> を次元 <code>{`dim`}</code> に沿って連結した新しいテンソルを返します。 <br/>  例: <br/>  <code>{``}</code><code>{` concat(t,t2,x) `}</code><code>{``}</code> <br/> <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gBcSybIiEmDaBnLAJwAUAD0QBmALoBKOIgAsxAKzEAbBMisIAX1ZbSGauVwMi+tpTSa6DRgCYWNTByiNufIaNvTZY4nPVWOhh6rIaYxpymVhT4YeT0nADGWLSJAIbMZo7sDMmpGYKMxHbEwlIajkGoIQbREYQO5rFWEJAJUHnpjAD6WIwAFgT83QDuaQCejdnOkJ0FJUVlFTRV2igSIFpAA" aria-label="playground concat examples">playground concat examples</a></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;(tensor)partial-address&#42;&#42;</td>
+      <td>スライス - 部分アドレスにマッチするセルを含む新しいテンソルを返します。<br/>   引数: <br/>  - <code>{`tensor`}</code>: テンソル式。 <br/> - <code>{`partial-address`}</code>: テンソルアドレス <code>{`{dimension:label,..}`}</code> の形式で指定できます。または、直接参照され、単一のマップ型もしくはインデックス型を持つテンソルの場合は、それぞれ波括弧内のラベルのみ <code>{`{label}`}</code>、もしくは角括弧内のインデックスのみ <code>{`[index]`}</code> で指定できます。インデックスラベルは、括弧で囲まれたラムダ式で指定することもできます。 <br/>  部分アドレスにマッチするセルを含む新しいテンソルを返します。よくある特殊ケースは、完全なアドレスを指定して単一の値を生成することです。結果のテンソルの型は、引数のテンソルの次元のうち、部分アドレスで指定されなかったものになります。<br/>  例: <br/> <code>{``}</code><code>{` # a_tensor is of type tensor(key{},x[2]) a_tensor{key:key1,x:1} `}</code><code>{``}</code> <br/>  <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gBcSybIiEmDaBnLAJwAUAD0QBmALoBKOIgAsxAKzEAbBMisIAX1ZbSGauVwMi+tpTSa6DHgBsAlgGNTViOwaNgwuAAYtGmjAdDD1WQ0xjThdAinxw8npOOycCAH0AJhZAtw4oT290-ytg1FCDK2wLdzNyC3jrTkZMmrZcrl4BQQBrAgBPYD1RdOk4YDAe3oBGWUmAOh9iMHT5iUWJ9NkxecW5FaCAmhLtFvrKkyzzONcoRKhk51SAWwBDHBwCABNU+1oPgmFPhcYm0msAJnAJpNiN5JkVAkcgicKpFCEDMHVrpBbpB7mkXm9Pt9fv9Cc1MSD0mC+hC+lDvIIxABadJSOGHXQoCQgLRAA" aria-label="playground slice examples">playground slice examples</a></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;tensor-literal-form&#42;&#42;</td>
+      <td>型とセル値を明示的に指定した新しいテンソルを返します。各セル値は、他のフィーチャーにアクセスできるラムダで与えることもできます。 <br/>  <a href="/ja/reference/ranking/tensor#tensor-literal-form" aria-label="リテラル形式">リテラル形式</a>から新しいテンソルを返します。型は明示的に指定する必要があります。各値はラムダで与えることができ、このラムダは - 他のすべてのラムダとは対照的に - &#42;コンテキストのフィーチャーや式を参照できます&#42;。 <br/> 例:  <code>{``}</code><code>{` # Declare an indexed tensor tensor(x[2]):[1.0, 2.0]  # Declare an mapped tensor tensor(x{}):{x1:3, x2:4} `}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;cell_cast(  tensor,  cell_type   )&#42;&#42;</td>
+      <td>引数と同じですが、すべてのセル値が指定された<a href="/ja/reference/ranking/tensor#tensor-type-spec" aria-label="セル型">セル型</a>に変換された新しいテンソルを返します。 <br/>  引数: <br/>   - <code>{`tensor`}</code>: テンソル式。 <br/>  - <code>{`cell_type`}</code>: 変換先のセル型。 <br/>  <code>{`bfloat16`}</code> から <code>{`float`}</code> へのキャストの例: <br/> <code>{``}</code><code>{` # With a tensor t of the type tensor<bfloat16>(x[5])(x+1) cell_cast(t, float)`}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;cell_order(  tensor, order   )&#42;&#42;</td>
+      <td>指定された順序に基づいて、元のセルの順位を持つ新しいテンソルを返します。 <br/>  引数: <br/>  - <code>{`tensor`}</code>: テンソル式。 <br/>  - <code>{`order`}</code>: <code>{`max`}</code> または <code>{`min`}</code> <br/>  指定された順序に基づいて、元のセルの順位を持つ新しいテンソルを返します。<code>{`max`}</code> では最大値が順位 0 になります。<code>{`min`}</code> では最小値が順位 0 になります。 <br/>  例: <br/> <code>{``}</code><code>{` cell_order(tensor(x[3]):[2,3,1],max) # tensor(x[3]):[1,0,2] cell_order(tensor(x[3]):[2,3,1],min) # tensor(x[3]):[1,2,0] `}</code><code>{``}</code> <br/>  <a href="https://docs.vespa.ai/playground/#N4IgZiBcDaoPYAcogMYgDQiZUAXZABLgBYCmBAjgK4CGANgJa4CeBcYB9dBKxVAdgGsAziAC+Y9PGwhSGLFFD9kuAIzy5kELlL9hcAE4AeMHTg1cAPgAUvAYOBiAlDgAMkVQGZ0qyAHZ0ACZIAFZ0Tw8wgBZIT1d0EMhAsXFJaWQ0TGw8QgA5AgZhAgATZn4aAFsGNAkpEERkOSzFEGUtXI1kT1S6hq1MhRxtQjAGfmK2A2LSAzGAczYOFFI6OlFa9K0mwaUVQM7+lboAfUNpg2s1dAIKmgAPJx7N1Hls4a0bmkFyGk-hQQIYEMRDIBAARqRhLgCB0NvUZNs3m1tN1MJptIEjLC0vCMq8WvgPsUDIhOKsCMIqGDhAgaMsimASRUQeRbv8QRZOAZyGB6MI5HC+rJ8UNkbgogdwAw6DoDMdKdTafTLt5AdZhE51U5HoKZAM3oSQDw4BUwWMedLZaQJmyAQB3JjESYMOZjehEXT6AyA4Hcykyp64rYi3ZaXAhSXigBUalSAF0xEA" aria-label="playground example for cell_order">playground example for cell_order</a></td>
+    </tr>
+  </tbody>
+</table>
+
+### プリミティブ関数におけるラムダ関数
+
+一部のプリミティブ関数は、テンソルのセルの集合に対して評価・適用されるラムダ関数を受け取ります。この関数は単一の式で構成され、その形式と組み込み関数は[一般的なランキング式](/ja/reference/ranking/ranking-expressions)と同じです。ただし、アトムはラムダの引数リストで定義された引数になります。
+
+式はラムダの外側の変数やデータ構造にアクセスできません。つまり、これらはクロージャーではありません。
+
+例:
+
+```bash
+f(x)(log(x))
+f(x,y)(if(x < y, 0, 1))
+```
+
+### 非プリミティブ関数
+
+非プリミティブ関数はプリミティブ関数で実装できますが、パフォーマンス上の理由から必ずしもそのように実装されているわけではありません。すべての算術演算子、比較演算子、およびスカラー演算はテンソルにも直接適用できることに注意してください。それらは以下では繰り返しません。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>関数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;argmax(t, dim)&#42;&#42;</td>
+      <td><code>{`join(t, reduce(t, max, dim), f(x,y)(if (x == y, 1, 0)))`}</code> <br/> テンソル内の最大値を持つセルが 1 に設定されたテンソルを返します。次元引数は reduce と同じ形式に従い、複数の次元を指定でき、省略可能です。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;argmin(t, dim)&#42;&#42;</td>
+      <td><code>{`join(t, reduce(t, min, dim), f(x,y)(if (x == y, 1, 0)))`}</code><br/>   テンソル内の最小値を持つセルが 1 に設定されたテンソルを返します。次元引数は reduce と同じ形式に従い、複数の次元を指定でき、省略可能です。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;avg(t, dim)&#42;&#42;</td>
+      <td><code>{`reduce(t, avg, dim)`}</code> <br/>  次元 <code>{`dim`}</code> に沿って <code>{`average`}</code> アグリゲーターでテンソルを集約します。次元引数が省略された場合は、すべての次元にわたって集約します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;count(t, dim)&#42;&#42;</td>
+      <td><code>{`reduce(t, count, dim)`}</code> <br/>   次元 <code>{`dim`}</code> に沿って <code>{`count`}</code> アグリゲーターでテンソルを集約します。次元引数が省略された場合は、すべての次元にわたって集約します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;cosine_similarity(t1, t2, dim)&#42;&#42;</td>
+      <td><code>{`reduce(t1*t2, sum, dim) / sqrt(reduce(t1*t1, sum, dim) * reduce(t2*t2, sum, dim))`}</code> <br/>   指定された次元における 2 つのベクトル間のコサイン類似度。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;diag(n1, n2)&#42;&#42;</td>
+      <td><code>{`tensor(i[n1],j[n2])(if (i==j, 1.0, 0.0)))`}</code> <br/>  対角成分が 1.0 に設定されたテンソルを返します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;elu(t)&#42;&#42;</td>
+      <td><code>{`map(t, f(x)(if(x < 0, exp(x)-1, x)))`}</code> <br/>  <a href="https://arxiv.org/abs/1511.07289" aria-label="Exponential linear unit">Exponential linear unit</a>。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;euclidean_distance(t1, t2, dim)&#42;&#42;</td>
+      <td><code>{`join(reduce(map(join(t1, t2, f(x,y)(x-y)), f(x)(x * x)), sum, dim), f(x)(sqrt(x)))`}</code> <br/>  euclidean_distance: <code>{`sqrt(sum((t1-t2)^2, dim))`}</code>。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;expand(t, dim)&#42;&#42;</td>
+      <td><code>{`t * tensor(dim[1])(1)`}</code> <br/>  テンソル <code>{`t`}</code> に <code>{`dim`}</code> という名前のインデックス付き次元を追加します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;hamming(t1, t2)&#42;&#42;</td>
+      <td><code>{`join(t1, t2, f(x,y)(hamming(x,y)))`}</code> <br/>  join を行い、<code>{`t1`}</code> と <code>{`t2`}</code> のマッチするセル間のハミング距離を返します。この関数は、入力にバイナリデータのベクトルが含まれ、ベクトル次元に沿ってハミング距離を合計する場合に特に便利です。例: <br/> | 入力 &#42;t1&#42; の型 → | <code>{`tensor<int8>(dimone{},z[32])`}</code> <br/> | 入力 &#42;t2&#42; の型 → | <code>{`tensor<int8>(dimtwo{},z[32])`}</code> <br/> | 式 → <code>{`reduce(join(t1, t2, f(a,b)(hamming(a,b)), sum, z)`}</code> |  | 出力の型 → <code>{`tensor<float>(dimone{},dimtwo{})`}</code> | <br/>  セル値は常に、両方とも [-128,127] の範囲の 8 ビット整数であるかのように扱われ、その上で異なるビットの数がカウントされることに注意してください。対応する<a href="/ja/reference/schemas/schemas#distance-metric" aria-label="距離メトリック">距離メトリック</a>も参照してください。引数にはスカラーも指定できます。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;l1_normalize(t, dim)&#42;&#42;</td>
+      <td><code>{`join(t, reduce(t, sum, dim), f(x,y) (x / y))`}</code> <br/>  L1 正規化: <code>{`t / sum(t, dim)`}</code>。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;l2_normalize(t, dim)&#42;&#42;</td>
+      <td><code>{`join(t, map(reduce(map(t, f(x)(x * x)), sum, dim), f(x)(sqrt(x))), f(x,y)(x / y))`}</code> <br/>  L2 正規化: <code>{`t / sqrt(sum(t^2, dim)`}</code>。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;matmul(t1, t2, dim)&#42;&#42;</td>
+      <td><code>{`reduce(join(t1, t2, f(x,y)(x * y)), sum, dim)`}</code> <br/>  2 つのテンソルの行列積。これは、共有された次元に沿って 2 つのテンソルの積を合計したものです。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;max(t, dim)&#42;&#42;</td>
+      <td><code>{`reduce(t, max, dim)`}</code> <br/>  次元 <code>{`dim`}</code> に沿って <code>{`max`}</code> アグリゲーターでテンソルを集約します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;median(t, dim)&#42;&#42;</td>
+      <td><code>{`reduce(t, median, dim)`}</code> <br/>  次元 <code>{`dim`}</code> に沿って <code>{`median`}</code> アグリゲーターでテンソルを集約します。次元引数が省略された場合は、すべての次元にわたって集約します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;min(t, dim)&#42;&#42;</td>
+      <td><code>{`reduce(t, min, dim)`}</code> <br/>  次元 <code>{`dim`}</code> に沿って <code>{`min`}</code> アグリゲーターでテンソルを集約します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;prod(t, dim)&#42;&#42;</td>
+      <td><code>{`reduce(t, prod, dim)`}</code> <br/>  次元 <code>{`dim`}</code> に沿って <code>{`product`}</code> アグリゲーターでテンソルを集約します。次元引数が省略された場合は、すべての次元にわたって集約します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;random(n1, n2, ...)&#42;&#42;</td>
+      <td><code>{`tensor(i1[n1],i2[n2],...)(random(1.0))`}</code> <br/>  0.0 から 1.0 の間の一様分布の乱数値を持つテンソルを返します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;range(n)&#42;&#42;</td>
+      <td><code>{`tensor(i[n])(i)`}</code> <br/>  増加する値を持つテンソルを返します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;relu(t)&#42;&#42;</td>
+      <td><code>{`map(t, f(x)(max(0,x)))`}</code> <br/>  Rectified linear unit。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;sigmoid(t)&#42;&#42;</td>
+      <td><code>{`map(t, f(x)(1.0 / (1.0 + exp(0.0-x))))`}</code> <br/>  各要素のシグモイドを返します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;softmax(t, dim)&#42;&#42;</td>
+      <td><code>{`join(map(t, f(x)(exp(x))), reduce(map(t, f(x)(exp(x))), sum, dim), f(x,y)(x / y))`}</code> <br/>  テンソルの softmax。すなわち <code>{`e^x / sum(e^x)`}</code>。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;sum(t, dim)&#42;&#42;</td>
+      <td><code>{`reduce(t, sum, dim)`}</code> <br/>  次元 <code>{`dim`}</code> に沿って <code>{`summation`}</code> アグリゲーターでテンソルを集約します。次元引数が省略された場合は、すべての次元にわたって集約します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;top(n, t)&#42;&#42;</td>
+      <td><code>{`t * filter_subspaces(cell_order(t, max) < n, f(s)(s))`}</code> <br/>  top N 関数: 単純なマップテンソルから上位 N 個のセルを選び出します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;unpack_bits(t)&#42;&#42;</td>
+      <td>int8 入力からビットを展開し、8 倍の数の float にします  最も内側のインデックス付き次元は 8 倍の数のセルを持つように拡張され、各セルは 8 ビット入力値の 1 ビットによって決まる 0.0 または 1.0 の float 値を持ちます。同じ基本機能を提供する <code>{`numpy.unpackbits`}</code> に相当します。<code>{`tensor<int8>(x[1]):[9]`}</code> のような最小の入力に対しては、出力 <code>{`tensor<float>(x[8]):[0,0,0,0,1,0,0,1]`}</code> が得られます(デフォルトのビット順はビッグエンディアン)。非常に複雑な例として、型 <code>{`tensor<int8>(foo{},x[3],y[11],z{})`}</code> の入力は、型 <code>{`tensor<float>(foo{},x[3],y[88],z{})`}</code> の出力を生成します。ここで「foo」、「x」、「z」は変わらず、「y」が最も内側のインデックス付き次元です。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;unpack_bits(t, cell_type)&#42;&#42;</td>
+      <td>int8 入力からビットを展開し、8 倍の数の値にします <br/> 上記と同じですが、オプションで異なる cell_type を指定できます(例えば、出力を double を使用する他のテンソルと組み合わせる場合は <code>{`double`}</code> にできます)。</td>
+    </tr>
+    <tr>
+      <td>unpack_bits(t, cell_type, endian)</td>
+      <td>int8 入力からビットを展開し、8 倍の数の値にします <br/>  上記と同じですが、オプションでビットのエンディアンも変更できます。<code>{`big`}</code>(デフォルト)または <code>{`little`}</code> のいずれかでなければなりません。</td>
+    </tr>
+    <tr>
+      <td>xw_plus_b(x, w, b, dim)</td>
+      <td><code>{`join(reduce(join(x, w, f(x,y)(x * y)), sum, dim), b, f(x,y)(x+y))`}</code> <br/>   <code>{`x`}</code>(通常はベクトル)と <code>{`w`}</code>(重み)の行列積に、<code>{`b`}</code>(バイアス)を加えたもの。ニューラルネットワーク層の活性化における典型的な演算です。例: <code>{`sigmoid(xw_plus_b(x,w,b)))`}</code>。</td>
+    </tr>
+  </tbody>
+</table>

@@ -1,0 +1,195 @@
+---
+title: "Kubernetes 上の Vespa デプロイの監視"
+sidebarTitle: "Kubernetes 上の Vespa デプロイの監視"
+---
+
+Prometheus Operator を使用して、Kubernetes 上の Vespa デプロイからメトリクスを収集します。このガイドでは、監視スタックのインストール、Vespa コンポーネント向けの `PodMonitor` リソースの構成、そして Grafana Cloud へのメトリクスの転送について説明します。
+
+## 前提条件
+
+- Kubernetes クラスター（EKS、GKE、AKS、または Minikube）。
+- [Helm CLI](https://helm.sh/docs/intro/install/)
+- Kubernetes コマンドライン・ツール（[kubectl](https://kubernetes.io/docs/reference/kubectl/)）
+- Grafana Cloud アカウント
+
+## 1. Prometheus Operator のインストール
+
+Kubernetes に Prometheus をインストールする推奨方法は、[kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) Helm チャートを使用することです。リポジトリを追加し、monitoring ネームスペースを作成します。
+
+```bash
+$ helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+$ helm repo update
+$ kubectl create namespace monitoring
+```
+
+### Grafana Cloud 資格情報の構成
+
+メトリクスを Grafana Cloud に転送する場合は、資格情報を含む Kubernetes Secret を作成します。Grafana Cloud Portal の _Configure Prometheus_ から **Instance ID**（ユーザー）と **API Token**（パスワード）を取得します。
+
+```bash
+$ kubectl create secret generic grafana-cloud-prometheus -n monitoring --from-literal=username=$INSTANCE_ID --from-literal=password=$API_TOKEN
+```
+
+### Helm Values の構成
+
+`prometheus-values.yaml` ファイルを作成します。この構成は、Grafana Cloud へのリモート書き込みを有効にし、すべての `PodMonitor` を選択するように Prometheus Operator を構成し、ローカルの Grafana インスタンスを無効にします。
+
+```yaml expandable
+prometheus:
+  prometheusSpec:
+  # Allow Prometheus to discover PodMonitors in other namespaces
+  podMonitorSelectorNilUsesHelmValues: false
+  serviceMonitorSelectorNilUsesHelmValues: false
+
+  # Remote write configuration for Grafana Cloud
+  remoteWrite:
+    - url: [https://prometheus-prod-XX-prod-XX.grafana.net/api/prom/push](https://prometheus-prod-XX-prod-XX.grafana.net/api/prom/push)
+      basicAuth:
+        username:
+          name: grafana-cloud-prometheus
+          key: username
+        password:
+          name: grafana-cloud-prometheus
+          key: password
+      writeRelabelConfigs:
+        - sourceLabels: [__address__]
+          targetLabel: cluster
+          replacement: my-cluster-name
+
+# Disable local Grafana
+grafana:
+  enabled: false
+
+# Enable Alertmanager and Kube State Metrics
+alertmanager:
+  enabled: true
+  kube-state-metrics:
+  enabled: true
+```
+
+Helm を使用してスタックをインストールします:
+
+```bash
+$ helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring --values prometheus-values.yaml
+```
+
+## 2. PodMonitor の構成
+
+Vespa は、標準的な Web トラフィック用ポートとは異なる特定のポートでメトリクスを公開します。Prometheus がこれらのエンドポイントをどのようにスクレイプするかを定義するために、`PodMonitor` カスタムリソースを使用します。
+
+### ConfigServer Pod の監視
+
+ConfigServer は、ポート **19071** のパス `/configserver-metrics` でメトリクスを公開します。これらのメトリクスをスクレイプするには、次の構成を適用します。
+
+```yaml expandable
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vespa-configserver
+  namespace: $NAMESPACE
+  labels:
+    release: prometheus # Required to be picked up by the operator
+spec:
+  selector:
+    matchLabels:
+      app: vespa-configserver
+  podMetricsEndpoints:
+    - targetPort: 19071
+      path: /configserver-metrics
+      interval: 30s
+      scheme: http
+      params:
+        format: ['prometheus']
+      relabelings:
+        # Map Kubernetes pod name to the 'pod' label
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - targetLabel: vespa_role
+          replacement: configserver
+```
+
+### アプリケーション Pod の監視
+
+コンテナーおよびコンテント Pod は、state API ポート **19092** の `/prometheus/v1/values` でメトリクスを公開します。次の例では、Vespa アプリケーション Pod 用の PodMonitor を定義します。
+
+```yaml expandable
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vespa-application
+  namespace: default
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchExpressions:
+      # Selects pods that are part of a Vespa application (feed, query, content)
+      - key: vespa.ai/cluster-name
+        operator: Exists
+  podMetricsEndpoints:
+    - targetPort: 19092
+      path: /prometheus/v1/values
+      interval: 30s
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        # Extract the role from the pod name or labels if needed
+        - targetLabel: vespa_role
+          replacement: node
+```
+
+## 3. メトリクスの確認
+
+`PodMonitor` を適用したら、Prometheus がターゲットを正常にスクレイプしていることを確認します。
+
+### ローカルでのターゲットの確認
+
+Prometheus UI をローカルマシンにポートフォワードします:
+
+```bash
+$ kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090
+```
+
+[http://localhost:9090/targets](http://localhost:9090/targets) にアクセスします。`default/vespa-configserver` と `default/vespa-application` という名前のターゲットが **UP** 状態で表示されるはずです。
+
+### メトリクスのクエリー
+
+Prometheus UI または Grafana Explore で PromQL クエリーを使用してデータを確認できます:
+
+```js
+# Check availability of Config Servers
+up{vespa_role="configserver"}
+
+# Retrieve average maintenance duration
+vespa_maintenance_duration_average
+
+# List all metrics coming from Vespa
+{job=~"default/vespa-.*"}
+```
+
+## トラブルシューティング
+
+**ターゲットに `No active targets` と表示される場合**:
+
+これは、`PodMonitor` のセレクターがどの Pod にもマッチしていないことを示します。Vespa Pod のラベルを確認してください:
+
+```bash
+$ kubectl get pods -n $NAMESPACE --show-labels
+```
+
+`PodMonitor` YAML の `selector.matchLabels` が、上記の出力に表示されるラベルと一致していることを確認してください。
+
+**ターゲットが `DOWN` 状態の場合**:
+
+これは通常、Prometheus がメトリクス・エンドポイントに到達できないことを意味します。クラスター内から curl コマンドを実行して、期待されるポートでメトリクスが公開されていることを確認してください:
+
+```bash
+$ kubectl run curl-test -n $NAMESPACE --image=curlimages/curl -it --rm -- curl http://cfg-0.$NAMESPACE.svc.cluster.local:19071/configserver-metrics?format=prometheus
+```
+
+**Network Policy**:
+
+トラフィックを制限するために `NetworkPolicy` を使用している場合は、`monitoring` ネームスペースから `$NAMESPACE` ネームスペースへの、ポート 19071 と 19092 のイングレス・トラフィックを許可するポリシーがあることを確認してください。

@@ -1,0 +1,111 @@
+---
+title: "ステートレス・モデルのリファレンス"
+sidebarTitle: "モデル・ファイル"
+---
+
+_.model_ ファイルは、[ステートレス・モデル評価](/ja/ranking/stateless-model-evaluation)で使用されます。これらは[ランキング式](/ja/basics/ranking)を含むファイルで、[models](/ja/reference/applications/application-packages) または _models_ のサブディレクトリーに、_.model_ という拡張子で配置されます:
+
+```
+├── models
+│   └── my_model.model
+└── services.xml
+```
+
+## .model ファイル形式の仕様
+
+```txt
+model [name] {
+
+    inputs {
+        ([input-name] [input-type])*
+    }
+
+    constants {
+        [constant]*
+    }
+
+    (function [name]([argument-name]*) {
+        expression: [ranking expression]
+    })*
+
+}
+```
+
+各要素は任意の順序(および数)で記述できます。
+
+### Constant 要素
+
+<Card>
+[constant-name] [type]?: [スカラー、[リテラル形式のテンソル](/ja/reference/ranking/tensor#tensor-literal-form)、または `file:` に続くファイル参照]
+</Card>
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>定数の名前。完全なフィーチャー名 <code>{`constant(myName)`}</code> として、あるいは単に <code>{`name`}</code> として記述します。</td>
+    </tr>
+    <tr>
+      <td>type</td>
+      <td>定数の型。<code>{`double`}</code> または<a href="/ja/reference/ranking/tensor#tensor-type-spec" aria-label="tensor type">テンソル型</a>です。省略した場合、型は double になります。</td>
+    </tr>
+    <tr>
+      <td>value</td>
+      <td>数値、<a href="/ja/reference/ranking/tensor#tensor-literal-form" aria-label="tensor on literal form">リテラル形式のテンソル</a>、または <code>{`file:`}</code> に続く、定数を含むファイルへのモデル・ファイルからの相対パス。ファイルは <a href="/ja/reference/schemas/schemas#tensor" aria-label="tensor JSON Format">テンソル JSON 形式</a>で保存され、<code>{`.json`}</code> で終わる必要があります。ファイルは lz4 圧縮でもかまいませんが、その場合の拡張子は <code>{`.json.lz4`}</code> でなければなりません。</td>
+    </tr>
+  </tbody>
+</table>
+
+定数の例:
+
+```js
+constants {
+    myDouble: 0.5
+    constant(myOtherDouble) double: 0.6
+    constant(myArray) tensor(x[3]):[1, 2, 3]
+    constant(myMap) tensor(key{}):\{key1: 1.0, key2: 2.0}
+    constant(myLargeTensor) tensor(x[10000]): file:constants/myTensor.json.lz4
+}
+```
+
+## モデルの例
+
+このファイルは [models](/ja/reference/applications/application-packages) ディレクトリー・ツリー内のどこかに `example.model` として保存する必要があり、同じディレクトリーには、圧縮 JSON のテンソルを含む `myLargeConstant.json.lz4` も含まれていなければなりません。
+
+```js expandable
+model example {
+
+    # All inputs that are not scalar (aka 0-dimensional tensor) must be declared
+    inputs {
+        
+        input1 tensor(name{},x[3])
+        input2 tensor(x[3])
+    }
+
+    constants {
+
+        constant(constant1) tensor(x[3]):{{x:0}:0.5, {x:1}:1.5, {x:2}:2.5}
+        constant(constant2): 3.0
+        constant(myLargeConstant) tensor(x[10000]): file:myLargeConstant.json.lz4
+    }
+
+    function foo1() {
+
+        expression: reduce(sum(input1 * input2, name) * constant1, max, x) * constant2
+    }
+
+    function foo2() {
+
+        expression: reduce(sum(input1 * input2, name) * constant(constant1asLarge), max, x) * constant2
+    }
+
+}
+```
+
+これにより、モデル _example_ が関数 _foo1_ と _foo2_ とともに利用可能になります。

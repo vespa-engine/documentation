@@ -1,0 +1,389 @@
+---
+title: "インデックス言語リファレンス"
+sidebarTitle: "indexing language"
+---
+
+このリファレンスでは、Vespa の _インデックス言語_ の全体をドキュメント化します。入力データに対してより複雑な処理が必要な場合は、[ドキュメントプロセッサー](/ja/applications/document-processors)を実装してください。
+
+インデックス言語は UNIX のパイプに似ており、ステートメントは _パイプ_ 記号で区切られた式で構成され、各式の出力が次の式の入力になります。ステートメントはセミコロンで終端され、(変数を使用する場合を除いて)互いに独立しています。
+
+例は[インデックス](/ja/writing/indexing)ガイドを参照してください。
+
+## インデックススクリプト
+
+インデックススクリプトは、セミコロン(`;`)で区切られた一連の[インデックスステートメント](#indexing-statement)です。スクリプトは、一度に 1 つのドキュメントに対して、ステートメントごとに順番に実行されます。
+
+Vespa は、各検索クラスターに割り当てられた検索定義に基づいて、検索クラスターごとに 1 つのインデックススクリプトを導出します。ドキュメントが検索クラスターにフィードされると、対応する[インデックスクラスター](/ja/reference/applications/services/content#document-processing)を通過し、そこでドキュメントに対してインデックススクリプトが実行されます。これはドキュメントが[再インデックス](/ja/operations/reindexing)されるたびにも行われるため、[now](#now) などの式は、ドキュメントが _フィード_ された時刻ではなく、(最後に)_インデックス_ された時刻と考える必要があることに注意してください。
+
+特定の検索クラスター用に生成されたインデックススクリプトは、インデックスドキュメントプロセッサーの構成を取得することで確認できます。
+
+```sh
+$ vespa-get-config -i search/cluster.<cluster-name> -n vespa.configdefinition.ilscripts
+```
+
+現在の _実行値_ は、ステートメントの実行前に `null` に設定されます。
+
+## インデックスステートメント
+
+インデックスステートメントは、パイプ(`|`)で区切られた一連の[インデックス式](#indexing-expression)です。ステートメントは、式ごとに順番に実行されます。
+
+ステートメント内では、実行値がある式から次の式へと渡されます。
+
+最も単純なステートメントは、入力フィールドの値をアトリビュートに渡すものです:
+
+```sh
+input year | attribute year;
+```
+
+上記のステートメントは、`input year` と `attribute year` という 2 つの式で構成されます。前者は、実行値を入力ドキュメントの「year」フィールドの値に設定します。後者は、現在の実行値をアトリビュート「year」に書き込みます。
+
+## インデックス式
+
+### プリミティブ
+
+文字列、数値リテラル、および true/false は、実行値を明示的に設定するための式として使用できます。例: `"foo"`、`69`、`true`)。
+
+### 出力
+
+出力式は、現在の実行値をドキュメントのフィールドに書き込む式です。これらの式は、構築するフィールドの種類(すなわち attribute、index、または summary)を示すインジケーターとしての役割も兼ねます。1 つのドキュメント内で同じフィールドに異なる値を割り当てることはできない点に注意してください(例えば `attribute | lowercase |
+index` は **不正** であり、デプロイできません)。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>式</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`attribute`}</code></td>
+      <td>実行値を現在のフィールドに書き込みます。デプロイ時には、このフィールドをアトリビュートとして保存すべきであることを示します。</td>
+    </tr>
+    <tr>
+      <td><code>{`index`}</code></td>
+      <td>実行値を現在のフィールドに書き込みます。デプロイ時には、このフィールドをインデックスフィールドとして保存すべきであることを示します。</td>
+    </tr>
+    <tr>
+      <td><code>{`summary`}</code></td>
+      <td>実行値を現在のフィールドに書き込みます。デプロイ時には、このフィールドをドキュメントサマリーに含めるべきであることを示します。</td>
+    </tr>
+  </tbody>
+</table>
+
+### 算術演算
+
+インデックスステートメントには、オペランドが数値である限り、算術演算を自由に組み合わせて含めることができます。文字列から数値への変換や、ある数値型から別の数値型への変換が必要な場合は、該当する[コンバーター](#converters)式を使用してください。サポートされている算術演算子は次のとおりです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>演算子</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`<lhs> + <rhs>`}</code></td>
+      <td>実行値を、<code>{`lhs`}</code> 式の実行値に <code>{`rhs`}</code> 式の実行値を加算した結果に設定します。</td>
+    </tr>
+    <tr>
+      <td><code>{`<lhs> - <rhs>`}</code></td>
+      <td>実行値を、<code>{`lhs`}</code> 式の実行値から <code>{`rhs`}</code> 式の実行値を減算した結果に設定します。</td>
+    </tr>
+    <tr>
+      <td><code>{`<lhs> * <rhs>`}</code></td>
+      <td>実行値を、<code>{`lhs`}</code> 式の実行値に <code>{`rhs`}</code> 式の実行値を乗算した結果に設定します。</td>
+    </tr>
+    <tr>
+      <td><code>{`<lhs> / <rhs>`}</code></td>
+      <td>実行値を、<code>{`lhs`}</code> 式の実行値を <code>{`rhs`}</code> 式の実行値で除算した結果に設定します。</td>
+    </tr>
+    <tr>
+      <td><code>{`<lhs> % <rhs>`}</code></td>
+      <td>実行値を、<code>{`lhs`}</code> 式の実行値を <code>{`rhs`}</code> 式の実行値で除算した余りに設定します。</td>
+    </tr>
+    <tr>
+      <td><code>{`<lhs> . <rhs>`}</code></td>
+      <td>実行値を、<code>{`lhs`}</code> 式の実行値と <code>{`rhs`}</code> 式の実行値を連結したものに設定します。<code>{`lhs`}</code> と <code>{`rhs`}</code> の _両方_ がコレクション型の場合、この演算子は <code>{`rhs`}</code> を <code>{`lhs`}</code> に追加します(いずれかのオペランドが null の場合、空のコレクションとして扱われます)。そうでない場合、この演算子は <code>{`lhs`}</code> と <code>{`rhs`}</code> の文字列表現を連結します(いずれかのオペランドが null の場合、結果は null になります)。</td>
+    </tr>
+  </tbody>
+</table>
+
+実行の優先順位を宣言するために括弧を使用できます(例: `(1
+  + 2) * 3`)。これは、`(input str_a | split ',') . (input str_b | split
+  ',') | index arr` のような、より高度な配列連結ステートメントでも機能します。
+
+### コンバーター
+
+これらの式を使用すると、あるデータ型から別のデータ型へ変換できます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>コンバーター</th>
+      <th>入力</th>
+      <th>出力</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`binarize [threshold]`}</code></td>
+      <td>任意のテンソル</td>
+      <td>任意のテンソル</td>
+      <td>テンソル内のすべての値を 0 または 1 に置き換えます。オプションの引数として、値が 0 ではなく 1 に置き換えられるために超える必要があるしきい値を指定できます。デフォルトのしきい値は 0 です。これは、<a href="#pack_bits" aria-label="pack_bits">pack_bits</a> に適した入力を作成するのに便利です。</td>
+    </tr>
+    <tr>
+      <td><code>{`embed [id] [args]`}</code></td>
+      <td>文字列</td>
+      <td>テンソル</td>
+      <td><a href="/ja/reference/rag/embedding" aria-label="embedder">エンベッダー</a>を呼び出して、テキストを 1 つ以上のベクトル埋め込みに変換します。出力テンソルの型は、後続の式が必要とする型になります(その特定のエンベッダーがサポートする範囲で)。引数は <code>{`embed colbert chunk`}</code> のようにスペース区切りで指定します。最初の引数は、エンベッダーが 1 つだけ構成されている場合には省略できます。追加の引数はすべてエンベッダーの実装に渡されます。同じ入力を持つ同じ chunk 式がスキーマ内に複数回出現する場合、その値は一度だけ計算されます。</td>
+    </tr>
+    <tr>
+      <td><code>{`chunk id [args]`}</code></td>
+      <td>文字列</td>
+      <td>テンソル</td>
+      <td>文字列を文字列の配列に変換するチャンカーを呼び出します。引数は <code>{`chunk fixed-length 512`}</code> のようにスペース区切りで指定します。使用するチャンカーの id は必須で、Vespa にバンドルされているチャンカー、または services.xml に追加された任意のチャンカーコンポーネントを指定できます。<a href="/ja/reference/rag/chunking" aria-label="chunking reference">チャンキングリファレンス</a>を参照してください。追加の引数はすべてチャンカーの実装に渡されます。同じ入力を持つ同じ chunk 式がスキーマ内に複数回出現する場合、その値は一度だけ計算されます。</td>
+    </tr>
+    <tr>
+      <td><code>{`hash`}</code></td>
+      <td>文字列</td>
+      <td>int または long</td>
+      <td>入力をハッシュ値に変換します(SipHash を使用)。ハッシュは、ターゲットフィールドに応じて int または long になります。</td>
+    </tr>
+    <tr>
+      <td><code>{`pack_bits`}</code></td>
+      <td>テンソル</td>
+      <td>テンソル</td>
+      <td>バイナリテンソルの値を、ビッグエンディアン順で 1 値あたり 1 ビットとしてバイトにパックします。入力テンソルは単一の密(dense)次元を持つ必要があります。値の型は任意で、疎(sparse)次元はいくつあっても構いません。0 でも 1 でもない値は、0 をしきい値として二値化されます。<br/> 出力テンソルは次のようになります: <br/> - 値の型は <code>{`int8`}</code>。<br/> - 密次元のサイズは 8 で除算されます(整数に切り上げ)。<br/> - 疎次元は元と同じです。<br/> 結果のテンソルは、ランキング時に <a href="/ja/reference/ranking/ranking-expressions#unpack-bits" aria-label="unpack_bits">unpack_bits</a> を使用してアンパックできます。テンソルは、<a href="#binarize" aria-label="binarize function">binarize 関数</a>によって、この式の入力に適したバイナリ形式に変換できます。</td>
+    </tr>
+    <tr>
+      <td><code>{`to_array`}</code></td>
+      <td>任意</td>
+      <td>Array&lt;inputType&gt;</td>
+      <td>実行値を単一要素の配列に変換します。</td>
+    </tr>
+    <tr>
+      <td><code>{`to_byte`}</code></td>
+      <td>任意</td>
+      <td>Byte</td>
+      <td>実行値を byte に変換します。実行値の文字列表現に解析可能な数値が含まれていない場合、NumberFormatException がスローされます。</td>
+    </tr>
+    <tr>
+      <td><code>{`to_double`}</code></td>
+      <td>任意</td>
+      <td>Double</td>
+      <td>実行値を double に変換します。実行値の文字列表現に解析可能な数値が含まれていない場合、NumberFormatException がスローされます。</td>
+    </tr>
+    <tr>
+      <td><code>{`to_float`}</code></td>
+      <td>任意</td>
+      <td>Float</td>
+      <td>実行値を float に変換します。実行値の文字列表現に解析可能な数値が含まれていない場合、NumberFormatException がスローされます。</td>
+    </tr>
+    <tr>
+      <td><code>{`to_int`}</code></td>
+      <td>任意</td>
+      <td>Integer</td>
+      <td>実行値を int に変換します。実行値の文字列表現に解析可能な数値が含まれていない場合、NumberFormatException がスローされます。</td>
+    </tr>
+    <tr>
+      <td><code>{`to_long`}</code></td>
+      <td>任意</td>
+      <td>Long</td>
+      <td>実行値を long に変換します。実行値の文字列表現に解析可能な数値が含まれていない場合、NumberFormatException がスローされます。</td>
+    </tr>
+    <tr>
+      <td><code>{`to_bool`}</code></td>
+      <td>任意</td>
+      <td>Bool</td>
+      <td>実行値をブーリアン型に変換します。入力が文字列の場合、空でなければ true になります。入力が数値の場合、0 でなければ true になります。</td>
+    </tr>
+    <tr>
+      <td><code>{`to_pos`}</code></td>
+      <td>文字列</td>
+      <td>Position</td>
+      <td>実行値を position 構造体に変換します。入力形式は、a) <code>{`[N|S]<val>;[E|W]<val>`}</code>、または b) <code>{`x;y`}</code> のいずれかでなければなりません。</td>
+    </tr>
+    <tr>
+      <td><code>{`to_string`}</code></td>
+      <td>任意</td>
+      <td>String</td>
+      <td>実行値を文字列に変換します。</td>
+    </tr>
+    <tr>
+      <td><code>{`to_uri`}</code></td>
+      <td>文字列</td>
+      <td>Uri</td>
+      <td>実行値を URI 構造体に変換します</td>
+    </tr>
+    <tr>
+      <td><code>{`to_wset`}</code></td>
+      <td>任意</td>
+      <td>WeightedSet&lt;inputType&gt;</td>
+      <td>実行値を、デフォルトの重みを持つ単一要素の重み付きセットに変換します。</td>
+    </tr>
+    <tr>
+      <td><code>{`to_epoch_second`}</code></td>
+      <td>文字列</td>
+      <td>Long</td>
+      <td>ISO-8601 の instant 形式でフォーマットされた文字列を Unix エポック(Unix 時間、POSIX 時間、Unix タイムスタンプとも呼ばれる)、すなわち 1970 年 1 月 1 日 UTC からの経過秒数に変換します。このコンバーターは、入力文字列値の解析に <a href="https://docs.oracle.com/en/java/javase/20/docs/api/java.base/java/time/Instant.html#parse(java.lang.CharSequence)" aria-label="java.time.Instant.parse">java.time.Instant.parse</a> を使用します。入力を解析できない場合、DateTimeParseException がスローされます。例: <br/> - <code>{`2023-12-24T17:00:43.000Z`}</code> は <code>{`1703437243L`}</code> に変換されます <br/> - <code>{`2023-12-24T17:00:43Z`}</code> は <code>{`1703437243L`}</code> に変換されます <br/> - <code>{`2023-12-24T17:00:43.431Z`}</code> は <code>{`1703437243L`}</code> に変換されます <br/> - <code>{`2023-12-24T17:00:43.431+00:00`}</code> は <code>{`1703437243L`}</code> に変換されます</td>
+    </tr>
+  </tbody>
+</table>
+
+### その他の式
+
+以下は、分類されていない利用可能な式です:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>式</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`_`}</code></td>
+      <td>現在の実行値を返します。これは、例えば現在の実行値の前に別の値を付加する場合などに便利です。<a href="/ja/writing/indexing#execution-value-example" aria-label="this example">この例</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td><code>{`attribute <fieldName>`}</code></td>
+      <td>実行値を、指定した名前のアトリビュートフィールドに書き込みます。</td>
+    </tr>
+    <tr>
+      <td><code>{`base64decode`}</code></td>
+      <td>実行値が文字列の場合、base-64 デコードされて long 整数になります。文字列でない場合、実行値は <code>{`Long.MIN_VALUE`}</code> に設定されます。</td>
+    </tr>
+    <tr>
+      <td><code>{`base64encode`}</code></td>
+      <td>実行値が long 整数の場合、base-64 エンコードされて文字列になります。long 整数でない場合、実行値は <code>{`null`}</code> に設定されます。</td>
+    </tr>
+    <tr>
+      <td><code>{`echo`}</code></td>
+      <td>デバッグ目的で、実行値を標準出力に出力します。</td>
+    </tr>
+    <tr>
+      <td><code>{`flatten`}</code></td>
+      <td><Warning>&#42;&#42;非推奨:&#42;&#42; 代わりにスキーマで <a href="/ja/reference/schemas/schemas#tokens" aria-label="tokens">tokens</a> を使用してください。</Warning></td>
+    </tr>
+    <tr>
+      <td><code>{`for_each { <script> }`}</code></td>
+      <td>実行値の各要素に対して、指定したインデックススクリプトを実行します。ここでの要素とは、コレクション内の各要素、または構造体内の各フィールド値を指します。</td>
+    </tr>
+    <tr>
+      <td><code>{`generate [id] [args]`}</code></td>
+      <td><a href="/ja/rag/document-enrichment" aria-label="field generator">フィールドジェネレーター</a>を呼び出して、入力文字列からフィールド値を生成します。引数は、<a href="/ja/rag/document-enrichment" aria-label="Document enrichment with LLMs">LLM によるドキュメントエンリッチメント</a>で説明されている <code>{`FieldGenerator`}</code> コンポーネントの id です。同じ入力を持つ同じ generate 式がスキーマ内に複数回出現する場合、その値は一度だけ計算されます。</td>
+    </tr>
+    <tr>
+      <td><code>{`get_field <fieldName>`}</code></td>
+      <td>実行値(ドキュメントまたは構造体である必要があります)から、指定した名前のフィールドの値を取得し、それを新しい実行値として設定します。</td>
+    </tr>
+    <tr>
+      <td><code>{`get_language`}</code></td>
+      <td>最後に割り当てられた、または検出された言語のコードを取得します。言語が割り当てられても検出されてもいない場合は、「unknown」を表す「un」を返します。言語は文字列がトークン化または埋め込みされる際に検出されるため、これを使用して、以前のフィールドがそのような操作(例えばインデックス化)を実行した際に検出された言語を取得できます。</td>
+    </tr>
+    <tr>
+      <td><code>{`get_value <key>`}</code></td>
+      <td>入力の Map から値を取得します。キーには数値、識別子、または引用符付き文字列を指定できます。指定したキーに値がない場合、出力は空になります。</td>
+    </tr>
+    <tr>
+      <td><code>{`get_var <varName>`}</code></td>
+      <td>実行コンテキストから、指定した名前の変数の値を取得し、それを実行値として設定します。変数のスコープは、現在のフィールドのインデックススクリプトに限定されることに注意してください。</td>
+    </tr>
+    <tr>
+      <td><code>{`hex_decode`}</code></td>
+      <td>実行値が文字列の場合、16 進数の long 整数として解析されます。文字列でない場合、実行値は <code>{`Long.MIN_VALUE`}</code> に設定されます。</td>
+    </tr>
+    <tr>
+      <td><code>{`hex_encode`}</code></td>
+      <td>実行値が long 整数の場合、符号なし整数の 16 進数文字列表現に変換されます。long 整数でない場合、実行値は <code>{`null`}</code> に設定されます。</td>
+    </tr>
+    <tr>
+      <td><code>{`hostname`}</code></td>
+      <td>実行値をホストコンピューターの名前に設定します。</td>
+    </tr>
+    <tr>
+      <td><code>{`        if (<left> <cmp> <right>) {             <trueScript>         }         [ else { <falseScript> } ]      `}</code></td>
+      <td>条件が true と評価された場合は <code>{`trueScript`}</code> を、false と評価された場合は <code>{`falseScript`}</code> を実行します。<code>{`left`}</code> または <code>{`right`}</code> のいずれかが null の場合、どの式も実行されません。生成される値は選択された分岐から返される値であり、両分岐は互換性のある型の値を生成しなければなりません(または何も生成しない必要があります)。</td>
+    </tr>
+    <tr>
+      <td><code>{`index <fieldName>`}</code></td>
+      <td>実行値を、指定した名前のインデックスフィールドに書き込みます。</td>
+    </tr>
+    <tr>
+      <td><code>{`input <fieldName>`}</code></td>
+      <td>ドキュメントから、指定した名前のフィールドの値を取得し、それを実行値として設定します。フィールド名に「.」文字を含めることで、ネストされた構造体のフィールドを取得できます。</td>
+    </tr>
+    <tr>
+      <td><code>{`join "<delim>"`}</code></td>
+      <td>実行値の各配列要素の文字列表現を連結して、単一の文字列を作成します。この関数は、<a href="/ja/querying/searching-multivalue-fields" aria-label="multivalue">複数値</a>フィールドのデータを単一値フィールドにインデックスする場合に便利です。</td>
+    </tr>
+    <tr>
+      <td><code>{`lowercase`}</code></td>
+      <td>実行値内のすべての文字列を小文字にします。</td>
+    </tr>
+    <tr>
+      <td><code>{`ngram <size>`}</code></td>
+      <td>実行値内のすべての文字列に ngram アノテーションを追加します。</td>
+    </tr>
+    <tr>
+      <td><code>{`normalize`}</code></td>
+      <td>入力データを<a href="/ja/linguistics/linguistics-opennlp#normalization" aria-label="normalize">正規化</a>します。この関数に対応するクエリーコマンドは <code>{`normalize`}</code> です。</td>
+    </tr>
+    <tr>
+      <td><code>{`now`}</code></td>
+      <td>現在のシステムクロック時刻を UNIX タイムスタンプ、すなわち協定世界時 1970 年 1 月 1 日 0 時 0 分 0 秒(エポック)からの経過秒数として出力します。</td>
+    </tr>
+    <tr>
+      <td><code>{`random [ <max> ]`}</code></td>
+      <td>ランダムな整数値を返します。最小値は 0 で、最大値は引数によって決まります。引数が指定されていない場合は、実行値によって決まります。</td>
+    </tr>
+    <tr>
+      <td><code>{`      sub-expression1 || sub-expression2 || ...    `}</code></td>
+      <td>null でない値を返す最初の代替サブ式の値を返します。<a href="/ja/writing/indexing#choice-example" aria-label="this example">この例</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td><code>{`        select_input {          ( case <fieldName>: <statement>; )*          }      `}</code></td>
+      <td>空でない&#42;&#42;最初&#42;&#42;の指定フィールドに対応するステートメントを実行します(<a href="/ja/writing/indexing#select-input-example" aria-label="example">例</a>を参照)。</td>
+    </tr>
+    <tr>
+      <td><code>{`set_language`}</code></td>
+      <td>このドキュメントの言語を、実行値の文字列表現に設定します。入力値を RFC 3066 言語タグとして解析し、その言語を現在のドキュメントに設定します。これは<a href="/ja/linguistics/linguistics-opennlp#tokenization" aria-label="tokenizer">トークナイザー</a>の動作に影響します。推奨される使い方は、ドキュメント内に言語コードを含むフィールドを 1 つ用意し、そのフィールドをドキュメントの&#42;&#42;最初&#42;&#42;のフィールドにすることです。これは、スキーマ内でそのフィールドより&#42;&#42;後&#42;&#42;に定義されたフィールドにのみ影響するためです。言語設定がどのように適用されるかの詳細については、<a href="/ja/linguistics/linguistics#language-handling" aria-label="linguistics">linguistics</a> を参照してください。</td>
+    </tr>
+    <tr>
+      <td><code>{`set_var <varName>`}</code></td>
+      <td>実行値を、指定した名前の変数に書き込みます。変数のスコープは、現在のフィールドのインデックススクリプトに限定されることに注意してください。</td>
+    </tr>
+    <tr>
+      <td><code>{`substring <from> <to>`}</code></td>
+      <td>実行値内のすべての文字列を、それぞれの値の部分文字列に置き換えます。引数は、開始位置(その位置を含む)と終了位置(その位置を含まない)です。両方の引数は、範囲外へのアクセスを避けるため、実行時にクランプされます。</td>
+    </tr>
+    <tr>
+      <td><code>{`split <regex>`}</code></td>
+      <td>指定した正規表現パターンを使用して、実行値の文字列表現を文字列配列に分割します。この関数は、カンマ区切りの数値文字列から整数配列を作成するなど、<a href="/ja/querying/searching-multivalue-fields" aria-label="multivalue">複数値</a>フィールドを作成する場合に便利です。</td>
+    </tr>
+    <tr>
+      <td><code>{`summary <fieldName>`}</code></td>
+      <td>実行値を、指定した名前のサマリーフィールドに書き込みます。デプロイ時には、このフィールドをドキュメントサマリーに含めるべきであることを示します。</td>
+    </tr>
+    <tr>
+      <td><code>{`        switch {          ( case '<value>': <caseStatement>; )*          [ default: <defaultStatement>; ]          }      `}</code></td>
+      <td>実行値の文字列表現に値が一致する case のステートメントを実行します(<a href="/ja/writing/indexing#switch-example" aria-label="example">例</a>を参照)。</td>
+    </tr>
+    <tr>
+      <td><code>{`tokenize [ normalize ] [ stem ]`}</code></td>
+      <td>実行値内のすべての文字列に言語的アノテーションを追加します。詳細は <a href="/ja/linguistics/linguistics" aria-label="linguistics">linguistics</a> を参照してください。</td>
+    </tr>
+    <tr>
+      <td><code>{`trim`}</code></td>
+      <td>実行値内のすべての文字列から、先頭と末尾の空白を削除します。</td>
+    </tr>
+    <tr>
+      <td><code>{`uri`}</code></td>
+      <td>実行値内のすべての文字列を URI 構造体に変換します。変換できなかった文字列は削除されます。</td>
+    </tr>
+  </tbody>
+</table>

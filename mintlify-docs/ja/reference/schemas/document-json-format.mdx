@@ -1,0 +1,1031 @@
+---
+title: "ドキュメントJSONフォーマット・リファレンス"
+sidebarTitle: "document JSON format"
+---
+
+このドキュメントでは、Vespaにドキュメント操作を送信する際に使用されるJSONフォーマットについて説明します。フィールドの型は[スキーマ・リファレンス](/ja/reference/schemas/schemas#field)で定義されています。これは以下のリファレンスです:
+
+- [ドキュメント操作](#document-operations)(put、get、remove、update)のJSON表現
+- Vespaドキュメントにおける[フィールド型](#field-types)のJSON表現
+- 更新対象フィールドのアドレッシングと[更新操作](#update-operations)のJSON表現
+
+[エンコーディングのトラブルシューティング](/ja/linguistics/troubleshooting-encoding)も参照してください。
+
+```bash expandable
+Document operations
+    Put
+    Get
+    Remove
+    Update
+      Test and set
+      Create
+Field types
+    string
+    int
+    long
+    bool
+    byte
+    float
+    double
+    position
+    predicate
+    raw
+    uri
+    array
+    weightedset
+    Tensors
+        Indexed tensors short form
+        Short form for tensors with a single mapped dimension
+        Mixed tensors short form
+        Cell values as binary data (hex dump format)
+        Tensor verbose form
+    struct
+    map
+    reference
+  Empty fields
+Update operations
+  assign
+    Single value field
+    Assign tensor
+    Assign struct field
+        Replacing entire struct
+        Replace individual struct fields
+    Assign map field
+        Map to primitive value
+        Map to struct
+    Arrays
+        Array of primitive values
+        Array of struct
+    Weighted set field
+    Clearing a field
+  add
+    Add array elements
+    Add to weighted set
+    Add to tensor
+  Remove elements in composites
+    Remove from weighted set field
+    Remove from map field
+    Remove from tensor
+  Arithmetic
+  match
+  Tensor modify
+  Fieldpath
+```
+
+## フィールド型
+
+特に断りのない限り、これらのフォーマットは読み取り操作で返される値と、書き込み操作(put操作およびフィールドのassign更新操作)での入力の両方に使用されます。
+
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>string</td>
+      <td><pre><code>{`"name": "Polly"`}</code></pre>  フィールドに空文字列("")をフィードすると、そのフィールドに値をフィードしなかった場合と同じ効果になり、そのフィールドはドキュメントAPIおよびドキュメントサマリーでレンダリングされません。</td>
+    </tr>
+    <tr>
+      <td>int</td>
+      <td><pre><code>{`"age": 42`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>long</td>
+      <td><pre><code>{`"current_time_ms": 1742837807000`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>bool</td>
+      <td>&#42;true&#42; または &#42;false&#42;:  <pre><code>{`"alive": false`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>byte</td>
+      <td><pre><code>{`"tinynumber": 128`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>float</td>
+      <td><pre><code>{`"weight": 123.4567`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>double</td>
+      <td><pre><code>{`"weight": 123.4567`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>position</td>
+      <td>位置(position)はlat/lngオブジェクトとしてエンコードされます:  <pre><code>{`"mypos": {     "lat": 37.4181488,     "lng": -122.0256157 }`}</code></pre>  詳細は<a href="/ja/querying/geo-search" aria-label="Geo Search">ジオサーチ</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>predicate</td>
+      <td><a href="/ja/reference/schemas/schemas#predicate" aria-label="predicate">predicate</a>は文字列で表現されます:  <pre><code>{`"predicate_field": "gender in [Female] and age in [20..30] and pos in [1..4]"`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>raw</td>
+      <td><a href="/ja/reference/schemas/schemas#raw" aria-label="raw">raw</a>フィールドの内容はbase64エンコードされた文字列として表現されます:  <pre><code>{`"raw_field": "VW5rbm93biBhcnRpc3QgZnJvbSB0aGUgbW9vbg=="`}</code></pre>  &#42;summary&#42;フィールドとして使用される場合、base64エンコードされた文字列としてレンダリングされます。</td>
+    </tr>
+    <tr>
+      <td>uri</td>
+      <td>URIは文字列です:  <pre><code>{`"url": "https://www.yahoo.com/"`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>array</td>
+      <td>配列はJSON配列として表現されます。  <pre><code>{`"int_array_field": [     123,     456,     789 ]  "string_array_field": [     "item 1",     "item 2",     "item 3" ]`}</code></pre>  structの配列は、定義されたstructフィールドに対応するJSONオブジェクトのJSON配列として表現されます:  <pre><code>{`"array_of_struct_field": [    { "first_name": "Chris", "last_name": "Martin" },    { "first_name": "James", "last_name": "Hetfield" },    { "first_name": "Diana", "last_name": "Krall" } ]`}</code></pre>  フィールドに空の配列([])をフィードすると、そのフィールドに値をフィードしなかった場合と同じ効果になり、そのフィールドはドキュメントAPIおよびドキュメントサマリーでレンダリングされません。</td>
+    </tr>
+    <tr>
+      <td>weightedset</td>
+      <td>weighted setは、値をウェイトとするマップとして表現されます。キーがもともと文字列でない場合でも、JSONフォーマットでは文字列として表現されることに注意してください。 <pre><code>{`"int_weighted_set": {     "123": 2,     "456": 78 }  "string_weighted_set": {     "item 1": 143,     "item 2": 6 }`}</code></pre> フィールドに空のweightedset(&#123;&#125;)をフィードすると、そのフィールドに値をフィードしなかった場合と同じ効果になり、そのフィールドはドキュメントAPIおよびドキュメントサマリーでレンダリングされません。</td>
+    </tr>
+    <tr>
+      <td>tensor</td>
+      <td>&#42;&#42;インデックス・テンソルの短縮形:&#42;&#42; 値を標準の値順で並べた配列です。標準の値順とは、右側の次元のインデックスが左側の次元のインデックスより先にインクリメントされ、次元はアルファベット順に並ぶ順序です(例えば次元x,yを持つテンソルでは、各"x"の値に対する"y"の値が隣接します): <pre><code>{`"tensorfield": [ 2.0, 3.0, 5.0, 7.0 ]`}</code></pre>  cells配列は、オプションで"values"キーの下のオブジェクトにネストできます。これはテンソル値が<a href="/ja/reference/api/document-v1#format.tensors" aria-label="by default">デフォルトで</a>返される形式であり、テンソル型を含む"type"キーも一緒に返されます。 <br/><br/>  &#42;&#42;単一のマップ次元を持つテンソルの短縮形&#42;&#42;: 次元のキーをキー、値を値とするマップです。<pre><code>{`"tensorfield": {     "a": 2.0,     "b": 3.0 }`}</code></pre> cellsオブジェクトは、オプションで"cells"キーの下のオブジェクトにネストできます。これはテンソル値が<a href="/ja/reference/api/document-v1#format.tensors" aria-label="by default">デフォルトで</a>返される形式であり、テンソル型を含む"type"キーも一緒に返されます。<br/> &#42;&#42;混合テンソルの短縮形:&#42;&#42; テンソルが単一のスパース次元を持つ場合: その次元の値をキーとし、そのキー内の密なサブスペースの値を含むネストされた配列を値とするマップです。   テンソルが複数のスパース次元を持つ場合: "blocks"要素にネストされた配列で、各要素は"address"と"values"のキーを持つマップで構成されます。"address"はスパース次元とその値のマップ(cellsと同様)、"values"はそのアドレス内の密なサブスペースの値を含むネストされた配列です。<br/><br/>  例 - 単一のスパース次元:  <br/><br/> <pre><code>{`"tensorfield": {     "x1":[2.0,3.0],     "x2":[4.0,5.0] }`}</code></pre>  例 - 複数のスパース次元: <pre><code>{`"tensorfield": {   "blocks": [     {"address":{"x":"x1","y":"y2"},"values":[2.0,3.0]},     {"address":{"x":"x2","y":"y2"},"values":[4.0,5.0]}   ] }`}</code></pre>  これはテンソル値が<a href="/ja/reference/api/document-v1#format.tensors" aria-label="by default">デフォルトで</a>返される形式であり、テンソル型を含む"type"キーも一緒に返されます。 <br/><br/>  &#42;&#42;バイナリデータとしてのセル値&#42;&#42; 密(dense)および混合(mixed)テンソルでは、16進数の文字列として送信されたバイナリデータからセル値を直接埋めることができます。最も単純なケースは、セル値の型が<code>{`int8`}</code>のベクトルの場合です: <pre><code>{`"tensorfield": {     "values": "FF00118022FE" }`}</code></pre> これは値<code>{`tensor<int8>(x[6]):[-1,0,17,-128,34,-2]`}</code>を表すために使用できます。 <br/><br/> 他のセル型の場合は、浮動小数点値のビット列を適切な幅(16、32、または64ビット)の符号なし整数としてそのまま解釈し、そのヘックスダンプ(セルあたりそれぞれ4、8、または16桁の16進数)を文字列として使用できます。"float"セル(32ビットIEE754浮動小数点)の場合、セルを変換する簡単なスニペットは次のようになります: <pre><code>{`import struct def float_to_hex(f: float):     return format(struct.unpack('=I', struct.pack('=f', f))[0], '08X')`}</code></pre> 高度な組み合わせの例として、型<code>{`tensor<float>(tag{},x[3])`}</code>のテンソルがある場合、次の入力を使用でき、対応する出力とともに示します: <pre><code>{`"mixedtensor": {     "foo": "3DE38E393E638E393EAAAAAB",     "bar": "3EE38E393F0E38E43F2AAAAB",     "baz": "3F471C723F638E393F800000" } "mixedtensor":{   "type":"tensor<float>(tag{},x[3])",   "blocks":{     "foo":[0.1111111119389534,0.2222222238779068,0.3333333432674408],     "bar":[0.4444444477558136,0.5555555820465088,0.6666666865348816],     "baz":[0.7777777910232544,0.8888888955116272,1.0]   } }`}</code></pre>  &#42;&#42;冗長形式:&#42;&#42; <a href="/ja/ranking/tensor-user-guide" aria-label="Tensor">テンソル</a>フィールドはセルの配列として表現できます: <pre><code>{`"tensorfield": [     { "address": { "x": "a", "y": "0" }, "value": 2.0 },     { "address": { "x": "a", "y": "1" }, "value": 3.0 },     { "address": { "x": "b", "y": "0" }, "value": 4.0 },     { "address": { "x": "b", "y": "1" }, "value": 5.0 } ]`}</code></pre>  これはあらゆるテンソルで機能しますが冗長なため、各種テンソル型に固有のより短い形式もサポートされています。最高のパフォーマンスを得るには、テンソル型に適用可能な最も短い形式を使用してください。 <br/> cells配列は、オプションで"cells"キーの下のオブジェクトにネストできます。これはテンソル値が<a href="/ja/reference/api/document-v1#format.tensors" aria-label="by default">デフォルトで</a>返される形式であり、テンソル型を含む"type"キーも一緒に返されます。</td>
+    </tr>
+    <tr>
+      <td>struct</td>
+      <td><pre><code>{`"mystruct": {     "intfield": 123,     "stringfield": "foo" }`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>map</td>
+      <td>スキーマでのマップのキー型が文字列でない場合でも、JSONディクショナリのキーは文字列でなければなりません: <pre><code>{`"int_to_string_map": {     "123": "foo",     "456": "bar",     "789": "foobar" }`}</code></pre>  フィールドに空のマップ(&#123;&#125;)をフィードすると、そのフィールドに値をフィードしなかった場合と同じ効果になり、そのフィールドはドキュメントAPIおよびドキュメントサマリーでレンダリングされません。</td>
+    </tr>
+    <tr>
+      <td>reference</td>
+      <td><a href="/ja/schemas/parent-child" aria-label="parent document">親ドキュメント</a>を参照するドキュメントIDの文字列: <pre><code>{`"artist_ref": "id:mynamespace:artists::artist-1"`}</code></pre></td>
+    </tr>
+  </tbody>
+</table>
+
+
+## 空のフィールド
+
+一般的に、フィード時に値を受け取らなかったフィールドは、ドキュメントのレンダリング時に無視されます。これらは空のフィールドと見なされます。ただし、特定のフィールド型には、空と見なされる値がいくつか存在します。例えば、空文字列("")は空と見なされ、空の配列([])も同様です。各型の詳細については上記の表を参照してください。
+
+## ドキュメント操作
+
+詳細は[読み取りと書き込み](/ja/writing/reads-and-writes)を参照してください - 選択肢:
+
+- [Vespa CLI](/ja/clients/vespa-cli#documents)を使用します。
+- [/document/v1/](/ja/reference/api/document-v1): このAPIはリクエストごとに1つの操作を受け付け、ドキュメントIDはURLにエンコードされます。 
+- [Vespa feed client](/ja/clients/vespa-feed-client): HTTP経由でドキュメント操作を非同期にVespaへフィードするJava API / コマンドラインツールです。 
+
+### Put
+
+"put"のペイロードには"put"操作と、フィールド値を含む["fields"](#field-types)があります([/document/v1/ の例](/ja/writing/document-v1-api-guide#post)):
+
+```json
+{
+    "put": "id:mynamespace:music::123",
+    "fields": {
+        "title": "Best of Bob Dylan"
+    }
+}
+```
+
+### Get
+
+"get"にはペイロードがありません - レスポンスには"put"と同じ"field"オブジェクトに加えて、"id"と"pathId"フィールドが含まれます([/document/v1/ の例](/ja/writing/document-v1-api-guide#get)):
+
+```json
+{
+    "pathId": "/document/v1/mynamespace/music/docid/123",
+    "id": "id:mynamespace:music::123",
+    "fields": {
+        "title": "Best of Bob Dylan"
+    }
+}
+```
+
+### Remove
+
+"remove"のペイロードには"remove"操作のみがあります([/document/v1/ の例](/ja/writing/document-v1-api-guide#delete)):
+
+```json
+{
+    "remove": "id:mynamespace:music::123"
+}
+```
+
+### Update
+
+"update"のペイロードには"update"操作と"fields"があります。注意: 各フィールドには、フィールド値を直接指定するのではなく、[更新操作](#update-operations)を含める必要があります([/document/v1/ の例](/ja/writing/document-v1-api-guide#put)):
+
+```json
+{
+    "update": "id:mynamespace:music::123",
+    "fields": {
+        "title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+```
+
+フラグを追加することで、[test and set](#test-and-set)条件を付加したり、更新時に新しいドキュメントを[作成](#create)できるようにしたり(いわゆる「upsert」操作)できます。
+
+#### Test and set
+
+操作にオプションの _condition_ を追加して、_test and set_ 条件を指定できます - [条件付き書き込み](/ja/writing/document-v1-api-guide#conditional-writes)を参照してください。_condition_ の値は文字列としてエンコードされた[ドキュメント・セレクション](/ja/reference/writing/document-selector-language)です。例: _sales_ フィールドが既に999と等しい場合にのみインクリメントします([/document/v1/ の例](/ja/writing/document-v1-api-guide#conditional-writes)):
+
+```json
+{
+    "update": "id:mynamespace:music::bob/BestOf",
+    "condition": "music.sales==999",
+    "fields": {
+        "sales": {
+            "increment": 1
+        }
+    }
+}
+```
+
+<Info>
+ **注:** 条件には _fieldname_ だけでなく、_documenttype.fieldname_ を使用してください。
+</Info>
+
+条件が満たされない場合、412レスポンスコードが返されます。
+
+#### create(存在しない場合に作成)
+
+存在しないドキュメントに対する**更新**は、_create_ を使用してサポートされます([/document/v1/ の例](/ja/writing/document-v1-api-guide#create-if-nonexistent)):
+
+```json
+{
+    "update": "id:mynamespace:music::bob/BestOf",
+    "create": true,
+    "fields": {
+        "title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+```
+
+Vespa 8.178以降、_create_ は条件付き**Put**操作と組み合わせて使用することもできます([/document/v1/ の例](/ja/writing/document-v1-api-guide#conditional-updates-and-puts-with-create) - 使用前にそこにある注意事項を確認してください):
+
+```json
+{
+    "put": "id:mynamespace:music::123",
+    "condition": "music.sales==999",
+    "create": true,
+    "fields": {
+        "title": "Best of Bob Dylan"
+    }
+}
+```
+
+## 更新操作
+
+更新操作は次のとおりです: [`assign`](#assign)、[`add`](#add)、[`remove`](#composite-remove)、[算術演算](#arithmetic)(`increment` `decrement` `multiply` `divide`)、[`match`](#match)、[`modify`](#tensor-modify)
+
+## assign
+
+`assign` は、フィールド(またはコレクションの要素)の値を新しい値で置き換えるために使用します。assignの際は、一般に `put` 操作でそのフィールドの値をフィードするときと同じ構文と構造を使用できます。
+
+### 単一値フィールド
+
+```js
+field title type string {
+    indexing: summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:music::example",
+    "fields": {
+        "title": {
+            "assign": "The best of Bob Dylan"
+        }
+    }
+}
+```
+
+### テンソル・フィールド
+
+```js
+field tensorfield type tensor(x{},y{}) {
+    indexing: attribute | summary
+}
+```
+
+```json 
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "assign": {
+                "cells": [
+                    { "address": { "x": "a", "y": "b" }, "value": 2.0 },
+                    { "address": { "x": "c", "y": "d" }, "value": 3.0 }
+                ]
+            }
+        }
+    }
+}
+```
+
+これにより、このフィールドに格納されているテンソル全体が完全に置き換えられます。
+
+### structフィールド
+
+#### struct内のすべてのフィールドを置き換える
+
+structのキー/値ペアのオブジェクトをassignすることで、struct全体が置き換えられます。
+
+```js
+struct person {
+    field first_name type string {}
+    field last_name type string {}
+}
+field contact type person {
+    indexing: summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:workers::example",
+    "fields": {
+        "contact": {
+            "assign": {
+                "first_name": "Bob",
+                "last_name": "The Plumber"
+            }
+        }
+    }
+}
+```
+
+#### 個別のstructフィールド
+
+個別のstructフィールドは[フィールドパス](#fieldpath)構文を使用して更新します。structを使用する際の制約については[リファレンス](/ja/reference/schemas/schemas#struct-name)を参照してください。
+
+```json
+{
+    "update": "id:mynamespace:workers::example",
+    "fields": {
+        "contact.first_name": {
+            "assign": "Bob"
+        },
+        "contact.last_name": {
+            "assign": "The Plumber"
+        }
+    }
+}
+```
+
+### マップ・フィールド
+
+個別のマップ・エントリーは[フィールドパス](/ja/reference/schemas/document-field-path)構文を使用して更新できます。次の宣言では、`key` がIntegerで、値が `person` structである `map` を定義しています。
+
+```js
+struct person {
+    field first_name type string {}
+    field last_name type string {}
+}
+field contact type map<int, person> {
+    indexing: summary
+}
+```
+
+`contact` マップのエントリーの一部を更新する例:
+
+- `contact` は更新対象のマップ・フィールドの名前です
+- `{0}` は更新されるキーです
+- `first_name` は `person` struct内で更新されるstructフィールドです
+
+```json
+{
+    "update": "id:mynamespace:workers::example",
+    "fields": {
+        "contact{0}.first_name": {
+            "assign": "John"
+        }
+    }
+}
+```
+
+マップのキーに要素をassignすると、そのキー/値のマッピングが存在しない場合は挿入され、既に存在する場合は新しい値で上書きされます。マップを使用する際の制約については[リファレンス](/ja/reference/schemas/schemas#map)を参照してください。
+
+#### プリミティブ値へのマップ
+
+```js
+field my_food_scores type map<string, string> {
+    indexing: summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:food::example",
+    "fields": {
+        "my_food_scores{Strawberries}": {
+            "assign": "Delicious!"
+        }
+    }
+}
+```
+
+#### structへのマップ
+
+```js
+struct contact_info {
+    field phone_number type string {}
+    field email type string {}
+}
+field contacts type map<string, contact_info> {
+    indexing: summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:people::d_duck",
+    "fields": {
+        "contacts{\"Uncle Scrooge\"}": {
+            "assign": {
+                "phone_number": "555-123-4567",
+                "email": "number_one_dime_luvr1877@example.com"
+            }
+        }
+    }
+}
+```
+
+### 配列フィールド
+
+#### プリミティブ値の配列
+
+```js
+field ingredients type array<string> {
+    indexing: summary
+}
+```
+
+配列全体をassignする:
+
+```json
+{
+    "update": "id:mynamespace:cakes:tasty_chocolate_cake",
+    "fields": {
+        "ingredients": {
+            "assign": ["sugar", "butter", "vanilla", "flour"]
+        }
+    }
+}
+```
+
+配列内の既存要素にassignする:
+
+```json
+{
+    "update": "id:mynamespace:cakes:tasty_chocolate_cake",
+    "fields": {
+        "ingredients[3]": {
+            "assign": "2 cups of flour (editor's update: NOT asbestos!)"
+        }
+    }
+}
+```
+
+インデックス要素3が存在している必要があることに注意してください。matchを使用した別の方法:
+
+```json
+{
+    "update": "id:mynamespace:cakes:tasty_chocolate_cake",
+    "fields": {
+        "ingredients": {
+            "match": {
+                "element": 3,
+                "assign": "2 cups of flour (editor's update: NOT asbestos!)"
+            }
+        }
+    }
+}
+```
+
+個別の配列要素は、[フィールドパス](/ja/reference/schemas/document-field-path)または[match](#match)構文を使用して更新できます。
+
+#### structの配列
+
+[structの配列](/ja/reference/schemas/schemas#array)を使用する際の制約についてはリファレンスを参照してください。
+
+```js
+struct person {
+    field first_name type string {}
+    field last_name type string {}
+}
+field people type array<person> {
+    indexing: summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:students:example",
+    "fields": {
+        "people[34]": {
+            "assign": {
+                "first_name": "Bobby",
+                "last_name": "Tables"
+            }
+        }
+    }
+}
+```
+
+要素のインデックスが存在している必要があることに注意してください。新しい要素を追加するには[add](#add-array-elements)を使用してください。matchを使用した別の構文:
+
+```json
+{
+    "update": "id:mynamespace:students:example",
+    "fields": {
+        "people": {
+            "match": {
+                "element": 34,
+                "assign": {
+                     "first_name": "Bobby",
+                     "last_name": "Tables"
+                }
+            }
+        }
+    }
+}
+```
+
+
+### weighted setフィールド
+
+weighted setに新しい要素を追加するには、[add](#add-weighted-set)を使用するか、`field{key}` 構文でassignします。後者の例:
+
+```js
+field int_weighted_set type weightedset<int> {
+    indexing: summary
+}
+field string_weighted_set type weightedset<string> {
+    indexing: summary
+}
+```
+
+```json
+{
+    "update":"id:mynamespace:weightedsetdoctype::example1",
+    "fields": {
+        "int_weighted_set{123}": {
+            "assign": 123
+        },
+        "int_weighted_set{456}": {
+            "assign": 100
+        },
+        "string_weighted_set{\"item 1\"}": {
+            "assign": 144
+        },
+        "string_weighted_set{\"item 2\"}": {
+            "assign": 7
+        }
+    }
+}
+```
+
+weighted setに対して `field{key}` 構文を使用すると、[add](#add-weighted-set)を使用する場合よりも効率が落ちる _可能性がある_ ことに注意してください。
+
+### フィールドのクリア
+
+フィールドをクリアするには、`null` 値をassignします。
+
+```json
+{
+    "update": "id:mynamespace:music::example",
+    "fields": {
+        "title": {
+            "assign": null
+        }
+    }
+}
+```
+
+## add
+
+`add` は、配列、weighted set、またはテンソルのマップ次元にエントリーを追加するために使用します。
+
+### 配列要素の追加
+
+追加されたエントリーは、指定された順序で配列の末尾に追加されます。
+
+```js
+field tracks type array<string> {
+    indexing: summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:music::https://music.yahoo.com/bobdylan/BestOf",
+    "fields": {
+       "tracks": {
+            "add": [
+                "Lay Lady Lay",
+                "Every Grain of Sand"
+            ]
+        }
+    }
+}
+```
+
+### weighted setエントリーの追加
+
+weighted setの要素を追加するには、JSONのキー/値構文を使用します。値は要素のウェイトです。
+
+既に存在するキー/ウェイトのマッピングを追加すると、既存のウェイトが新しいもので上書きされます。
+
+```js
+field int_weighted_set type weightedset<int> {
+    indexing: summary
+}
+field string_weighted_set type weightedset<string> {
+    indexing: summary
+}
+```
+
+```json
+{
+    "update":"id:mynamespace:weightedsetdoctype::example1",
+    "fields": {
+        "int_weighted_set": {
+            "add": {
+                "123": 123,
+                "456": 100
+            }
+        },
+        "string_weighted_set": {
+            "add": {
+                "item 1": 144,
+                "item 2": 7
+            }
+        }
+    }
+}
+```
+
+### テンソル・セルの追加
+
+マップ(mapped)または混合(mixed)テンソルにセルを追加します。インデックス次元のみを持つテンソルには無効です。既に存在するセルを追加すると、セルの値が新しい値で上書きされます。アドレスは完全に指定する必要がありますが、束縛されたインデックス次元が指定されていないセルにはデフォルト値 `0.0` が設定されます。その他の例については、システムテスト[tensor add update](https://github.com/vespa-engine/system-test/tree/master/tests/search/tensor_feed/tensor_add_remove_update)を参照してください。
+
+```js
+field tensorfield type tensor(x{},y[3]) {
+    indexing: attribute | summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "add": {
+                "cells": [
+                    { "address": { "x": "b", "y": "0" }, "value": 2.0 },
+                    { "address": { "x": "b", "y": "1" }, "value": 3.0 }
+                ]
+            }
+        }
+    }
+}
+```
+
+この例では、セル `{"x":"b","y":"2"}` は暗黙的に0.0に設定されます。
+
+つまり、次のテンソルから始めた場合:
+
+```json
+{
+    {"x": "a", "y": "0"}: 0.2,
+    {"x": "a", "y": "1"}: 0.3,
+    {"x": "a", "y": "2"}: 0.5,
+}
+```
+
+上記のadd操作を適用すると、次のテンソルになります:
+
+```json
+{
+    {"x": "a", "y": "0"}: 0.2,
+    {"x": "a", "y": "1"}: 0.3,
+    {"x": "a", "y": "2"}: 0.5,
+    {"x": "b", "y": "0"}: 2.0,
+    {"x": "b", "y": "1"}: 3.0,
+    {"x": "b", "y": "2"}: 0.0,
+}
+```
+
+混合テンソルには、代わりに _ブロック短縮形_ を推奨します。これにより、インデックス次元を持つセルが指定されないという問題も回避できます:
+
+```json
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "add": {
+                "blocks": [
+                    { "address": { "x": "b" }, "values": [2.0, 3.0, 5.0] }
+                ]
+            }
+        }
+    }
+}
+```
+
+## remove
+
+`remove` を使用して、配列、weighted set、マップ、テンソルから要素を削除します。
+
+### 配列フィールド
+
+配列フィールドは、"remove" と削除する値の配列を使用した、値による削除をサポートしています。
+
+例えば、次のフィールドがあるとします:
+
+```js
+field string_array type array<string> {
+    indexing: summary
+}
+```
+
+この更新は、"hello" または "1" であるすべての配列要素を削除します:
+
+```json
+{
+    "update":"id:mynamespace:weightedsetdoctype::example1",
+    "fields": {
+        "string_array": {
+            "remove": ["hello", 1]
+        }
+    }
+}
+```
+
+### weighted setフィールド
+
+```js
+field string_weighted_set type weightedset<string> {
+    indexing: summary
+}
+```
+
+```json
+{
+    "update":"id:mynamespace:weightedsetdoctype::example1",
+    "fields": {
+        "string_weighted_set": {
+            "remove": {
+                "item 2": 0
+            }
+        }
+    }
+}
+```
+
+### マップ・フィールド
+
+```
+field string_map type map<string, string> {
+    indexing: summary
+}
+```
+
+```json
+{
+    "update":"id:mynamespace:mapdoctype::example1",
+    "fields": {
+        "string_map{item 2}": {
+            "remove": 0
+        }
+    }
+}
+```
+
+### テンソル・フィールド
+
+マップ(mapped)または混合(mixed)テンソルからセルを削除します。インデックス次元のみを持つテンソルには無効です。マップ次元とインデックス次元の両方を持つテンソルでは、マップ次元のみを指定してください。マップ次元が指すすべてのインデックス・セルは暗黙的に削除されます。その他の例については、システムテスト[tensor remove update](https://github.com/vespa-engine/system-test/tree/master/tests/search/tensor_feed/tensor_add_remove_update)を参照してください。
+
+```js
+field tensorfield type tensor(x{},y[2]) {
+    indexing: attribute | summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "remove": {
+                "addresses": [
+                    {"x": "b"},
+                    {"x": "c"}
+                ]
+            }
+        }
+    }
+}
+```
+
+この例では、セル `{x:b,y:0},{x:b,y:1},{x:c,y:0},{x:c,y:1}` が削除されます。
+
+アドレスにマップ次元のサブセットのみを指定することもサポートされています。その場合、指定された次元のラベル値に一致するすべてのセルが削除されます。次の例では、次元 `x` のラベルが `b` であるすべてのセルが削除されます。
+
+```js
+field tensorfield type tensor(x{},y{},z[2]) {
+    indexing: attribute | summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "remove": {
+                "addresses": [
+                    {"x": "b"}
+                ]
+            }
+        }
+    }
+}
+```
+
+## 算術演算
+
+4つの算術演算子 `increment`、`decrement`、`multiply`、`divide` は、更新を適用する前に現在の値を参照することなく、_単一値_ の数値を変更するために使用します。例:
+
+```js
+field sales type int {
+    indexing: summary | attribute
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:music::https://music.yahoo.com/bobdylan/BestOf",
+    "fields": {
+        "sales": {
+            "increment": 1
+        }
+    }
+}
+```
+
+## match
+
+_weighted setまたは配列_ の特定のキーに対して算術演算を行う場合は、`match` 操作を使用します:
+
+```js
+field track_popularity type weightedset<string> {
+    indexing: summary | attribute
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:music::https://music.yahoo.com/bobdylan/BestOf",
+    "fields": {
+        "track_popularity": {
+            "match": {
+                "element": "Lay Lady Lay",
+                "increment": 1
+            }
+        }
+    }
+}
+```
+
+つまり、weighted set "track\_popularity" に対して、要素 "Lay Lady Lay" を `match` し、そのウェイトを1だけ `increment` します。存在しないキーのインクリメントでキーの自動作成をトリガーする方法については、[weightedset properties](/ja/reference/schemas/schemas#weightedset-properties)リファレンスを参照してください。
+
+更新対象のフィールドが配列の場合、`element` の値は正の整数になります。
+
+<Info>
+ **注:** 1回の操作でマッチできる要素は1つだけです。
+</Info>
+
+## テンソルの変更
+
+テンソル内の個別のセルは、`modify` 更新を使用して変更できます。セルは指定された操作に従って変更されます:
+
+- `replace` - 単一のセル値を置き換えます
+- `add` - 既存のセル値に値を加算します
+- `multiply` - 既存のセル値に値を乗算します
+
+セルのアドレスは完全に指定する必要があります。セルが存在しない場合、そのセルへの更新は無視されます。modify更新を適用する前に存在しないセルを作成するには、`"create": true`(下記の例を参照)を使用します。その他の例については、システムテスト[tensor modify update](https://github.com/vespa-engine/system-test/tree/master/tests/search/tensor_feed/tensor_modify_update)を参照してください。
+
+```js
+field tensorfield type tensor(x[3]) {
+    indexing: attribute | summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "modify": {
+                "operation": "replace",
+                "addresses": [
+                    { "address": { "x": "1" }, "value": 7.0 },
+                    { "address": { "x": "2" }, "value": 8.0 }
+                ]
+            }
+        }
+    }
+}
+```
+
+この例では、セル `{"x":"1"}` は値7.0に、`{"x":"2"}` は値8.0に置き換えられます。代わりに操作 `add` または `multiply` を使用した場合、7.0と8.0はセル `{"x":"1"}` と `{"x":"2"}` の現在の値に加算または乗算されます。
+
+単一のマップ次元を持つテンソルでは、_セル短縮形_ も使用できます:
+
+```js
+field tensorfield type tensor(x{}) {
+    indexing: attribute | summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "modify": {
+                "operation": "add",
+                "create": true,
+                "cells": {
+                    "b": 5.0,
+                    "c": 6.0
+                }
+            }
+        }
+    }
+}
+```
+
+この例では、セル `{"x":"b"}` に5.0が、セル `{"x":"c"}` に6.0が加算されます。`"create": true` を指定すると、modify更新を適用する前に、入力テンソルに存在しないセルが作成されます。デフォルトのセル値は、`replace` と `add` では0.0、`multiply` では1.0です。つまり、存在しないセルは操作で指定された値になります。
+
+混合テンソルでは、_ブロック短縮形_ を使用して密なサブスペース全体を変更することもできます:
+
+```js
+field tensorfield type tensor(x{},y[3]) {
+    indexing: attribute | summary
+}
+```
+
+```json
+{
+    "update": "id:mynamespace:tensordoctype::example",
+    "fields": {
+        "tensorfield": {
+            "modify": {
+                "operation": "replace",
+                "blocks": {
+                    "a": [1,2,3],
+                    "b": [4,5,6]
+                }
+            }
+        }
+    }
+}
+```
+
+## フィールドパス
+
+フィールドパス(Fieldpath)は、複合構造内のフィールドにアクセスするためのものです。インデックスやattributeの一部ではない構造については、フィールドパスを使用して要素に直接アクセスできます。これは、フィールド値に追加情報を加えることで行います。マップ構造の場合は、キーを指定します([例](#assign)を参照)。
+
+```js
+mymap{mykey}
+```
+
+そして、"mykey" をキーとする要素に対して操作を行います。配列にもアクセスできます([詳細](#assign)を参照)。
+
+```js
+myarray[3]
+```
+
+これはstructにも当てはまります([詳細](#assign)を参照)。**注:** structの更新は[index](/ja/reference/applications/services/content#document)モードでは機能しません:
+
+```json
+mystruct.value1
+```
+
+これはネストされた構造でも機能します。例えば、`struct` の `array` への `map` の `map`:
+
+```json
+{
+    "update": "id:mynamespace:complexdoctype::foo",
+    "fields": {
+        "nested_structure{firstMapKey}{secondMapKey}[4].title": {
+            "assign": "Look at me, mom! I'm hiding deep in a nested type!"
+        }
+    }
+}
+```

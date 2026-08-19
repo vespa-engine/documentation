@@ -1,0 +1,59 @@
+---
+title: "Vespa での Valgrind の使用"
+sidebarTitle: "Valgrind"
+---
+
+Valgrind は、バグの調査や、[プロファイリング](/ja/performance/profiling)で全体像を把握した後にアプリケーションの詳細なパフォーマンスプロファイルを取得するのに便利なツールです。このドキュメントでは、Vespa のプロセスを valgrind で実行する方法を説明します。
+
+## callgrind を使った Valgrind
+
+valgrind をインストールします。`$VESPA_HOME` を全ユーザー書き込み可能にする必要がある場合があります:
+
+```bash
+$ sudo chmod 777 $VESPA_HOME
+```
+
+プロファイリングセッションが完了したら、これを元に戻すことを忘れないでください。valgrind の一般的な使い方 - メモリエラーを表示する:
+
+```bash
+$ valgrind 'application'
+```
+
+コールグラフを表示する:
+
+```bash
+$ valgrind --tool=callgrind 'application'
+```
+
+詳細なプロファイリンググラフを表示する - アプリケーションの最適化に使用します:
+
+```bash
+$ valgrind --tool=callgrind --simulate-hwpref=yes --simulate-cache=yes \
+  --dump-instr=yes --collect-jumps=yes 'application'
+```
+
+valgrind の実行後、*callgrind.out.\** を *kcachegrind* がインストールされたホストにコピーします。また、バイナリーも実行時と同じパスにコピーします。コードにアクセスできると便利です - コードへのパスは kcachegrind で指定できます。
+
+## valgrind を使用して Vespa を起動する
+
+次の環境変数を設定して Vespa を起動します:
+
+```bash
+$ VESPA_USE_VALGRIND="vespa-proton"
+```
+
+valgrind の下で Vespa を実行し、メモリエラーを確認します (ログは `$VESPA_HOME/tmp/` に出力されます):
+
+```bash
+$ VESPA_USE_VALGRIND="vespa-proton" VESPA_VALGRIND_OPT="--tool=callgrind --simulate-hwpref=yes \
+  --simulate-cache=yes --dump-instr=yes --collect-jumps=yes"
+```
+
+アプリケーションをプロファイリングする:
+
+```bash
+$ VESPA_USE_VALGRIND="vespa-proton" VESPA_VALGRIND_OPT="--tool=callgrind --simulate-hwpref=yes \
+  --simulate-wb=yes --dump-instr=yes --collect-jumps=yes --collect-bus=yes --branch-sim=yes"
+```
+
+Vespa を必ず停止してください - callgrind.* ファイルはプログラムが停止するまで生成されません。

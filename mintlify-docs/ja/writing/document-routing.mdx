@@ -1,0 +1,1055 @@
+---
+title: "ルーティング"
+sidebarTitle: "ドキュメントルーティング"
+---
+
+*ルーティング* は、Vespaに書き込まれるドキュメントや更新がシステム内でたどる経路を設定するために使用されます。Vespaはほとんどのケースに適したルーティング設定を自動的にセットアップするため、明示的なルーティング設定は不要です。ただし、異なるドキュメントストリームを異なるドキュメント処理クラスターに送る、複数の連続したクラスターを経由させる、といった高度なユースケースでは明示的なルーティングを使用できます。
+
+ルーティングについては、他にもより掘り下げた記事があります:
+
+- [vespa-route](/ja/reference/operations/self-managed/tools#vespa-route)を使用して、[例](#example-reconfigure-the-default-route)のように、Vespaアプリケーションのルートとサービスを調べます
+- [Routing policies reference](#routing-policies-reference)。複雑なルートとデフォルトルーティングについては[ルーティングポリシー](#routing-policies)の注記を参照してください
+
+Vespaには、Vespaアプリケーションと通信したいクライアントが利用できるトランスポート層とプログラミングインターフェースがあります。トランスポート層は *Message Bus* です。[Document API](/ja/writing/document-api-guide)はMessage Busの上に実装されています。したがって、このインターフェースを設定することで、Message Busで利用できる機能の一部が公開されます。*Document API* を使用するクライアントについては、[Vespa APIs and interfaces](/ja/reference/api/api)を参照してください。Vespaルーティングの原子(アトム)は *ルート(route)* と *ホップ(hop)* です。
+
+[document-processing](https://github.com/vespa-engine/sample-apps/tree/master/examples/document-processing)はカスタムドキュメント処理の例で、ルーティングのテストに役立ちます。
+
+## ルートはホップのシーケンス
+
+ネットワークトラフィックが送信元から宛先までにたどる、あるいはたどり得る、ホスト、ルーター、ブリッジ、ゲートウェイ、その他のデバイスのシーケンスは、古典的に *ルート(route)* と呼ばれるものです。動詞としての *route(ルーティングする)* は、あるルーティングアルゴリズムに従って総移動時間を最小化するように、パケットを送出するリンクを決定することを意味します。
+
+Vespaでは、ルートは単に名前付きホップのシーケンスです。選択ロジックをルートに任せる代わりに、受信者を解決する責任は[ホップ](#a-hop-is-a-point-to-point-transmission)の[セレクター](#selection-logic)に与えられています。ホップは、アプリケーション内でのメッセージの経路を変更するために、多かれ少なかれ望むままのことができます。事前定義された受信者の中から選択して自分自身を少し変えることも、書き換えや別のホップの参照によって自分自身を完全に変えることも、さらにはその分岐以降のルート全体を変更することさえできます。実質的に、ルートは経路上の複数の地点で分岐し得るため、複雑なルートになります。図が示すように、Message Busは[ユニキャスト](https://en.wikipedia.org/wiki/Unicast)と[マルチキャスト](https://en.wikipedia.org/wiki/Multicast)の両方をサポートしており、Message Busは任意の複雑さのルートを可能にします。以下のグラフの各ノードはVespaのサービスを表します:
+
+<Frame>
+![ホップを含むルートの図](/assets/img/routing.svg)
+</Frame>
+
+## ホップはポイントツーポイントの伝送
+
+
+電気通信において、*ホップ* とは、Internet Protocolネットワーク上のパケットの経路における、あるルーターから次のルーターへの1ステップです。これは、インターネットのようなルーティングされたネットワークにおいて、2つのホスト間のルートの一部を形成するホスト間の直接接続です。より一般的な言い方をすれば、ホップとは、メッセージを地点Aから地点Bに届けるために必要な一連の伝送における、1つのポイントツーポイント伝送です。
+
+Message Busでは、ホップの概念はメッセージ伝送の最小ステップとして導入されました。ホップは、メッセージングクライアントがそれを選択するために使用する *名前(name)*、伝送先となり得る *受信者(recipient)* サービスのリスト、そしてそれらの受信者の中から選択するために使用される *セレクター(selector)* で構成されます。従来のホップとは異なり、Vespaにおけるホップは1つの送信者から多数の受信者への伝送です。
+
+とはいえ、上記は部分的にしか正しくありません。これはホップの概念を理解する最も簡単な方法です。実際には、ホップの受信者リストは、セレクター文字列内で名前が指定されたすべての[ルーティングポリシー](#routing-policies)が利用できる、設定済みの文字列のリストにすぎません。詳細は以下の[選択ロジック](#selection-logic)を参照してください。
+
+ホップの受信者は、Vespaのサービスロケーションブローカー(vespa-slobrok)に登録されたMessage Busクライアントのサービス名です。これらの名前は、その導出ロジックを理解すれば明確に定義されています。それらは"/"で区切られたアドレスコンポーネントのセットで、その値はアプリケーションにおけるサービスの役割によって与えられます。受信者の例:
+
+```text
+search/cluster.foo/*/feed-destination
+```
+
+上記の受信者のマークされたコンポーネント、`/search/cluster.foo/*`は、ホストのシンボリック名に解決されます。これはMessage Busインスタンスが設定された名前です。マークされていないコンポーネント、`feed-destination`は、ホップが伝送する実行中サービスのローカル名、つまり実行中のMessage Busインスタンス上に作成された *セッション* の名前です。
+
+Vespaの管理インターフェースのActive Configurationページでは、現在の設定サブスクリプションを見ることで、任意のアプリケーションにどのようなシンボリック名が存在するかを知ることができます。利用可能なすべてのMessage Busサービスは、`ConfigId`をホストのシンボリック名として使用します。これを調べる方法については[vespa-route](/ja/reference/operations/self-managed/tools#vespa-route)を参照するか、[config API](/ja/reference/api/config-v2)を使用してください。
+
+ホップは特殊文字"?"をプレフィックスとして付けることで、[ignore-result](#hop)属性が"true"に設定されているかのように動作させることができます。
+
+### アスタリスク
+
+サービス識別子には、アドレスコンポーネントとして特殊文字"\*"を含めることができます。この文字を含む受信者は、それにマッチする *任意の1つの* サービスをネットワークが選択するようにという要求です。
+
+## ルーティングポリシー
+
+ルーティングポリシーは、単一のアドレスコンポーネントに対して、候補となる受信者のリストの中から選択を行うプロトコル固有のアルゴリズムです。上記の[ホップの説明](#a-hop-is-a-point-to-point-transmission)を参照してください。これらのポリシーは、Message Busプロトコルの重要な部分として設計・実装されています。たとえば"Document"プロトコルでは、これらがドキュメント伝送のルーティング動作を構成します。ポリシーがなければ、ホップは受信者と逐語的にマッチさせることしかできず、唯一の高度な選択ロジックは[アスタリスク](#asterisk)のものだけになります。
+
+選択アルゴリズムの実装に加えて、ルーティングポリシーは、選択された各受信者から返された応答を1つの意味のある応答に結合するマージアルゴリズムも実装する必要があります。これが必要なのは、クライアントはメッセージが1つの受信者に送信されたのか複数の受信者に送信されたのかを必ずしも知らず、**Message Busはすべてのメッセージに対して単一の応答を保証する**からです。
+
+より形式的には、ルーティングポリシーとは、Message Busプロトコルに登録された、任意の大きさ(または小ささ)の、名前付きの、独立したコードの断片です。[上記](#selection-logic)で説明したように、ポリシーのインスタンスは、ルートから受信者を解決するときと、応答をマージするときの両方で実行されます。ポリシーには`RoutingContext`オブジェクトが渡され、ルートと応答に対してほぼ何でもできるようになっています。選択とマージの両方で、同じポリシーオブジェクトと同じコンテキストオブジェクトが使用されます。
+
+[routing policy reference](#routing-policies-reference)を参照してください。
+
+## 選択ロジック
+
+Message Busがメッセージをルーティングしようとするとき、可能な限り最後のタイミングで、メッセージのルートの**最初の**ホップを検査して受信者のセットを解決します。まず、その[ポリシーがすべて解決](#1-resolve-policy-directives)されます。次に、出力されたサービス名がルーティングテーブルと照合され、別のホップやルートにマップされていないかが確認されます。最後に、メッセージは選択されたすべての受信者サービスに[送信](#3-send-to-services)されます。各ポリシーは複数の受信者を選択できるため、これは任意に複雑なルーティングツリーを生じさせ得ます。もちろん、循環依存や設定ミスによる無限再帰を防ぐためのセーフガードがMessage Bus内にあります。
+
+<Note>
+**注:** 
+
+アプリケーション内で実行する、他のポリシーを備えた別のプロトコルを開発することは**可能**ですが、Vespaのすべてのコンポーネントは"Document"プロトコルのみをサポートしているため、そうする意味はほとんどありません。
+</Note>
+
+### 1. ポリシーディレクティブの解決
+
+このステップで実行されるロジックは実際には単純です。ホップ文字列にポリシーディレクティブ、つまり角括弧で囲まれた任意の文字列が含まれている限り、Message Busはルーティング対象のメッセージのプロトコルに対してそのポリシーのインスタンスを作成して実行します。
+
+```text
+Name:        storage/cluster.backup
+Selector:    storage/cluster.backup/distributor/[Distributor]/default
+Recipients:  -
+```
+
+上記のホップは、おそらくVespaで出会う最も単純なホップです。上で説明したサービス名によく似た文字列の中に単一のポリシーディレクティブを含み、受信者はありません。このホップを解決するとき、Message Busは"DocumentRouteSelector"ポリシーのインスタンスを作成し、その`select()`メソッドを呼び出します。"Distributor"ポリシーは、自身のディレクティブを適切なdistributor識別子に置き換え、これで曖昧さのないサービス識別子となったホップ文字列を生成します。
+
+```text
+Name:        indexing
+Selector:    [DocumentRouteSelector]
+Recipients:  search/cluster.music
+             search/cluster.books
+```
+
+このホップは、単一のポリシーディレクティブ"\[DocumentRouteSelector\]"にすぎないセレクターを持ち、"search/cluster.music"と"search/cluster.books"という2つの設定済み受信者を持ちます。このポリシーは、自身のディレクティブを受信者ルートの内容に置き換えることで、ホップを0個、1個、または2個の**新しい**ルートに展開します。これらの各ルートは、それ自体が1つ以上のホップを持つことがあります。それらは順番に、独立して処理されます。選択されたすべての受信者から応答が揃うと、ポリシーの`merge()`メソッドが呼び出され、結果の応答が上位に渡されます。
+
+```text
+Name:        default
+Selector:    [AND:indexing storage/cluster.backup]
+Recipients:  -
+```
+
+このホップはセレクターを持ちますが、受信者はありません。この理由は[routing policies reference](#routing-policies-reference)で最もよく説明されていますが、設定済み受信者を持たないホップの例として役立ちます。ポリシーディレクティブにコロン(":")が含まれていることに注目してください。これは、ディレクティブの残りの部分がポリシーのコンストラクターへのパラメーターであることを示します。このポリシーは、メッセージのルート全体を、パラメーター文字列で名前が指定されたルートのセットに置き換えます。
+
+どのルーティングポリシーが利用できるかは、現在実行されているプロトコルによって決まります。このバージョンの時点でサポートされている唯一のプロトコルは"Document"です。これは[後述](#routing-policies-reference)のルーティングポリシーのセットを提供します。
+
+### 2. ホップ名とルート名の解決
+
+すべてのポリシーディレクティブが解決されるとすぐに、Message Busは、結果の文字列が実際にサービス名であり、実行中のプロトコルに設定された別のホップやルートの名前(この順序で確認)でないことを確認します。結果は次のいずれかになります:
+
+1. 文字列がホップ名として認識される - 現在のホップはその名前のホップに置き換えられ、処理は[ステップ1](#1-resolve-policy-directives)に戻ります。
+2. 文字列がルート名として認識される - 現在のルートは、これ以降のすべてのホップを含めて、その名前のルートに置き換えられます。処理は[ステップ1](#1-resolve-policy-directives)に戻ります。
+3. 文字列がサービス名として受け入れられる - これによりルーティングツリーの現在の分岐は終端します。すべての分岐が終端すると、処理は[ステップ3](#3-send-to-services)に進みます。
+
+ホップ名がルート名より先にチェックされるため、Message Busは"route:"プレフィックスもサポートしており、これにより文字列の残りの部分は設定済みルートに解決されるか、失敗するかのいずれかになります。
+
+### 3. サービスへの送信
+
+ルートリゾルバーがこの時点に到達すると、送信されるメッセージの最初のホップは、任意に複雑なルーティングツリーに解決されています。このツリーの各リーフは、あるポリシーがすでにそれに対する応答を生成していない限り、メッセージを受信するサービスを表します。何人の受信者が選択されても、メッセージのシリアライズは1回だけ行われ、ネットワーク伝送はすべての受信者間で同じメモリチャンクを共有できます。
+
+メッセージへの応答が送信者に到着すると、それらはルーティングツリーの対応するリーフノードに引き渡されますが、マージはすべてのリーフノードの準備が整うまで開始されません。
+
+ルートの解決は、すべての再送ロジックの後、ネットワーク伝送の直前に行われます。つまり、再送予定のメッセージがある間にルート設定が変更された場合、それらは新しいルートに従います。
+
+受信者の解決が、[結果を無視する](#hop)ように設定されたホップを通過した場合、ネットワーク層は合成された"OK"で即座に応答します。
+
+## 例: デフォルトルートの再設定
+
+アプリケーションに検索とストレージの両方の機能が必要だが、デフォルトのフィードは検索にのみ渡したい、と想定します。これの想像上のシナリオとしては、スパムのフィルタリングなしで継続的なフィードがVespaに投入されているシステムが考えられます。問題のあるサイトからの受信ドキュメントをブロックするためにカスタムドキュメントプロセッサーが使用できる、URLブロックリストを保存する最小限のストレージ専用クラスターが欲しいとします。
+
+ブロックリストとドキュメントプロセッサーに加えて、以下を追加します:
+
+```js
+<routing version="1.0">
+    <routingtable protocol="document">
+        <route name="default" hops="docproc/cluster.blocklist/*/chain.blocklist indexing" />
+    </routingtable>
+</routing>
+```
+
+これはデフォルトルートを上書きして、インデックス作成の前に、利用可能な任意のブロックリスト用ドキュメントプロセッサーを通過するようにします。ドキュメントプロセッサーがメッセージをブロックすると判断した場合、適切な *ok* 応答で応答するか、あるいはブロック時に返すと決めたエラー応答をクライアントソフトウェアが受け入れる必要があります。
+
+ブロックリスト情報をストレージにフィードする場合、アプリケーションはすでに利用可能な`storage`ホップを使用するだけで済みます。
+
+*default* という名前の使用に関する議論については、[#13193](https://github.com/vespa-engine/vespa/issues/13193)を参照してください。
+
+### Document API
+
+Message Bus上で動作するDocument APIの現在の実装では、このAPIの設定は後者(Message Bus)の設定を意味します。ほとんどのクライアントは、このAPIを通じてのみルーティングを行います。Document APIを使用するには、`DocumentAccess`インターフェースを実装するクラスをインスタンス化する必要があります。執筆時点では`MessageBusDocumentAccess`のみが存在し、その作成にはパラメーターセットが必要です。これらのパラメーターは、おおよそ次のような`MessageBusDocumentAccessParam`のインスタンスに含まれます:
+
+```js
+class MessageBusDocumentAccessParams {
+    String documentManagerConfigId; // The id to resolve to document manager config.
+    String oosServerPattern;        // The service pattern to resolve to fleet controller
+                                    // services.
+    String appConfigId;             // The id to resolve to application config.
+    String slobrokConfigId;         // The id to resolve to slobrok config.
+    String routingConfigId;         // The id to resolve to messagebus routing config.
+
+    String routeName;               // The name of the route to send to.
+    int    traceLevel;              // The trace level to use when sending.
+
+    class SourceSessionParams {
+        int    maxPending;          // Maximum number of pending messages.
+        int    maxPendingSize;      // Maximum size of pending messages.
+        double timeout;             // Default timeout in seconds for messages
+                                    // that have no timeout set.
+        double requestTimeoutA;     // Default request timeout in seconds, using
+        double requestTimeoutB;     // the equation 'requestTimeout = a * retry + b'.
+        double retryDelay;          // Number of seconds to wait before resending.
+    };
+}
+```
+
+最も分かりやすい設定パラメーターは`routeName`で、これはドキュメントや更新を送信する際に使用するルートの名前を`MessageBusDocumentAccess`オブジェクトに知らせます。2つ目のパラメーターは`traceLevel`で、これによりクライアントはデータが正確にどのように伝送されたかを確認できます。
+
+<Note>
+**注:** 
+
+トレーシングは1~9のレベルで有効にでき、数値が大きいほどトレーシングが多くなります。トレーシングの概念はDocument API自体では公開されていないため、そのデータは送信者に応答が到着したときに単に標準出力に出力されます。したがって、これは本番環境では使用すべきではありませんが、デバッグ時には役立ちます。
+</Note>
+
+[Document API JavaDoc](https://javadoc.io/doc/com.yahoo.vespa/documentapi)を参照してください。
+
+## ルーティングサービスこれは、[services.xml](/ja/reference/applications/services/services)の *routing* セクション内のすべての要素に関するリファレンスドキュメントです。
+
+```text
+routing [version]
+    routingtable [protocol, verify]
+        route [name, hops]
+        hop [name, selector, ignore-result]
+            recipient [session]
+    services [protocol]
+        service [name]
+```
+
+## routing
+
+[services](/ja/reference/applications/services/services#services)に含まれます。ルーティングに関連するすべての設定のコンテナー要素です。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>version</td>
+      <td>required</td>
+      <td>number</td>
+      <td></td>
+      <td>このVespaバージョンでは"1.0"に設定する必要があります</td>
+    </tr>
+  </tbody>
+</table>
+
+省略可能なサブ要素:
+
+<CardGroup>
+  <Card title="routingtable" icon="code-branch" href="#routingtable" horizontal />
+  <Card title="services" icon="server" href="#services" horizontal />
+</CardGroup>
+
+例:
+
+```js
+<routing version="1.0">
+    <routingtable protocol="document">
+        <route name="route1" hops="hop1 hop2" />
+        <route name="route2" hops="hop3 hop4 hop5" />
+        <hop name="hop1" selector="docproc/cluster.foo/docproc/*/feed-processor">
+            <recipient session="docproc/cluster.foo/docproc/*/feed-processor" />
+        </hop>
+        <hop name="hop2" selector="search/cluster.bar/[SearchGroup]/[SearchRow]/[SearchColumn]/feed-destination">
+            <recipient session="search/cluster.bar/g0/c0/r0/feed-destination" />
+            <recipient session="search/cluster.bar/g0/c1/r0/feed-destination" />
+            <recipient session="search/cluster.bar/g0/c0/r1/feed-destination" />
+            <recipient session="search/cluster.bar/g0/c1/r1/feed-destination" />
+            <recipient session="search/cluster.bar/g1/c0/r0/feed-destination" />
+            <recipient session="search/cluster.bar/g1/c1/r0/feed-destination" />
+            <recipient session="search/cluster.bar/g1/c0/r1/feed-destination" />
+            <recipient session="search/cluster.bar/g1/c1/r1/feed-destination" />
+        </hop>
+    </routingtable>
+    <services protocol="document">
+        <service name="foo/bar" />
+    </services>
+</routing>
+```
+
+## routingtable
+
+[routing](#routing)に含まれます。特定のプロトコル用のルーティングテーブルを指定します。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>protocol</td>
+      <td>required</td>
+      <td></td>
+      <td></td>
+      <td>使用するプロトコルを設定します。定義されているプロトコルは&#42;document&#42;のみです。サポートされていないプロトコル用のルーティングテーブルを定義した場合、アプリケーションはそのプロトコルの名前を含むINFOエントリをログに記録するだけです。</td>
+    </tr>
+    <tr>
+      <td>verify</td>
+      <td>optional</td>
+      <td>boolean</td>
+      <td></td>
+      <td>ToDo: document this</td>
+    </tr>
+  </tbody>
+</table>
+
+省略可能なサブ要素:
+
+<CardGroup>
+  <Card title="route" icon="code-branch" href="#route" horizontal />
+  <Card title="hop" icon="arrow-right-circle" href="#hop" horizontal />
+</CardGroup>
+
+例:
+
+```js
+<routing version="1.0">
+    <routingtable protocol="document">
+        <route name="route1" hops="hop1 hop2" />
+        <hop name="hop1" selector="docproc/cluster.foo/docproc/*/feed-processor">
+            <recipient session="docproc/cluster.foo/docproc/*/feed-processor" />
+        </hop>
+    </routingtable>
+</routing>
+```
+
+## route
+
+[routingtable](#routingtable)に含まれます。一連の中間ホップを経由してメッセージを宛先に届けるルートを指定します。ルート内の少なくとも1つのホップが存在しない場合、アプリケーションは起動に失敗し、そのホップの名前を含むエラーを発行します。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>required</td>
+      <td></td>
+      <td></td>
+      <td>ルート名。</td>
+    </tr>
+    <tr>
+      <td>hops</td>
+      <td>required</td>
+      <td></td>
+      <td></td>
+      <td>空白で区切られたホップ名のリスト。各名前は有効なホップである必要があります。</td>
+    </tr>
+  </tbody>
+</table>
+
+サブ要素: なし
+
+例:
+
+```js
+<routing version="1.0">
+    <routingtable protocol="document">
+        <route name="route1" hops="hop1 hop2" />
+        <route name="route2" hops="hop3 hop4 hop5" />
+    </routingtable>
+</routing>
+```
+
+## hop
+
+[routingtable](#routingtable)に含まれます。1つ以上のルートの構築に使用できる単一のホップを指定します。ホップは、それが属するルーティングテーブル内で一意の名前を持つ必要があります。ホップはセレクター文字列と受信者セッションのリストを含みます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>required</td>
+      <td></td>
+      <td></td>
+      <td>ホップ名。</td>
+    </tr>
+    <tr>
+      <td>selector</td>
+      <td>required</td>
+      <td></td>
+      <td></td>
+      <td>セレクター文字列。</td>
+    </tr>
+    <tr>
+      <td>ignore-result</td>
+      <td>optional</td>
+      <td></td>
+      <td></td>
+      <td>&#42;true&#42;に設定すると、そのホップを経由したルーティングの結果を無視することを指定します。</td>
+    </tr>
+  </tbody>
+</table>
+
+省略可能なサブ要素:
+
+<CardGroup>
+  <Card title="recipient" icon="user" href="#recipient" horizontal />
+</CardGroup>
+
+例:
+
+```js
+<routing version="1.0">
+    <routingtable protocol="document">
+        <hop name="hop1" selector="docproc/cluster.foo/docproc/*/feed-processor">
+            <recipient session="docproc/cluster.foo/docproc/*/feed-processor" />
+        </hop>
+    </routingtable>
+</routing>
+```
+
+## recipient
+
+[hop](#hop)に含まれます。ホップの受信者セッションを指定します。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>session</td>
+      <td>required</td>
+      <td></td>
+      <td></td>
+      <td>この属性は、ルーティング可能な実行中のサービスインスタンスに対応している必要があります。すべてのセッション識別子は、ロケーション部分と名前で構成されます。検索ノードには常に&#42;search/cluster.name/g#/r#/c#/feed-destination&#42;という形式のセッション名が与えられ、一方、ドキュメントプロセッサーサービスは常に&#42;docproc/cluster.name/docproc/#/feed-processor&#42;という名前になります。</td>
+    </tr>
+  </tbody>
+</table>
+
+サブ要素: なし
+
+例:
+
+```js
+<routing version="1.0">
+    <routingtable protocol="document">
+        <hop name="search/cluster.music" selector="search/cluster.music/[SearchGroup]/[SearchRow]/[SearchColumn]/feed-destination">
+            <recipient session="search/cluster.music/g0/c0/r0/feed-destination" />
+            <recipient session="search/cluster.music/g0/c0/r1/feed-destination" />
+            <recipient session="search/cluster.music/g1/c0/r0/feed-destination" />
+            <recipient session="search/cluster.music/g1/c0/r1/feed-destination" />
+        </hop>
+    </routingtable>
+</routing>
+```
+
+## services
+
+[routing](#routing)に含まれます。特定のプロトコルで利用可能なサービスのセットを指定します。現時点でサポートされている唯一のプロトコルは *document* です。ここで指定されたサービスは、ルート検証ステップで使用され、存在することは分かっているが *services.xml* からは導出できないサービスをホップやルートが参照できるようにします。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>protocol</td>
+      <td>required</td>
+      <td></td>
+      <td></td>
+      <td>使用するプロトコルを設定します。定義されているプロトコルは&#42;document&#42;のみです。</td>
+    </tr>
+  </tbody>
+</table>
+
+省略可能なサブ要素:
+
+<CardGroup>
+  <Card title="service" icon="server" href="#service" horizontal />
+</CardGroup>
+
+例:
+
+```js
+<routing version="1.0">
+    <services protocol="document">
+        <service name="foo/bar" />
+    </services>
+</routing>
+```
+
+## service
+
+[services](#services)に含まれます。*services.xml* からは導出できない、既知の単一のサービスを指定します。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>required</td>
+      <td></td>
+      <td></td>
+      <td>サービスの名前。</td>
+    </tr>
+  </tbody>
+</table>
+
+サブ要素: なし
+
+例:
+
+```js
+<routing version="1.0">
+    <services protocol="document">
+        <service name="foo/bar" />
+    </services>
+</routing>
+```
+
+## Routingpoliciesリファレンス
+
+
+この記事には、Vespaで利用可能なすべてのルーティングポリシーの動作の詳細な説明が含まれています。
+
+*Documentプロトコル* は、現在Vespaでサポートされている唯一のMessage Busプロトコルです。さらに、このプロトコルの一部であるすべてのルーティングポリシーは、[応答のマージ](#merge)のための共通のコードパスを共有しています。このプロトコルが提供するポリシーは次のとおりです:
+
+- [AND](#and) - 設定されたすべての受信者ホップを選択します。
+- [DocumentRouteSelector](#documentrouteselector) - [ドキュメント選択文字列](/ja/reference/writing/document-selector-language)を使用して互換性のあるルートを選択します
+- [Content](#content) - システム状態に基づいてコンテント・クラスターのdistributorを選択します
+- [MessageType](#messagetype) - メッセージタイプに基づいて次のホップを選択します
+- [Extern](#extern) - リモートのVespaアプリケーションに問い合わせて受信者を選択します
+- [LocalService](#localservice) - IPアドレスに基づいて受信者を選択します
+- [RoundRobin](#roundrobin) - 設定された受信者の中からラウンドロビン順で1つを選択します
+- [SubsetService](#subsetservice) - マッチするすべてのサービスのサブセットの中からのみ選択します
+- [LoadBalancer](#loadbalancer) - パフォーマンスに応じた重みを生成して受信者の中から選択するラウンドロビンポリシー
+
+### 共通のDocument `merge()` ロジック
+
+ほとんどのDocumentルーティングポリシーの共有マージロジックは、複数の応答を1つにマージする際に「正しい」ことをしようとする試みです。まずすべての応答を順に確認し、その内容を次のいずれかとして格納します:
+
+1. OK応答、
+2. IGNORE応答、または
+3. ERROR応答
+
+少なくとも1つのERROR応答が見つかった場合、他のすべてのエラーを含む新しい応答を返します。少なくとも1つのOK応答がある場合、最初のOK応答を返しますが、他のすべての応答からフィード情報をこの応答に転送します(これはフィード開始・フィード終了メッセージ用の特定のデータです)。それ以外の場合、すべてのIGNOREエラーを含む新しい応答を返します。擬似コード:
+
+```text
+for each reply, do
+    if reply has no errors, do
+        store reply in OK list
+    else, do
+        if reply has only IGNORE errors
+            copy all errors from reply to IGNORE list
+        else, do
+            copy all errors from reply to ERROR list
+
+if ERROR list is not empty, do
+    return new reply with all errors
+else, do
+    if OK list is not empty, do
+        return first reply with all feed answers
+    else, do
+        return new reply with all IGNORE errors
+```
+
+## ルーティングポリシーリファレンス
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>ポリシー</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>AND</td>
+      <td>これは主に、メッセージのルートを設定されたすべての受信者に分岐させることをユーザーに可能にする便宜的なポリシーです。メッセージタイプを認識せず、単に常にすべての受信者を選択します。応答は<a href="#merge" aria-label="shared logic">共有ロジック</a>に従ってマージされます。<br/><br/> 省略可能な文字列パラメーターは、空白で区切られたホップのリストとして解析されます。設定された受信者はパラメーターで与えられた受信者より優先されますが、これは将来変更される可能性があります。</td>
+    </tr>
+    <tr>
+      <td>DocumentRouteSelector</td>
+      <td>このポリシーは、<a href="/ja/reference/applications/services/services" aria-label="services.xml">services.xml</a>内のコンテント・クラスターの&#42;documents&#42;要素で定義されたサブスクリプションルールに従って、ポリシーの受信者の中から選択を行う責任を持ちます。"documents"要素に"selection"属性が設定されている場合、その値は<a href="/ja/reference/writing/document-selector-language" aria-label="document select">document select</a>文字列として処理され、ルートを決定するためにドキュメントとドキュメント更新に対して実行されます。"feedname"属性が設定されている場合、すべてのフィードコマンドはそれを通してフィルタリングされます。<br/><br/>  このポリシーの受信者リストは、ルート名に直接マップされている必要があります。たとえば、受信者が"search/cluster.music"で、選択基準に従ってメッセージが適切である場合、メッセージは"search/cluster.music"ルートにルーティングされます。ルートが存在しない場合、このポリシーはエラーで応答します。要するに、このポリシーはドキュメントの内容と設定された基準に基づいて、1つ以上の受信者ルートを選択します。<br/><br/>  複数のルートが選択された場合、その応答は<a href="#merge" aria-label="shared logic">共有ロジック</a>に従ってマージされます。<br/><br/>  このポリシーはパラメーターをサポートしません。<br/><br/>  この設定は"documentrouteselectorpolicy"で、config id "routing/documentapi"から利用できます。<br/><br/> <Warning> &#42;&#42;重要:&#42;&#42;<br/> GETメッセージには選択基準を実行する対象のドキュメントが含まれていないため、このポリシーはマージロジックが処理するIGNORED応答を返します。これは、コンテント・クラスターを持たないアプリケーションからドキュメントを取得しようとすると確認できます。</Warning></td>
+    </tr>
+    <tr>
+      <td>Content</td>
+      <td>このポリシーを使用すると、コンテント・クラスターにメッセージを送信できます。このポリシーは、対象クラスターから取得したシステム状態をslobrokの情報と組み合わせて使用し、メッセージに適した正しいdistributorを選択します。<br/><br/>  要するに、ドキュメントストレージと通信する際はこのポリシーを使用してください。<br/><br/>  このポリシーは複数のパラメーターをサポートし、それぞれ最大1つずつ指定できます:<br/><br/> &#42;&#42;cluster&#42;&#42;<br/>到達したいクラスターの名前。例: cluster=mycluster <br/><br/> &#42;&#42;config&#42;&#42;<br/> ポリシーの設定を取得するために使用したいconfigサーバーまたはプロキシのカンマ区切りリスト。これは、現在いるクラスター以外のクラスターと通信するために使用できます。例: config=tcp/myadmin1:19070,tcp/myadmin2:19070 <br/><br/> 各パラメーターはセミコロンで区切ります。</td>
+    </tr>
+    <tr>
+      <td>MessageType</td>
+      <td>このポリシーは、メッセージのタイプに基づいて次のホップを選択します。すべてのメッセージの送信先(defaultroute)を設定します。その上で、どのメッセージタイプを上書きして代替ルートに送信するかを設定します。これは現在、<a href="/ja/reference/applications/services/content#content" aria-label="content">content</a>要素を使用する際にVespaによって内部的にのみ使用されています。</td>
+    </tr>
+    <tr>
+      <td>Extern</td>
+      <td>このポリシーは、外部のVespaアプリケーションと通信し、その別のアプリケーションのslobrokサーバーを使用して単一のサービスパターンを解決するために必要なロジックを実装します。このポリシーが最初に作成されてからサービスクエリーへの応答を受け取るまでには多少の遅延があり得ることに留意してください。そのため、このポリシーを使用すると、解決されるまでメッセージが数回再送されることがあります。リトライを無効にすると、このポリシーは最初の数秒間、すべてのメッセージを失敗させる可能性があります。<br/><br/>   このポリシーは、接続先の外部slobrokサーバーのアドレスと、クエリーに使用するパターンの両方にパラメーターを使用します。パラメーターは<code>{`<spec>;<service>`}</code>という形式である必要があります。ここで、<code>{`spec`}</code>は"tcp/hostname:port"形式のslobrok接続スペックのカンマ区切りリストで、<code>{`service`}</code>はリモートのVespaアプリケーション上で実行されているサービスです。<br/><br/>  <Warning> &#42;&#42;重要:&#42;&#42;<br/> リモートアプリケーションは、送信元のアプリケーションとバイナリ互換のあるバージョンのMessage BusとDocument APIの両方を持っている必要があります。これはパッチリリース間でも問題になることがあるため、このポリシーを使用する際はアプリケーションのバージョンを同期させてください。</Warning></td>
+    </tr>
+    <tr>
+      <td>LocalService</td>
+      <td>このポリシーは、マッチするすべてのサービスの中から選択を行いますが、現在のホストと同じホスト上で実行されているものを優先します。利用可能なサービスを問い合わせる際に使用されるパターンは現在のものですが、ポリシーディレクティブをアスタリスクに置き換えたものです。たとえば、ホップ"docproc/cluster.default/[LocalService]/chain.default"は、パターン"docproc/cluster.default/&#42;/chain.default"にマッチするすべてのサービスの中からローカルサービスを優先します。ローカルで実行されているマッチするサービスが複数ある場合、このポリシーはそれらの間で単純なラウンドロビンのロードバランシングを行います。マッチするサービスがローカルで実行されていない場合、このポリシーは単にアスタリスクをマッチとして返し、基盤のネットワークロジックが利用可能なすべての中でロードバランシングを行えるようにします。<br/><br/>  このポリシーは、ローカルホスト名を上書きする省略可能なパラメーターを受け付けます。ホップに特定のホストを優先させたい場合に使用してください。<br/><br/> <Warning> &#42;&#42;重要:&#42;&#42;<br/> 他のポリシーディレクティブをアスタリスクに置き換える追加のロジックはありません。つまり、ホップ文字列内の"[LocalService]"の後に他のポリシーディレクティブが存在する場合、サービスは一切マッチし得ません。</Warning></td>
+    </tr>
+    <tr>
+      <td>RoundRobin</td>
+      <td>このポリシーは、設定された受信者のセットの中から選択を行うために使用されます。設定された各受信者について、このポリシーはどのオンラインサービスがマッチするかを判定し、それらすべての中からラウンドロビン順で1つを選択します。設定された受信者のいずれも利用可能なサービスにマッチしない場合、このポリシーは、後で再試行すべきであることを送信者に示すエラーを返します。<br/><br/>  このポリシーは単一の受信者のみを選択するため、マージロジックを含みません。</td>
+    </tr>
+    <tr>
+      <td>SubsetService</td>
+      <td>このポリシーは、マッチするすべてのサービスのサブセットの中から選択を行うために使用され、システム内の接続数を最小限に抑えるために使用されます。利用可能なサービスを問い合わせる際に使用されるパターンは現在のものですが、ポリシーディレクティブをアスタリスクに置き換えたものです。たとえば、ホップ"docproc/cluster.default/[SubsetService:3]/chain.default"は、パターン"docproc/cluster.default/&#42;/chain.default"にマッチするすべてのサービスのサブセットの中から選択します。パターンがマッチのセットを返すことを前提として、このポリシーは、実行中のMessage Busの接続文字列のハッシュ値(これは各インスタンスで一意です)に基づいて、これらのサブセットを保持します。マッチするサービスがない場合、このポリシーはアスタリスクをマッチとして返し、基盤のネットワークロジックが優雅に失敗できるようにします。<br/><br/>  このポリシーは、省略可能なパラメーターをサブセットのサイズとして解析します。指定がない場合、サブセットのサイズはデフォルトの5になります。<br/><br/> <Warning> &#42;&#42;重要:&#42;&#42; <br/>他のポリシーディレクティブをアスタリスクに置き換える追加のロジックはありません。つまり、ホップ文字列内の"[SubsetService]"の後に他のポリシーディレクティブが存在する場合、サービスは一切マッチし得ません。</Warning></td>
+    </tr>
+    <tr>
+      <td>LoadBalancer</td>
+      <td>このポリシーは、docprocのような、どのノードでも任意のメッセージを処理できるステートレスなクラスターに送信するために使用されます。メッセージはノード間でラウンドロビン方式で送信されますが、各ノードにはそのパフォーマンスに基づいた重みが割り当てられます。重みは、ノードの入力キューが満杯になりビジー応答を返した回数を計測することで計算されます。パフォーマンス特性が異なるノードを持つdocprocクラスターに送信する場合は、このポリシーを使用してください。<br/><br/> このポリシーは複数のパラメーターをサポートし、それぞれ最大1つずつ指定できます:  <br/><br/>&#42;&#42;cluster&#42;&#42;<br/> 到達したいクラスターの名前。例: cluster=docproc/cluster.default (必須) <br/><br/>&#42;&#42;session&#42;&#42;<br/>到達したい宛先セッション。docprocの場合はdocprocチェーンの名前。例: session=chain.mychain (必須) <br/><br/>&#42;&#42;config&#42;&#42;<br/> ポリシーの設定を取得するために使用したいconfigサーバーまたはプロキシのカンマ区切りリスト。これは、現在いるクラスター以外のクラスターと通信するために使用できます。例: config=tcp/myadmin1:19070,tcp/myadmin2:19070 <br/><br/> 各パラメーターはセミコロンで区切ります。デフォルトでは、このポリシーは設定に現在のVespaクラスターを使用します。</td>
+    </tr>
+  </tbody>
+</table>
+
+## インデックス作成のためのルーティング
+
+通常のVespa構成には、コンテナーとコンテント・クラスターがあり、*スキーマ* で1つ以上のドキュメントタイプが定義されています。ドキュメント書き込みのルーティングとは、ドキュメントを *インデックス作成* コンテナー・クラスターにルーティングし、次に適切な *コンテント* クラスターにルーティングすることです。
+
+インデックス作成クラスターはコンテナー・クラスターです。バリエーションについては[複数のコンテナー・クラスター](#multiple-container-clusters)を参照してください。このクラスターに[document-api](/ja/reference/applications/services/container#document-api)フィードエンドポイントを追加します。ドキュメントタイプからコンテント・クラスターへのマッピングは、コンテント・クラスターの[document](/ja/reference/applications/services/content#document)にあります。[album-recommendation](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/app/services.xml)より:
+
+```js
+<services version="1.0">
+
+    <container id="container" version="1.0">
+        <document-api />
+        <search />
+        <nodes>
+            <node hostalias="node1" />
+        </nodes>
+    </container>
+
+    <content id="music" version="1.0">
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="music" mode="index" />
+        </documents>
+        <nodes>
+            <node hostalias="node1" distribution-key="0" />
+        </nodes>
+    </content>
+
+</services>
+```
+
+この構成により、Vespaはどれがインデックス作成に使用されるコンテナー・クラスターで、どのコンテント・クラスターが *music* ドキュメントタイプを保存するかを認識します。この構成から生成されたルーティングを表示するには、[vespa-route](/ja/reference/operations/self-managed/tools#vespa-route)を使用します:
+
+```text
+$ vespa-route
+There are 6 route(s):
+    1. default
+    2. default-get
+    3. music
+    4. music-direct
+    5. music-index
+    6. storage/cluster.music
+
+There are 2 hop(s):
+    1. container/chain.indexing
+    2. indexing
+``` 
+
+*default* ルートに注目してください。このルートはVespaによって自動生成され、[/document/v1](/ja/reference/api/document-v1)を使用する際に他のルートが使用されない場合に使用されます。*default* は *indexing* を指します:
+
+```text
+$ vespa-route --route default
+The route 'default' has 1 hop(s):
+    1. indexing
+```
+
+```text
+$ vespa-route --hop indexing
+The hop 'indexing' has selector:
+       [DocumentRouteSelector]
+And 1 recipient(s):
+    1. music
+```
+
+```text
+$ vespa-route --route music
+The route 'music' has 1 hop(s):
+    1. [MessageType:music]
+```
+
+要するに、*default* ルートは *music* タイプのドキュメントを処理します。Vespaは *document-api* を持つコンテナー・クラスターにルーティングします。上記の *chain.indexing* に注目してください。これは、インデックス作成を行う組み込みの *ドキュメントプロセッサー* のセットです(後述)。
+
+ルーティングの詳細については[トレースの付録](#appendix-trace)を参照してください。
+
+## chain.indexing
+
+このインデックス作成チェーンは、コンテント・クラスターが`mode="index"`を持つと、コンテナー上にセットアップされます。
+
+[IndexingProcessor](https://github.com/vespa-engine/vespa/blob/master/docprocs/src/main/java/com/yahoo/docprocs/indexing/IndexingProcessor.java)は、スキーマから生成された[インデックス作成スクリプト](/ja/reference/writing/indexing-language)に基づいてドキュメントにアノテーションを付けます。例:
+
+```js
+$ vespa-get-config -n vespa.configdefinition.ilscripts \
+  -i container/docprocchains/chain/indexing/component/com.yahoo.docprocs.indexing.IndexingProcessor
+
+maxtermoccurrences 100
+fieldmatchmaxlength 1000000
+ilscript[0].doctype "music"
+ilscript[0].docfield[0] "artist"
+ilscript[0].docfield[1] "artistId"
+ilscript[0].docfield[2] "title"
+ilscript[0].docfield[3] "album"
+ilscript[0].docfield[4] "duration"
+ilscript[0].docfield[5] "year"
+ilscript[0].docfield[6] "popularity"
+ilscript[0].content[0] "clear_state | guard { input artist | tokenize normalize stem:"BEST" | summary artist | index artist; }"
+ilscript[0].content[1] "clear_state | guard { input artistId | summary artistId | attribute artistId; }"
+ilscript[0].content[2] "clear_state | guard { input title | tokenize normalize stem:"BEST" | summary title | index title; }"
+ilscript[0].content[3] "clear_state | guard { input album | tokenize normalize stem:"BEST" | index album; }"
+ilscript[0].content[4] "clear_state | guard { input duration | summary duration; }"
+ilscript[0].content[5] "clear_state | guard { input year | summary year | attribute year; }"
+ilscript[0].content[6] "clear_state | guard { input popularity | summary popularity | attribute popularity; }"
+```
+
+詳細は[linguistics](/ja/linguistics/linguistics)を参照してください。
+
+デフォルトでは、インデックス作成チェーンは *services.xml* 内の *最初の* コンテナー・クラスター上にセットアップされます。複数のコンテナー・クラスターを持つ場合は、これを明示的に設定することをお勧めします。[複数のコンテナー・クラスター](#multiple-container-clusters)を参照してください。
+
+## ドキュメント選択
+
+[document](/ja/reference/applications/services/content#document)は[selection](/ja/reference/writing/document-selector-language)文字列を持つことができ、通常はドキュメントを失効させるために使用されます。これはフィード中にも評価されるため、すぐに失効するはずのドキュメントは破棄されます。これはエラーではなく、ドキュメントAPIは200を報告しますが、混乱を招くことがあります。
+
+この評価は、フィードエンドポイントの[DocumentRouteSelector](https://github.com/vespa-engine/vespa/blob/master/documentapi/src/main/java/com/yahoo/documentapi/messagebus/protocol/DocumentRouteSelectorPolicy.java)で、あらゆる処理/インデックス作成の *前に* 行われます。つまり、ドキュメントはselection文字列を使用して評価され(破棄するかどうか)、次にドキュメントタイプに基づいてどこにルーティングするかが決まります。
+
+例: selectionが、フィードされるドキュメントにマッチしないように設定されています:
+
+```js
+<content id="music" version="1.0">
+    <redundancy>1</redundancy>
+    <documents>
+        <document type="music" mode="index" selection='music.album == "thisstringwillnotmatch"'/>
+```
+
+```js
+$ vespa-feeder --trace 6 doc.json
+
+<trace>
+    [1564576570.693] Source session accepted a 4096 byte message. 1 message(s) now pending.
+    [1564576570.713] Sequencer sending message with sequence id '-1163801147'.
+    [1564576570.721] Recognized 'default' as route 'indexing'.
+    [1564576570.727] Recognized 'indexing' as HopBlueprint(selector = { '[DocumentRouteSelector]' }, recipients = { 'music' }, ignoreResult = false).
+    [1564576570.811] Running routing policy 'DocumentRouteSelector'.
+    [1564576570.822] Policy 'DocumentRouteSelector' assigned a reply to this branch.
+    [1564576570.828] Sequencer received reply with sequence id '-1163801147'.
+    [1564576570.828] Source session received reply. 0 message(s) now pending.
+</trace>
+
+Messages sent to vespa (route default) :
+----------------------------------------
+PutDocument:	ok: 0 msgs/sec: 0.00 failed: 0 ignored: 1 latency(min, max, avg): 9223372036854775807, -9223372036854775808, 0
+```
+
+selectionなしの場合(つまりすべてがマッチ):
+
+```js
+$ vespa-feeder --trace 6 doc.json
+
+<trace>
+    [1564576637.147] Source session accepted a 4096 byte message. 1 message(s) now pending.
+    [1564576637.168] Sequencer sending message with sequence id '-1163801147'.
+    [1564576637.176] Recognized 'default' as route 'indexing'.
+    [1564576637.180] Recognized 'indexing' as HopBlueprint(selector = { '[DocumentRouteSelector]' }, recipients = { 'music' }, ignoreResult = false).
+    [1564576637.256] Running routing policy 'DocumentRouteSelector'.
+    [1564576637.268] Component '[MessageType:music]' selected by policy 'DocumentRouteSelector'.
+    ...
+</trace>
+
+Messages sent to vespa (route default) :
+----------------------------------------
+PutDocument:	ok: 1 msgs/sec: 1.05 failed: 0 ignored: 0 latency(min, max, avg): 845, 845, 845
+```
+
+後者のケースでは、[DocumentRouteSelector](https://github.com/vespa-engine/vespa/blob/master/documentapi/src/main/java/com/yahoo/documentapi/messagebus/protocol/DocumentRouteSelectorPolicy.java)ルーティングポリシーにおいて、ドキュメントがselection文字列にマッチした、またはselection文字列がなかったため、ドキュメントはルートの次のホップに転送されました。
+
+## ドキュメント処理
+
+[ドキュメント処理](/ja/applications/document-processors)を使用して、ドキュメントのカスタム処理を追加します。通常のユースケースは、インデックス作成の前に、デフォルトルートにドキュメントプロセッサーを追加することです。例:
+
+```js expandable
+<services version="1.0">
+
+    <container id="container" version="1.0">
+        <document-api />
+        <search />
+        <document-processing>
+            <chain id="default">
+                <documentprocessor
+                    id="com.mydomain.example.Rot13DocumentProcessor"
+                    bundle="album-recommendation-docproc" />
+            </chain>
+        </document-processing>
+        <nodes>
+            <node hostalias="node1" />
+        </nodes>
+    </container>
+
+    <content id="music" version="1.0">
+        <redundancy>1</redundancy>
+        <documents>
+            <document >type="music" mode="index" />
+        </documents>
+        <nodes>
+            <node hostalias="node1" distribution-key="0" />
+        </nodes>
+    </content>
+
+</services>
+```
+
+新しいホップ *default/chain.default* が追加され、デフォルトルートがそれを含むように変更されることに注意してください:
+
+
+```text
+$ vespa-route
+
+There are 6 route(s):
+    1. default
+    2. default-get
+    3. music
+    4. music-direct
+    5. music-index
+    6. storage/cluster.music
+
+There are 3 hop(s):
+    1. default/chain.default
+    2. default/chain.indexing
+    3. indexing
+```
+
+```text
+$ vespa-route --route default
+
+The route 'default' has 2 hop(s):
+    1. default/chain.default
+    2. indexing
+```
+
+
+デフォルトルートに自動的に含まれるためには、ドキュメント処理チェーンは *default* という名前でなければならないことに注意してください。
+
+### インデックス作成チェーンの継承
+
+上記の代替として、インデックス作成チェーンを継承する方法があります。次のエラーが出た場合はこれを使用してください:
+
+```text
+Indexing cluster 'XX' specifies the chain 'default' as indexing chain.
+As the 'default' chain is run by default, using it as the indexing chain will run it twice.
+Use a different name for the indexing chain.
+```
+
+チェーンに *default* 以外の名前を付けて、*indexing* を継承させます:
+
+```js expandable
+<services version="1.0">
+
+    <container id="container" version="1.0">
+        <document-api />
+        <search />
+        <document-processing>
+            <chain id="offer-processing" inherits="indexing">
+                <documentprocessor id="processor.OfferDocumentProcessor"/>
+            </chain>
+        </document-processing>
+        <nodes>
+            <node hostalias="node1" />
+        </nodes>
+    </container>
+
+    <content id="music" version="1.0">
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="offer" mode="index"/>
+            <document-processing cluster="default" chain="offer-processing"/>
+        </documents>
+        <nodes>
+            <node hostalias="node1" distribution-key="0" />
+        </nodes>
+    </content>
+
+</services>
+```
+
+詳細は[#13193](https://github.com/vespa-engine/vespa/issues/13193)を参照してください。
+
+## 複数のコンテナー・クラスター
+
+Vespaは複数のコンテナー・クラスターを使用するように設定できます。ユースケースとしては、検索とドキュメント処理を分離することや、キャパシティの制約や依存関係のために異なるドキュメント処理クラスターを持つことが考えられます。検索用とフィード/インデックス作成用のコンテナー・クラスターを分離した例:
+
+```js expandable
+<services version="1.0">
+
+    <container id="container-search" version="1.0">
+        <search />
+        <nodes>
+            <node hostalias="node1" />
+        </nodes>
+    </container>
+
+    <container id="container-indexing" version="1.0">
+        <http>
+            <server id="httpServer2" port="8081" />
+        </http>
+        <document-api />
+        <document-processing />
+        <nodes>
+            <node hostalias="node1" />
+        </nodes>
+    </container>
+
+    <content id="music" version="1.0">
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="music" mode="index" />
+            <document-processing cluster="container-indexing" />
+        </documents>
+        <nodes>
+            <node hostalias="node1" distribution-key="0" />
+        </nodes>
+    </content>
+
+</services>
+```
+
+注:
+
+- インデックス作成ルートは、コンテントからコンテナー・クラスターへの[document-processing](/ja/reference/applications/services/content#document-processing)要素を使用して明示的に指定されています
+- フィードエンドポイントからインデックス作成プロセッサーへのネットワークホップを避けるために、*document-api* をインデックス作成と同じクラスター上にセットアップしてください
+- *document-processing* が設定されていない場合、デフォルトで *default* という名前のコンテナー・クラスターになります。複数のコンテナー・クラスターを使用する場合は、*document-processing* を明示的に設定するのがベストプラクティスです。
+
+*container-indexing/chain.indexing* ホップに注目してください。インデックス作成チェーンは *container-indexing* クラスター上にセットアップされています:
+
+```text
+$ vespa-route
+
+There are 6 route(s):
+    1. default
+    2. default-get
+    3. music
+    4. music-direct
+    5. music-index
+    6. storage/cluster.music
+
+There are 2 hop(s):
+    1. container-indexing/chain.indexing
+    2. indexing
+```
+
+```js
+$ curl -s http://localhost:8081 | python -m json.tool | grep -C 3 chain.indexing
+
+        {
+            "bundle": "container-disc:7.0.0",
+            "class": "com.yahoo.messagebus.jdisc.MbusClient",
+            "id": "chain.indexing@MbusClient",
+            "serverBindings": []
+        },
+        {
+--
+            "class": "com.yahoo.docproc.jdisc.DocumentProcessingHandler",
+            "id": "com.yahoo.docproc.jdisc.DocumentProcessingHandler",
+            "serverBindings": [
+                "mbus://*/chain.indexing"
+            ]
+        },
+        {
+```
+
+## 付録: トレース
+
+以下はトレースの例です(selection文字列なし):
+
+```js expandable
+$ cat doc.json
+[
+{
+    "put": "id:mynamespace:music::123",
+    "fields": {
+         "album": "Bad",
+         "artist": "Michael Jackson",
+         "title": "Bad",
+         "year": 1987,
+         "duration": 247
+    }
+}
+]
+
+$ vespa-feeder --trace 6 doc.json
+<trace>
+    [1564571762.403] Source session accepted a 4096 byte message. 1 message(s) now pending.
+    [1564571762.420] Sequencer sending message with sequence id '-1163801147'.
+    [1564571762.426] Recognized 'default' as route 'indexing'.
+    [1564571762.429] Recognized 'indexing' as HopBlueprint(selector = { '[DocumentRouteSelector]' }, recipients = { 'music' }, ignoreResult = false).
+    [1564571762.489] Running routing policy 'DocumentRouteSelector'.
+    [1564571762.493] Component '[MessageType:music]' selected by policy 'DocumentRouteSelector'.
+    [1564571762.493] Resolving '[MessageType:music]'.
+    [1564571762.520] Running routing policy 'MessageType'.
+    [1564571762.520] Component 'music-index' selected by policy 'MessageType'.
+    [1564571762.520] Resolving 'music-index'.
+    [1564571762.520] Recognized 'music-index' as route 'container/chain.indexing [Content:cluster=music]'.
+    [1564571762.520] Recognized 'container/chain.indexing' as HopBlueprint(selector = { '[LoadBalancer:cluster=container;session=chain.indexing]' }, recipients = {  }, ignoreResult = false).
+    [1564571762.526] Running routing policy 'LoadBalancer'.
+    [1564571762.538] Component 'tcp/vespa-container:19101/chain.indexing' selected by policy 'LoadBalancer'.
+    [1564571762.538] Resolving 'tcp/vespa-container:19101/chain.indexing [Content:cluster=music]'.
+    [1564571762.580] Sending message (version 7.83.27) from client to 'tcp/vespa-container:19101/chain.indexing' with 179.853 seconds timeout.
+    [1564571762.581] Message (type 100004) received at 'container/container.0' for session 'chain.indexing'.
+    [1564571762.581] Message received by MbusServer.
+    [1564571762.582] Request received by MbusClient.
+    [1564571762.582] Running routing policy 'Content'.
+    [1564571762.582] Selecting route
+    [1564571762.582] No cluster state cached. Sending to random distributor.
+    [1564571762.582] Too few nodes seen up in state. Sending totally random.
+    [1564571762.582] Component 'tcp/vespa-container:19114/default' selected by policy 'Content'.
+    [1564571762.582] Resolving 'tcp/vespa-container:19114/default'.
+    [1564571762.586] Sending message (version 7.83.27) from 'container/container.0' to 'tcp/vespa-container:19114/default' with 179.995 seconds timeout.
+    [1564571762.587181] Message (type 100004) received at 'storage/cluster.music/distributor/0' for session 'default'.
+    [1564571762.587245] music/distributor/0 CommunicationManager: Received message from message bus
+    [1564571762.587510] Communication manager: Sending Put(BucketId(0x2000000000000020), id:mynamespace:music::123, timestamp 1564571762000000, size 275)
+    [1564571762.587529] Communication manager: Passing message to source session
+    [1564571762.587547] Source session accepted a 1 byte message. 1 message(s) now pending.
+    [1564571762.587681] Sending message (version 7.83.27) from 'storage/cluster.music/distributor/0' to 'storage/cluster.music/storage/0/default' with 180.00 seconds timeout.
+    [1564571762.587960] Message (type 10) received at 'storage/cluster.music/storage/0' for session 'default'.
+    [1564571762.588052] music/storage/0 CommunicationManager: Received message from message bus
+    [1564571762.588263] PersistenceThread: Processing message in persistence layer
+    [1564571762.588953] Communication manager: Sending PutReply(id:mynamespace:music::123, BucketId(0x2000000000000020), timestamp 1564571762000000)
+    [1564571762.589023] Sending reply (version 7.83.27) from 'storage/cluster.music/storage/0'.
+    [1564571762.589332] Reply (type 11) received at 'storage/cluster.music/distributor/0'.
+    [1564571762.589448] Source session received reply. 0 message(s) now pending.
+    [1564571762.589459] music/distributor/0Communication manager: Received reply from message bus
+    [1564571762.589679] Communication manager: Sending PutReply(id:music:music::123, BucketId(0x0000000000000000), timestamp 1564571762000000)
+    [1564571762.589807] Sending reply (version 7.83.27) from 'storage/cluster.music/distributor/0'.
+    [1564571762.590] Reply (type 200004) received at 'container/container.0'.
+    [1564571762.590] Routing policy 'Content' merging replies.
+    [1564571762.590] Reply received by MbusClient.
+    [1564571762.590] Sending reply from MbusServer.
+    [1564571762.590] Sending reply (version 7.83.27) from 'container/container.0'.
+    [1564571762.612] Reply (type 200004) received at client.
+    [1564571762.613] Routing policy 'LoadBalancer' merging replies.
+    [1564571762.613] Routing policy 'MessageType' merging replies.
+    [1564571762.615] Routing policy 'DocumentRouteSelector' merging replies.
+    [1564571762.622] Sequencer received reply with sequence id '-1163801147'.
+    [1564571762.622] Source session received reply. 0 message(s) now pending.
+</trace>
+
+Messages sent to vespa (route default) :
+----------------------------------------
+PutDocument:	ok: 1 msgs/sec: 3.30 failed: 0 ignored: 0 latency(min, max, avg): 225, 225, 225
+```

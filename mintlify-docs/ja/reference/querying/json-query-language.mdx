@@ -1,0 +1,668 @@
+---
+title: "JSON Selectクエリー・リファレンス"
+sidebarTitle: "Select"
+---
+
+
+このドキュメントでは、`select` パラメーターとは何かを説明し、その使い方の例をいくつか示します。POSTでクエリーを実行する方法については [Query API](/ja/querying/query-api) を参照してください。
+
+このクエリーはJSON構文を持ち、HTTP POSTで実行されるクエリーで使用できます。`select` パラメーターはYQLと等価であり、YQLの代わりに使用できますが、YQLと一緒には使用できません。また、`query` パラメーターと一緒に使用することもできません。
+
+## 構造
+
+
+```json
+"select" : {
+  "where" : {...},
+  "grouping" : {...},
+  "fields" : [...]
+}
+```
+
+フィールド 'title' でターム 'country' を検索するクエリーの例:
+
+```json
+{
+  "select": {
+    "where": {
+      "contains": ["title", "country"]
+    }
+  }
+}
+```
+
+このクエリーは `curl` で実行できます:
+
+```bash
+curl -H "Content-Type: application/json" \
+    --data "{ 'select': { 'where': { 'contains': ['default', 'country'] } } }" \
+    http://localhost:8080/search/
+```
+
+
+### Where
+
+[YQL](/ja/reference/querying/grouping-language) のSQLライクな構文とは異なり、*where* のクエリーはツリー構文で記述します。YQLの関数と引数を組み合わせることで、YQLと等価なクエリーをJSONで記述できます。
+
+#### 形式的な構造
+
+
+関数は次のようにネストします: 
+
+```json
+FUNCTION : {
+  "children" : [ argument, argument,..],
+  "attributes" : {annotations}
+{
+```
+
+または、関数でattributesを使用しない場合は、`children` キーを上に移動して次のように記述します:
+
+```json
+FUNCTION : [
+  argument,
+  argument,
+  ...
+]
+```
+
+YQLは正規言語であり、Vespaでパースされるとクエリー・ツリーにパースされます。そのツリーは、JSONの `where` パラメーターでも構築できます。
+
+このYQLを見てみましょう: `select * from sources * where default contains foo and rank(a contains "A", b contains "B")`。これは次のクエリー・ツリーを生成します:
+
+<Frame>
+<img src="/assets/img/querytree.svg" width="737px" height="auto" alt="クエリー・ツリーの例" />
+</Frame>
+
+上のツリーは、'where' パラメーターを使って次のように記述できます:
+
+```json
+{
+  "and" :  [
+    { "contains" : ["default", "foo"] },
+    { "rank" : [
+      { "contains" : ["a", "A"] },
+      { "contains" : ["b", "B"] }
+    ]}
+  ]
+}
+```
+これはYQLと等価です。
+
+
+
+### Fields
+
+Vespa `8.680.18` から利用可能です。
+
+`fields` パラメーターは、各ヒットに含まれる
+[サマリー・フィールド](/ja/querying/document-summaries#selecting-summary-fields-in-yql)を制限します。
+これはフィールド名のJSON配列であり、YQLの `select` 句の
+フィールド・リストと等価です。
+
+YQL: `select id, title from sources * where title contains 'madonna'`。
+
+等価なJSON:
+
+```json
+{
+  "select": {
+    "fields": ["id", "title"],
+    "where": {
+      "contains": ["title", "madonna"]
+    }
+  }
+}
+```
+
+`fields` が省略された場合、または空の場合は、選択された
+[ドキュメント・サマリー・クラス](/ja/querying/document-summaries#selecting-summary-fields-in-yql)のすべてのフィールドが返されます。
+
+
+### Grouping
+
+`grouping` フィールドには、1つ以上の[グルーピング・ステートメント](/ja/querying/grouping)をJSON配列として設定できます。
+配列の各項目は、JSONで表現されたグルーピング・ステートメントであり、
+- 各グルーピング関数は、関数名をフィールド
+  名、関数の内容を値とするJSONオブジェクトで表現されます。
+- 引数のリストはJSON配列として表現されます。
+- 直接の `each` を持つ `all` 操作の直接の `label` フィールドは、その `each` が
+  生成するグループ・リストにラベルを付けます。これは[グルーピング言語](/ja/reference/querying/grouping-language#labels)の
+  `each(...) as(label)` と等価です。
+- 出力式のラベルには、`output` の中でグルーピング言語の構文を使用します。
+  例: `"output": "count() as(total)"`。
+
+例:
+
+グルーピング・ステートメント:
+
+```json
+| all(group(time.year(a)) each(output(count())
+    all(group(time.monthofyear(a)) each(output(count())))
+```
+等価なJSONの `grouping` 引数:
+
+```json
+"grouping" : [
+  {
+    "all" : {
+      "group" : "time.year(a)",
+      "each" : { "output" : "count()" },
+      "all" : {
+        "group" : "time.monthofyear(a)",
+        "each" : { "output" : "count()" },
+      }
+    }
+  }
+]
+```
+
+グルーピング・ステートメント:
+
+```bash
+all(
+  group(year)
+  each(output(count())) as(by_year)
+)
+```
+等価なJSONの `grouping` 引数:
+
+```json
+"grouping": [
+  {
+    "all": {
+      "group": "year",
+      "label": "by_year",
+      "each": {
+        "output": "count()"
+      }
+    }
+  }
+]
+```
+
+グルーピング・ステートメント:
+
+```bash
+all(
+  group(author)
+  output(count() as(authors_cardinality))
+)
+```
+等価なJSONの `grouping` 引数:
+
+```json
+"grouping": [
+  {
+    "all": {
+      "group": "author",
+      "output": "count() as(authors_cardinality)"
+    }
+  }
+]
+```
+
+グルーピング・ステートメント:
+
+```bash
+all(group(predefined(foo, bucket[1, 2>, bucket[3, 4>)))
+```
+等価なJSONの `grouping` 引数:
+
+```json
+"grouping" : [ 
+  { 
+    "all" : { 
+      "group" : { 
+        "predefined" : [ "foo", { "bucket": [1,2]}, { "bucket": [3,4]} ] 
+      } 
+    } 
+  } 
+]
+```
+
+### その他のクエリー・パラメーター
+
+SelectやYQLの構文に固有ではない[クエリー・パラメーター](/ja/reference/api/query)も同様に機能します。たとえば、`music` ドキュメント型ですべてを検索(`"where": true`)するには:
+
+```json
+{
+  "select": {
+    "where": true
+  },
+  "model": {
+    "restrict": "judgment"
+  }
+}
+```
+
+### 完全な例
+
+すべてのドキュメントに対して1つのバケットを作成し(`"group": "\"all\""`)、全体の価格統計(`"avg(price)"` と `"sum(price)"`)を出力します:
+
+```json
+{
+  "select": {
+    "where": true,
+    "grouping": [
+      {
+        "all": {
+          "group": "\"all\"",
+          "each": {
+            "output": [
+              "avg(price)",
+              "sum(price)"
+            ]
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+より複雑な例:
+```json
+{
+  "select" : {
+    "where" : {
+      "and" : {
+        "children" : [
+          {"title" : "music"},
+          {"default" : "festival"}
+        ]
+      }
+     },
+    "grouping" : [ {
+      "all" : {
+        "group" : "time.year(a)",
+          "each" : { "output" : "count()" }
+      }		
+    } ]
+  },
+  "offset" : 5,
+  "presentation" : {
+    "bolding" : false,
+    "format" : "json"
+  }
+}
+```
+
+### さまざまな関数の例
+
+
+##### CONTAINS
+YQL: `where title contains 'a'`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "contains" : [ "title", "a" ]
+}
+```
+
+##### text() を使ったCONTAINS
+YQL: `where title contains ({language:'en'}text('hello world'))`。
+
+この[アノテーション付きtext()演算子](/ja/reference/querying/yql#text)のJSONでの形式:
+
+```json
+"where" : {
+  "contains" : [
+    "title",
+    { 
+      "text" : { 
+        "query" : "hello world",
+        "attributes" : {
+          "language" : "en"
+        }
+      }
+    }
+  ]
+}
+```
+
+##### 数値演算子
+YQL: `where date >= 10`。
+
+これのJSONでの形式:
+
+*rangeパラメーターの導入:*
+
+```json
+"range" : [
+  "date",
+  { ">=" : 10}
+]
+```
+
+rangeクエリーは次のパラメーターを受け付けます:
+
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>演算子</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>≥</td>
+      <td>以上</td>
+    </tr>
+    <tr>
+      <td><code>{`>`}</code></td>
+      <td>より大きい</td>
+    </tr>
+    <tr>
+      <td><code>{`<`}</code></td>
+      <td>より小さい</td>
+    </tr>
+    <tr>
+      <td>≤</td>
+      <td>以下</td>
+    </tr>
+  </tbody>
+</table>
+
+YQL: `where range(field, 0, 500)`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "range" : [
+    "field",
+    { ">=" : 0, "<=" : 500}
+  ]
+}
+```
+
+
+##### OR
+YQL: `where title contains 'a' or title contains 'b'`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "or" : [
+    { "contains" : [ "title", "a" ] },
+    { "contains" : [ "title", "b" ] }
+  ]
+}
+```
+
+
+##### AND
+YQL: `where title contains 'a' and title contains 'b'`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "and" : [
+    {"contains" : [ "title", "a" ] },
+  {"contains" : [ "title", "b" ] }
+  ]
+}
+```
+
+
+##### AND NOT
+YQL: `where title contains 'a' and !(title contains 'b')`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "and_not" : [
+    {"contains" : [ "title", "a" ] },
+    {"contains" : [ "title", "b" ] }
+  ]
+}
+```
+
+形式的な構造:
+
+```json
+"where" : {
+  "and_not" : [
+    <Statement>,
+    <!Statement>,
+    ..
+  ]
+}
+```
+
+
+
+##### 正規表現
+YQL: `where title matches "madonna"`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "matches" : [
+    "title",
+    "madonna"
+  ]
+}
+```
+別の例:
+
+YQL: `where title matches "mado[n]+a"`
+
+```json
+"where" : {
+  "matches" : [
+    "title",
+    "mado[n]+a"
+  ]
+}
+```
+
+
+##### フレーズ
+
+YQL: `where text contains phrase("st", "louis", "blues")`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "contains" : [ "text", { "phrase" : ["st", "louis", "blues"] } ]
+}
+```
+
+
+##### NearとOrdered Near
+YQL: `where description contains ([ {"distance": 100} ]onear("a", "b"))`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "contains" : [ 
+    "description",
+    { "onear" : {
+      "children" : ["a", "b"],
+      "attributes" : {"distance" : 100} 
+      }
+    }
+  ]
+}
+```
+
+
+##### Equals
+YQL: `where my_number = 42`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "equals" : { "field": "my_number", "value": 42 }
+}
+```
+
+これは、次の省略形でも表現できます:
+
+```json
+"where" : {
+  "equals" : ["my_number", 42]
+}
+```
+
+`equals` 演算子は、boolean値と整数値をサポートします。
+
+配列フィールドの特定の要素インデックスでマッチさせるには、`index` パラメーターを追加します。
+単一のインデックスのみがサポートされています:
+
+YQL: `where my_numbers[2] = 42`。
+
+```json
+"where" : {
+  "equals" : { "field": "my_numbers", "index": 2, "value": 42 }
+}
+```
+
+
+##### 同一struct要素内の検索
+YQL: `where persons contains sameElement(first_name contains 'Joe', last_name contains 'Smith', year_of_birth < 1940)`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "contains" : [
+    "persons",
+    { "sameElement" : [
+      {"first_name" : "Joe",
+      "last_name" : "Smith",
+      "range" : [
+        "year_of_birth",
+        { "<" : 1940}
+      ]
+      }
+    ]
+    }
+  ]
+}
+```
+
+
+##### タームの等価(Term Equivalence)
+YQL: `where fieldName contains equiv("A","B")`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "contains" : [
+    "fieldName",
+    { "equiv" : ["A", "B"] }
+  ]
+}
+```
+
+
+##### Rank
+YQL: `where rank(a contains "A", b contains "B")`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "rank" : [
+    { "contains" : [ "a", "A" ] },
+    { "contains" : [ "b", "B" ] }
+  ]
+}
+```
+
+
+
+##### 高度な関数
+
+###### Wand
+YQL: `where wand(description, {"a":1, "b":2}`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "wand" : [ "description", {"a" : 1, "b":2} ]
+}
+```
+
+別の例:
+
+YQL: `where [ {"scoreThreshold": 13, "totalTargetHits": 7} ]wand(description, {"a":1, "b":2})`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "wand" : {
+    "children" : [ "description", {"a" : 1, "b":2} ],
+    "attributes" : {"scoreThreshold": 13, "totalTargetHits": 7}
+  }
+}
+```
+
+###### dotProduct
+YQL: `where dotProduct(description, {"a":1, "b":2})`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "dotProduct" : [ "description", {"a" : 1, "b":2} ]
+}
+```
+
+###### weightedSet
+YQL: `where weightedSet(description, {"a":1, "b":2})`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "weightedSet" : [ "description", {"a" : 1, "b":2} ]
+}
+```
+
+###### weakAnd
+YQL: `where {scoreThreshold: 41, "totalTargetHits": 7}weakAnd(a contains "A", b contains "B")`。
+
+これのJSONでの形式:
+
+```json
+"where" : {
+  "weakAnd" : {
+    "children" : [ { "contains" : ["a", "A"] }, { "contains" : ["b", "B"] } ],
+    "attributes" : {"scoreThreshold": 41, "totalTargetHits": 7}
+	}
+}
+```
+
+
+
+##### Predicate
+YQL: `where predicate(predicate_field,{"gender":"Female"},{"age":20L})`。
+
+これのJSONでの形式:
+
+```js
+"where" : {
+  "predicate" : [
+    "predicate_field",
+    {"gender" : "Female"},
+    {"age" : 20L}
+  ]
+}
+```

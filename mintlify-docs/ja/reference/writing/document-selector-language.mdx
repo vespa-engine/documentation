@@ -1,0 +1,410 @@
+---
+title: "ドキュメントセレクター言語リファレンス"
+sidebarTitle: "document selector language"
+---
+
+このドキュメントでは、データのフィード、ダンプ、ガベージコレクションの際にドキュメントのサブセットを選択するために使用される _ドキュメントセレクター言語_ について説明します。この言語は、解析してパースツリーを構築できるテキスト文字列フォーマットを定義しており、そのパースツリーによって、与えられたドキュメントがサブセットに含まれるかどうかを判定できます。
+
+## 例
+
+`music` スキーマ内のすべてのドキュメントにマッチ:
+
+`music`
+
+アプリケーションは複数のスキーマを持てるため、ドキュメントタイプ(スキーマ)にマッチさせた上で、`artistname` フィールドの特定の値にマッチ:
+
+`music and music.artistname == "Coldplay"`
+
+以下では、最初の条件は、ドキュメントが music タイプであり、author フィールドが存在しなければならないことを指定しています。2 番目の条件は、length フィールドが設定されており、かつ 1000 以下でなければならないことを指定しています:
+
+`music.author and music.length <= 1000`
+
+次の式は、いずれかのサブ式が true であるすべてのドキュメントを選択します。最初のサブ式は、author フィールドに John Doe という名前が含まれ、その間や前に任意の文字列があってもよいことを指定しています。`\n` エスケープは、フィールドの比較が行われる前に改行に変換されます。したがって、マッチが true になるには、フィールドが Doe と改行で終わっている必要があります。2 番目の式は、author が定義されていないすべての book を選択します:
+
+`book.author = "*John*Doe\n" or not book.author`
+
+以下は、式をグループ化するために括弧を使用する例です。また、定数値 false も使用されています。`(false or music.test)` サブ式は、選択結果を変えることなく単に `music.test` に置き換えられることに注意してください。`not` 句の中のサブ式は、size フィールドが 1000 を超え、かつ test フィールドが定義されているすべてのドキュメントを選択します。`not` 句は選択を反転させるため、size が 1000 以下、または test フィールドが未定義のすべてのドキュメントを選択します:
+
+`not (music.length > 1000) and (false or music.test)`
+
+その他の例:
+
+    - `music.version() == 3 and (music.givenname + " " + music.surname).lowercase() = "bruce spring*"`
+    - `id.user.hash().abs() % 300 % 7 = 1`
+    - `music.wavstream.hash() == music.checksum`
+    - `music.size / music.length > 10`
+    - `music.expire > now() - 7200`
+
+## 大文字と小文字の区別
+
+この言語で使用される識別子(`and or not true false null id scheme namespace specific user group`)は、大文字と小文字を区別しません。ドキュメントとの一貫性のため、小文字の識別子を使用することを推奨します。
+
+## 分岐演算子/優先順位
+
+分岐演算子は、テキストフォーマットから生成されるパースツリー内の他のノードを結合するために使用されます。存在する各分岐ノードを、優先順位の順に以下の表に示します。演算子を優先順位の順に列挙します:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>演算子</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>NOT</td>
+      <td>子ノードの選択を反転させる単項前置演算子</td>
+    </tr>
+    <tr>
+      <td>AND</td>
+      <td>二項中置演算子。すべての子が true の場合に true になります</td>
+    </tr>
+    <tr>
+      <td>OR</td>
+      <td>二項中置演算子。いずれかの子が true の場合に true になります</td>
+    </tr>
+  </tbody>
+</table>
+
+独自の優先順位を定義するには括弧を使用します。and は or より優先順位が高いため、`a and b or c and d` は `(a and b) or (c and d)` と等価です。式 `a and (b or c) and d` は前の 2 つとは等価ではありません。括弧を使用して or 式を先に評価するよう強制しているためです。
+
+括弧は値の計算にも使用できます。剰余 `%` が最も高い優先順位を持ち、次に乗算 `*` と除算 `/`、加算 `+` と減算 `-` が最も低い優先順位です。
+
+## プリミティブ
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>プリミティブ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ブーリアン定数</td>
+      <td>ブーリアン定数 <code>{`true`}</code> と <code>{`false`}</code> は、すべてにマッチ/何にもマッチしないことを表すために使用できます</td>
+    </tr>
+    <tr>
+      <td>null 定数</td>
+      <td>ドキュメントに存在しないフィールドを参照すると、特別な <code>{`null`}</code> 値が返されます。式 <code>{`music.title`}</code> は <code>{`music.title != null`}</code> の省略形です。比較で null 値を使用すると、分かりにくい相互作用が生じる可能性があります。<a href="#comparisons-with-missing-fields-null-values" aria-label="comparisons with missing fields (null values)">存在しないフィールドとの比較(null 値)</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>ドキュメントタイプ</td>
+      <td>ドキュメントタイプは、特定のタイプのドキュメントを選択するプリミティブとして使用できます - <a href="/ja/writing/visiting#analyzing-field-values" aria-label="example">例</a>。</td>
+    </tr>
+    <tr>
+      <td>ドキュメントフィールド指定</td>
+      <td>ドキュメントフィールド指定(<code>{`doctype.field`}</code>)は、フィールドが設定されているすべてのドキュメントを選択するプリミティブとして使用できます - <code>{`doctype.field != null`}</code> の短い形式です</td>
+    </tr>
+    <tr>
+      <td>比較</td>
+      <td>比較は、2 つの値を比較するために使用されるプリミティブです</td>
+    </tr>
+  </tbody>
+</table>
+
+## 比較
+
+比較演算子は、演算子を使用して 2 つの値を比較します。すべての演算子は中置で、2 つの引数を取ります。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>演算子</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&gt;</td>
+      <td>左の引数が右の引数より大きい場合に true になります。大なり・小なり表記を使用する演算子は、両方の引数が数値または文字列である場合にのみ意味を持ちます。文字列の場合は、バイナリ(バイト単位)表現によって順序付けられ、最初の文字が最上位、最後の文字が最下位になります。引数の型が混在している場合、または引数のいずれかが数値でも文字列でもない場合、比較は無効(invalid)となり、マッチしません。</td>
+    </tr>
+    <tr>
+      <td>&lt;</td>
+      <td>左の引数が右の引数より小さい場合にマッチします</td>
+    </tr>
+    <tr>
+      <td>&lt;=</td>
+      <td>左の引数が右の引数以下の場合にマッチします</td>
+    </tr>
+    <tr>
+      <td>&gt;=</td>
+      <td>左の引数が右の引数以上の場合にマッチします</td>
+    </tr>
+    <tr>
+      <td>==</td>
+      <td>両方の引数が完全に同じ場合にマッチします。マッチするには両方の引数が同じ型でなければなりません</td>
+    </tr>
+    <tr>
+      <td>!=</td>
+      <td>両方の引数が同じでない場合にマッチします</td>
+    </tr>
+    <tr>
+      <td>=</td>
+      <td>グロブパターンを使用した文字列マッチングです。右の引数として与えられたパターンが、左の引数として与えられた文字列全体にマッチする場合にのみマッチします。アスタリスク <code>{`*`}</code> は、任意の文字の 0 回以上の繰り返しにマッチします。疑問符 <code>{`?`}</code> は、任意の 1 文字にマッチします。パターンマッチング演算子である正規表現 <code>{`=~`}</code> とグロブ <code>{`=`}</code> は、両方の引数が文字列である場合にのみ意味を持ちます。正規表現演算子は、文字列以外には決してマッチしません。グロブ演算子は、両方の引数が文字列でない場合、<code>{`==`}</code> の動作に戻ります。</td>
+    </tr>
+    <tr>
+      <td>=~</td>
+      <td>正規表現を使用した文字列マッチングです。右の引数として与えられた正規表現が、左の引数として与えられた文字列にマッチする場合にマッチします。正規表現の記法は perl と同様です。値の先頭を示すには '^' を、値の末尾を示すには '$' を使用します</td>
+    </tr>
+  </tbody>
+</table>
+
+### 存在しないフィールドとの比較(null 値)
+
+一方または両方のオペランドが `null`(すなわちフィールドが存在しない)である可能性がある場合に、動作が明確に定義されている比較演算子は `==` と `!=` のみです。`null` 値に対してそれ以外の比較演算子を使用すると、特別な _invalid_(無効)値が生成されます。
+
+invalid 値は、それが含まれる論理式を「汚染」することがあります:
+
+- `AND` は、オペランドのいずれも false でなく、少なくとも 1 つが invalid の場合、invalid を返します
+- `OR` は、オペランドのいずれも true でなく、少なくとも 1 つが invalid の場合、invalid を返します
+- `NOT` は、オペランドが invalid の場合、invalid を返します
+
+セレクション式のルートの結果として invalid 値が伝播した場合、そのドキュメントはマッチとみなされません。これは通常望ましい動作です。フィールドが存在しない場合、それを必要とするセレクションもマッチすべきではないからです。ただし、ガベージコレクションでは、セレクションの結果が invalid になったドキュメントは削除 _されません_。削除は危険になり得るためです。
+
+これが _予期しない_ 動作をもたらす可能性がある一例:
+
+1. すでに多数の `foo` タイプのドキュメントがクラスターにフィードされている。
+2. ドキュメントタイプに新しいフィールド `expires_at_time` を追加し、保持したいドキュメントのサブセットを更新する。
+3. 有効期限が切れていないドキュメントのみを保持するために、`foo` ドキュメント宣言にガベージコレクションのセレクションを追加する: `foo.expires_at_time > now()`
+
+この時点で、`expires_at_time` フィールドを _含まない_ 古いドキュメントは削除 _されません_。式が `false` ではなく invalid と評価されるためです。
+
+この問題を回避するには、フィールドの存在チェックによる「短絡評価」を使用できます: `(foo.expires_at_time != null) and (foo.expires_at_time > now())`。
+
+## インポートされたフィールドにおける null の動作
+
+セレクションがインポートされたフィールドを参照している場合、参照先のドキュメントを取得できないコンテキストでセレクションが評価されると、すべてのインポートされたフィールドに対して `null` が返されます。GC 式の場合、これはフィードルーティングロジックの一部としてクライアント側で発生し、また、親ドキュメントの集合が不完全なバックエンドノード(ノード障害時など)でも発生する可能性があります。したがって、インポートされたフィールドを使用して GC セレクションを書く際には、この点を念頭に置くことが重要です。
+
+`<document>` タグでセレクション基準を指定するということは、ドキュメントがコンテント・クラスターにフィードされ、そこに保持されるために満たすべき条件を宣言しているということです。
+
+例として、親の `artist` ドキュメント内のブーリアンフィールド `is_cool` を指すインポートされたフィールド `artist_is_cool` を持つドキュメントタイプ `music_recording` を考えます。確実にクールなアーティストのレコーディングだけをクラスターに保持したい場合、次のようなセレクションを書きたくなるかもしれません:
+
+```js
+<document type="music_recording"
+          mode="index"
+          selection="music_recording.artist_is_cool == true">
+```
+
+**これは期待どおりに動作しません**。この式は、クラスターが特定のドキュメントを受け入れるべきかどうかを判断するために、フィードパイプラインの一部として評価されるためです。その時点では、親ドキュメントにはアクセスできません。その結果、このフィールドは `null` を返し、ドキュメントはクラスターにルーティングされません。
+
+代わりに、親ドキュメントが _存在しない可能性がある_ ケースを処理できるように式を書いてください:
+
+```js
+<document type="music_recording"
+          mode="index"
+          selection="(music_recording.artist_is_cool == null) or (music_recording.artist_is_cool == true)">
+```
+
+このセレクションでは、インポートされたフィールドが利用 _できない_ 場合に、ドキュメントがクラスターに受け入れられることを明示的に許可しています。一方で、利用 _できる_ 場合には、それを GC に使用できるようにしています。
+
+## ロケール/文字セット
+
+この言語は現在、ASCII 以外の文字セットをサポートしていません。単一文字のグロブおよび正規表現マッチングは、正確に 1 文字にマッチすることが保証されず、複数のバイト値で表現される文字の一部にマッチする可能性があります。
+
+## 値
+
+比較演算子は 2 つの値を比較します。値は次のいずれかです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ドキュメントフィールド指定</td>
+      <td>構文: <code>{`<doctype>.<fieldpath>`}</code> <br/> ドキュメントには、ドキュメントタイプに応じて定義されたフィールドの集合があります。フィールド名は、フィールドに使用される識別子です。この式はフィールドの値を返します。値は、整数、浮動小数点数、文字列、配列、またはこれらの型のマップです。<br/> 複数値については、比較には &#42;equals&#42; 演算子のみをサポートしています。そのセマンティクスは、フィールド値が返す配列が、比較の反対側にマッチする要素を少なくとも 1 つ &#42;含んで&#42; いなければならない、というものです。マップの場合は、比較にマッチするキーが存在しなければなりません。<br/> フィールドパスの最も単純な使い方はフィールドを指定することですが、複雑な型については<a href="/ja/reference/schemas/document-field-path" aria-label="the field path syntax documentation">フィールドパス構文のドキュメント</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>Id</td>
+      <td>構文: <code>{`  id.[scheme|namespace|type|specific|user|group]  `}</code> <br/> 各ドキュメントはドキュメント ID を持ち、Vespa インストール内でそのドキュメントを一意に識別します。id 演算子は文字列の識別子を返します。オプションの引数が与えられた場合は、id の一部を返します。<br/> - scheme (id) <br/> - namespace (異なるユーザーのデータを分離するため) <br/> - type (id スキームで指定) <br/> - specific (namespace 内でドキュメントを区別するためのユーザー指定部分) <br/> - user (n= 修飾子を使用してドキュメント ID に指定される数値) <br/> - group (g= 修飾子を使用してドキュメント ID に指定される文字列のグループ)</td>
+    </tr>
+    <tr>
+      <td>null</td>
+      <td>値 null は、何も存在しないことを表すために指定できます。例えば、フィールドを含まないドキュメントに対するフィールド指定は null と評価されるため、比較 'music.artist == null' は artist フィールドが設定されていないすべてのドキュメントを選択します。'id.user == null' は、<code>{`n=`}</code> <a href="/ja/schemas/documents#id-scheme" aria-label="document ID scheme">ドキュメント ID スキーム</a>を使用していないすべてのドキュメントにマッチします。テンソルフィールドは null との比較 &#42;のみ&#42; 可能です。テンソルフィールドの &#42;内容&#42; を使用するドキュメントセレクションを書くことはできません。存在の有無のみをチェックできます。</td>
+    </tr>
+    <tr>
+      <td>数値</td>
+      <td>値は数値にできます。整数と浮動小数点数のどちらも使用できます。数値の型は重要ではありません。比較の両側で同じ型の数値を使用する必要はありません。例えば '3.0 &lt; 4' はマッチし、'3.0 == 3' はおそらくマッチします(丸め誤差の問題があるため、浮動小数点数に対する == 演算子の使用は一般的に推奨されません)。数値はさまざまな書き方ができます。例: <pre><code>{`1234 -234 +53 +534.34 543.34e4 -534E-3 0.2343e-8`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>文字列</td>
+      <td>文字列値は二重引用符で囲んで指定します(すなわち "mystring")。文字列は ASCII 文字列として解釈されます。エスケープせずに使用できるのは ASCII 値 32〜126 のみで、例外として <code>{`\\`}</code> と <code>{`"`}</code> はエスケープが必要です。&lt;ul&gt;&lt;li&gt;改行: <code>{`\\n`}</code>&lt;/li&gt;&lt;li&gt;キャリッジリターン: <code>{`\\r`}</code>&lt;/li&gt;&lt;li&gt;タブ: <code>{`\\t`}</code>&lt;/li&gt;&lt;li&gt;フォームフィード: <code>{`\\f`}</code>&lt;/li&gt;&lt;li&gt;引用符(<code>{`"`}</code>): <code>{`\\"`}</code>&lt;/li&gt;&lt;li&gt;その他の任意の文字: <code>{`\\x##`}</code>(<code>{`##`}</code> は ASCII 値を指定する 2 桁の 16 進数)&lt;/li&gt;&lt;/ul&gt;</td>
+    </tr>
+  </tbody>
+</table>
+
+### 値の算術演算
+
+値に対して算術演算を行うことができます。一般的な算術演算子である加算 `+`、減算 `-`、乗算 `*`、除算 `/`、剰余 `%` がサポートされています。
+
+### 関数
+
+関数は何らかの対象に対して呼び出され、比較式で使用できる値を返します:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>値の関数</td>
+      <td>値の関数は値を受け取り、それに対して何らかの処理を行い、任意の型の値を返します。<br/> - &#42;abs()&#42; 数値型に対して呼び出され、その数値型の絶対値を返します。つまり、-3 は 3 を返し、-4.3 は 4.3 を返します。<br/> - &#42;hash()&#42; 呼び出された対象の値の MD5 ハッシュを計算します。結果は符号付き 64 ビット整数です。(正のハッシュ値のみを取得したい場合は、後に abs() を使用してください)。<br/> - &#42;lowercase()&#42; 文字列値に対して呼び出され、大文字を小文字に変換します。<Note>&#42;&#42;注:&#42;&#42; これは 'a' から 'z' の文字に対してのみ機能し、ロケールはサポートされません。</Note></td>
+    </tr>
+    <tr>
+      <td>ドキュメントタイプの関数</td>
+      <td>一部の関数は、値の代わりにドキュメントタイプを受け取り、その型に基づいた値を返します。<br/> - &#42;version()&#42; <code>{`version()`}</code> 関数は、ドキュメントタイプのバージョン番号を返します。</td>
+    </tr>
+  </tbody>
+</table>
+
+#### now 関数
+
+ドキュメントセレクションは _now()_ 関数を提供します。これは現在の日時のタイムスタンプを返します。これを使用して、ドキュメントを経過時間でフィルタリングします。典型的には[ガベージコレクション](/ja/reference/applications/services/content#documents)に使用します。
+
+**例**: `music` スキーマに long 型フィールド _inserttimestamp_ がある場合、この式は直近 2 時間のドキュメントのみにマッチします:
+
+`music.inserttimestamp > now() - 7200`
+
+## セレクションでのインポートされたフィールドの使用
+
+[親子関係(parent-child)](/ja/schemas/parent-child)を使用している場合、シンプルなインポートされたフィールド(すなわちトップレベルのプリミティブフィールド)を、子のドキュメントタイプの通常のフィールドであるかのようにセレクション内で参照できます。複雑なフィールド(コレクション、構造体など)はサポートされていません。
+
+<Danger>
+ **重要:** インポートされたフィールドを参照するドキュメントセレクションを使用する際は、特にそれらをガベージコレクション式の一部として使用する場合、細心の注意が必要です。インポートされたフィールドが、評価時にアクセスできないドキュメントを参照している場合、そのインポートされたフィールドは、子ドキュメントに存在しない通常のフィールドであるかのように振る舞います。つまり、特別な `null` 値を返します。
+</Danger>
+
+null のセマンティクスと、これらを明確に定義された方法で処理するセレクションの書き方の詳細については、[存在しないフィールドとの比較(null 値)](#comparisons-with-missing-fields-null-values)を参照してください。特に GC セレクションを書く場合は、[インポートされたフィールドにおける null の動作](#null-behavior-with-imported-fields)を読んでください。
+
+### 例
+
+以下は、3 階層の親子関係の例です。
+
+祖父母(grandparent)のスキーマ:
+
+```js
+schema grandparent {
+    document grandparent {
+        field a1 type int {
+            indexing: attribute | summary
+        }
+    }
+}
+```
+
+祖父母への参照を持つ親(parent)のスキーマ:
+
+```js
+schema parent {
+    document parent {
+        field a2 type int {
+            indexing: attribute | summary
+        }
+        field ref type reference<grandparent> {
+            indexing: attribute | summary
+        }
+    }
+    import field ref.a1 as a1 {}
+}
+```
+
+親への参照、および(推移的に)祖父母への参照を持つ子(child)のスキーマ:
+
+```js
+schema child {
+    document child {
+        field a3 type int {
+            indexing: attribute | summary
+        }
+        field ref type reference<parent> {
+            indexing: attribute | summary
+        }
+    }
+    import field ref.a1 as a1 {}
+    import field ref.a2 as a2 {}
+}
+```
+
+これらをドキュメントセレクション式で使用するのは簡単です:
+
+祖父母の `a1` が 5 より大きいすべての子ドキュメントを検索:
+
+`child.a1 > 5`
+
+親の `a2` が 10 で、祖父母の `a1` が 4 であるすべての子ドキュメントを検索:
+
+`child.a1 == 10 and child.a2 == 4`
+
+親ドキュメントが見つからない(または参照されたフィールドが親に設定されていない)すべての子ドキュメントを検索:
+
+`child.a2 == null`
+
+なお、`child` ドキュメントを Visit する際、インポートされたフィールドには常に **child** ドキュメントタイプ自体を通じてのみアクセスします。
+
+上記のドキュメントスキーマと参照関係に関する、より網羅的な使用例の一覧は、システムテスト [imported fields in selections](https://github.com/vespa-engine/system-test/blob/master/tests/search/parent_child/imported_fields_in_selections.rb) にあります。このテストは、Visit と GC の両方のケースをカバーしています。
+
+## 制約
+
+言語の識別子により、ドキュメントタイプ名として使用できるものが制限されます。以下の値は有効なドキュメントタイプ名ではありません: _true, false, and, or, not, id, null_
+
+## 文法 - この言語の EBNF
+
+簡略化のため、文字列の大文字・小文字の両方のケースは含めていません。「null」、「true」、「false」などの識別子は、大文字・小文字の混在を含め、任意のケースで書くことができます。
+
+```js expandable
+nil = "null" ;
+bool = "true" | "false" ;
+posdigit = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' ;
+digit = '0' | posdigit ;
+hexdigit = digit | 'a' | 'b' | 'c' | 'd' | 'e' | 'f'
+					 	   | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' ;
+integer = ['-' | '+'], posdigit, { digit } ;
+float = ['-' | '+'], digit, { digit },
+      			['.' , { digit }, [ ('e' | 'E'), posdigit, { digit }] ] ;
+number = float | integer ;
+stdchars = ? All ASCII chars except '\\', '"', 0 - 31 and 127 - 255 ? ;
+alpha = ? ASCII characters in the range a-z and A-Z ? ;
+alphanum = alpha | digit ;
+space = ( ' ' | '\t' | '\f' | '\r' | '\n' ) ;
+string = '"', { stdchars | ( '\\', ( 't' | 'n' | 'f' | 'r' | '"' ) )
+							| ( "\\x", hexdigit, hexdigit ) }, '"' ;
+doctype = alpha, { alphanum } ;
+fieldname = { alphanum '{' |'}' | '[' | ']' '.' } ;
+function = alpha, { alphanum } ;
+idarg = "scheme" | "namespace" | "type" | "specific" | "user" | "group" ;
+searchcolumnarg = integer ;
+operator = ">=" | ">" | "==" | "=~" | "=" | "<=" | "<" | "!=" ;
+idspec = "id", ['.', idarg] ;
+searchcolumnspec = "searchcolumn", ['.', searchcolumnarg] ;
+fieldspec = doctype, ( function | ('.', fieldname) ) ;
+value = ( valuegroup | nil | number | string | idspec | searchcolumnspec | fieldspec ),
+				   { function } ;
+valuefuncmod = ( valuegroup | value ), '%',
+				   ( valuefuncmod | valuegroup | value ) ;
+valuefuncmul = ( valuefuncmod | valuegroup | value ), ( '*' | '/' ),
+				   ( valuefuncmul | valuefuncmod | valuegroup | value ) ;
+valuefuncadd = ( valuefuncmul | valuefuncmod | valuegroup | value ),
+				   ( '+' | '-' ),
+				   ( valuefuncadd | valuefuncmul | valuefuncmod | valuegroup
+				   | value ) ;
+valuegroup = '(', arithmvalue, ')' ;
+arithmvalue = ( valuefuncadd | valuefuncmul | valuefuncmod | valuegroup
+				   | value ) ;
+comparison = arithmvalue, { space }, operator, { space },
+				   arithmvalue ;
+leaf = bool | comparison | fieldspec | doctype ;
+not = "not", { space }, ( group | leaf ) ;
+and = ( not | group | leaf ), { space }, "and", { space },
+				   ( and | not | group | leaf ) ;
+or = ( and | not | group | leaf ), { space }, "or", { space },
+				   ( or | and | not | group | leaf ) ;
+group = '(', { space }, ( or | and | not | group | leaf ),
+				   { space }, ')' ;
+expression = ( or | and | not | group | leaf ) ;
+```

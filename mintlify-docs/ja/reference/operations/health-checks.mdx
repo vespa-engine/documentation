@@ -1,0 +1,47 @@
+---
+title: "ヘルスチェックのリファレンス"
+sidebarTitle: "ヘルスチェック"
+---
+
+これは、[コンテナー](/ja/applications/containers)に対するロード・バランサーのヘルスチェックのリファレンスです。
+
+デフォルトでは、コンテナーは [VipStatusHandler](https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/java/com/yahoo/container/handler/VipStatusHandler.java) のインスタンスを構成し、`/status.html` を提供します。コンテント・クラスターが UP であれば、ステータス・コード 200 とテキスト *OK* で応答します。詳細は [VipStatus.java](https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/java/com/yahoo/container/handler/VipStatus.java) を参照してください。
+
+複数のコンテント・クラスターを持つアプリケーションで、組み込みのロジックが用途に対して不十分な場合は、ヘルスチェック用のカスタム・ハンドラーを実装すべきです。データ・ソースの管理方法については[フェデレーション](/ja/querying/federation)も参照してください。
+
+## ステータス・ファイルによるオーバーライド
+
+`container.core.vip-status` を使用して、`VipStatusHandler` がヘルス・ステータスにファイルを使用するようにします:
+
+```xml
+<container>
+    <config name="container.core.vip-status">
+        <accessdisk>true</accessdisk>
+        <statusfile>/full-path-to/status-response.html</statusfile>
+    </config>
+```
+
+ファイルが存在する場合、その内容が `/status.html` で提供され、存在しない場合はエラー・メッセージが生成されます。コンテナーをサービスから外すには、提供対象のファイルを削除するか名前を変更します。
+
+## 別のパス / 複数のパス
+
+`VipStatusHandler` は、デフォルトでは単一のファイル・パスのみを参照します。URI パスとは独立しているため、複数のハンドラー・インスタンスを構成して、別のメッセージやカスタム・メッセージを提供することが可能です - 例:
+
+```xml
+<handler id="vipFreshness" class="com.yahoo.container.handler.VipStatusHandler">
+    <binding>http://*:*/docproc/freshness-data.xml</binding>
+    <config name="container.core.vip-status">
+        <accessdisk>true</accessdisk>
+        <statusfile>/full-path-to/freshness-data.xml</statusfile>
+    </config>
+</handler>
+<handler id="vipClustering" class="com.yahoo.container.handler.VipStatusHandler">
+    <binding>http://*:*/docproc/ClusteringDocproc.status</binding>
+    <config name="container.core.vip-status">
+        <accessdisk>true</accessdisk>
+        <statusfile>/full-path-to/ClusteringDocproc.status</statusfile>
+    </config>
+</handler>
+```
+
+パス `/docproc/freshness-data.xml` と `/docproc/ClusteringDocproc.status` は、それぞれ `/full-path-to/freshness-data.xml` と `/full-path-to/ClusteringDocproc.status` にあるファイルを提供します。ハンドラー・インスタンスは互いに独立しているため、コンテナーを一方のローテーションから、もう一方に影響を与えることなく外すことができます。

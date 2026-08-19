@@ -1,0 +1,294 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "相互認証 TLS(mTLS)リファレンス"
+sidebarTitle: "Mtls"
+---
+
+
+<Note>
+**注:**
+
+実践的なガイドについては、[相互認証 TLS(mTLS)によるセルフホスト Vespa アプリケーションの保護](/ja/security/mtls)を参照してください。
+</Note>
+
+
+## 環境変数
+
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>VESPA_TLS_CONFIG_FILE</td>
+      <td>TLS 設定を含む JSON 設定ファイルの絶対パス。</td>
+    </tr>
+    <tr>
+      <td>VESPA_TLS_INSECURE_MIXED_MODE</td>
+      <td>TLS 混合モードを有効にします。指定可能な値については <a href="#tls-mixed-mode" aria-label="TLS Mixed mode">TLS 混合モード</a>を参照してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+### TLS 混合モード
+
+`VESPA_TLS_INSECURE_MIXED_MODE` に指定可能な TLS 混合モードの設定:
+
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>plaintext_client_mixed_server</td>
+      <td>クライアントは TLS を使用せず、サーバーは TLS と平文の両方のクライアントを受け付けます。</td>
+    </tr>
+    <tr>
+      <td>tls_client_mixed_server</td>
+      <td>クライアントは TLS を使用し、サーバーは TLS と平文の両方のクライアントを受け付けます。</td>
+    </tr>
+    <tr>
+      <td>tls_client_tls_server</td>
+      <td>すべてのクライアントとサーバーが TLS のみを使用します。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+### 設定ファイル
+
+TLS 設定ファイルには、単一のトップレベル JSON オブジェクトが含まれます。
+
+#### トップレベル要素
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>必須</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#the-files-element" aria-label="files">files</a></td>
+      <td>はい</td>
+      <td>暗号マテリアルのファイルシステムパスを含む JSON オブジェクト。</td>
+    </tr>
+    <tr>
+      <td>authorized-peers</td>
+      <td>いいえ</td>
+      <td><a href="#the-authorized-peer-element" aria-label="authorized-peer">authorized-peer</a> オブジェクトの JSON 配列。指定しない場合、認可エンジンは無効になります。ピア認可ルールの作成方法については専用の<a href="#peer-authorization-rules" aria-label="section">セクション</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>accepted-ciphers</td>
+      <td>いいえ</td>
+      <td>受け付ける TLS 暗号スイートの JSON 配列。デフォルトで有効な暗号スイートについては<a href="#cipher-suites" aria-label="here">こちら</a>を参照してください。デフォルトの暗号スイートの&#42;サブセット&#42;のみを指定できます。&#42;これはエキスパート向けのオプションです&#42; — 十分な理由がない限りデフォルトを使用してください。</td>
+    </tr>
+    <tr>
+      <td>accepted-protocols</td>
+      <td>いいえ</td>
+      <td>受け付ける TLS プロトコルバージョンの JSON 配列。デフォルトで有効な TLS バージョンについては<a href="#protocol-versions" aria-label="here">こちら</a>を参照してください。デフォルトのプロトコルバージョンの&#42;サブセット&#42;のみを指定できます。&#42;これはエキスパート向けのオプションです&#42; — 十分な理由がない限りデフォルトを使用してください。</td>
+    </tr>
+    <tr>
+      <td>disable-hostname-validation</td>
+      <td>いいえ</td>
+      <td>TLS/HTTPS のホスト名検証を無効にします。デフォルトでは有効です(デフォルト値 false)。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+
+#### *files* 要素
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>必須</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>private-key</td>
+      <td>はい</td>
+      <td>PKCS#8 PEM 形式の秘密鍵を含むファイルの絶対パス。</td>
+    </tr>
+    <tr>
+      <td>certificate</td>
+      <td>はい</td>
+      <td>X.509 証明書チェーン(中間証明書を含む)を含むファイルの絶対パス。証明書は改行で区切られた PEM 形式でエンコードされている必要があります。</td>
+    </tr>
+    <tr>
+      <td>ca-certificates</td>
+      <td>はい</td>
+      <td>信頼するすべての X.509 認証局を含むファイルの絶対パス。証明書は改行で区切られた PEM 形式でエンコードされている必要があります。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+#### *authorized-peer* 要素
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>必須</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>required-credentials</td>
+      <td>はい</td>
+      <td>この特定のルールに対する各<a href="#the-required-credential-element" aria-label="credential requirement">クレデンシャル要件</a>を指定する JSON 配列。</td>
+    </tr>
+    <tr>
+      <td>name</td>
+      <td>はい</td>
+      <td>ルールの名前。</td>
+    </tr>
+    <tr>
+      <td>description</td>
+      <td>いいえ</td>
+      <td>ルールの説明。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+#### *required-credential* 要素
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>必須</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>field</td>
+      <td>はい</td>
+      <td>証明書のフィールド。指定可能な値: &#42;CN&#42;、&#42;SAN_DNS&#42;、&#42;SAN_URI&#42;。</td>
+    </tr>
+    <tr>
+      <td>must-match</td>
+      <td>はい</td>
+      <td>「glob」スタイルのパターンを含む文字列。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+
+#### ピア認可ルール
+
+`authorized-peers` メンバーは、クレデンシャルルールセット・オブジェクトの配列です。ピアが認可されたとみなされるためには、その証明書が少なくとも 1 つのルールセットに完全にマッチしなければなりません(MUST)。
+
+各ルールセットには、クレデンシャルマッチャーの `required-credentials` 配列が含まれていなければなりません。証明書がルールセットにマッチするためには、そのすべてのクレデンシャルマッチャーにマッチしなければなりません(MUST)。
+
+クレデンシャルは、`must-match` で与えられたパターンを、指定された証明書の `field` に対してチェックすることでマッチングされます。現在、次のフィールドがサポートされています:
+* *CN* - 証明書の Distinguished Name 情報の Common Name 部分。複数の CN エントリが存在する場合、最後のものが考慮されます。
+* *SAN_DNS* - タイプ DNS の Subject Alternate Name。証明書には多くの SAN エントリが含まれる場合があります。その場合、すべてのエントリがチェックされ、少なくとも 1 つのエントリがマッチすればクレデンシャルはマッチしたとみなされます。
+* *SAN_URI* - タイプ URI の Subject Alternate Name。*SAN_DNS* に似ていますが、パターンマッチングのセマンティクスが少し異なります。
+
+*CN* および *SAN_DNS* フィールドの場合、`must-match` パターンは次のセマンティクスを持つ「glob」スタイルのパターンです:
+* `*` は、ドットで区切られた 1 つのホスト名パート内の 0〜n 個の非ドット文字にマッチします。これは、HTTPS のホスト名検証で証明書が使用するワイルドカードに似ています。例
+  * `*.baz` は `bar.baz` にマッチしますが、`foo.bar.baz` や `foo.baz.bar` にはマッチしません。
+  * `*.*.baz` は `foo.bar.baz` にマッチしますが、`bar.baz` にはマッチしません。
+  * `*-myservice` は `foo-myservice` にマッチしますが、`bar.foo-myservice` にはマッチしません。
+* `?` は、ドットで区切られた 1 つのホスト名パート内のちょうど 1 個の非ドット文字にマッチします。例:
+  * `?.bar` は `x.bar` にマッチしますが、`bar`、`.bar`、`yx.bar` にはマッチしません。
+  * `?.?.baz` は `x.y.baz` にマッチしますが、`x.baz` や `xx.yy.baz` にはマッチしません。
+
+*SAN_URI* フィールドの場合も、`must-match` は「glob」スタイルのパターンですが、*CN*/*SAN_DNS* と比べていくつかの違いがあります:
+* `*` ワイルドカードは 0〜n 個の非スラッシュ文字にマッチします。`/` は、ホストとパスのコンポーネント間の区切り、およびパスセグメント間の区切りとして使用されます。例:
+  * `vespa://myapp/content/*` は `vespa://myapp/content/node1` にマッチしますが、`vespa://myapp/container/node1` や `vespa://myapp/content/node1/myservice` にはマッチしません。
+  * `vespa://*/*/*` は `vespa://myapp/content/node1` にマッチしますが、`vespa://myapp/content` や `vespa://myapp/content/node1/myservice` にはマッチしません。
+* パターン内の `?` に特別な動作はありません - リテラルの `?` にのみマッチします。URI では `?` はパスとクエリーのコンポーネント間の区切りとして使用されます。
+
+description フィールドはオプションで、たとえば特定のルールセットが存在する理由を文書化するのに便利です。認可エンジンにとって意味的な意味はありません。
+
+`authorized-peers` フィールドを指定しない場合、認可には証明書の有効性のみが使用されます。`authorized-peers` フィールドを指定する場合は、少なくとも 1 つのエントリを含める必要があります。
+
+#### 例
+
+```json expandable
+{
+    "files": {
+        "ca-certificates": "/absolute/path/to/ca-certs.pem",
+        "certificates": "/absolute/path/to/host-certs.pem",
+        "private-key": "/absolute/path/to/private-key.pem",
+        "disable-hostname-validation": false
+    },
+    "authorized-peers": [
+        {
+            "required-credentials": [
+                { "field": "CN", "must-match": "vespa-monitoring.example.com" },
+                { "field": "SAN_DNS", "must-match": "*.us-east-*.monitor.example.com" }
+            ],
+            "description": "Backend monitoring service access",
+            "name": "monitoring"
+        }, 
+        {
+            "required-credentials": [
+                { "field": "SAN_DNS", "must-match": "*.mycluster.vespa.example.com" }
+            ],
+            "description": "Cluster-internal node P2P access",
+            "name": "cluster"
+        }
+    ]
+}
+```
+## Vespa がサポートする TLS 機能
+
+Vespa は、モダンで高性能な暗号ライブラリを用いてビルドされています。セキュリティ上の理由から、Vespa の TLS スタックには常に適用されるいくつかの追加の制約があります:
+* ネゴシエート可能な最も古い TLS バージョンは `TLSv1.2` です。
+* [前方秘匿性](https://en.wikipedia.org/wiki/Forward_secrecy)をサポートする暗号スイートのみがネゴシエート可能です(すなわち、鍵交換の一部として ECDHE を使用する暗号スイート)。
+* [AEAD](https://en.wikipedia.org/wiki/Authenticated_encryption#Authenticated_encryption_with_associated_data) の性質を持つモダンな共通鍵暗号のみがサポートされています。実際には、これは [AES-GCM](https://en.wikipedia.org/wiki/AES-GCM) または [ChaCha20-Poly1305](https://en.wikipedia.org/wiki/ChaCha20-Poly1305) を意味します。サポートされている暗号スイートは[こちら](#cipher-suites)に一覧があります。
+* [CRIME](https://en.wikipedia.org/wiki/CRIME)/BREACH 型の圧縮オラクル攻撃を緩和するため、TLS 圧縮は明示的に無効化されています。
+* TLS 再ネゴシエーションは明示的に無効化されています。
+* TLS セッション再開は、リプレイ攻撃に関連する潜在的な脆弱性につながる可能性があるため、明示的に無効化されています。ただし、Vespa アプリケーションコンテナーのエッジは、プロキシやクライアントからの多数の頻繁で短命な接続をサポートする必要があるため、セッション再開をサポートしています。
+
+
+<Note>
+**注:**
+
+上記は、`vespa_openssl` パッケージでビルドされた Vespa バージョンを使用していることを前提としています(すべてのオープンソース RPM と Docker イメージが該当します)。カスタムビルドを行う場合は、OpenSSL 1.1.1 以降に対してビルドすることを強く推奨します。それより古いバージョンでは、パフォーマンスの低下や暗号機能の制限がある可能性があります。1.0.1 より前の OpenSSL バージョンはサポートされていません。
+</Note>
+
+
+### デフォルトの TLS プロトコル設定
+
+Vespa はデフォルトで次の TLS 設定を使用します(`accepted-ciphers` / `accepted-protocols` で上書きされない限り)。
+
+#### プロトコルバージョン
+
+* `TLSv1.3` - _注:_ 現在の Java ランタイムの特定の制限により、TLSv1.3 は今のところ C++ バックエンドでのみサポートされています。Java でも TLSv1.3 がデフォルトになるよう、近い将来に再検討する予定です。
+* `TLSv1.2`
+
+#### 暗号スイート
+
+* `TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384`
+* `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384`
+* `TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256` (JDK 12+)
+* `TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256`
+* `TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256`
+* `TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256`
+* `TLS_AES_128_GCM_SHA256` (TLSv1.3)
+* `TLS_AES_256_GCM_SHA384` (TLSv1.3)
+* `TLS_CHACHA20_POLY1305_SHA256` (TLSv1.3, JDK 12+)

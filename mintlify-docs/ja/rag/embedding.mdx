@@ -1,0 +1,700 @@
+---
+title: "埋め込み(Embedding)"
+---
+
+よく使われる手法として、非構造化データ(テキストや画像など)を抽象的なベクトル空間内の点にマッピングし、その空間で計算を行うというものがあります。たとえば、[ベクトル空間内の近傍点を見つける](/ja/querying/approximate-nn-hnsw)ことで類似データを検索したり、[ベクトルをニューラル・ネットへの入力として使用](/ja/ranking/onnx)したりします。このマッピングは _埋め込み(embedding)_ と呼ばれます。埋め込みと埋め込みの管理については、この[ブログ記事](https://blog.vespa.ai/tailoring-frozen-embeddings-with-vespa/)を参照してください。
+
+埋め込みベクトルは、クエリーや書き込みで Vespa に送信できます:
+
+<Frame>
+ ![ドキュメントとクエリーの埋め込み](/assets/img/vespa-overview-embeddings-1.svg)
+</Frame>
+
+あるいは、`embed` 関数を使用して Vespa 内部で埋め込みを生成することで、ベクトル転送のコストを削減し、クライアントをシンプルにできます:
+
+<Frame>
+ ![テキストから埋め込みを生成する Vespa の埋め込み機能](/assets/img/vespa-overview-embeddings-2.svg)
+</Frame>
+
+スキーマに埋め込みを追加すると、アプリケーションの特性が変化します。メモリー使用量が増加し、フィード・レイテンシーが増える可能性があります。これへの対処方法については、[ベクトルのバイナリー化](/ja/rag/binarizing-vectors)を参照してください。
+
+## エンベッダーの設定
+
+エンベッダーは[コンポーネント](/ja/applications/components)であり、[services.xml](/ja/reference/applications/services/services) で設定する必要があります。コンポーネントは共有され、複数のスキーマにまたがって使用できます。
+
+```xml
+<container id="default" version="1.0">
+    <component id="hf-embedder" type="hugging-face-embedder">
+        <transformer-model path="my-models/model.onnx"/>
+        <tokenizer-model path="my-models/tokenizer.json"/>
+        <prepend>
+            <query>query:</query>
+            <document>passage:</document>
+        </prepend>
+    </component>
+    ...
+</container>
+```
+
+[独自に実装する](https://javadoc.io/doc/com.yahoo.vespa/linguistics/latest/com/yahoo/language/process/Embedder.html)ことも、[Vespa が提供するエンベッダー](#provided-embedders)を使用することもできます。
+
+同じエンベッダーを使用するコンテナー・クラスターが複数ある場合は、コンポーネント設定の重複を避けるために [include](/ja/reference/applications/services/container#include) 文の使用を検討してください。
+
+## クエリー・テキストの埋め込み
+
+クエリー・リクエストでテンソルを指定する箇所では、(エンベッダーが設定されていれば)代わりに任意のテキストを `embed()` で囲んで指定できます:
+
+```bash
+input.query(q)=embed(myEmbedderId, "Hello%20world")
+```
+
+シングル・クォートとダブル・クォートのどちらも使用できます。設定されているエンベッダーが 1 つだけの場合は、エンベッダー ID 引数とクォートを省略できます。
+
+テキスト引数は、`@parameter` 構文を使用して、参照されるパラメーターで指定することもできます:
+
+```json
+{
+    "yql": "select * from doc where {totalTargetHits:10}nearestNeighbor(embedding_field, query_embedding)",
+    "text": "my text to embed",
+    "input.query(query_embedding)": "embed(@text)",
+}
+```
+
+エンベッダーを使用しているかどうかにかかわらず、入力テンソルは常に[スキーマの rank-profile で定義](/ja/reference/schemas/schemas#inputs)されている必要があることに注意してください。
+
+## ドキュメント・フィールドの埋め込み
+
+[インデックス言語](/ja/reference/writing/indexing-language#indexing-statement)の `embed` 関数を使用して、文字列を埋め込みに変換します:
+
+```text
+schema doc {
+
+    document doc {
+
+        field title type string {
+            indexing: summary | index
+        }
+
+    }
+
+    field embeddings type tensor<bfloat16>(x[384]) {
+        indexing {
+            input title |embed embedderId| attribute | index
+        }
+    }
+
+}
+```
+
+埋め込みフィールドはスキーマ内の `document` 句の外側で定義されていることに注意してください。設定されているエンベッダーが 1 つだけの場合は、エンベッダー ID 引数を省略できます。
+
+入力フィールドは配列にすることもでき、その場合出力はランク 2 のテンソルになります。[このブログ記事](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/)を参照してください:
+
+```bash
+schema doc {
+
+    document doc {
+
+        field chunks type array<string> {
+            indexing: index | summary
+        }
+
+    }
+
+    field embeddings type tensor<bfloat16>(p{},x[5]) {
+        indexing: input chunks |embed embedderId| attribute | index
+    }
+
+}
+```
+
+## 提供されているエンベッダー
+
+Vespa はプラットフォームの一部として複数のエンベッダーを提供しています。
+
+### Huggingface Embedder
+
+任意の [Huggingface トークナイザー](https://huggingface.co/docs/tokenizers/index)(多言語トークナイザーを含む)を使用してトークンを生成し、それを [ONNX](https://onnx.ai/) モデル形式で提供された Transformer モデルへの入力とするエンベッダーです:
+
+```xml
+<container id="default" version="1.0">
+    <component id="hf-embedder" type="hugging-face-embedder">
+        <transformer-model path="my-models/model.onnx"/>
+        <tokenizer-model path="my-models/tokenizer.json"/>
+    </component>
+    ...
+</container>
+```
+
+huggingface-embedder は、すべての [Huggingface トークナイザー実装](https://huggingface.co/docs/tokenizers/index)をサポートしています。
+
+- `transformer-model` は、[ONNX](https://onnx.ai/) 形式の埋め込みモデルを指定します。Huggingface の埋め込みモデルを Vespa の `hugging-face-embedder` と互換性のある形式にエクスポートする方法については、[モデルの ONNX へのエクスポート](/ja/ranking/onnx#using-optimum-to-export-models-to-onnx-format)を参照してください。Vespa がサポートする ONNX モデル形式の詳細については、[モデルのサイズと複雑さに関する制限](/ja/ranking/onnx#limitations-on-model-size-and-complexity)を参照してください。 
+- `tokenizer-model` は、Huggingface の `tokenizer.json` 形式のファイルを指定します。[HF の JSON ファイルからのトークナイザーの読み込み](https://huggingface.co/transformers/v4.8.0/fast_tokenizers.html#loading-from-a-json-file)を参照してください。
+
+モデル・ファイルをアプリケーション・パッケージから供給するには `path` を、リモート・サーバーから供給するには `url` を、[Vespa Cloud が提供するモデル](/ja/rag/model-hub)を使用するには `model-id` を使用します。また、Huggingface API トークンを[シークレット・ストア](/ja/security/secret-store)に追加し、model タグ内で `secret-ref` を使用してそのシークレットを参照することで、プライベートな Huggingface Model Hub でホストされているモデルも使用できます。詳細は[モデル設定リファレンス](/ja/reference/rag/embedding#model-config-reference)を参照してください。
+
+```xml
+<container id="default" version="1.0">
+    <component id="e5" type="hugging-face-embedder">
+        <transformer-model url="https://huggingface.co/intfloat/e5-small-v2/resolve/main/model.onnx"/>
+        <tokenizer-model url="https://huggingface.co/intfloat/e5-small-v2/raw/main/tokenizer.json"/>
+    </component>
+    ...
+</container>
+```
+
+すべての設定パラメーターについては[リファレンス](/ja/reference/rag/embedding#huggingface-embedder-reference-config)を参照してください。
+
+#### Huggingface エンベッダーのモデル
+
+以下は、hugging-face-embedder で使用できるテキスト埋め込みモデルと、その出力[テンソル](/ja/ranking/tensor-user-guide)の次元数の例です。結果の[テンソル型](/ja/reference/ranking/tensor#tensor-type-spec)は `float`、`bfloat16`、またはバイナリー量子化を用いた `int8` にできます。Huggingface エンベッダーをバイナリー量子化と組み合わせて使用する例については、ブログ記事 [Combining matryoshka with binary-quantization](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/) を参照してください。
+
+以下のモデルは、デフォルトの [pooling-strategy](/ja/reference/rag/embedding#huggingface-embedder-reference-config) である `pooling-strategy` `mean` を使用します:
+
+- [intfloat/e5-small-v2](https://huggingface.co/intfloat/e5-small-v2) は `tensor<float>(x[384])` を生成します
+- [intfloat/e5-base-v2](https://huggingface.co/intfloat/e5-base-v2) は `tensor<float>(x[768])` を生成します
+- [intfloat/e5-large-v2](https://huggingface.co/intfloat/e5-large-v2) は `tensor<float>(x[1024])` を生成します
+- [intfloat/multilingual-e5-base](https://huggingface.co/intfloat/multilingual-e5-base) は `tensor<float>(x[768])` を生成します
+
+以下のモデルは、バイナリー化や、最初の k 次元のみを保持する Matryoshka による次元数の柔軟性に有用です。このテーマについては [Matryoshka 🤝 Binary vectors: Slash vector search costs with Vespa](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/) が優れた読み物です。`int8` でバイナリー化を有効にする場合は、[distance-metric hamming](/ja/reference/schemas/schemas#hamming) を使用してください:
+
+- [mxbai-embed-large-v1](https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1) は `tensor<float>(x[1024])` を生成します。このモデルはバイナリー化にも有用で、出力先を `tensor<int8>(x[128])` にすることでバイナリー化がトリガーされます。`pooling-strategy` `cls` と `normalize` `true` を使用してください。
+- [nomic-embed-text-v1.5](https://huggingface.co/nomic-ai/nomic-embed-text-v1.5) は `tensor<float>(x[768])` を生成します。このモデルはバイナリー化にも有用で、出力先を `tensor<int8>(x[96])` にすることでバイナリー化がトリガーされます。`normalize` `true` を使用してください。
+
+Snowflake arctic モデル・シリーズ:
+
+- [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) は `tensor<float>(x[384])` を生成します。`pooling-strategy` `cls` と `normalize` `true` を使用してください。
+- [snowflake-arctic-embed-m](https://huggingface.co/Snowflake/snowflake-arctic-embed-m) は `tensor<float>(x[768])` を生成します。`pooling-strategy` `cls` と `normalize` `true` を使用してください。
+
+これらの例のテキスト埋め込みモデルはすべて、適切な [distance-metric](/ja/reference/schemas/schemas#distance-metric) を用いて Vespa の[最近傍探索](/ja/querying/nearest-neighbor-search)と組み合わせて使用できます。[distance-metric: prenormalized-angular](/ja/reference/schemas/schemas#prenormalized-angular) を使用するには、`normalize` 設定を `true` にする必要があることに注意してください。
+
+埋め込みモデルの選定には、[Massive Text Embedding Benchmark](https://huggingface.co/blog/mteb)(MTEB)ベンチマークと [MTEB リーダーボード](https://huggingface.co/spaces/mteb/leaderboard)が参考になります。
+
+### Bert embedder
+
+非推奨(DEPRECATED)。Bert embedder ではなく [Huggingface Embedder](#huggingface-embedder) の使用を推奨します。
+
+[WordPiece](/ja/reference/rag/embedding#wordpiece-embedder) エンベッダーを使用してトークンを生成し、それを BERT ベース・モデルが想定する形式で、指定された [ONNX](https://onnx.ai/) モデルへの入力とするエンベッダーです:
+
+```xml
+<container version="1.0">
+    <component id="myBert" type="bert-embedder">
+        <transformer-model url="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx"/>
+        <tokenizer-vocab url="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/raw/main/vocab.txt"/>
+        <max-tokens>128</max-tokens>
+        <transformer-output>last_hidden_state</transformer-output>
+    </component>
+</container>
+```
+
+- `transformer-model` は、[ONNX](https://onnx.ai/) 形式の埋め込みモデルを指定します。Huggingface の埋め込みモデルを互換性のある [ONNX](https://onnx.ai/) 形式にエクスポートする方法については、[モデルの ONNX へのエクスポート](/ja/ranking/onnx#using-optimum-to-export-models-to-onnx-format)を参照してください。 
+- `tokenizer-vocab` は、Huggingface の `vocab.txt` ファイル(1 行につき 1 つの有効なトークン)を指定します。Bert embedder は `tokenizer.json` 形式のトークナイザー設定ファイルをサポートしていないことに注意してください。つまり、最大トークン数などのトークナイズ設定は明示的に設定する必要があります。 
+- `transformer-output` は、`model.onnx` ファイル内で埋め込み出力に付けられた名前を指定します。これはモデルが ONNX 形式にどのようにエクスポートされたかによって異なります。よく使われる名前の 1 つは `last_hidden_state` で、特に Transformer ベースのモデルで使われます。その他のよくある名前は `output` または `output_0`、`embedding` または `embeddings`、`sentence_embedding`、`pooled_output`、`encoder_last_hidden_state` です。デフォルトは `output_0` です。 
+
+Bert embedder は英語([WordPiece](/ja/reference/rag/embedding#wordpiece-embedder))と、3 つのモデル入力(_input\_ids, attention\_mask, token\_type\_ids_)を持つ BERT スタイルの Transformer モデルに限定されます。Bert embedder ではなく [Huggingface Embedder](#huggingface-embedder) の使用を推奨します。
+
+すべての設定オプションについては[設定リファレンス](/ja/reference/rag/embedding#bert-embedder-reference-config)を参照してください。
+
+### ColBERT embedder
+
+[ColBERT](https://github.com/stanford-futuredata/ColBERT) モデルをサポートするエンベッダーです。ColBERT エンベッダーはテキストを _トークン_ 埋め込みにマッピングし、1 つのテキストを複数の文脈化された埋め込みとして表現します。これにより、すべてのトークンを単一のベクトルに縮約するよりも高い品質が得られます。
+
+ColBERT と ColBERT エンベッダーの詳細については、ブログ記事 [Announcing the Vespa ColBERT embedder](https://blog.vespa.ai/announcing-colbert-embedder-in-vespa/) および [Announcing Vespa Long-Context ColBERT](https://blog.vespa.ai/announcing-long-context-colbert-in-vespa/) を参照してください。
+
+```xml
+<container version="1.0">
+    <component id="colbert" type="colbert-embedder">
+        <transformer-model url="https://huggingface.co/colbert-ir/colbertv2.0/resolve/main/model.onnx"/>
+        <tokenizer-model url="https://huggingface.co/colbert-ir/colbertv2.0/raw/main/tokenizer.json"/>
+        <max-query-tokens>32</max-query-tokens>
+        <max-document-tokens>128</max-document-tokens>
+    </component>
+</container>
+```
+
+- `transformer-model` は、[ONNX](https://onnx.ai/) 形式の ColBERT 埋め込みモデルを指定します。Huggingface の埋め込みモデルを互換性のある [ONNX](https://onnx.ai/) 形式にエクスポートする方法については、[モデルの ONNX へのエクスポート](/ja/ranking/onnx#using-optimum-to-export-models-to-onnx-format)を参照してください。HF モデル・ハブの [vespa-engine/col-minilm](https://huggingface.co/vespa-engine/col-minilm) ページには、推論を高速化するために colbert チェックポイントを ONNX 形式にエクスポートする方法の詳細な例があります。 
+- `tokenizer-model` は、Huggingface の `tokenizer.json` 形式のファイルを指定します。[HF の JSON ファイルからのトークナイザーの読み込み](https://huggingface.co/transformers/v4.8.0/fast_tokenizers.html#loading-from-a-json-file)を参照してください。
+- `max-query-tokens` はベクトルとして表現されるクエリー・テキストのトークンの最大数を制御し、同様に `max-document-tokens` はドキュメント側を制御します。これらのパラメーターはリソース使用量の制御に使用できます。 
+
+すべての設定オプションとデフォルト値については[設定リファレンス](/ja/reference/rag/embedding#colbert-embedder-reference-config)を参照してください。
+
+ColBERT のトークン埋め込みは[混合テンソル(mixed tensor)](/ja/ranking/tensor-user-guide#tensor-concepts)として表現されます: `tensor<float>(token{}, x[dim])`。ここで `dim` は文脈化されたトークン埋め込みのベクトル次元数です。Hugging Face ハブの [colbert モデル・チェックポイント](https://huggingface.co/colbert-ir/colbertv2.0)は 128 次元を使用しています。
+
+エンベッダーの出力先テンソルは[スキーマ](/ja/basics/schemas)で定義され、対象の[テンソル・セル精度](/ja/reference/ranking/tensor#tensor-type-spec)の定義に応じて、エンベッダーは表現を圧縮できます。対象テンソルのセル型が `int8` の場合、ColBERT エンベッダーはドキュメント側のトークン埋め込みをバイナリー化によって圧縮し、値あたり 1 ビットにストレージを削減します。これにより、float を使用する場合と比較してトークン埋め込みのストレージ・フットプリントが 32 分の 1 になります。_クエリー_ 側の表現はバイナリー化では圧縮されません。以下は、[ドキュメント・フィールドを埋め込む](#embedding-a-document-field)ためにドキュメント・スキーマで ColBERT エンベッダーを使用する 2 つの方法を示しています。
+
+```text
+schema doc {
+    document doc {
+        field text type string {..}
+    }
+    field colbert_tokens type tensor<float>(token{}, x[128]) {
+        indexing: input text | embed colbert | attribute
+    }
+    field colbert_tokens_compressed type tensor<int8>(token{}, x[16]) {
+        indexing: input text | embed colbert | attribute
+    }
+}
+```
+
+最初のフィールド `colbert_tokens` は、テンソルの出力先セル型が float であるため、元の表現を格納します。2 番目のフィールドである `colbert_tokens_compressed` テンソルは圧縮されます。`int8` のテンソル・セル精度を使用する場合は、元のベクトル・サイズを 8 で割る必要があります(128/8 = 16)。
+
+`float` の代わりに `bfloat16` を使用して、`float` と比較してストレージを 2 分の 1 に削減することもできます。
+
+```text
+field colbert_tokens type tensor<bfloat16>(token{}, x[128]) {
+    indexing: input text | embed colbert | attribute
+}
+```
+
+ColBERT エンベッダーは、(チャンクを表す)文字列の配列に対しても使用できます:
+
+```text
+schema doc {
+    document doc {
+        field chunks type array<string> {..}
+    }
+    field colbert_tokens_compressed type tensor<int8>(chunk{}, token{}, x[16]) {
+        indexing: input text | embed colbert chunk | attribute
+    }
+}
+```
+
+ここでは、対象テンソルに 2 つ目のマップ次元が必要であり、embed への 2 つ目の引数として、チャンクに使用するテンソル次元の名前を ColBERT エンベッダーに伝えます。
+
+上記の例では、[HNSW](/ja/querying/approximate-nn-hnsw) インデックスを作成するための `index` 関数を指定していないことに注意してください。colbert 表現はランキング・モデルとして使用することを意図しており、Vespa の nearestNeighbor クエリー・オペレーターによる検索での使用は意図していません。検索には、たとえばドキュメント・レベルのベクトルや字句マッチングを使用できます。
+
+メモリー・フットプリントを削減するには、[ページド属性](/ja/content/attributes#paged-attributes)を使用してください。
+
+#### ColBERT ランキング
+
+Vespa のテンソル計算式で表現された MaxSim 類似度オペレーターのバリエーションを用いて ColBERT をランキングで使用する方法については、サンプル・アプリケーションを参照してください。[colbert](https://github.com/vespa-engine/sample-apps/tree/master/colbert) および [colbert-long](https://github.com/vespa-engine/sample-apps/tree/master/colbert-long) を参照してください。
+
+### SPLADE embedder
+
+[SPLADE](https://github.com/naver/splade) モデルをサポートするエンベッダーです。SPLADE エンベッダーはテキストをマップ・テンソルにマッピングし、テキストを一意なトークンとその重みからなるスパース・ベクトルとして表現します。
+
+```xml
+<container version="1.0">
+    <component id="splade" type="splade-embedder">
+        <transformer-model path="models/splade_model.onnx"/>
+        <tokenizer-model path="models/tokenizer.json"/>
+    </component>
+</container>
+```
+
+- `transformer-model` は、[ONNX](https://onnx.ai/) 形式の SPLADE 埋め込みモデルを指定します。Huggingface の埋め込みモデルを互換性のある [ONNX](https://onnx.ai/) 形式にエクスポートする方法については、[モデルの ONNX へのエクスポート](/ja/ranking/onnx#using-optimum-to-export-models-to-onnx-format)を参照してください。 
+- `tokenizer-model` は、Huggingface の `tokenizer.json` 形式のファイルを指定します。[HF の JSON ファイルからのトークナイザーの読み込み](https://huggingface.co/transformers/v4.8.0/fast_tokenizers.html#loading-from-a-json-file)を参照してください。
+
+すべての設定オプションとデフォルト値については[設定リファレンス](/ja/reference/rag/embedding#splade-embedder-reference-config)を参照してください。
+
+splade のトークン重みは[マップ・テンソル(mapped tensor)](/ja/ranking/tensor-user-guide#tensor-concepts)として表現されます: `tensor<float>(token{})`。
+
+エンベッダーの出力先テンソルは[スキーマ](/ja/basics/schemas)で定義されます。以下は、[ドキュメント・フィールドを埋め込む](#embedding-a-document-field)ためにドキュメント・スキーマで SPLADE エンベッダーを使用する方法を示しています。
+
+```text
+schema doc {
+    document doc {
+        field text type string {..}
+    }
+    field splade_tokens type tensor<float>(token{}) {
+        indexing: input text | embed splade | attribute
+    }
+}
+```
+
+SPLADE エンベッダーは、(チャンクを表す)文字列の配列に対しても使用できます。ここでは、より低いテンソル・セル精度 `bfloat16` も使用しています:
+
+```text
+schema doc {
+    document doc {
+        field chunks type array<string> {..}
+    }
+    field splade_tokens type tensor<bfloat16>(chunk{}, token{}) {
+        indexing: input text | embed splade chunk | attribute
+    }
+}
+```
+
+ここでは、対象テンソルに 2 つ目のマップ次元が必要であり、embed への 2 つ目の引数として、チャンクに使用するテンソル次元の名前を splade エンベッダーに伝えます。
+
+メモリー・フットプリントを削減するには、[ページド属性](/ja/content/attributes#paged-attributes)を使用してください。
+
+#### SPLADE ランキング
+
+SPLADE をランキングで使用する方法については、[splade](https://github.com/vespa-engine/sample-apps/tree/master/splade) サンプル・アプリケーションを参照してください。(チャンクを表す)文字列の配列に対して SPLADE エンベッダーを使用する方法も含まれています。
+
+#### SPLADE による検索
+
+SPLADE を検索(retrieval)に使用する方法については、[Sparse retrieval in Vespa](https://blog.vespa.ai/redefining-hybrid-search-possibilities-with-vespa/#sparse-retrieval-in-vespa) が良い議論を提供しています。
+
+### VoyageAI Embedder
+
+[VoyageAI](https://www.voyageai.com/) の埋め込み API を使用して、セマンティック検索用の高品質な埋め込みを生成するエンベッダーです。このエンベッダーは VoyageAI の API サービスを呼び出すため、ローカルのモデル・ファイルや ONNX 推論を必要としません。VoyageAI が返すすべての埋め込みは単位長に正規化されており、コサイン類似度や [prenormalized-angular](/ja/reference/schemas/schemas#prenormalized-angular) 距離メトリクスに適しています([VoyageAI FAQ](https://docs.voyageai.com/docs/faq#which-similarity-function-should-i-use) を参照)。
+
+```xml
+<container version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4</model>
+        <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
+        <dimensions>1024</dimensions>
+    </component>
+</container>
+```
+
+- `model` は、使用する VoyageAI モデルを指定します。 
+- `api-key-secret-ref` は、VoyageAI API キーを含む Vespa の[シークレット・ストア](/ja/security/secret-store)内のシークレットを参照します。これは認証に必須です。 
+
+すべての設定パラメーターについては[リファレンス](/ja/reference/rag/embedding#voyageai-embedder-reference-config)を参照してください。
+
+#### VoyageAI エンベッダーのモデル
+
+利用可能なモデルの完全な一覧とその仕様については、以下を参照してください:
+
+- [VoyageAI Embeddings Documentation](https://docs.voyageai.com/docs/embeddings) - 汎用モデルおよび特化型モデル
+- [Contextualized Chunk Embeddings](https://docs.voyageai.com/docs/contextualized-chunk-embeddings) - ドキュメント・チャンクを周囲のコンテキストとともに埋め込むためのモデル。[チャンクの扱い](../rag/working-with-chunks.html)を参照してください。
+- [Multimodal Embeddings](https://docs.voyageai.com/docs/multimodal-embeddings) - テキスト、画像、動画のためのマルチモーダル・モデル
+
+#### 文脈化されたチャンク埋め込み
+
+[文脈化されたチャンク埋め込み(contextualized chunk embeddings)](https://docs.voyageai.com/docs/contextualized-chunk-embeddings)を使用するには、VoyageAI エンベッダーを `voyage-context-*` モデルで設定し、ドキュメントのチャンクを含む `array<string>` フィールドの埋め込みに使用します:
+
+```js
+schema doc {
+    document doc {
+        field chunks type array<string> {
+            indexing: index | summary
+        }
+    }
+    field embeddings type tensor<float>(chunk{}, x[1024]) {
+        indexing: input chunks | embed voyage | attribute | index
+        attribute {
+            distance-metric: prenormalized-angular
+        }
+    }
+}
+```
+
+文脈化されたチャンク埋め込みモデルで配列フィールドを埋め込む場合、Vespa はドキュメントのすべてのチャンクを単一の API リクエストで送信し、Voyage が各チャンクを他のチャンクからのコンテキストとともにエンコードできるようにします。ドキュメント内のすべてのチャンクの合計サイズは、VoyageAI API の入力トークン制限内に収まる必要があることに注意してください。チャンク化の戦略については[チャンクの扱い](/ja/rag/working-with-chunks)を参照してください。
+
+#### 入力タイプの検出
+
+VoyageAI のモデルは、検索品質を向上させるために、クエリー埋め込みとドキュメント埋め込みを区別します。エンベッダーはコンテキストを自動的に検出し、埋め込みが Vespa でのフィード時(/ja/writing/indexing )に実行されるかクエリー処理時に実行されるかに基づいて、適切な入力タイプを設定します。
+
+入力タイプをプログラムで制御する必要がある高度なユースケースでは、Java コードからエンベッダーを呼び出す際に [Embedder.Context](https://javadoc.io/static/com.yahoo.vespa/linguistics/8.620.35/com/yahoo/language/process/Embedder.Context.html) の `destination` プロパティを使用できます。
+
+#### voyage-4-nano をローカルでのクエリー推論に使用する
+
+[voyage-4-nano](/ja/rag/model-hub#voyage-4-nano) モデルは、[Hugging Face embedder](#huggingface-embedder) で使用できる ONNX モデルとして提供されています。より大きな [Voyage 4](https://blog.voyageai.com/2026/01/15/voyage-4/) モデルと同じ埋め込み空間を共有しているため、ローカル推論によるクエリー埋め込みに使用できます。多少の精度と引き換えに、クエリーに対する API 使用を完全になくすことでコストを削減できます。
+
+### OpenAI Embedder
+
+Vespa 8.678 以降で利用可能
+
+[OpenAI](https://platform.openai.com/docs/guides/embeddings) の埋め込み API を使用して、セマンティック検索用の埋め込みを生成するエンベッダーです。このエンベッダーは、任意の OpenAI 互換 API を対象にできます。
+
+```xml
+<container version="1.0">
+    <component id="openai" type="openai-embedder">
+        <model>text-embedding-3-small</model>
+        <api-key-secret-ref>openai_api_key</api-key-secret-ref>
+        <dimensions>1536</dimensions>
+    </component>
+</container>
+```
+
+- `model` は、使用する OpenAI モデルを指定します。 
+- `api-key-secret-ref` は、OpenAI API キーを含む Vespa の[シークレット・ストア](/ja/security/secret-store)内のシークレットを参照します。認証を必要としないセルフホストの OpenAI 互換エンドポイントでは、この要素を省略できます。 
+
+すべての設定パラメーターについては[リファレンス](/ja/reference/rag/embedding#openai-embedder-reference-config)を参照してください。
+
+### Mistral Embedder
+
+Vespa 8.678 以降で利用可能
+
+[Mistral](https://docs.mistral.ai/capabilities/embeddings/overview/) の埋め込み API を使用して、セマンティック検索用の埋め込みを生成するエンベッダーです。
+
+```xml  
+<container version="1.0">
+    <component id="mistral" type="mistral-embedder">
+        <model>mistral-embed</model>
+        <api-key-secret-ref>mistral_api_key</api-key-secret-ref>
+        <dimensions>1024</dimensions>
+    </component>
+</container>
+```
+
+- `model` は、使用する Mistral モデルを指定します。 
+- `api-key-secret-ref` は、Mistral API キーを含む Vespa の[シークレット・ストア](/ja/security/secret-store)内のシークレットを参照します。これは認証に必須です。 
+
+Mistral は、`codestral-embed` のようにそれを提供するモデルで出力の量子化をサポートしています。すべての設定パラメーターについては[リファレンス](/ja/reference/rag/embedding#mistral-embedder-reference-config)を参照してください。
+
+## エンベッダーのパフォーマンス
+
+埋め込みの推論は、大きな埋め込みモデルではリソースを大量に消費することがあります。パフォーマンスに影響する要因:
+
+- 埋め込みモデルのパラメーター数。大きなモデルは小さなモデルよりも評価コストが高くなります。
+- 入力シーケンスの長さ。Transformer モデルは入力長に対して二次的にスケールします。クエリーは通常ドキュメントより短いため、クエリーの埋め込みはドキュメントの埋め込みよりも計算負荷が低くなります。 
+- `embed` 呼び出しへの入力数。配列をエンコードする場合は、単一のドキュメントが持ちうる入力の数を考慮してください。ローカル CPU 推論では、ドキュメントに多数の `embed` 入力がある場合、[フィード・タイムアウト](/ja/reference/api/document-v1#timeout)設定の引き上げが必要になることがあります。 
+
+ローカルの ONNX ベースのエンベッダー([Hugging Face](#huggingface-embedder)、[Bert](#bert-embedder)、[ColBERT](#colbert-embedder)、[SPLADE](#splade-embedder) の各エンベッダーなど)では、特に長いシーケンス長(ドキュメント)に対して [GPU](/ja/reference/rag/embedding#embedder-onnx-reference-config) を使用することで、パフォーマンスを劇的に向上させ、コストを削減できます。ブログ記事 [GPU-accelerated ML inference in Vespa Cloud](https://blog.vespa.ai/gpu-accelerated-ml-inference-in-vespa-cloud/) を参照してください。GPU アクセラレーション対応インスタンスでは、fp32 モデルの代わりに fp16 モデルを使用することで、fp32 と比較してスループットが最大 3 倍向上します。
+
+外部 API を呼び出すクラウド・エンベッダー([VoyageAI](#voyageai-embedder)、[OpenAI](#openai-embedder)、[Mistral](#mistral-embedder))では、スループットはローカルのハードウェアではなく API のレイテンシーとレート制限によって制約されます。チューニングのガイダンスについては、[クラウド・エンベッダーのためのスレッド・プールのチューニング](#thread-pool-tuning)と[動的バッチング](#dynamic-batching)を参照してください。
+
+ベクトル・サイズを削減する方法については、[ベクトルのバイナリー化](/ja/rag/binarizing-vectors)を参照してください。
+
+## メトリクス
+
+Vespa の組み込みエンベッダーは、計算時間とトークン・シーケンス長のメトリクスを出力します。これらのメトリクスには `embedder.` というプレフィックスが付き、[コンテナー・メトリクス](/ja/reference/operations/metrics/container)のリファレンス・ドキュメントに一覧があります。サードパーティーのエンベッダー実装は、`ai.vespa.embedding.Embedder.Runtime` コンポーネントをインジェクトすることで、同じ定義済みメトリクスを簡単に出力できます。もちろん、カスタム・メトリクスを出力してもまったく問題ありません。
+
+## サンプル・アプリケーション
+
+以下のサンプル・アプリケーションはエンベッダーを使用しています:
+
+- [commerce-product-ranking](https://github.com/vespa-engine/sample-apps/tree/master/commerce-product-ranking) - 複数のエンベッダーの使用をデモンストレーションします
+- [multi-vector-indexing](https://github.com/vespa-engine/sample-apps/tree/master/multi-vector-indexing) は、複数のドキュメント・フィールド入力でエンベッダーを使用する方法をデモンストレーションします
+- [colbert](https://github.com/vespa-engine/sample-apps/tree/master/colbert) は、colbert-embedder の使用方法をデモンストレーションします 
+- [colbert-long](https://github.com/vespa-engine/sample-apps/tree/master/colbert-long) は、長いコンテキスト(配列入力)で colbert-embedder を使用する方法をデモンストレーションします 
+- [splade](https://github.com/vespa-engine/sample-apps/tree/master/splade) は、splade-embedder の使用方法をデモンストレーションします。
+
+## 便利なテクニック
+
+エンベッダーで役立つさまざまなテクニックです。
+
+### クエリー・テキストへの固定文字列の追加
+
+埋め込みモデルによっては、テキストの先頭に固定文字列を付加することが求められる場合があります。例:
+
+```xml
+<component id="e5" type="hugging-face-embedder">
+    <transformer-model url="https://huggingface.co/intfloat/e5-small-v2/resolve/main/model.onnx"/>
+    <tokenizer-model url="https://huggingface.co/intfloat/e5-small-v2/raw/main/tokenizer.json"/>
+    <prepend>
+        <query>query:</query>
+        <document>passage:</document>
+    </prepend>
+</component>
+```
+
+上記の設定は、クエリーとフィールド・データのテキストの先頭に文字列を付加します。完全な例は [ColBERT](https://github.com/vespa-engine/sample-apps/tree/master/colbert) サンプル・アプリケーションにあります。
+
+`<prepend>` 要素は [OpenAI embedder](/ja/reference/rag/embedding#openai-embedder-reference-config) でもサポートされており、タスク固有のプレフィックスを期待する OpenAI 互換の指示チューニング済みモデルに便利です。
+
+別のアプローチとして、クエリー・プロファイルを使用してクエリー・データの先頭に文字列を付加する方法があります。埋め込みたい入力テキストの周囲に標準的なラッパーやプレフィックス指示を追加する必要がある場合は、`embed(myEmbedderId, @text)` のようにパラメーター置換を使用してテキストを供給し、そのパラメーター(ここでは `text`)を[クエリー・プロファイル](/ja/querying/query-profiles)で定義します。クエリー・プロファイルは[値の置換](/ja/querying/query-profiles#value-substitution)を使用して、供給されたテキスト値を含む別のクエリー・リクエストをその中に配置します。以下は、ベクトル表現に埋め込まれる前にクエリーにプレフィックス指示を付ける具体例です。以下は `search/query-profiles/default.xml` に `text` 入力フィールドを定義しています:
+
+```xml
+<query-profile id="default">
+    <field name="text">"Represent this sentence for searching relevant passages: %{user_query}</field>
+</query-profile>
+```
+
+そして、クエリー・リクエスト時に `user_query` をリクエスト・パラメーターとして渡すと、このパラメーターが `text` 値の生成に使用され、その値が埋め込まれます。
+
+```json
+{
+    "yql": "select * from doc where userQuery() or (totalTtargetHits: 100}nearestNeighbor(embedding, e))",
+    "input.query(e)": "embed(mxbai, @text)",
+    "user_query": "space contains many suns"
+}
+```
+
+エンベッダーによって埋め込まれるテキストは次のようになります: _Represent this sentence for searching relevant passages: space contains many suns_。
+
+### 入力フィールドの連結
+
+インデックス処理では "`.`" を使用して値を連結でき、[choice](/ja/writing/indexing#choice-example) を使用して欠損しているフィールド値を処理して、エンベッダーへの単一の入力を生成できます:
+
+```text
+schema doc {
+
+    document doc {
+
+        field title type string {
+            indexing: summary | index
+        }
+
+        field body type string {
+            indexing: summary | index
+        }
+
+    }
+
+    field embeddings type tensor<bfloat16>(x[384]) {
+        indexing {
+            (input title || "") . " " . (input body || "") |embed embedderId| attribute | index
+        }
+        index: hnsw
+    }
+
+}
+```
+
+連結を使用して、埋め込む文字列の先頭に固定の前置き文を追加することもできます。
+
+### foreach との組み合わせ
+
+インデックス式では `for_each` を使用したり、他のドキュメント・フィールドを含めたりすることもできます。たとえば、埋め込みモデルの _E5_ ファミリーは入力とともに指示(instructions)を使用します。次の式は、入力の先頭に _passage:_ を付け、その後にタイトルとテキスト・チャンクの連結を続けます。
+
+```text
+schema doc {
+
+    document doc {
+
+        field title type string {
+            indexing: summary | index
+        }
+
+        field chunks type array<string> {
+            indexing: index | summary
+        }
+
+    }
+    field embedding type tensor<bfloat16>(p{}, x[384]) {
+        indexing {
+            input chunks |
+                for_each {
+                    "passage: " . (input title || "") . " " . ( _ || "")
+                } | embed e5 | attribute | index
+        }
+        attribute {
+            distance-metric: prenormalized-angular
+        }
+    }
+}
+```
+
+詳細は[インデックス言語の実行値](/ja/writing/indexing#execution-value-example)を参照してください。
+
+### フィード用と検索用のエンベッダーの分離
+
+Vespa Cloud では、バースト的なフィード負荷がクエリー・レイテンシーに影響しないように、フィード用と検索用に別々のコンテナー・クラスターを設定するのが一般的な慣行です。HTTP ベースのクラウド・エンベッダー([VoyageAI](#voyageai-embedder)、[OpenAI](#openai-embedder)、[Mistral](#mistral-embedder))を使用する場合は、各クラスターに個別のエンベッダー・コンポーネントを設定してください。これにより、ワークロードごとに異なるモデルと API キーを選択でき、さらに 2 つの利点が得られます: **コスト最適化**(モデル・バリアントによる)と**レート制限の分離**です。
+
+```xml
+<container id="feed" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-large</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_feed_api_key</api-key-secret-ref>
+    </component>
+    <document-api/>
+</container>
+
+<container id="search" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-lite</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_search_api_key</api-key-secret-ref>
+    </component>
+    <search/>
+</container>
+```
+
+#### モデル・バリアントによるコスト最適化
+
+プロバイダーが同じ埋め込み空間を共有する複数のモデル・サイズを提供している場合、ドキュメント埋め込みにはより強力な(そしてより高価な)モデルを使用し、クエリー埋め込みにはより小さく安価なモデルを使用できます。ドキュメントの埋め込みはインデックス時に一度だけ行われるのに対し、クエリーの埋め込みはすべての検索リクエストで発生するため、これにより検索品質を維持しながら運用コストを大幅に削減できます。
+
+たとえば、[Voyage 4 モデル・ファミリー](https://blog.voyageai.com/2026/01/15/voyage-4/)はサイズ間でベクトル空間を共有しており、このパターンに自然に適合します: 上記のように、フィード・クラスターで `voyage-4-large` を、検索クラスターで `voyage-4-lite` を使用します。さらにコスト効率の高いクエリー側の選択肢については、[voyage-4-nano をローカルでのクエリー推論に使用する](#voyageai-local-query-inference)も参照してください。
+
+#### レート制限の分離
+
+フィード操作と検索操作の分離は、API レート制限の管理において特に重要です。バースト的なドキュメント・フィード操作は API クォータを大量に消費し、検索クエリーに影響するレート制限エラーを引き起こす可能性があります。フィード用と検索用のエンベッダーに**別々の API キー**を使用することで、フィードのバーストが検索に悪影響を及ぼさないようにできます。
+
+### クラウド・エンベッダーのためのスレッド・プールのチューニング
+
+HTTP ベースのクラウド・エンベッダー(VoyageAI、OpenAI、Mistral)を使用する場合、コンテナーのフィード・スループットは主に、CPU ではなく、埋め込み API のレイテンシーとドキュメント処理スレッド・プールのサイズの組み合わせによって制限されます。フィードされる各ドキュメントは、埋め込み API のレスポンスを待つ間、スレッドをブロックします。スループットを向上させるには、コンテント・クラスターがボトルネックでないと仮定すると、[ドキュメント処理スレッド・プールのサイズ](../reference/applications/services/docproc#threadpool)を増やす必要があるでしょう。
+
+たとえば、それぞれ 8 vCPU を持つ 2 ノードのコンテナー・クラスターを考えます。ドキュメント処理スレッド・プールのデフォルト・サイズは vCPU あたり 1 スレッドなので、合計 16 スレッドになります。埋め込み API の平均レイテンシーが 200ms の場合、最大スループットはおよそ 16 / 0.2 = 80 ドキュメント/秒です。コンテナーのチューニングの詳細については、[コンテナー・チューニング](/ja/performance/container-tuning)を参照してください。
+
+実効スループットは API キーのレート制限を超えることは決してできないことに注意してください。エンベッダーのレイテンシーとスループットを把握するには、[エンベッダー・メトリクス](/ja/reference/operations/metrics/container)を使用してください。さらなるスループットの向上には、[動的バッチング](#dynamic-batching)の有効化を検討してください。
+
+### 動的バッチング
+
+動的バッチングは、複数の同時実行の埋め込みリクエストを単一の埋め込み呼び出しにまとめます。これは、スループットがトークン毎分(TPM)制限ではなく、プロバイダーのリクエスト毎分(RPM)制限によって制約されている場合に有用です。バッチングはリクエストをまとめることで RPM の使用量を削減しますが、TPM の使用量には影響しません。
+
+動的バッチングは [VoyageAI](#voyageai-embedder)、[OpenAI](#openai-embedder)、[Mistral](#mistral-embedder) の各エンベッダーでサポートされています。
+
+```xml
+<container id="feed" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-4-large</model>
+        <dimensions>1024</dimensions>
+        <api-key-secret-ref>voyage_feed_api_key</api-key-secret-ref>
+        <batching max-size="16" max-delay="200ms"/>
+    </component>
+    <document-api/>
+</container>
+```
+
+`max-size` 属性は単一バッチ内のリクエストの最大数を設定し、`max-delay` はバッチが満杯になるのを待つ最大時間を設定します。この時間を超えると不完全なバッチのまま送信されます。バッチングはデフォルトでは無効です。
+
+各スレッドはバッチに 1 つのリクエストを提供するため、[ドキュメント処理スレッド・プールのサイズ](/ja/reference/applications/services/docproc#threadpool)は少なくとも `max-size` 以上にしてください。
+
+## トラブルシューティング
+
+このセクションでは、よくある問題とその解決方法を説明します。
+
+### モデルのダウンロード失敗
+
+モデルのダウンロードに失敗すると、Vespa のステートレス・コンテナー・サービスが `RuntimeException: Not able to create config builder for payload` で起動しなくなります。[例](/ja/applications/components#component-load)を参照してください。
+
+これは通常、モデルのダウンロードが失敗したことを意味します。詳細は Vespa のログを確認してください。ダウンロード失敗の最も一般的な原因は、ネットワークの問題または URL の誤りです。
+
+コンテナーがポートをリッスンしないため、これは Vespa の status 出力でも確認できます:
+
+```sh
+vespa status -t http://127.0.0.1:8080            
+Container at http://127.0.0.1:8080 is not ready: unhealthy container at http://127.0.0.1:8080/status.html: Get "http://127.0.0.1:8080/status.html": EOF
+Error: services not ready: http://127.0.0.1:8080
+```
+
+### テンソル形状の不一致
+
+ネイティブのエンベッダー実装は、出力テンソルが特定の形状を持つことを想定しています。形状が正しくない場合、フィード中に次のようなエラー・メッセージが表示されます:
+
+```json
+feed: got status 500 ({"pathId":"..","..","message":"[UNKNOWN(252001) @ tcp/vespa-container:19101/chain.indexing]:
+Processing failed. Error message: java.lang.IllegalArgumentException: Expected 3 output dimensions for output name 'sentence_embedding': [batch, sequence, embedding], got 2 -- See Vespa log for details. "}) for put xx:not retryable
+```
+
+これは、エクスポートされた ONNX モデルの出力テンソルが期待される形状を持っていないことを意味します。たとえば上記は、出力形状が [batch, sequence, embedding](3 次元テンソル)であることを期待する [hf-embedder](#huggingface-embedder) によってログ出力されたものです。これは、エンベッダー実装が単一の埋め込みベクトルを生成するために、シーケンス次元に対して [pooling-strategy](/ja/reference/rag/embedding#huggingface-embedder) を実行するためです。Vespa の埋め込みではバッチ・サイズは常に 1 です。
+
+正しい出力形状でモデルを ONNX 形式にエクスポートする方法については [onnx エクスポート](/ja/ranking/onnx#using-optimum-to-export-models-to-onnx-format)を、入力名と出力名のデバッグについては [onnx デバッグ](/ja/ranking/onnx#debugging-onnx-models)を参照してください。
+
+### 入力名
+
+ネイティブのエンベッダー実装は、ONNX モデルが特定の入力名を受け付けることを想定しています。名前が正しくない場合、Vespa のコンテナー・サービスが起動せず、vespa ログに次のようなエラー・メッセージが表示されます:
+
+```sh
+WARNING container Container.com.yahoo.container.di.Container
+Caused by: java.lang.IllegalArgumentException: Model does not contain required input: 'input_ids'. Model contains: my_input
+```
+
+これは、ONNX モデルが "my\_input" を受け付けるのに対し、設定では "input\_ids" を使おうとしたことを意味します。[hf-embedder](#huggingface-embedder) のデフォルトの入力名は "input\_ids"、"attention\_mask"、"token\_type\_ids" です。これらは設定で上書きできます([リファレンス](/ja/reference/rag/embedding#huggingface-embedder))。埋め込みモデルによっては "token\_type\_ids" 入力を使用しないものもあります。次の例に示すように、`transformer-token-type-ids` を空に設定することで、これを設定で指定できます。
+
+```xml
+<component id="hf-embedder" type="hugging-face-embedder">
+    <transformer-model path="my-models/a-model-without-token-types-model.onnx"/>
+    <tokenizer-model path="my-models/tokenizer.json"/>
+    <transformer-token-type-ids/>      
+</component>
+```
+
+### 出力名
+
+ネイティブのエンベッダー実装は、ONNX モデルが特定の出力名を生成することを想定しています。そうでない場合、Vespa のステートレス・コンテナー・サービスが起動せず、vespa ログに次のようなエラー・メッセージが表示されます:
+
+```sh
+Model does not contain required output: 'test'. Model contains: last_hidden_state
+```
+
+これは、ONNX モデルが "last\_hidden\_state" を生成するのに対し、設定では "test" を使おうとしたことを意味します。[hf-embedder](#huggingface-embedder) のデフォルトの出力名は "last\_hidden\_state" です。これは設定で上書きできます。[リファレンス](/ja/reference/rag/embedding#huggingface-embedder)を参照してください。
+
+### EOF
+
+vespa status でコンテナーが正常(healthy)と表示されるにもかかわらず、フィード中に EOF エラーが発生する場合、これはステートレス・コンテナー・サービスがクラッシュしてポートのリッスンを停止したことを意味します。これは、エンベッダーの ONNX モデルのサイズ、docker コンテナーのメモリー・リソース制約、または Vespa のステートレス・コンテナー・サービスに設定された JVM ヒープ・サイズに関連している可能性があります。
+
+```sh
+vespa feed ext/1.json 
+feed: got error "Post "http://127.0.0.1:8080/document/v1/doc/doc/docid/1": unexpected EOF" (no body) for put id:doc:doc::1: giving up after 10 attempts
+```
+
+これは、ステートレス・コンテナー(JVM)のメモリー不足に関連している可能性があります。コンテナーのログで OOM エラーを確認してください。JVM のチューニング・オプションについては [jvm-tuning](/ja/performance/container-tuning#jvm-tuning) を参照してください(デフォルトのヒープ・サイズは 1.5GB です)。コンテナーのクラッシュは、docker や podman のコンテナーに割り当てられたメモリーが少なすぎることが原因の場合もあり、その場合 Linux カーネルがメモリーを解放するためにプロセスを強制終了することがあります。[docker コンテナーのメモリー](/ja/operations/self-managed/docker-containers#memory)のドキュメントを参照してください。Vespa はエンベッダーのモデル推論に必要なメモリーを自動的に見積もりますが、この見積もりは不正確な場合があります。推論用に特定の量のコンテナー・メモリーを確保するには、[\<inference\>\<memory\>](/ja/reference/applications/services/container#inference-memory) で上書きしてください。

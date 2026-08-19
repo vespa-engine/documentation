@@ -1,0 +1,151 @@
+---
+title: "ユニット・テスト"
+description: "このドキュメントでは、ローカルのJava VMでアプリケーションの機能をテストする方法を説明します。システム・テスト、ステージング・テスト、本番検証テストの作成方法については、[自動デプロイメント](/ja/operations/automated-deployments)を参照してください。"
+---
+
+## Applicationを使ったユニット・テスト
+
+[Application](https://javadoc.io/doc/com.yahoo.vespa/application/latest/com/yahoo/application/Application.html) クラスは、ユニット・テストを書くときに便利です。Applicationは、アプリケーション・パッケージの設定を使用して、テスト用のコンテナー・インスタンスをセットアップします。テストからは [app.getJDisc(clusterName)](https://javadoc.io/page/com.yahoo.vespa/application/latest/com/yahoo/application/Application#getJDisc-java.lang.String-) を通じて [JDisc](https://javadoc.io/doc/com.yahoo.vespa/application/latest/com/yahoo/application/container/JDisc.html) クラスにアクセスします。このクラスには、すべての一般的な[コンポーネント・タイプ](/ja/reference/applications/components)を使用するためのメソッドがあります。
+
+使用例については [MetalSearcherTest.java](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation-java/app/src/test/java/ai/vespa/example/album/MetalSearcherTest.java) を参照してください。テストを並列に実行するために、このテストがネットワーク層を無効にしている点に注目してください。
+
+<Note>
+**注:**
+
+`Application` は *コンテナー* のみをセットアップし、*コンテント* ノードはセットアップしません。したがって完全にステートレスであり、アプリケーション・コンポーネントの機能をユニット・テストすることを目的としています。*ClusterSearcher* はコンテント・ノードを見つけられず、呼び出されるとエラーをログに記録します。検索のようなエンドツーエンドの機能をテストするには、*システム・テスト* を書いてください。
+</Note>
+
+プロトタイピングでは、ネットワーク・インターフェースを有効にし、コンテナーをインスタンス化して、ブラウザーでリクエストを実行します:
+
+```java
+public class ApplicationMain {
+    @Test
+    public static void main(String[] args) throws Exception {
+        try (com.yahoo.application.Application app = com.yahoo.application.Application.fromApplicationPackage(
+        FileSystems.getDefault().getPath("src/main/application"),
+        Networking.enable)) {
+            app.getClass();
+            Thread.sleep(Long.MAX_VALUE);
+        }
+    }
+}
+```
+
+## 設定可能なコンポーネントのユニット・テスト
+
+ユニット・テスト用に設定インスタンスをプログラムで構築する方法です。まず[開発者ガイド](/ja/applications/developer-guide)を読んでください。
+
+スキーマから生成された設定クラスを使って自己完結的なユニット・テストを書けるようにするには、たとえば外部のservicesファイルなどを使わずに設定をインスタンス化する必要があります。設定クラスは独自のビルダーを内包しており、まさにこの問題を解決するのに役立ちます。ビルダーを使うことで、設定はデプロイ時に使用されるものとまったく同じ、イミュータブルで型安全なオブジェクトとして作成されます。
+
+### 設定スキーマ
+
+次のスキーマを持つconfig定義ファイル `demo.def` を想定します:
+
+```java
+package=com.mydomain.demo
+
+toplevel[].term string
+toplevel[].number int
+toplevel[].largenumber long
+toplevel[].secondlevel[].name string
+toplevel[].secondlevel[].magnitude double
+
+simplename string
+simplenumber int
+simplevaluearray[] string
+
+coordinate.x double
+coordinate.y double
+coordinate.name string
+```
+
+つまり、設定クラスは `com.mydomain.demo.DemoConfig` となり、構造体の配列、いくつかのトップレベルのプリミティブ(*simplename* と *simplenumber*)、プリミティブ値の配列(*simplevaluearray*)、および構造体(*coordinate*)を含みます。
+
+### 設定ビルダーの使用
+
+クラウド設定システムのすべての構造化オブジェクトは、ネストされたクラスとして独自のBuilderを持ちます。したがって上記の例では、設定クラス全体には `DemoConfig.Builder`、トップレベルの配列には `DemoConfig.Toplevel.Builder`、内側の配列には `DemoConfig.Toplevel.Secondlevel.Builder`、構造体には `DemoConfig.Coordinate.Builder` が得られます。
+
+設定オブジェクトまたはサブ構造体は、対応する *Builder* クラスを受け取るコンストラクターを使ってインスタンス化するのが最も簡単です。構造体の配列には *Builder* インスタンスの配列を受け取るコンストラクターを使用し、プリミティブ値の配列は対応するプリミティブ値クラスのjava.util.Collectionをそのまま受け取ります:
+
+```java expandable
+package com.mydomain.demo;
+import static org.junit.Assert.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import org.junit.Test;
+import static com.mydomain.demo.DemoConfig.Toplevel;
+import static com.mydomain.demo.DemoConfig.Toplevel.Secondlevel;
+import static com.mydomain.demo.DemoConfig.Coordinate;
+public class DemoTest {
+    /**
+    * An example showing how to build a relatively complex, mixed type
+    * configuration including arrays of primitive elements, nested arrays and
+    * arrays of structures and so on.
+    */
+    @Test
+    public final void test() {
+        // We need use builders to safely create the graph of immutable
+        // configuration objects. Each generated configuration class contains
+        // the builder for creating an instance of itself. This pattern is
+        // repeated for structures. So, in our case, we have four structured
+        // levels. The complete configuration class, DemoConfig, the top-level,
+        // nested array, Toplevel, the contained array, Secondlevel and the
+        // structure Coordinate. This leaves us with using four distinct
+        // builder classes: DemoConfig.Builder, Toplevel.Builder,
+        // Secondlevel.Builder and Coordinate.Builder.
+        // Chained setters are the most used pattern for the builders:
+        DemoConfig forTesting = new DemoConfig(new DemoConfig.Builder()
+        .simplename("basic chained setter for the string simplename")
+        .simplenumber(42)
+        .toplevel(buildTopLevelArray())
+        .simplevaluearray(
+        Arrays.asList(new String[] { "primitive", "arrays",
+        "are", "easier", "to", "build", "than",
+        "arrays", "of", "structures" }))
+        .coordinate(
+        new Coordinate.Builder()
+        .name("have no idea what to call this one")
+        .x(1e300d).y(1e-300d)));
+        assertTrue(forTesting != null); // ;)
+    }
+    /**
+    * It is often the more readable solution to use helper methods to build
+    * configuration arrays.
+    *
+    * @return a list of Toplevel.Builder instances
+    */
+    private List<Toplevel.Builder> buildTopLevelArray() {
+        // Note how the Builder classes tend to work on Collection classes and
+        // mutable objects, while the config ready for use is bolted down and
+        // immutable:
+        List<Toplevel.Builder> configArray = new ArrayList<Toplevel.Builder>(3);
+        String[] configStrings = new String[] { "a", "b", "c" };
+        int[] configNumbers = new int[] { 1, 2, 3 };
+        long[] configLargeNumbers = new long[] { 1L + (long) Integer.MAX_VALUE,
+        2L + (long) Integer.MAX_VALUE, 3L + (long) Integer.MAX_VALUE };
+        for (int i = 0; i < configStrings.length; ++i) {
+            configArray.add(new Toplevel.Builder().number(configNumbers[i])
+            .largenumber(configLargeNumbers[i]).term(configStrings[i])
+            .secondlevel(buildSecondLevelArray(2)));
+        }
+        return configArray;
+    }
+    /**
+    * Once again, the building of an array is delegated to a helper method
+    *
+    * @param subelements
+    *            the length of the returned list
+    * @return a list of SecondLevel.Builder
+    */
+    private List<Secondlevel.Builder> buildSecondLevelArray(int subelements) {
+        List<Secondlevel.Builder> builders = new ArrayList<Secondlevel.Builder>(
+        subelements);
+        for (int i = 0; i < subelements; ++i) {
+            builders.add(new Secondlevel.Builder().name(String.valueOf(i))
+            .magnitude((double) i));
+        }
+        return builders;
+    }
+}
+```

@@ -1,0 +1,154 @@
+---
+title: "コンテナーのチューニング"
+---
+
+Vespa で使用されるコンテナーをチューニングするための設定パラメーター集です。一部の設定パラメーターはネイティブの [services.xml](/ja/basics/applications) サポートがあり、その他は[汎用的な config オーバーライド](/ja/reference/applications/config-files#generic-configuration-in-services-xml)を通じて設定します。
+
+## コンテナーのワーカー・スレッド
+
+コンテナーは、その処理のために複数のスレッド・プールを使用します。リクエスト・ハンドラーを含むほとんどのコンポーネントは、共有 executor インスタンスによって制御されるコンテナーの[デフォルト・スレッド・プール](/ja/reference/applications/services/container#threadpool)を使用します。どのコンポーネントも、`java.util.concurrent.Executor` インスタンスをインジェクトすることでデフォルト・プールを利用できます。Jetty サーバー、[サーチ・ハンドラー](/ja/reference/applications/services/search#threadpool)、[document-processing](/ja/reference/applications/services/docproc#threadpool) チェーンなど、一部の組み込みコンポーネントは専用のスレッド・プールを持ちます。これらのスレッド・プールは config モデル内の特別な配線を通じてインジェクトされ、他のコンポーネントから簡単にはアクセスできません。
+
+スレッド・プールはデフォルトで、JVM が報告するシステム・リソース(`Runtime.getRuntime().availableProcessors()`)に応じてスケールされます。コンテナーが最適に動作するためには、`-XX:ActiveProcessorCount`/`jvm_availableProcessors` の設定が正しいことが極めて重要です。[デフォルト・スレッド・プール](/ja/reference/applications/services/container#threadpool)の設定は services.xml でオーバーライドできます。デフォルト設定はさまざまなワークロードで機能するようにチューニングされているため、そのまま維持することを推奨します。なお、デフォルト設定とプールの使用方法はマイナー・バージョン間で変更される可能性があります。
+
+コンテナーは最小数のワーカー・スレッドを事前起動するため、アイドル状態のコンテナーでも数百のスレッドが実行中と報告されることがあります。[サーチ・ハンドラー](/ja/reference/applications/services/search#threadpool)と[ドキュメント処理ハンドラー](/ja/reference/applications/services/docproc#threadpool)のスレッド・プールは、それぞれの設定で指定されたワーカー数を事前起動します。キャパシティを上方にチューニングすると、処理中のリクエストが増えて並行性が高まるため、GC 圧力が高くなるリスクが増加することに注意してください。GC 圧力は、処理中のリクエスト数、リクエストの完了にかかる時間、リクエストあたりに生成されるガベージの量の関数です。キュー・サイズを増やすと、アプリケーションはリクエストを拒否することなく短時間のトラフィック・バーストを処理できるようになりますが、キューに入れられたリクエストの平均レイテンシーは増加します。大きなキューは、過負荷状況でのヒープ消費も増加させます。一部のスレッド・プールでは、キューが満杯になると追加のスレッドが作成され([`max`](/ja/reference/applications/services/search#threads.max) が指定されている場合)、アイドル・タイムアウト後に破棄されます。すべてのスレッドが使用中の場合、リクエストは 503 レスポンスで拒否されます。
+
+実効的なスレッド・プール設定と使用率の統計は、[コンテナー・メトリクス](/ja/operations/metrics#container-metrics)を通じて観測できます。エクスポートされるメトリクスの一覧は[スレッド・プール・メトリクス](/ja/operations/metrics#thread-pool-metrics)を参照してください。
+
+<Note>
+**注:** 
+
+キュー・サイズが 0 に設定されている場合、キュー・サイズを測定するメトリクス `jdisc.thread_pool.work_queue.size` は、代わりにアクティブなスレッド数を測定するようになります。
+</Note>
+
+### 推奨事項
+
+固定サイズのプールは、ピーク負荷時のレイテンシーを安定させるのに適していますが、その代償として静的なメモリ負荷が高くなり、過剰な数のスレッドを設定した場合はコンテキスト・スイッチのオーバーヘッドが増加します。可変サイズのプールは、主にトラフィックの少ない期間のメモリ消費を最小化するのに有効で、また一般に、ピーク負荷の規模がある程度不明な場合にも有効です。欠点は、すべてのコア・スレッドがアクティブになると、追加のタスクがキューに入れられてレイテンシーが増加することと、追加スレッドの起動には OS へのシステム・コールが伴うため比較的コストが高いことです。
+
+### 例
+
+8 vCPU のコンテナー・ホストを考えます。[サーチ・ハンドラーのスレッド・プール](/ja/reference/applications/services/search#threadpool)に `<threads>4</threads>` を設定すると `4 * 8 = 32` のワーカー・スレッドとなり、`<queue>25</queue>` を追加するとプールの合計キュー・キャパシティは `32 * 25 = 800` リクエストになります。同じスレッド計算は[ドキュメント処理ハンドラーのスレッド・プール](/ja/reference/applications/services/docproc#threadpool)にも適用されますが、こちらはキュー設定をサポートしていません。以下の例は、デフォルト・スレッド・プール、サーチ・ハンドラーのスレッド・プール、ドキュメント処理ハンドラーのスレッド・プールをすべて固定にした、一貫性のある設定を示しています。
+
+```xml expandable
+<container id="container" version="1.0">
+
+    <!-- The containers default thread pool -->
+    <threadpool>
+        <!-- Note: relative values -->
+
+        <!-- 5 threads per vcpu => 40 threads on 8 vcpu -->
+        <threads max="5">5</threads>
+
+        <!-- 25 queue slots per thread => 1000 entries on 8 vcpu -->
+        <queue>25</queue>
+    </threadpool>
+
+    <search>
+        <!-- Search handler thread pool -->
+        <threadpool>
+            <!-- Don't set the 'max' attribute or at least keep it equal to 'threads' for a fixed pool size (recommended) -->
+
+            <!-- 4 threads per vcpu => 32 threads on 8 vcpu -->
+            <threads>4</threads>
+
+            <!-- 25 queue slots per thread => 800 entries on 8 vcpu -->
+            <queue>25</queue>
+        </threadpool>
+    </search>
+
+    <document-processing>
+        <!-- Docproc worker thread pool -->
+        <threadpool>
+            <!-- 2 threads per vcpu => 16 threads on 8 vcpu -->
+            <threads>2</threads>
+        </threadpool>
+    </document-processing>
+
+</container>
+```
+
+## コンテナーのメモリ使用量
+
+> *助けて、コンテナー・ノードがメモリを 70% 以上使っています!*
+
+コンテナー・プロセスが設定された最大ヒープ・サイズを使い切っている状態はよく観測されます。これ自体は必ずしも問題の兆候ではありません。Java Virtual Machine (JVM) は割り当てられたヒープ内でメモリを管理しており、ガベージ・コレクションの頻度を減らすために可能な限り多くのヒープを使用するように設計されています。
+
+十分なメモリが割り当てられているかどうかを理解するには、ガベージ・コレクションのアクティビティを見てください。GC が頻繁に実行されて CPU を大量に使用していたり、長い停止を引き起こしていたりする場合は、ワークロードに対してヒープ・サイズが小さすぎる可能性があります。そのような場合は、最大ヒープ・サイズを増やすことを検討してください。一方、ガベージ・コレクターの実行頻度が低く効率的に動作している場合は、コンテナーが割り当てられたヒープのほとんどまたはすべてを使用し、さらにそれ以上を使用することも完全に正常です(一部のメモリはヒープ外にも割り当てられるためです。たとえば効率的なデータ転送のためのダイレクト・バッファーなど)。
+
+Vespa は JVM の GC パフォーマンスを監視できるように複数のメトリクスをエクスポートしています。たとえば [jvm.gc.overhead](/ja/reference/operations/metrics/container#jvm_gc_overhead) が 8~10% を超える場合は、ヒープ・メモリの増加や GC 設定のチューニングを検討すべきです。
+
+## JVM ヒープ・サイズ
+
+Vespa が使用するデフォルトの JVM ヒープ・サイズ設定を変更して、特定のハードウェア設定やアプリケーション要件により適合させます。
+
+JVM ヒープ全体の相対サイズを[利用可能メモリに対するパーセンテージ](/ja/reference/applications/services/container#nodes)で設定すると、ヒープ・サイズが正確にいくつになるかは分かりませんが、設定は適応的になり、利用可能メモリが少ない環境でもコンテナーが起動できることが保証されます。以下の例は、マシン上の利用可能メモリの 50% を JVM ヒープに割り当てます:
+
+```xml
+<container id="container" version="1.0">
+    <nodes>
+        <jvm allocated-memory="50%" />
+        <node hostalias="node0" />
+    </nodes>
+</container>
+```
+
+## JVM チューニング
+
+GC 関連のパラメーターの制御には *gc-options* を、その他のパラメーターのチューニングには *options* を使用します。[リファレンス・ドキュメント](/ja/reference/applications/services/container#nodes)を参照してください。例: G1 ガベージ・コレクターを使用して 4 GB のヒープで実行し、NewRatio = 1(old 世代と new 世代を同じサイズ)とし、詳細な GC ログ(stdout 経由で vespa.log ファイルに記録)を有効にします。
+
+```xml
+<container id="default" version="1.0">
+    <nodes>
+        <jvm options="-Xms4g -Xmx4g -XX:+PrintCommandLineFlags -XX:+PrintGC"
+             gc-options="-XX:+UseG1GC -XX:MaxTenuringThreshold=15" />
+        <node hostalias="node0" />
+    </nodes>
+</container>
+```
+
+docker イメージでのデフォルトのヒープ・サイズは 1.5g で、高スループットのアプリケーションでは小さすぎて、頻繁なガベージ・コレクションを引き起こす可能性があります。デフォルトでは G1GC コレクターが使用されます。
+
+### Config Server と Config Proxy
+
+config server と config proxy は、*services.xml* のモデルに基づいて実行されるものではありません。むしろ、そのモデル内のサービスをブートストラップするために使用されます。したがって、config server と config proxy の JVM パラメーターの設定には設定変数を使用する必要があります。また、変更後には再起動(config proxy の場合は *services*)が必要ですが、事前に *vespa prepare* や *vespa activate* を行う必要は*ありません*。例:
+
+```bash
+VESPA_CONFIGSERVER_JVMARGS      -Xlog:gc
+VESPA_CONFIGPROXY_JVMARGS       -Xlog:gc -Xmx256m
+```
+
+[Vespa 変数の設定](/ja/operations/self-managed/files-processes-and-ports#environment-variables)を参照してください。
+
+## コンテナーのウォームアップ
+
+一部のアプリケーションでは、起動直後のコンテナーに対する最初のクエリーの完了に長い時間がかかることが観測されます。これは通常、一部のコンポーネントがデータ構造や接続の遅延セットアップを行うためです。遅延初期化は避け、コンポーネントのコンストラクターでの事前(eager)初期化を優先すべきですが、常に可能とは限りません。
+
+このようなケースで最初のクエリーの問題を回避する方法は、起動時にウォームアップ・クエリーを実行することです。これは、通常のクエリーを処理する Handler のコンストラクターからクエリーを発行することで行います。デフォルト・ハンドラー [com.yahoo.search.handler.SearchHandler](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/handler/SearchHandler.java) を使用している場合は、これをサブクラス化し、そのサブクラスを *services.xml* でクエリー・リクエストのハンドラーとして設定します。
+
+ハンドラーのコンストラクターの最後の行に warmupQueries() メソッドの呼び出しを追加します。メソッドは次のようなものになります:
+
+```java
+private void warmupQueries() {
+    String[] requestUris = new String[] {"warmupRequestUri1", "warmupRequestUri2"};
+    int warmupIterations = 50;
+
+    for (int i = 0; i < warmupIterations; i++) {
+        for (String requestUri : requestUris) {
+            handle(HttpRequest.createTestRequest(requestUri, com.yahoo.jdisc.http.HttpRequest.Method.GET));
+        }
+    }
+}
+```
+
+これらのクエリーはコンテナーが外部クエリーの受け付けを開始する前に実行されるため、最初の外部クエリーはウォームアップ済みのコンテナー・インスタンスで処理されることになります。
+
+ウォームアップ・クエリーがメトリクスに報告されないようにするには、ウォームアップ・クエリーで [metrics.ignore](/ja/reference/api/query#metrics.ignore) を使用します。
+
+### ウォームアップの無効化
+
+services.xml の container セクションに以下の container http config を追加することで、ウォームアップを無効化できます:
+
+```xml
+<config name="container.core.container-http">
+  <warmup>false</warmup>
+</config>
+```

@@ -1,0 +1,807 @@
+---
+title: "クエリー API"
+---
+
+Vespa クエリー API を使用して、データのクエリー、ランキング、整理を行います。例:
+
+```bash
+$ vespa query "select * from music where year > 2001" \
+  "ranking=rank_albums" \
+  "input.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+```
+
+簡単に言うと、クエリーは以下のコンポーネントで構成されます:
+
+-   入力データ
+-   ランキングおよびグルーピングの指定
+-   結果
+-   その他の実行パラメーター
+
+このガイドは、API のより重要な要素の入門です。詳細は[クエリー API リファレンス](../reference/api/query)を参照してください。データフローについては、以下の[クエリー実行](#query-execution)を参照してください。
+
+## 入力
+
+入力データは、構造化データと非構造化テキストの両方です:
+
+```bash
+$ vespa query "select * from music where artist contains \"coldplay\" and default contains text(@q)" \
+  "q=head"
+```bash
+$ vespa query "select * from music where artist contains \"coldplay\" and default contains text(@q)" \
+  "q=head"
+```bash
+$ vespa query "select * from music where artist contains \"coldplay\" and default contains text(@q)" \
+  "q=head" \
+  "ranking=rank_albums" \
+  "input.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+```
+
+以下の[クエリー実行](#query-execution)を参照してください。
+
+### 入力の例
+
+```bash
+$ vespa query "select * from sources * where default contains text(@animal)" \
+  "animal=panda"
+```
+
+text() オペレーターはクエリープロパティ "animal" にアクセスし、プロパティ値を [weakAnd](../reference/querying/yql#grammar) クエリーにトークナイズします。結果は次のようになります:
+
+`select * from sources * where weakAnd(default contains "panda")`
+
+式の残りの部分を変更せずに "animal" の値を変更する場合:
+
+```bash
+$ vespa query "select * from sources * where default contains text(@animal)" \
+  "animal=panda smokey"
+```
+
+結果は次のとおりです:
+
+`select * from sources * where weakAnd(default contains "panda", default contains "smokey")`
+
+複数のクエリープロパティを組み合わせて、より複雑な式にする場合:
+
+```bash
+$ vespa query "select * from sources * where range(year, 1963, 2014) and (default contains text(@animal) or default contains text(@teddy))" \
+  "animal=panda" \
+  "teddy=bear roosevelt"
+```
+
+結果の YQL 式は次のとおりです:
+
+`select * from sources * where range(year, 1963, 2014) and (weakAnd(default contains "panda") or weakAnd(default contains "bear", default contains "roosevelt"))`
+
+### フィールドセット
+
+`where` 句で複数のフィールドをクエリーするには、フィールドセットを使用します。スキーマでは:
+
+```sd
+fieldset text_content {
+    fields: title, description
+}
+```
+
+フィールドセットを使用して両方のフィールドをクエリーします:
+
+```bash
+$ vespa query 'select * from sources where text_content contains text(@q)' \
+  'q=query a fieldset'
+```
+
+フィールドセット内のフィールドは同じマッチモードを持つ必要があります。詳細は[リファレンス](../reference/schemas/schemas#fieldset)を参照してください。
+
+### クエリープロファイル
+
+[クエリープロファイル](../reference/api/query#queryprofile)を使用して、クエリーパラメーターを設定に保存します。これによりクエリー文字列が短くなり、設定を変更するだけでクエリーを簡単に変更できます。ユースケースとしては、異なる市場ごとのクエリープロパティの設定や、変化しないパラメーターの設定などがあります。クエリープロファイルは、ネスト、バージョン管理、継承が可能です。
+
+### 地理フィルターとランキング
+
+緯度と経度を使用して位置でフィルタリングし、[ジオ検索](/ja/querying/geo-search)を実装します。[DistanceToPath](../reference/ranking/rank-features#distanceToPath\(name\).distance) は、近さに基づく[ランク関数](../basics/ranking)です。地理フィルタリングの代わりにランキングを使用すると、結果が改善されることがよくあります。
+
+### パラメーター置換
+
+パラメーター置換を使用すると、クエリー値を YQL 文字列自体に挿入する代わりに、リクエストパラメーターとして提供できます。これによりクエリー生成が簡素化され、文字列/セット/配列の値が YQL 文字列から分離されます。つまり、値に YQL のような構文が含まれていても YQL 文字列を破損しません:
+
+-   セット/配列の値を YQL 文字列から分離し、クエリー生成を簡素化する。
+-   クエリーのパースを高速化する。パラメーター置換の使用は文字列パースを加速する。
+-   重複を削減する。
+
+最も単純な形式として、文字列には [text()](../reference/querying/yql#text) を使用します:
+
+```text
+... where default contains text(@user_input)&user_input=free+text
+```
+
+リスト、マップ、配列も使用できます。例:
+
+```text
+# Simple example: provide a set for the IN operator
+... where id in (@my_set)&my_set=10,20,30
+
+# Same set, but use the set as a block-list (exclude items in the set)
+... where !(id in (@my_set))&my_set=10,20,30
+
+# Use a weightedSet operator
+... where weightedSet(field, @my_set)&my_set={a:1,b:2}
+```
+
+データの重複を排除するのにも最適です。Vespa 8.287 からは、`embed` でパラメーター置換を使用できます:
+
+```bash
+$ vespa query \
+  'yql=select id, from product where {targetHits:10}nearestNeighbor(embedding, query_embedding) or userQuery()' \
+  'input.query(query_embedding)=embed(transformer, @query)' \
+  'input.query(query_tokens)=embed(tokenizer, @query)' \
+  'query=running shoes for kids, white'
+```
+
+[userQuery()](../reference/querying/yql#userquery) オペレーターで使用される [query](../reference/api/query#model.querystring) という名前のパラメーターの使用に注目してください。また、[embed](../rag/embedding#embedding-a-query-text) 関数で置換される値にも注目してください。
+
+形式の完全なリストは[リファレンス](../reference/querying/yql#parameter-substitution)を参照してください。
+
+## ランキング
+
+[ランキング](../basics/ranking)は、クエリーとデータの計算を指定します。ドキュメントにスコアを割り当て、スコア順に並べたドキュメントを返します。[ランクプロファイル](../reference/api/query#ranking.profile)は、ドキュメントのスコアの計算方法の仕様です。アプリケーションは複数のランクプロファイルを持ち、異なる計算を実行できます。例として、クエリーカテゴリーとユーザー埋め込みを指定するクエリー([テンソルユーザーガイド](../ranking/tensor-user-guide#ranking-with-tensors)より):
+
+```sd
+rank-profile product_ranking inherits default {
+    inputs {
+        query(q_category) tensor<float>(category{})
+        query(q_embedding) tensor<float>(x[4])
+    }
+
+    function p_sales_score() {
+        expression: sum(query(q_category) * attribute(sales_score))
+    }
+
+    function p_embedding_score() {
+        expression: closeness(field, embedding)
+    }
+
+    first-phase {
+        expression: p_sales_score() + p_embedding_score()
+    }
+    match-features: p_sales_score() p_embedding_score()
+}
+```
+
+```bash
+vespa query 'yql=select * from product where {targetHits:1}nearestNeighbor(embedding,q_embedding)' \
+  'input.query(q_embedding)=[1,2,3,4]' \
+  'input.query(q_category)={"Tablet Keyboard Cases":0.8, "Keyboards":0.3}' \
+  'ranking=product_ranking'
+```
+
+<Note>
+**注:**
+
+この例では、`input.query(q_embedding)` は `ranking.features.query(q_embedding)` の短縮形です。テンソル形式については[リファレンス](../reference/api/query#ranking.features)を参照してください。
+</Note>
+
+結果は、ランキングの代わりに[ソート](../reference/querying/sorting-language)を使用して並べることもできます。
+
+上記のランクプロファイルはテキストランキングを行いませんが、そのようなプロファイルは組み込みで用意されています。テキスト検索の詳細は[テキストマッチング](/ja/querying/text-matching)で説明されています。正規化、プレフィックス検索、リングイスティクスに関する情報はそちらを参照してください。
+
+## グルーピング
+
+[グルーピング](/ja/querying/grouping)は、ランキング後に結果セット内のドキュメントをグループ化する方法です。例として、アーティストごとに最大 3 枚のアルバムを、年でグループ化して返します:
+
+```bash
+$ vespa query "select * from music where true limit 0 | all(group(year) each(max(3) each(output(summary())) ) )"
+```
+
+グルーピングで使用されるフィールドは [attribute](../content/attributes) でなければなりません。グルーピング式は YQL クエリー文字列の一部で、末尾に追加されます。
+
+アプリケーションは*すべての*ドキュメントをグループ化できます(YQL ですべてのドキュメントを選択)。`limit 0` を使用すると、グルーピング結果のみが返されます。
+
+## 結果
+
+デフォルトでは、すべてのフィールドが結果に返されます。フィールドのサブセットを指定するには、[ドキュメントサマリー](/ja/querying/document-summaries)を使用します。テキストを検索する場合、フィールドにドキュメントの静的な要約を持たせるか、[ダイナミックサマリー](../reference/schemas/schemas#summary)を使用することで、検索の視覚的な関連性を向上させ、使用帯域幅を削減できます。
+
+デフォルトの出力形式は [JSON](../reference/querying/default-result-format) です。バイナリの [CBOR](https://cbor.io/) 形式も [format=cbor](../reference/api/query#presentation.format) で利用できます。レスポンスはより小さく、特に数値データのレンダリングが高速で、デシリアライズすると同一の結果を生成するドロップイン代替です。他の形式で結果を生成するには、カスタム [Renderer](../applications/result-renderers) を作成します。
+
+結果を操作するコードを書くには、[リクエスト-レスポンス](../applications/processing)処理の詳細をお読みください。
+
+## クエリー実行
+
+<Frame>![クエリー実行 - クエリーからレスポンスまで](/assets/img/query-to-response.svg)</Frame>
+
+フェーズ:
+
+<Steps>
+<Step>
+**クエリー処理**: 正規化、書き換え、エンリッチ。サーチチェーン内のカスタムロジック
+</Step>
+<Step>
+**マッチング、ランキング、グルーピング/集約:** このフェーズはクエリーをコンテントノードにディスパッチします
+</Step>
+<Step>
+**結果処理、レンダリング:** クエリーフェーズで見つかったグローバルの上位ヒットのコンテンツ取得とスニペット生成
+</Step>
+</Steps>
+
+上記は簡略化したものです。クエリーが[結果のグルーピング](/ja/querying/grouping)も指定している場合、クエリーフェーズはコンテナーとコンテントノード間の複数のフェーズやラウンドトリップを伴うことがあります。クエリー実行の詳細については、[life of a query](../performance/sizing-search#life-of-a-query-in-vespa) を参照してください。
+
+クエリープランを分析するには、[trace.explainlevel](../reference/api/query#trace.explainlevel) を使用します。クエリープランを変更するには、次のヒントを使用してください:
+
+-   評価を高速化するには [ranked: false](../reference/querying/yql#ranked) クエリーアノテーションを使用する
+-   インデックス内のドキュメントのサブセットをランキングする top-k 選択を効率的に実装するには、[capped range search](../reference/querying/yql#numeric) を使用する。
+
+### クエリー処理とディスパッチ
+
+<Steps>
+<Step>
+クエリーは、フロントエンドアプリケーションから *クエリー API* を使用して、またはカスタム[リクエストハンドラー](../applications/request-handlers)が処理する任意のカスタムリクエスト形式で、コンテナーノードに送信されます。リクエストハンドラーはカスタムリクエスト形式をネイティブの Vespa API に変換します。
+</Step>
+<Step>
+[リングイスティクス処理](../linguistics/linguistics)や[クエリー書き換え](../linguistics/query-rewriting)のようなクエリーの前処理は、組み込みおよびカスタムの[サーチチェーン](../applications/chaining)で行われます。[Searcher の開発](../applications/searchers)を参照してください。
+
+デフォルトのサーチチェーンは *vespa* です。[クイックスタート](../basics/deploy-an-application-local)のように `ApplicationStatus` を調べることで、このチェーンにインストールされているコンポーネントを確認できます。クエリーに `&trace.level=4`(またはそれ以上)を追加すると、クエリーで呼び出されたコンポーネントが出力され、順序の分析に役立ちます。
+
+これは、クエリーをエンリッチするコードをプラグインする統合ポイントです。例: リクエスト内のユーザー ID からユーザープロファイルデータを検索する。サーチチェーンのコンポーネントを調べるには、*&trace.level=2* を設定します。
+</Step>
+<Step>
+クエリーはコンテナーから*コンテント・クラスター*に送信されます。詳細は[フェデレーション](/ja/querying/federation)を参照してください。アプリケーションは複数のコンテント・クラスターを持つことができます。Vespa はデフォルトですべてを検索します。[フェデレーション](/ja/querying/federation)はクラスターのクエリー方法を制御し、[sources](../reference/api/query#model.sources) はクラスターの名前を指定します。上の図には 1 つのコンテント・クラスターがありますが、複数も完全にサポートされており、[ドキュメントタイプ](../basics/schemas)ごとに異なるスケーリングが可能です。例えば、*tweet* ドキュメントタイプを *user* ドキュメントタイプとは別のコンテント・クラスターにインデックスすることで、両者を独立してスケーリングできます。
+
+<Frame>![クエリー処理とディスパッチ](/assets/img/query-dispatch.svg)</Frame>
+</Step>
+</Steps>
+
+### マッチング、ランキング、グルーピング
+
+<Steps>
+<Step>
+この時点で、クエリーは 1 つ以上の[コンテント・クラスター](../reference/applications/services/content)に入ります。[グループ分散](../content/elasticity#grouped-distribution)を使用するコンテント・クラスターでは、クエリーは[ディスパッチポリシー](../reference/applications/services/content#dispatch-tuning)を使用して単一グループ内のすべてのコンテントノードにディスパッチされ、フラットな単一グループのコンテント・クラスターでは、クエリーはすべてのコンテントノードにディスパッチされます。
+</Step>
+<Step>
+クエリーはコンテントノードに到着し、[Ready サブデータベース](../content/proton)内のドキュメントセットに対してマッチング、[ランキング](../basics/ranking)、集約/グルーピングを実行します。デフォルトでは、Vespa は [DAAT](../performance/feature-tuning#hybrid-taat-daat) を使用します。マッチングと first-phase のスコア計算はインターリーブされ、2 つの分離された順次フェーズではありません。*vespa-proton* は *ready* ドキュメントに対してマッチングを行い、リクエスト/スキーマで指定されたとおりに[ランキング](../basics/ranking)します。各コンテントノードは、ドキュメントコーパス全体のサブセットに対してマッチングとランキングを行い、要求された場合は、総ヒット数、ソートおよびグルーピングデータなどのメタ情報とともにヒットを返します。
+
+<Frame>![クエリー](/assets/img/proton-query.svg)</Frame>
+
+</Step>
+<Step>
+グループ内のコンテントノードが[タイムアウト](../performance/graceful-degradation)以内に応答すると、[max-hits / top-k](../reference/applications/services/content#dispatch-tuning) の結果がクエリーフェーズの結果処理のためにコンテナーに返されます。このフェーズでは、ヒットごとに利用できるデータは内部のグローバルドキュメント ID(gid)とランキングスコアのみです。カバレッジや総ヒット数などの結果メタ情報もあります。フィールドの内容などのヒット固有の追加データは、結果処理フェーズがコンテンツ取得を完了するまで利用できません。
+</Step>
+</Steps>
+
+### 結果処理(fill)フェーズ
+
+<Steps>
+<Step>
+クエリーフェーズの結果が利用可能になると、カスタムのチェーンされた [Searcher コンポーネント](../applications/searchers#multiphase-searching)は、ヒットの内容がコンテントノードから取得される前に、最初の検索フェーズから利用可能な限られたデータを処理できます。コンテントノードからの取得は遅延実行され、カスタム Searcher コンポーネントが事前に要求しない限り、レスポンスのレンダリングまで呼び出されません。
+</Step>
+<Step>
+要求された[ドキュメントサマリー](/ja/querying/document-summaries)内のフィールドのみがコンテントノードから取得されます。サマリーリクエストは、クエリーフェーズの結果を生成したコンテントノードに直接送られます。
+</Step>
+<Step>
+コンテントノードへのリクエストが完了すると、完全な結果セットはカスタムコンポーネントによってさらに処理(結果の重複排除、top-k の再ランキングなど)されてから、レスポンスが[レンダリング](../applications/result-renderers)されます。
+</Step>
+</Steps>
+
+## HTTP
+
+<Note>
+**注:**
+
+Vespa はクエリー API 用の Java クライアントライブラリを提供していません。クエリーのベストプラクティスは、ユーザーが生成したクエリーをそのまま送信し、[Searcher コンポーネント](../applications/searchers)を使用して追加のロジックを実装することです。
+</Note>
+
+Vespa チームは、体系的な評価を行っていないため、特定の HTTP クライアントを推奨していません。私たちが最も経験を持っているのは Apache HTTP クライアントです。[HTTP ベストプラクティス](/ja/clients/http-best-practices)(Vespa Cloud 向けですが、ほとんどは一般的に適用可能)も参照してください。[#24534](https://github.com/vespa-engine/vespa/issues/24534) のディスカッションも参照してください。
+
+GET または POST を使用します。パラメーターは GET パラメーターとして送信するか、JSON として POST できます。これらは同等です:
+
+```bash
+$ curl -H "Content-Type: application/json" \
+    --data '{"yql" : "select * from sources * where default contains \"coldplay\""}' \
+    http://localhost:8080/search/
+
+$ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+default+contains+%22coldplay%22
+```
+
+### POST の使用
+
+この形式は[クエリー API リファレンス](../reference/api/query)に基づいており、*フラット*なドット表記から*ネストされた* JSON 構造に変換されています。リクエストメソッドは POST、*Content-Type* は *"application/json"* でなければなりません。例:
+
+```bash
+$ curl -X POST -H "Content-Type: application/json" --data '
+  {
+      "yql": "select * from sources * where true",
+      "offset": 5,
+      "ranking": {
+          "matchPhase": {
+              "ascending": true,
+              "maxHits": 15
+          }
+      },
+      "presentation" : {
+          "bolding": false,
+          "format": "json"
+      }
+  }' \
+  http://localhost:8080/search/
+```
+
+<Note>
+**注:**
+
+[Query Builder](https://github.com/vespa-engine/vespa/tree/master/client/js/app#query-builder) アプリケーションを試してみてください!
+</Note> <Warning>
+**重要:**
+
+セキュリティフィルターは GET リクエストと POST リクエストを異なる方法でブロックすることがあります。これにより POST されたクエリーがブロックされる可能性があります。
+</Warning>
+
+### HTTP
+
+[http サーバー](../reference/applications/services/http#server)を設定します。例えば、URL の長さ(ヘッダーを含む)を設定するには *requestHeaderSize* を設定します:
+
+```xml
+<container version="1.0">
+    <http>
+        <server port="8080" id="myserver">
+            <config name="jdisc.http.connector">
+                <requestHeaderSize>32768</requestHeaderSize>
+            </config>
+        </server>
+    </http>
+</container>
+```
+
+HTTP keepalive がサポートされています。
+
+値は標準の URL エンコーディングに従ってエンコードする必要があります。つまり、スペースは + に、+ は %2b に、というようにエンコードされます。[RFC 2396](https://www.ietf.org/rfc/rfc2396.txt) を参照してください。
+
+HTTP ステータスコードは[クエリー API リファレンス](../reference/api/query#http-status-codes)にあります。[Stack Overflow の質問](https://stackoverflow.com/questions/54340386/how-should-i-customize-my-search-result-in-vespa/54344429#54344429)も参照してください。
+
+クエリー API のクライアントを実装する際は、HTTP ステータスコードの処理について以下のガイドラインを考慮してください:
+
+#### クライアントエラーとサーバーエラー
+
+一般に、クライアントは*サーバーエラー*(5xx)の場合にのみリクエストをリトライすべきで、*クライアントエラー*(4xx)の場合はリトライすべきではありません。例えば、クライアントは `400 Bad Request` レスポンスを受け取った後にリクエストをリトライす**べきではありません**。
+
+#### バックプレッシャーの処理
+
+5xx レスポンス、特に `503 Service Unavailable` と `504 Gateway Timeout` の処理には注意してください。これらのレスポンスは通常、システムの過負荷を示しており、バックオフなしで盲目的にリトライすると状況が悪化するだけです。例えば、`503 Service Unavailable` は、リクエストを処理する検索ハンドラースレッドが利用できない場合に返されます。これはシステムからのバックプレッシャーの明確な兆候であり、クライアントは全体のスループットを減らし、過負荷状態の悪化を避けるために適切なスロットリング機構を実装すべきです。
+
+## タイムアウト
+
+クエリータイムアウトの設定方法は[リファレンス](../reference/api/query#timeout)を参照してください。よくある質問:
+
+-   *タイムアウトはクエリー全体に適用されますか、それともコンテント・クラスターに送信されてからだけですか?[Searcher](../applications/searchers) がコンテナー内で 2*timeout の間スリープした場合、呼び出し元はタイムアウトを示すレスポンスを受け取りますか?*
+    
+    タイムアウトは、コンテナーとコンテントノードの処理の両方を含むクエリー全体に適用されます。ただし、タイムアウト処理は協調的です。時間のかかる Searcher や外部リソースにアクセスする Searcher がある場合、Searcher コードは [Query.getTimeLeft()](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/Query.java) をチェックすべきです。したがってこの場合、タイムアウトしますが、それは 2*timeout + アルファの後になります。
+    
+-   *マルチフェーズ検索中、クエリータイムアウトは個々の Searcher ごとに設定されますか、それともサーチチェーン全体に設定されますか?*
+    
+    タイムアウトはクエリー全体に対するものです(そしてほとんどの Searcher はタイムアウトをチェックしません。`Query.getTimeLeft()` を使用してください)。例えば、サーチチェーンに 3 つの Searcher がある場合、クエリータイムアウトが 500 ms のとき、1 つの Searcher が 497 ms かかり、2 つの Searcher がそれぞれ 1 ms かかっても問題ありません。
+    
+-   *複数のサーチチェーンを非同期に実行する場合、これらの各チェーンに異なるクエリータイムアウトを設定し、さらに非同期実行を行う Searcher に別の全体タイムアウトを設定できますか?*
+    
+    それらのチェーンに送信する各クローンクエリーに異なるタイムアウトを設定でき、それらからのレスポンスを待つ際にタイムアウトを指定できます。
+    
+
+## エラー処理
+
+[結果](../reference/querying/default-result-format#error)内の `root: error` 要素をチェックしてください:
+
+```json
+{
+    "root": {
+        "errors": [
+            {
+                "code": 8,
+                "summary": "Error in search reply.",
+                "source": "music",
+                "message": "Could not locate attribute for grouping number 0 : Failed locating attribute vector 'year'. Ignoring this grouping."
+            }
+        ],
+```
+
+## トラブルシューティング
+
+Vespa がクエリー文字列から有効な検索式を生成できない場合、*Null query* というエラーメッセージが表示されます。トラブルシューティングするには、リクエストに [&trace.level=2](../reference/api/query#trace.level) を追加します。*yql* パラメーターが欠落している場合も、このエラーメッセージが表示されます。
+
+### クエリートレース
+
+クエリー実行をデバッグするには、*クエリートレース*を使用します。[trace.level=1](../reference/api/query#trace.level)(またはそれ以上)を使用して有効にします。呼び出されたすべての Searcher のタイミング情報を得るには、[trace.timestamps=true](../reference/api/query#trace.timestamps) を追加します。以下の結果例にトレースの例があります。[実践的な検索性能ガイド](../performance/practical-search-performance-guide#advanced-query-tracing)も試してみてください。
+
+カスタムコードでは、[Query.trace](https://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/Query) を使用してトレース出力を追加します。
+
+### 大きなメモリ使用量
+
+2G を超える RAM を割り当てるクエリーは、次のようなメッセージをログに記録します:
+
+```text
+mmap 2727 of size 8589934592 from : search::attribute::PostingListMerger<int>::reserveArray(unsigned int, unsigned long)(0x40001513eef0)
+
+(0x400013595334) from (0x400013593acc) from operator new(unsigned long)(0x400013592f88) from search::attribute::PostingListMerger<int>::reserveArray(unsigned int, unsigned long)(0x40001513eef0) from search::attribute::PostingListSearchContextT<int>::fetchPostings(search::queryeval::ExecuteInfo const&, bool)(0x400015159a38) from search::queryeval::SameElementBlueprint::fetchPostings(search::queryeval::ExecuteInfo const&)(0x4000154f36fc) from search::queryeval::IntermediateBlueprint::fetchPostings(search::queryeval::ExecuteInfo const&)(0x40001549ad38) from proton::matching::MatchToolsFactory::MatchToolsFactory(proton::matching::QueryLimiter&, vespalib::Doom const&, proton::matching::ISearchContext&, search::attribute::IAttributeContext&, search::engine::Trace&, std::basic_string_view<char, std::char_traits<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, ...
+
+1 mappings of accumulated size 8589934592
+```
+
+これは必ずしも何かが間違っていることを示すわけではありません。例えば、範囲検索は多くのメモリを使用します。
+
+## 結果の例
+
+通常のクエリー結果:
+
+```json expandable
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 1
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 3,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "id:mynamespace:music::a-head-full-of-dreams",
+                "relevance": 0.16343879032006284,
+                "source": "music",
+                "fields": {
+                    "sddocname": "music",
+                    "documentid": "id:mynamespace:music::a-head-full-of-dreams",
+                    "artist": "Coldplay",
+                    "album": "A Head Full of Dreams",
+                    "year": 2015,
+                    "category_scores": {
+                        "cells": [
+                            {
+                                "address": {
+                                    "cat": "pop"
+                                },
+                                "value": 1.0
+                            },
+                            {
+                                "address": {
+                                    "cat": "rock"
+                                },
+                                "value": 0.20000000298023224
+                            },
+                            {
+                                "address": {
+                                    "cat": "jazz"
+                                },
+                                "value": 0.0
+                            }
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+}
+```
+
+空の結果:
+
+```json
+{
+    "root": {
+        "fields": {
+            "totalCount": 0
+        },
+        "id": "toplevel",
+        "relevance": 1.0
+    }
+}
+```
+
+エラー結果:
+
+```json expandable
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 2
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 4,
+            "full": true,
+            "nodes": 2,
+            "results": 2,
+            "resultsFull": 2
+        },
+        "errors": [
+            {
+                "code": 8,
+                "summary": "Error in search reply.",
+                "source": "music",
+                "message": "Could not locate attribute for grouping number 0 : Failed locating attribute vector 'year'. Ignoring this grouping."
+            }
+        ],
+```
+
+シンプルな検索アプリケーションで、多くのフィールドが未定義の場合。クエリー `/search/?query=blues&hits=3&trace.level=2` の結果
+
+```json expandable
+{
+
+    "trace": {
+        "children": [
+            {
+                "message": "No query profile is used"
+            },
+            {
+                "message": "Invoking chain 'vespa' [com.yahoo.prelude.statistics.StatisticsSearcher@native -> com.yahoo.prelude.querytransform.PhrasingSearcher@vespa -> ... -> federation@native]"
+            },
+            {
+                "children": [
+                    {
+                        "message": "Detected language: ENGLISH"
+                    },
+                    {
+                        "message": "Language ENGLISH determined by the characters in the terms."
+                    },
+                    {
+                        "message": "Query parsed to: select * from sources * where default contains \"blues\" limit 3"
+                    },
+                    {
+                        "message": "Child execution",
+                        "children": [
+                            {
+                                "message": "Stemming: [select * from sources * where default contains ({\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false}\"blue\") limit 3]"
+                            },
+                            {
+                                "message": "Lowercasing: [select * from sources * where default contains ({\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false}\"blue\") limit 3]"
+                            },
+                            {
+                                "message": "sc0.num0 search to dispatch: query=[blue] timeout=5000ms offset=0 hits=3 grouping=0 : collapse=false restrict=[music]"
+                            },
+                            {
+                                "message": "Current state of query tree: WORD[connectedItem=null connectivity=0.0 creator=ORIG explicitSignificance=false fromSegmented=false index=\"\" isRanked=true origin=\"(0 5)\" segmentIndex=0 significance=0.0 stemmed=true uniqueID=1 usePositionData=true weight=100 words=true]{\n \"blue\"\n}\n"
+                            },
+                            {
+                                "message": "YQL+ representation: select * from sources * where default contains ({\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false, \"id\": 1}\"blue\") limit 3"
+                            },
+                            {
+                                "message": "sc0.num0 dispatch response: Result (3 of total 10 hits)"
+                            },
+                            {
+                                "message": "sc0.num0 fill to dispatch: query=[blue] timeout=5000ms offset=0 hits=3 grouping=0 : collapse=false restrict=[music] summary=[null]"
+                            },
+                            {
+                                "message": "Current state of query tree: WORD[connectedItem=null connectivity=0.0 creator=ORIG explicitSignificance=false fromSegmented=false index=\"\" isRanked=true origin=\"(0 5)\" segmentIndex=0 significance=0.0 stemmed=true uniqueID=1 usePositionData=true weight=100 words=true]{\n \"blue\"\n}\n"
+                            },
+                            {
+                                "message": "YQL+ representation: select * from sources * where default contains ({\"origin\": {\"original\": \"blues\", \"offset\": 0, \"length\": 5}, \"stem\": false, \"normalizeCase\": false, \"id\": 1}\"blue\") limit 3"
+                            }
+                        ]
+                    },
+                    {
+                        "message": "Child execution"
+                    }
+                ]
+            }
+        ]
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 10
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 10,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:0/0/0/dfd9fcfa650b44545ef0b8b2",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Electric Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&id=1807865261",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&id=1807865261"
+                }
+            },
+            {
+                "id": "index:0/0/0/273d384dc214386c934d793f",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Delta Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&id=1804905714",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&id=1804905714"
+                }
+            },
+            {
+                "id": "index:0/0/0/b3c74a9bf3aea1e2260311c0",
+                "relevance": "-Infinity",
+                "source": "basicsearch",
+                "fields": {
+                    "sddocname": "music",
+                    "title": "Chicago Blues",
+                    "artist": "",
+                    "song": "",
+                    "bgndata": "",
+                    "sales": "NaN",
+                    "pto": -1,
+                    "mid": 2,
+                    "ew": "blues",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&id=1804905710",
+                    "userrate": "NaN",
+                    "pid": "",
+                    "weight": "NaN",
+                    "url": "",
+                    "isbn": "",
+                    "fmt": "",
+                    "albumid": "",
+                    "disp_song": "",
+                    "pfrom": "NaN",
+                    "bgnpfrom": "NaN",
+                    "categories": "Blues",
+                    "data": "",
+                    "numreview": "NaN",
+                    "bgnsellers": 0,
+                    "image": "",
+                    "artistspid": "",
+                    "newestedition": "NaN",
+                    "bgnpto": "",
+                    "year": "NaN",
+                    "did": "NaN",
+                    "scorekey": "NaN",
+                    "cbid": "NaN",
+                    "summaryfeatures": "",
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&id=1804905710"
+                }
+            }
+        ]
+    }
+}
+```
+
+グルーピングクエリー `/search/?hits=0&yql=select * from sources * where sddocname contains purchase | all(group(customer) each(output(sum(price))))` の結果
+
+```json expandable
+{
+
+    "trace": {
+        "children": [
+            {
+                "children": [
+                    {
+                        "message": "Child execution"
+                    }
+                ]
+            }
+        ]
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1,
+        "fields": {
+            "totalCount": 20
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 20,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "group:root:0",
+                "relevance": 1,
+                "continuation": {
+                    "this": ""
+                },
+                "children": [
+                    {
+                        "id": "grouplist:customer",
+                        "relevance": 1,
+                        "label": "customer",
+                        "children": [
+                            {
+                                "id": "group:string:Jones",
+                                "relevance": 9870,
+                                "value": "Jones",
+                                "fields": {
+                                    "sum(price)": 39816
+                                }
+                            },
+                            {
+                                "id": "group:string:Brown",
+                                "relevance": 8000,
+                                "value": "Brown",
+                                "fields": {
+                                    "sum(price)": 20537
+                                }
+                            },
+                            {
+                                "id": "group:string:Smith",
+                                "relevance": 6100,
+                                "value": "Smith",
+                                "fields": {
+                                    "sum(price)": 19484
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+}
+```

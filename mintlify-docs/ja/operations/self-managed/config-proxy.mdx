@@ -1,0 +1,99 @@
+---
+title: "Configuration proxy"
+sidebarTitle: "Config Proxy"
+---
+
+クラウドコンフィグ・システムの概要については、[アプリケーション・パッケージ](/ja/basics/applications)を参照してください。*config proxy* はすべての Vespa ノード上で実行されます。config proxy は、[VESPA\_CONFIGSERVERS](/ja/operations/self-managed/files-processes-and-ports#environment-variables) で定義された一連のコンフィグソースを持ちます。
+
+config proxy は、同じマシン上のコンフィグ・クライアントのためのプロキシとして機能し、すべてのクライアントは *localhost:19090* でコンフィグを要求できます。config proxy が使用する*コンフィグソース*は [VESPA\_CONFIGSERVERS](/ja/operations/self-managed/files-processes-and-ports#environment-variables) で設定され、1 つ以上のコンフィグソース（[config server](/ja/operations/self-managed/configuration-server) のアドレス）で構成されます。
+
+このプロキシはメモリキャッシュを備えており、可能な場合はそこからコンフィグを提供します。default モードでは、プロキシは config server に対して未処理のリクエストを保持し、コンフィグが変更されたとき（コンフィグの新しい世代）にレスポンスが返ります。つまり、config server 上でコンフィグが変更されるたびに、プロキシはレスポンスを受け取ってキャッシュを更新し、変更されたコンフィグをすべてのクライアントに応答します。
+
+config proxy には 2 つのモードがあります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>モード</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>default</td>
+      <td>サーバーからコンフィグを取得し、メモリキャッシュに保存します。config proxy は常に &#42;default&#42; モードで起動されます。可能な場合はキャッシュから提供します。常にコンフィグソースを使用します。再起動すると、メモリにキャッシュされていたすべてのコンフィグは失われます。</td>
+    </tr>
+    <tr>
+      <td>memorycache</td>
+      <td>メモリキャッシュからのみコンフィグを提供します。コンフィグソースは一切使用しません。再起動するとキャッシュされたすべてのコンフィグは失われます。モードを &#42;memorycache&#42; に設定すると、config proxy はキャッシュからコンフィグを提供し、config server への接続なしで動作するため、ノード上のすべてのアプリケーションは（それまで実行されておりコンフィグを要求済みであれば）従来どおり動作します。config proxy が停止、再起動、またはクラッシュした場合、このノード上のアプリケーションは動作しなくなります。</td>
+    </tr>
+  </tbody>
+</table>
+
+キャッシュされたコンフィグ、モード、コンフィグソースなどを調べるには、[vespa-configproxy-cmd](/ja/reference/operations/self-managed/tools#vespa-configproxy-cmd) を使用します。一部の設定を変更するためのコマンドもあります。次のようにコマンドを実行すると:
+
+```bash
+$ vespa-configproxy-cmd -m
+```
+
+利用可能なすべてのコマンドが表示されます。
+
+## config server からの切り離し
+
+```bash
+$ vespa-configproxy-cmd -m setmode memorycache
+```
+
+## コンフィグの検査
+
+サービス（この例では searchnode（proton）インスタンス）の設定を検査するには、次のようにします:
+
+<Steps>
+<Step>
+[/state/v1/config](/ja/reference/api/state-v1#state-v1-config) を使用して、サービスが使用しているアクティブなコンフィグ世代を確認します。*http://localhost:19110/state/v1/config* の例では、世代は 2 です:
+
+```json
+{
+    "config": {
+        "generation": 2,
+        "proton": {
+            "generation": 2
+        },
+        "proton.documentdb.music": {
+            "generation": 2
+        }
+    }
+}
+```
+</Step>
+<Step>
+[vespa-configproxy-cmd](/ja/reference/operations/self-managed/tools#vespa-configproxy-cmd) を使用して、該当する *config definition name*、*config id*、*config generation* を確認します。例:$ vespa-configproxy-cmd | grep proton
+
+```bash
+$ vespa-configproxy-cmd | grep proton
+
+vespa.config.search.core.proton,music/search/cluster.music/0,2,MD5:40087d6195cedb1840721b55eb333735,XXHASH64:43829e79cea8e714
+```
+
+`vespa.config.search.core.proton` はこの特定のコンフィグの *config definition name*、`music/search/cluster.music/0` はこのノード上の proton サービスインスタンスが使用する *config id*、`2` はアクティブなコンフィグ世代です。つまり、/state/v1/config のレスポンスと一致しているため、サービスは正しいコンフィグ世代を使用しています（一部のコンフィグ変更には再起動が必要な場合があります）。
+</Step>
+<Step>
+[vespa-get-config](/ja/reference/operations/self-managed/tools#vespa-get-config) を使用して、生成されたコンフィグを取得します。例:$ vespa-get-config -n vespa.config.search.core.proton -i music/search/cluster.music/0
+
+```bash
+$ vespa-get-config -n vespa.config.search.core.proton -i music/search/cluster.music/0
+
+basedir "/opt/vespa/var/db/vespa/search/cluster.music/n0"
+rpcport 19106
+httpport 19110
+...
+```
+
+<Warning>
+**Important:** 
+
+`-i` を省略するとデフォルトの設定が返されます。つまり、アクティブなサービスインスタンス向けに生成されたものではありません。
+</Warning>
+
+</Step>
+</Steps>

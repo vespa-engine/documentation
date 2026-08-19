@@ -1,0 +1,180 @@
+---
+title: "ストリーミング検索"
+---
+
+検索エンジンは、保存されたデータに対してインデックスを作成することでクエリーを高速化します。インデックスの構築と維持には余分なリソースがかかりますが、クエリーが大幅に安価になるため、通常はこれは良いトレードオフです。しかし、データが多数の小さなサブセットに分割され、各クエリーがそのサブセットの 1 つ(または少数)だけを検索するユースケースでは、これは当てはまりません。典型的な例は、ユーザーが自分のデータだけを検索する*パーソナル・インデックス*です。
+
+このようなユースケースのために、Vespa は*ストリーミング検索*を提供しています。これは、ドキュメントの生データのみを[保存](/ja/content/proton#document-store)し、検索をストリーミングで実装するモードで、インデックスは不要です。さらに、attribute もディスクにのみ保存されるため、メモリ上で必要なデータはドキュメントあたり 45 バイトだけとなり、ストリーミング・モードでは各ノードに数十億のドキュメントを保存できます。
+
+これは、ベクトル埋め込みを使用するパーソナル・データのアプリケーションで特に重要です。ベクトル埋め込みは通常、大量のメモリを必要とし、良好なパフォーマンスのためには ANN が必要になりますが、ANN は最も関連性の高いドキュメントをすべて表面化するわけではないため、パーソナル・データの検索には不向きなことが多いのです。
+
+ストリーミング・モードは、サブセットがコーパス全体に比べて*平均的に*小さい場合に適しています。Vespa は、時折現れる大きなサブセット(たとえば、大量のデータを持つユーザー)に対しても、そのようなデータ・グループを複数のコンテント・ノードに自動的にシャーディングして並列に検索することで、低いクエリー・レイテンシーを実現します。
+
+<Note>
+**注:** 
+
+同じクラスターでストリーミング・モードとインデックス・モードの両方を使用することは推奨されません。2 つのモードのリソース使用量とパフォーマンス特性は大きく異なり、そのようなシステムを運用して良好なパフォーマンスを得るのは非常に難しい場合があります。
+</Note>
+
+## ストリーミング検索における相違点
+
+ストリーミング検索は、マッチング、ランキング、グルーピング、ソートを含む Vespa のほとんどの機能について同じ実装を使用しており、ほぼ同じ機能をサポートしています。[インデックス・モード](/ja/reference/applications/services/content#document)で使用される[スキーマ](/ja/basics/schemas)は、ほとんどの場合、変更なしでストリーミング検索に使用できます。ただし、以下の相違点があります:
+
+- ストリーミング検索は、ドキュメントのフィード時に [linguistics](/ja/linguistics/linguistics) モジュールを使用しません。代わりに、ストリーミングされる各ドキュメントの string フィールドは、検索の実行の一部としてオンザフライで[トークナイズ](/ja/linguistics/linguistics-opennlp#tokenization)および[正規化](/ja/linguistics/linguistics-opennlp#normalization)されます。クエリー・タームも同じ方法で[正規化](/ja/linguistics/linguistics-opennlp#normalization)されます。ストリーミング検索では[ステミング](/ja/linguistics/linguistics-opennlp#stemming)はサポートされません。
+- インデックスが存在しないため、コンテント・ノードはターム統計や平均フィールド長の統計を収集しません。
+	- タームの重要度(significance)の恩恵を受ける[テキスト・マッチング機能](/ja/reference/ranking/rank-features)を使用する場合は、[グローバル significance モデル](/ja/ranking/significance#global-significance-model)によってタームの重要度を提供すべきです。これには特に *[bm25](/ja/ranking/bm25)*、*nativeRank*、*nativeFieldMatch*、*nativeProximity*、*fieldMatch* が含まれます。
+	- *bm25* を使用する場合は、より正確な *bm25* スコアのために [averageFieldLength](/ja/reference/ranking/rank-feature-configuration#properties) 設定を調整してください。ストリーミング検索では、[num_docs_indexed](/ja/reference/ranking/rank-features#num_docs_indexed) ランク・フィーチャーは 1 を返します。
+- インデックスが存在しない場合でも、フィールドをマッチング、ランキング、グルーピング、ソートで利用可能にするには、[index](/ja/reference/schemas/schemas#index) または [attribute](/ja/reference/schemas/schemas#attribute) として指定する必要があります。フィールドに関連付けられるデフォルトの [match](/ja/reference/schemas/schemas#match) 設定は、[インデックス・モード](/ja/reference/applications/services/content#document)と同等です。
+- ストリーミング検索は、より幅広いマッチング・オプション(substring や prefix など)をサポートし、これらはクエリー時にも設定時にも指定できます。詳細は[マッチング・オプション](#matching-options-in-streaming-search)を参照してください。
+- ストリーミング検索では [HNSW](/ja/reference/schemas/schemas#index-hnsw) インデックスはサポートされません。つまり、ストリーミング検索で使用される[最近傍検索](/ja/querying/nearest-neighbor-search#using-nearest-neighbor-search)は常に*厳密(exact)*です。したがって、*近似*最近傍検索を調整するための以下のパラメーターは効果がありません:
+	- [post-filter-threshold](/ja/reference/schemas/schemas#post-filter-threshold)
+	- [approximate-threshold](/ja/reference/schemas/schemas#approximate-threshold)
+	- [filter-first-threshold](/ja/reference/schemas/schemas#filter-first-threshold)
+	- [filter-first-exploration](/ja/reference/schemas/schemas#filter-first-exploration)
+	- [exploration-slack](/ja/reference/schemas/schemas#exploration-slack)
+	- [target-hits-max-adjustment-factor](/ja/reference/schemas/schemas#target-hits-max-adjustment-factor)
+- ストリーミング検索では[親子関係](/ja/schemas/parent-child)はサポートされません。このような機能を使用すると[デプロイメント](/ja/learn/glossary#deployment)が失敗します。
+- ストリーミング検索では [predicate フィールド](/ja/schemas/predicate-fields)はサポートされません。ドキュメント内に summary 専用フィールドとして存在することはできますが、検索はできません。
+- ストリーミング検索では [URI フィールド](/ja/reference/schemas/schemas#uri)はサポートされません。通常の string フィールドとして扱われ、uri 検索機能はサポートされません。
+- ストリーミング検索では、[firstPhaseRank](/ja/reference/ranking/rank-features#firstPhaseRank) ランク・フィーチャーは常にデフォルト値を返します。
+
+## ストリーミング検索の使用
+
+ストリーミング検索を使用するために必要な手順は以下のとおりです:
+
+<Steps>
+<Step>
+インデクシング・モードを [streaming](/ja/reference/applications/services/content#document) に設定します:
+
+```xml
+<content id="mycluster" version="1.0">
+	    <documents>
+	        <document type="myType" mode="streaming" />
+```
+</Step>
+<Step>
+ドキュメントが属する小さなサブセットを指定する *group* 値(通常は userid)を含む[ドキュメント ID](/ja/schemas/documents) を使用します。これらは `id:myNamespace:myType:**g=myUserid**:myLocalid` という形式を持ち、[document/v1](/ja/writing/document-v1-api-guide) リクエストのパスとして表現する場合は `document/v1/myNamespace/myType/**group/myUserId**/myLocalId` となります
+</Step>
+<Step>
+クエリー・パラメーター [streaming.groupname](/ja/reference/api/query#streaming.groupname) を使用して、検索対象のサブセットを指定します。
+</Step>
+</Steps>
+
+完全な例は、[ベクトル・ストリーミング検索サンプル・アプリケーション](https://github.com/vespa-engine/sample-apps/tree/master/vector-streaming-search)を参照してください。
+
+## ストリーミング検索でのインデクシング・ステートメントの有効化
+
+<Warning>
+**重要:** 
+
+Vespa 8.287 以降、このセクションは無視してかまいません。`<document-processing/>` タグを追加する必要はありません。設定はインデックス・モードを使用する場合と同一です。
+</Warning>
+
+インデクシング・ステートメントは、名前が示すとおり主にインデクシングに使用されるため、ストリーミング検索ではデフォルトでは実行されません。
+
+しかし、ストリーミングを使用する場合でもインデクシング・ステートメントを実行できると便利なことがあります。たとえば、次のように `embed` 関数を使用してテキストを埋め込みベクトルに変換する場合です
+
+```js
+indexing: input myTextField | embed | attribute
+```
+
+インデクシング・ステートメントはドキュメント・プロセッサーによって実行されるため、ストリーミングでこれらを有効にするには、コンテナー・クラスターでドキュメント処理を有効にし、コンテント・クラスターからインデクシング処理を行うクラスターとしてそれを指定します:
+
+```xml
+<services version="1.0">
+    <container id="myContainers" version="1.0">
+        ...
+        <document-processing/>
+        ...
+    </container>
+
+    <content id="mail" version="1.0">
+        ...
+        <documents>
+            <document type="myType" mode="streaming" />
+            <document-processing chain="indexing" cluster="myContainers" />
+        </documents>
+        ...
+    </content>
+</services>
+```
+
+## ストリーミング検索でのマッチング・オプション
+
+ストリーミング検索は、テキスト・フィールドのマッチングにおいてより高い柔軟性を提供します。マッチ設定は任意のテキスト・フィールドに対してクエリー時に指定でき、`indexing: index` が指定されたフィールドは [suffix](/ja/reference/schemas/schemas#suffix) および [substring](/ja/reference/schemas/schemas#substring) マッチングをサポートします。
+
+YQL でクエリー時にマッチ設定を指定するには:
+
+```text
+select * from sources * where artist contains ({prefix:true}"col")
+select * from sources * where artist contains ({substring:true}"old")
+select * from sources * where artist contains ({suffix:true}"play")
+```
+
+スキーマでフィールドのデフォルトのマッチ設定を指定するには:
+
+```js
+field artist type string {
+    indexing: summary | index
+    match: substring
+}
+```
+
+## ストリーミング検索のグルーピング拡張
+
+[グルーピング](/ja/querying/grouping)はストリーミング検索でも通常どおり機能しますが、ここで説明する 2 つの追加機能を提供します。
+
+### すべてのドキュメントに対するグルーピング
+
+ストリーミング検索はクエリーに関係なく、グループ名/セレクションに一致するすべてのドキュメントを「見る」ため、クエリーに一致するドキュメントだけでなく、それらすべてのドキュメントに対してグルーピングを行うことが可能です。これは、グルーピング式で `where(true)` を使用することで行います:
+
+```text
+all( where(true) all(group(myfield) each(output(count()))) )
+```
+
+この場合、グループに対して関連度(relevancy)は計算されません。関連度を持つのはマッチしたヒットだけだからです。
+
+### docidnsspecific 関数
+
+`docidnsspecific` 関数は、名前空間を除いた docid を返します。
+
+```text
+all( group(docidnsspecific()) each(output(count())) )
+```
+
+## ストリーミング検索のリソース使用量
+
+**メモリ**: ストリーミング検索は、ドキュメントの内容に関係なく、ドキュメントあたり 45 バイトのメモリを必要とします。
+
+**ディスク**: ストリーミング検索は、生のドキュメント・データを圧縮形式で保存するためのディスク領域を必要とします。サイズは実際のデータに依存しますが、ドキュメント数に対して線形に外挿できます。
+
+## ストリーミング検索でのクエリー・チューニング
+
+ストリーミング検索は [visit](/ja/writing/visiting) 操作です。並列性は [persistence-threads](/ja/reference/applications/services/content#persistence-threads) を使用して設定します:
+
+```xml
+<persistence-threads count='8'/>
+<visitors thread-count='8'/>
+```
+
+[Vespa Cloud](/) では、この数は [resources](/ja/reference/applications/services/services) で設定された VCPU 数に合わせて自動的に設定されます。VCPU を増やしてもレイテンシーが下がらない場合は、ストリーミング検索が IO バウンドになっていることを意味します。
+
+### ドキュメント・ストアのチューニング: ダイレクト IO とキャッシュ
+
+メモリ使用量をより適切に制御するには、[ドキュメント・ストア・キャッシュ](/ja/reference/applications/services/content#summary)が有効な場合に、読み取りにダイレクト IO を使用してください。これにより OS のバッファー・キャッシュが小さくなり、パフォーマンスがより予測可能になります。ドキュメント・ストア・キャッシュは最近のエントリーをキャッシュし、繰り返しアクセスを行うユーザーやグループのパフォーマンスを向上させます。以下の設定はドキュメント・ストア・キャッシュに 1 GB を確保します。
+
+```xml highlight= {7-8, 11-13}
+<engine>
+  <proton>
+    <tuning>
+      <searchnode>
+        <summary>
+          <io>
+            <write>directio</write>
+            <read>directio</read>
+          </io>
+          <store>
+            <cache>
+              <maxsize>1073741824</maxsize>
+            </cache>
+```

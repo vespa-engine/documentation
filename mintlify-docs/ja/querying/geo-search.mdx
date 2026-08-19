@@ -1,0 +1,319 @@
+---
+title: "ジオサーチ"
+---
+
+ドキュメント内で地理的な位置をモデル化するには、単一の必須の位置であれば、型が [position](../reference/schemas/schemas#position) のフィールドを使用します。任意の数の位置(まったくない場合も含む)を許可するには、代わりに `array<position>` を使用します。これは、ヒットを制限する(円形の領域内に位置を持つドキュメントのみがヒットする)ためや、ある地点からの距離をランキング関数への入力として使用するため、あるいはその両方に使用できます。
+
+Vespa における地理的な地点は、地理的な[緯度](https://en.wikipedia.org/wiki/Latitude)と[経度](https://en.wikipedia.org/wiki/Longitude)を使用して指定します。例として、[カリフォルニア州サニーベール](https://www.google.com/maps/place/721+1st+Ave,+Sunnyvale,+CA+94089/@37.4181488,-122.0256157,12z)のある場所は、北緯 37.4181488 度、西経 122.0256157 度となります。これは JSON では `{ "lat": 37.4181488, "lng": -122.0256157 }` と表現されます。
+
+上記のとおり、北(緯度)と東(経度)には正の数を、南と西には負の数を使用します。これは一般的な慣例です。
+
+<Note>
+**注:**
+
+古い位置の形式(Vespa 5、6、7 で使用されていたもの)も、フィード入力としては引き続き受け付けられます。レガシー出力の有効化も一時的に可能です。[レガシーフラグ v7-geo-positions](../reference/querying/default-result-format#geo-position-rendering) を参照してください。
+</Note>
+
+## サンプルのスキーマとドキュメント
+
+サンプルのスキーマとしては、各企業が(本社または連絡先の)位置を持つ企業ディレクトリが考えられます。
+
+```js
+schema biz {
+    document biz {
+        field title type string {
+            indexing: index
+        }
+        field mainloc type position {
+            indexing: attribute | summary
+        }
+    }
+    fieldset default {
+        fields: title
+    }
+}
+```
+
+このスキーマを使用した、位置情報付きの企業エントリーの一例を示します。
+
+```json
+{
+    "put": "id:mynamespace:biz::business-1",
+    "fields": {
+        "title":      "Yahoo Inc (main office)",
+        "mainloc":    { "lat": 37.4181488, "lng": -122.0256157 }
+    }
+}
+```
+
+## 制限
+
+地理的な制限を追加する API は、YQL ステートメントで [geoLocation](../reference/querying/yql#geolocation) 句を使用し、地点とその地点からの最大距離を指定するというものです。
+
+```bash
+$ curl -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where title contains \"office\" and geoLocation(mainloc, 37.416383, -122.024683, \"20 miles\")"}' \
+  http://localhost:8080/search/
+```
+
+クエリーツリーの任意の場所に [GeoLocationItem](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/GeoLocationItem) を追加することで、プログラムによってクエリーを構築または変更することもできます。
+
+位置をランキングのみに使用する(位置のマッチングを*一切*要求しない)場合は、ランキング専用の項として指定します。これには YQL の [rank()](../reference/querying/yql#rank) 演算を使用するか、プログラムでクエリーを構築する場合は [RankItem](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/RankItem) を使用します。
+
+*同時に*、負の半径(たとえば `-1 m`)を指定します。これは任意の位置にマッチし、ドキュメント内の最も近い位置について距離などを計算します。例:
+
+```bash
+$ curl -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where title contains \"office\" and geoLocation(mainloc, 37.416383, -122.024683, \"20 miles\")"}' \
+  http://localhost:8080/search/
+```
+
+## 位置マッチからのランキング
+
+上記の例で使用する主なランク特徴量は [distance(mainloc).km](../reference/ranking/rank-features#distance\(name\).km) で、これに対してさらに計算を行い、目的の(クエリーの)位置に近いドキュメントにより良いランクを与えます。ここでは、どのような距離が実用的かを考慮する必要があります。徒歩、車、飛行機での移動では、ランキングのスケールがまったく異なるはずです。それをサポートする自然な方法の 1 つは、異なるランクプロファイルを使用することです。クエリーで最大距離を指定する場合は、それをランキングへの入力として送信し、スケーリングに使用することもできます。
+
+また、[closeness(mainloc)](../reference/ranking/rank-features#closeness\(name\)) もあります。これは正確な位置で 1.0 になり、調整可能な最大距離で 0.0 になるもので、多くのニーズにはこれで十分です。
+
+### 便利な summary-features
+
+さらに処理を行うために、計算された距離を返してもらうと便利な場合があります。これを行う推奨の方法は、関連するランク特徴量を [summary-features](../reference/schemas/schemas#summary-features) として使用することです。特に、[distance(*fieldname*).km](../reference/ranking/rank-features#distance\(name\).km) は地理的な距離をキロメートル単位で返し、[distance(*fieldname*).latitude](../reference/ranking/rank-features#distance\(name\).latitude) と [distance(*fieldname*).longitude](../reference/ranking/rank-features#distance\(name\).longitude) は最良の位置の地理座標を度単位で直接返します。これらは Searcher からプログラムで簡単に利用でき、さらなる処理のために[結果内の特徴量の値にアクセス](../ranking/ranking-expressions-features#accessing-feature-function-values-in-results)できます。
+
+<Note>
+**注:**
+
+`geoLocation` は正確な大円距離の計算は行いません。より単純な距離計算を使用しており、「ローカル」な検索(市や都市圏)には適しています。非常に遠く離れた位置や国際日付変更線に近い位置(ベーリング海など)では、計算結果が不正確になる場合があります。
+</Note>
+
+## 複数の位置フィールドの使用
+
+アプリケーションによっては、検索対象となる複数の位置属性を持つと便利な場合があります。たとえば、上記の例を支社のオフィスの位置で拡張できます。
+
+```js
+schema biz {
+    document biz {
+        field title type string {
+            indexing: index
+        }
+        field mainloc type position {
+            indexing: attribute | summary
+        }
+        field otherlocs type array {
+            indexing: attribute
+        }
+    }
+    fieldset default {
+        fields: title
+    }
+}
+```
+
+例の企業をオーストラリアとノルウェーのオフィスで拡張すると、次のようになります。
+
+```json
+{
+    "put": "id:mynamespace:biz::business-1",
+    "fields": {
+        "title":       "Yahoo Inc (some offices)",
+        "mainloc":     { "lat": 37.4, "lng": -122.0 },
+        "otherlocs": [ { "lat": -33.9, "lng": 151.2 },
+                       { "lat": 63.4, "lng": 10.4 } ]
+    }
+}
+```
+
+1 つのクエリー項目で検索できるのは、位置属性のうち 1 つだけです。複数のフィールドにまたがる検索を行うには、YQL を使用して複数の `geoLocation` 項目を `or` 句の中で組み合わせるか、複数のフィールドを 1 つの結合された配列フィールドにまとめます(上記の例では、"mainloc" の位置を "otherlocs" 配列にも複製し、必要に応じて名前を "otherlocs" から "all_locs" に変更することが考えられます)。
+
+## 空港の位置を使った例
+
+さらにいくつかの位置の例として、いくつかの空港とその位置を JSON 形式で示したリストを以下に示します。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>空港コード</th>
+      <th>都市</th>
+      <th>位置</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>SFO</td>
+      <td>サンフランシスコ、アメリカ</td>
+      <td><code>{`{ "lat": 37.618806, "lng": -122.375416 }`}</code></td>
+    </tr>
+    <tr>
+      <td>LAX</td>
+      <td>ロサンゼルス、アメリカ</td>
+      <td><code>{`{ "lat": 33.942496, "lng": -118.408048 }`}</code></td>
+    </tr>
+    <tr>
+      <td>JFK</td>
+      <td>ニューヨーク、アメリカ</td>
+      <td><code>{`{ "lat": 40.639928, "lng": -73.778692 }`}</code></td>
+    </tr>
+    <tr>
+      <td>LHR</td>
+      <td>ロンドン、イギリス</td>
+      <td><code>{`{ "lat": 51.477500, "lng": -0.461388 }`}</code></td>
+    </tr>
+    <tr>
+      <td>SYD</td>
+      <td>シドニー、オーストラリア</td>
+      <td><code>{`{ "lat": -33.946110, "lng": 151.177222 }`}</code></td>
+    </tr>
+    <tr>
+      <td>TRD</td>
+      <td>トロンハイム、ノルウェー</td>
+      <td><code>{`{ "lat": 63.457556, "lng": 10.924250 }`}</code></td>
+    </tr>
+    <tr>
+      <td>OSL</td>
+      <td>オスロ、ノルウェー</td>
+      <td><code>{`{ "lat": 60.193917, "lng": 11.100361 }`}</code></td>
+    </tr>
+    <tr>
+      <td>GRU</td>
+      <td>サンパウロ、ブラジル</td>
+      <td><code>{`{ "lat": -23.435555, "lng": -46.473055 }`}</code></td>
+    </tr>
+    <tr>
+      <td>GIG</td>
+      <td>リオデジャネイロ、ブラジル</td>
+      <td><code>{`{ "lat": -22.809999, "lng": -43.250555 }`}</code></td>
+    </tr>
+    <tr>
+      <td>BLR</td>
+      <td>バンガロール、インド</td>
+      <td><code>{`{ "lat": 13.198867, "lng": 77.705472 }`}</code></td>
+    </tr>
+    <tr>
+      <td>FCO</td>
+      <td>ローマ、イタリア</td>
+      <td><code>{`{ "lat": 41.804475, "lng": 12.250797 }`}</code></td>
+    </tr>
+    <tr>
+      <td>NRT</td>
+      <td>東京、日本</td>
+      <td><code>{`{ "lat": 35.765278, "lng": 140.385556 }`}</code></td>
+    </tr>
+    <tr>
+      <td>PEK</td>
+      <td>北京、中国</td>
+      <td><code>{`{ "lat": 40.073, "lng": 116.598 }`}</code></td>
+    </tr>
+    <tr>
+      <td>CPT</td>
+      <td>ケープタウン、南アフリカ</td>
+      <td><code>{`{ "lat": -33.971368, "lng": 18.604292 }`}</code></td>
+    </tr>
+    <tr>
+      <td>ACC</td>
+      <td>アクラ、ガーナ</td>
+      <td><code>{`{ "lat": 5.605186, "lng": -0.166785 }`}</code></td>
+    </tr>
+    <tr>
+      <td>TBU</td>
+      <td>ヌクアロファ、トンガ</td>
+      <td><code>{`{ "lat": -21.237999, "lng": -175.137166 }`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+## パスまでの距離
+
+この例では、[DistanceToPath](../reference/ranking/rank-features#distanceToPath\(name\).distance) ランク特徴量の概要を説明します。この特徴量は、*ドキュメントの位置*を、クエリーで与えられたパスにマッチさせます。この特徴量は、各ドキュメントからパスまでの最短距離を返すだけでなく、最も近い地点、すなわち*交点*に到達するまでにパスに*沿って*移動した距離も含みます。この特徴量は、計画された旅行の途中でガソリンスタンドを見つけるという分かりやすいユースケースから、*gas* 特徴量という愛称で呼ばれてきました。
+
+この例では、アメリカからバンガロールに旅行しており、帰りの旅程を計画しているところです。バンガロールで車を借り、チェンナイの空港に到着したら返却することにしました。すでにかなりお腹が空いているので、街を出たら食事のために立ち寄りたいと考えています。追加の給油手数料を払わずに済むよう、空港に到着する直前に給油もしたいと考えています。どの道を通るべきか、バンガロールの郊外にどんなレストランがあるか、チェンナイに近づいたらどんなガソリンスタンドがあるかを把握する必要があります。バンガロールから空港までの旅程を図示すると次のようになります。
+
+<Frame>
+![](/assets/img/geo/path1.png)
+</Frame>
+パスに沿ってレストランを検索すると、かなり大きな地図のウィンドウ内に存在するすべてのレストランのごく一部しか表示されません。ここでは、最も関連性の高い結果が実際にはすべてバンガロールまたはチェンナイにあることがわかります。
+<Frame>
+![](/assets/img/geo/path2.png)
+</Frame>
+最良の結果を見つけるには、地図ウィンドウを食事をする予定のあたりに移動して、検索をやり直します。
+<Frame>
+![](/assets/img/geo/path3.png)
+</Frame>
+
+空港近くのガソリンスタンドを見つけるにも、同様の操作が必要です。これは、*DistanceToPath* を使わずに、計画した旅程に沿った小さなウィンドウ内でレストランを検索する様子を示しています。次に、*DistanceToPath* を使用して、この種の計画をユーザーにとってより便利になるよう、素早く簡単に改善する方法を説明します。
+
+この特徴量の性質上、検索コーパスには位置データを持つドキュメントが含まれている必要があります。検索対象のドキュメントと同じ座標空間にあるパスをクエリーと一緒に渡すことができる [Searcher コンポーネント](../applications/searchers)を書く必要があります。最後に、目標の移動距離にどれだけマッチするか、そして同時にパスに「十分」近いかに応じてドキュメントをスコアリングする [rank-profile](../basics/ranking) を定義する必要があります。
+
+### クエリー構文
+
+このドキュメントでは、コンテナー用の Searcher プラグインの書き方は説明しません。[コンテナーのドキュメント](../applications/searchers)を参照してください。ただし、*DistanceToPath* が期待する構文を確認しておきましょう。[ランク特徴量リファレンス](../reference/ranking/rank-features#distanceToPath\(name\).distance)に記載されているように、パスは特徴量の名前と `path` キーワードによるクエリーパラメーターとして与えられます。
+
+```js
+yql=(…)&rankproperty.distanceToPath(name).path=(x1,y1,x2,y2,…,xN,yN)
+```
+
+ここで `name` は、位置データを保持する位置属性の名前と一致する必要があります。
+
+パス自体は、`N` 個の座標ペアのリストとして解析され、これらが合わせて `N-1` 個の線分を形成します。
+
+$$
+(x_1,y_1) \rightarrow (x_2,y_2),\ (x_2,y_2) \rightarrow (x_3,y_3),\ (\ldots),\ (x_{N-1},y_{N-1}) \rightarrow (x_N,y_N)
+$$
+
+<Note>
+**注:**
+
+パスは読みやすい(緯度、経度)形式では*なく*、内部形式(度に 100 万を掛けたもの)の整数のペアです。地理座標からこの形式への変換が必要な場合は、検索プラグインで行う必要があります。各ペアの最初の数値('x')は経度(東経または西経の度数)で、2 番目('y')は緯度(北緯または南緯の度数)であることに注意してください。これは地図の通常の向きに対応しており、緯度/経度の通常の順序とは*逆*です。
+</Note>
+
+### ランクプロファイル
+
+一旦このシナリオを離れると、次のようなランクプロファイルが考えられます。
+
+```js
+rank-profile default {
+    first-phase {
+        expression: nativeRank
+    }
+    second-phase {
+        expression: firstPhase * if (distanceToPath(ll).distance < 10000, 1, 0)
+    }
+}
+```
+
+このプロファイルは、まず Vespa の *nativeRank* 特徴量に従ってすべてのドキュメントをランク付けし、次に上位 100 件の結果に対して 2 回目のパスを行い、パスまでの距離に基づいてこれらを並べ替えます。ドキュメントがパスから 100 メートル以内にある場合は関連度を維持し、そうでない場合は関連度が 0 に設定されます。このようなランクプロファイルでも現在の問題は確かに解決できますが、Vespa のランキングモデルを使えば、これをはるかに発展させることができます。
+
+以下は、クエリーで指定されたパスまでの目標距離と移動距離に応じてドキュメントをランク付けするランクプロファイルです。
+
+```js
+rank-profile default {
+    first-phase {
+        expression {
+            max(0,    query(distance) - distanceToPath(ll).distance) *
+            (1 - fabs(query(traveled) - distanceToPath(ll).traveled))
+        }
+    }
+}
+```
+
+この式は 2 つの部分から成ります。最初の構成要素は、[クエリーパラメーター](../reference/ranking/ranking-expressions) `distance` と比較した、ドキュメントから指定パスまでの距離に基づいてランクを決定します。許容距離を超えた場合、この構成要素の寄与は 0 になります。距離の寄与は次に、クエリーパラメーター `traveled` と比較した実際の移動距離の差と掛け合わされます。要するに、このプロファイルは、パスに十分近いすべてのドキュメントを含め、実際の距離と移動距離の指標に従ってランク付けします。
+
+<Note>
+**注:**
+
+*DistanceToPath* は *2 次元座標*とのみ互換性があります。1 次元でのパス指定には意味がないためです。
+</Note>
+
+### 結果
+
+この例のために、ユーザーの最初の経路検索クエリーで見つかったパスを Vespa の[クエリー構文](#query-syntax)に渡せるカスタムのパス Searcher を実装済みであると仮定します。ユーザーが指定しなければならないパラメーターがさらに 2 つあります。`distance` と `traveled` です。Vespa は、これらのパラメーターが特徴量の出力と互換性のあるスケールで与えられることを期待しており、おそらくコンテナープラグインでマッピングも行うべきです。特徴量の *distance* 出力は Vespa の内部解像度で与えられ、これは 1 メートルあたり約 10 単位です。*traveled* 出力は 0 から 1 の間の正規化された数値で、0 はパスの始点、1 はパスの終点を表します。
+
+これは、このシナリオに最も適したヒットを返すためにこれらのパラメーターをどのように使用できるかを示しています。図は各クエリーの最上位ヒットのみを示していることに注意してください。
+
+<Frame>
+![](/assets/img/geo/path4.png)
+</Frame>
+<Frame>
+![](/assets/img/geo/path5.png)
+</Frame>
+
+1. DistanceToPath 特徴量を使ったレストランの検索。`distance = 1000, traveled = 0.1`
+2. DistanceToPath 特徴量を使ったガソリンスタンドの検索。`distance = 1000, traveled = 0.9`
+

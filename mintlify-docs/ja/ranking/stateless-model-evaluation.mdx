@@ -1,0 +1,199 @@
+---
+title: "ステートレス・モデル評価"
+---
+
+Vespa の得意分野は、大量のデータ・ポイントに対して機械学習モデルを高速に評価することです。しかし、ステートレスなコンテナーでリクエストに応じてモデルを 1 回だけ評価するためにも使用できます。[services.xml](/ja/reference/applications/services/services) で機能を有効にすることで、[アプリケーション・パッケージ](/ja/reference/applications/application-packages)の `models/` ディレクトリに追加されたすべての機械学習モデル([TensorFlow](/ja/ranking/tensorflow)、[Onnx](/ja/ranking/onnx)、[XGBoost](/ja/ranking/xgboost)、[LightGBM](/ja/ranking/lightgbm)、[Vespa ステートレス・モデル](/ja/reference/ranking/model-files))が、REST API と Java API の両方を通じて利用可能になり、独自のコードから推論を計算できます。
+
+サンプルのアプリケーション・パッケージは [model-evaluation システム・テスト](https://github.com/vespa-engine/system-test/tree/master/tests/container/model_evaluation/app)にあります。
+
+### model evaluation タグ
+
+REST API と Java API の両方を有効にするには、[services.xml](/ja/reference/applications/services/services) で、必要とする [container](/ja/applications/containers) クラスターの中に `model-evaluation` タグを追加します:
+
+```bash highlight= {3}
+<container>
+    ...
+    <model-evaluation/>
+    ...
+</container>
+```
+
+`model-evaluation` セクションには、オプションで ONNX モデル用の推論セッション・オプションを含めることができます。[ONNX 推論オプション](#onnx-inference-options)を参照してください。
+
+## REST API を使用したモデル推論
+
+モデルを評価する最も簡単な方法は REST API を使用することです。上記のように有効にすると、新しい API パス `/model-evaluation/v1/` が利用可能になります。アプリケーション・パッケージ内のモデルに関する情報(モデルへの期待される入力パラメーターを含む)を発見・確認するには、このルートからリンクをたどるだけです。モデルを評価するには、クエリー・パスに `/eval` を追加します:
+
+```bash
+http://host:port/model-evaluation/v1/<model-name>/<function>/eval?<param1=...>&...
+```
+
+ここで `<model-name>` は、アプリケーション・パッケージに複数のモデルをデプロイできるため、どのモデルを評価するかを示します。`<function>` は、モデルが評価可能な複数のシグネチャと出力を持つ場合があるため、どのシグネチャと出力を評価するかを指定します。モデルに関数が 1 つしかない場合は省略できます。モデルへの入力は、GET リクエストの場合はクエリー・パラメーターとして指定し、POST リクエストの場合はリクエストのボディ部分に含めることもできます。入力パラメーターの期待される形式は、[リテラル形式](/ja/reference/ranking/tensor#tensor-literal-form)で指定されたテンソルです。
+
+この例については [model-inference サンプル・アプリ](https://github.com/vespa-engine/sample-apps/tree/master/model-inference)を参照してください。
+
+### モデル評価 REST API のパラメーター
+
+モデル評価リクエストは以下のリクエスト・パラメーターを受け付けます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>パラメーター</th>
+      <th>型</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;format.tensors&#42;&#42;</td>
+      <td>String</td>
+      <td>結果でテンソルがどのようにレンダリングされるかを制御します。<br/><br/>  値: <code>{`short`}</code> <br/>説明:<br/> &#42;&#42;デフォルト&#42;&#42;。テンソル値を 2 つのキーを持つ JSON オブジェクトとしてレンダリングします。"type" は値を含み、"cells"/"blocks"/"values"(<a href="/ja/reference/schemas/document-json-format#tensor" aria-label="depending on the type">型に応じて</a>)はテンソルの内容を含みます。   テンソルの内容を<a href="/ja/reference/schemas/document-json-format#tensor" aria-label="type-appropriate short form">型に適した短縮形式</a>でレンダリングします。 <br/><br/> 値: <code>{`long`}</code><br/>説明:<br/> テンソル値を 2 つのキーを持つ JSON オブジェクトとしてレンダリングします。"type" は値を含み、"cells" はテンソルの内容を含みます。 <br/>  テンソルの内容を<a href="/ja/reference/schemas/document-json-format#tensor" aria-label="general verbose form">一般的な詳細形式</a>でレンダリングします。 <br/><br/> 値: <code>{`short-value`}</code>  <br/>説明:<br/> テンソルの内容を JSON 値として直接レンダリングします。<br/> テンソルの内容を<a href="/ja/reference/schemas/document-json-format#tensor" aria-label="type-appropriate short form">型に適した短縮形式</a>でレンダリングします。 <br/><br/> 値: <code>{`long-value`}</code> <br/>説明:<br/> テンソルの内容を JSON 値として直接レンダリングします。 <br/>  テンソルの内容を<a href="/ja/reference/schemas/document-json-format#tensor" aria-label="general verbose form">一般的な詳細形式</a>でレンダリングします。 <br/><br/> 値: <code>{`string`}</code> <br/>説明:<br/> テンソルの内容を<a href="/ja/reference/ranking/tensor#tensor-literal-form" aria-label="appropriate literal short form">適切なリテラル短縮形式</a>の文字列としてレンダリングします。 <br/><br/> 値: <code>{`string-long`}</code><br/>説明:<br/> テンソルの内容を<a href="/ja/reference/ranking/tensor#general-literal-form" aria-label="general literal form">一般リテラル形式</a>の文字列としてレンダリングします。</td>
+    </tr>
+  </tbody>
+</table>
+
+## Java を使用したモデル推論
+
+REST API はモデル推論を実行するための基本的なインターフェースを提供しますが、Java インターフェースははるかに多くの制御を提供し、たとえばカスタムの入出力フォーマットを実装できます。
+
+まず、`pom.xml` に以下の依存関係を追加します:
+
+```xml
+<dependency>
+    <groupId>com.yahoo.vespa</groupId>
+    <artifactId>container</artifactId>
+    <scope>provided</scope>
+</dependency>
+```
+
+(あるいは、最小限の依存関係にしたい場合は、`container` の代わりに `model-evaluation` に依存させます。)
+
+上記の依存関係と `services.xml` への `model-evaluation` 要素の追加により、モデルを評価する Java コンポーネントが、コンストラクターの引数として `ai.vespa.models.evaluation.ModelsEvaluator`([ModelsEvaluator.java](https://github.com/vespa-engine/vespa/blob/master/model-evaluation/src/main/java/ai/vespa/models/evaluation/ModelsEvaluator.java) を参照)のインスタンスを受け取れるようになります(Vespa が[自動的にインジェクトします](/ja/applications/dependency-injection))。
+
+推論を行うには、(任意のスレッドから)`ModelsEvaluator` API を使用します。サンプル・コード:
+
+```java expandable
+import ai.vespa.models.evaluation.ModelsEvaluator;
+import ai.vespa.models.evaluation.FunctionEvaluator;
+import com.yahoo.tensor.Tensor;
+
+// ...
+
+// Create evaluator
+FunctionEvaluator evaluator = modelsEvaluator.evaluatorOf("myModel", "mySignature", "myOutput"); // Unambiguous args may be skipped
+
+// Get model inputs for instance from query (here we just construct a sample tensor)
+Tensor.Builder b = Tensor.Builder.of(new TensorType.Builder().indexed("d0", 3));
+b.cell(0.1, 0);
+b.cell(0.2, 0);
+b.cell(0.3, 0);
+Tensor input = b.build();
+
+// Bind inputs to the evaluator
+evaluator.bind("myInput", input);
+
+// Evaluate model. Note: Evaluator must be discarded after a single use
+Tensor result = evaluator.evaluate());
+
+// Do something with the result
+```
+
+[model-inference サンプル・アプリ](https://github.com/vespa-engine/sample-apps/tree/master/model-inference)にもこの例があります。
+
+## Java でのモデル評価のユニット・テスト
+
+アプリケーションの開発中に、モデルやサーチャー、ドキュメント・プロセッサーをユニット・テストできると便利です。Vespa は、"models" ディレクトリの内容から構築できる `ModelsEvaluatorTester` を提供しています。これにより、Vespa のコンテキストでモデルが期待どおりに動作すること、そしてサーチャーやドキュメント・プロセッサーがモデルから正しい結果を得ることをテストできます。
+
+`pom.xml` に以下の依存関係が必要です:
+
+```bash
+<dependency>
+    <groupId>com.yahoo.vespa</groupId>
+    <artifactId>container-test</artifactId>
+    <scope>test</scope>
+</dependency>
+```
+
+これにより、テスト可能な `ModelsEvaluator` を構築できます:
+
+```java
+import com.yahoo.vespa.model.container.ml.ModelsEvaluatorTester;
+
+public class ModelsTest {
+    @Test
+    public void testModels() {
+        ModelsEvaluator modelsEvaluator = ModelsEvaluatorTester.create("src/main/application/models");
+
+        // Test the modelsEvaluator directly or construct a searcher and pass it in
+
+    }
+}
+```
+
+返される `ModelsEvaluator` オブジェクトには、渡されたディレクトリの下で見つかったすべてのモデルが含まれます。これはユニット・テストでのみ使用すべきであることに注意してください。
+
+[model-inference サンプル・アプリ](https://github.com/vespa-engine/sample-apps/tree/master/model-inference)は、ハンドラー、サーチャー、ドキュメント・プロセッサーのテストにこれを使用しています。
+
+## ONNX 推論オプション
+
+ONNX モデルは [ONNX Runtime](https://onnxruntime.ai/) を使用して評価されます。Vespa は推論をチューニングするための以下のオプションを提供しています:
+
+```bash
+<model-evaluation>
+    <onnx>
+        <models>
+            <model name="reranker_margin_loss_v4">
+                <intraop-threads>[number]</intraop-threads>
+                <interop-threads>[number]</interop-threads>
+                <execution-mode>parallel | sequential</execution-mode>
+                <gpu-device>[number]</gpu-device>
+            </model>
+        </models>
+    </onnx>
+</model-evaluation>
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>intraop-threads</td>
+      <td>省略可</td>
+      <td>number</td>
+      <td>max(1, CPU count / 4)</td>
+      <td>マルチスレッド実装を持つ演算の実行に利用可能なスレッド数。</td>
+    </tr>
+    <tr>
+      <td>interop-threads</td>
+      <td>省略可</td>
+      <td>number</td>
+      <td>実行モードが <code>{`parallel`}</code> の場合、<code>{`max(1, CPU count / 4)`}</code></td>
+      <td>複数の演算を並列に実行するために利用可能なスレッド数。これは <code>{`parallel`}</code> 実行モードの場合にのみ適用されます。</td>
+    </tr>
+    <tr>
+      <td>execution-mode</td>
+      <td>省略可</td>
+      <td>string</td>
+      <td>sequential</td>
+      <td>グラフの演算子がどのように実行されるかを制御します。<code>{`sequential`}</code> または <code>{`parallel`}</code> のいずれかです。</td>
+    </tr>
+    <tr>
+      <td>gpu-device</td>
+      <td>省略可</td>
+      <td>number</td>
+      <td></td>
+      <td>計算に使用する GPU デバイス番号を 0 始まりで設定します。つまり、GPU が <code>{`/dev/nvidia0`}</code> の場合は 0 に設定します。これは Nvidia CUDA 対応の GPU でなければなりません。</td>
+    </tr>
+  </tbody>
+</table>
+
+ステートレス・モデル評価は、アプリケーション・パッケージ内の `models` ディレクトリ配下のモデルの自動検出に基づいているため、上記の設定は、デフォルト設定を使用すべきでないモデルや GPU で実行すべきモデルに対してのみ必要です。

@@ -1,0 +1,312 @@
+---
+title: "ページ・テンプレート リファレンス"
+sidebarTitle: "ページ・テンプレート"
+---
+
+このドキュメントは、Page Template XML フォーマットの要素のリファレンスです。[ページ・テンプレート入門](/ja/querying/page-templates)を参照してください。
+
+ページ・テンプレートは、ページ上でいくつかのソースからのデータを構成する特定の方法(または方法の集合)を記述します。次のような構造を持ちます:
+
+<Card>
+`<`[page](#page) id="[\[id\]](#id)"> *`<!-- The top-level section of this page -->`* 
+&ensp;&ensp;\[page-element\]\* 
+`</page>`
+</Card>
+
+...ここで、各 `[page-element]` は以下のいずれかです:
+
+\<[section](#section)\>[page-element]\*\</section\>
+
+_ネストされたセクション(画面領域)_
+
+\<[source](#source) name="[source-name]"\> [renderer]\* [parameter]\* \</source\>
+
+_このセクションに配置されるべきデータ・ソース_
+
+\<[renderer](#renderer) name="[renderer-name]"\> [parameter]\* \</renderer\>
+
+_これを含むソースまたはセクションに使用するレンダラー_
+
+\<[choice](#choice)\> [map] or [page-element]/[alternative]\* \</choice\>
+
+_実行時に解決される、代替のページ要素間の選択_
+
+\<placeholder id="[id]"/\>
+
+_実行時に map の item によって置き換えられる要素_
+
+\<[include](#include) idref="[page-id]"\>/\>
+
+_別のページに含まれるページ要素をインクルードします_
+
+上記のネストされた要素は以下のとおりです:
+
+\<parameter name="[name]"\>[value]\</parameter\>
+
+_それを保持する要素のパラメーター。レンダラーのパラメーターは、結果の中でそのままフロントエンドに送信されます。ソースのパラメーターは、クエリー・パラメーター `source.[sourceName].[name]` を設定することでソースに送信されます。_
+
+\<alternative\> [page-element]\* \</alternative\>
+
+_1 つの選択肢を構成する複数のページ要素_
+
+\<[map](#map) to="placeholder-id1 placeholder-id2 ... "\> [page-element]/[item]\* \</alternative\>
+
+_いくつかのページ要素のプレースホルダーへのマッピング_
+
+\<[item](#item)\> [page-element]\* \</item\>
+
+_すべてが 1 つのプレースホルダーにマップされるべき複数のページ要素_
+
+すべてのタグには、タグの用途を文書化するための `description` 属性を含めることもできます。タグと属性の詳細は以下で説明します。
+
+## id
+
+id は次の形式を持ちます:
+
+```bash
+id        ::= name(:major(.minor(.micro(.qualifier)?)?)?)?
+name      ::= identifier
+major     ::= integer
+minor     ::= integer
+micro     ::= integer
+qualifier ::= identifier
+```
+
+省略された数値のバージョン・コンポーネントは 0 を意味するものとみなされ、qualifier の省略は空文字列を意味するものとみなされます。
+
+## page
+
+ページ・テンプレートのルート・タグです。ページを定義し、そのルート・セクションでもあります。属性とサブタグは [section](#section) と同じですが、page では `id` 属性が必須である点が異なります。
+
+## section
+
+画面領域の表現です。実行時に、セクションはさまざまなソースからのコンテンツを含みます。最終的なレンダラーは、それを含むタグによって決定される画面領域に、セクションとそのデータ・アイテムやサブセクションをレンダリングします。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>説明</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>id</td>
+      <td>参照のために使用される、このセクションの一意な識別子。</td>
+      <td>_id なし_</td>
+    </tr>
+    <tr>
+      <td>layout</td>
+      <td>識別子。指定可能な値は <code>{`row`}</code>、<code>{`column`}</code>、および返されるページのレンダラーがサポートする追加のレイアウトです。</td>
+      <td><code>{`column`}</code></td>
+    </tr>
+    <tr>
+      <td>region</td>
+      <td>識別子。指定可能な値と、これが必須かどうかは、それを含むセクションの特定の layout 識別子によって決定されます(<code>{`row`}</code> と <code>{`column`}</code> は region 識別子を指定しません)。</td>
+      <td>_なし_</td>
+    </tr>
+    <tr>
+      <td>source</td>
+      <td>この中で許可されるソースのスペース区切りの集合。これはソースをサブタグとして定義することの短縮記法です。このセクションのソースの全リストは、ここに列挙されたソースとサブタグの両方で構成されます。</td>
+      <td>_何も指定されていない場合、すべてのソースが許可されます。_</td>
+    </tr>
+    <tr>
+      <td>max</td>
+      <td>このセクション内(サブセクションを含む)で許可されるアイテムの最大数。使用されるブレンド方法にかかわらず、最も関連性の高いアイテムが保持されます。</td>
+      <td>_無制限_</td>
+    </tr>
+    <tr>
+      <td>min</td>
+      <td>この中で望まれるアイテムの最小数。</td>
+      <td>_無制限_</td>
+    </tr>
+    <tr>
+      <td>order</td>
+      <td>このコンテナーに表示されるアイテムに使用する順序付けの方法。これは、ヒットのフィールドにソース名と関連度スコアを加えたものに対する任意の<a href="/ja/reference/querying/sorting-language" aria-label="sorting specification">ソート指定</a>です。たとえば <code>{`[source]-[relevance] category`}</code> は、ソースでグループ化し、各グループを第一に関連度の降順、第二に "category" フィールドでソートします。<code>{`[source]`}</code> 識別子は、使用中のテンプレートに列挙されている順序でソースをソートします。</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+## source
+
+そのデータが、これを含むセクションに配置されるべきデータ・ソースです。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>説明</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>このソースの名前。</td>
+      <td>_必須_</td>
+    </tr>
+    <tr>
+      <td>url</td>
+      <td>このソースの url。これが設定されている場合、このソースのデータは取得*されず*、代わりに(url 付きの)source タグが返されるページに現れ、フロントエンドがそれを取得できるようにします。このようなデータは、返されるページを最適化するために検査・処理することができないため、これは主に移行パスとして提供されています。</td>
+      <td>_url なし: 設定されたこのソースをコンテナーから取得します。_</td>
+    </tr>
+  </tbody>
+</table>
+
+## renderer
+
+特定のタイプのデータ・アイテム(ヒット)のセクションをレンダリングするために使用するレンダラーです。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>説明</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>このレンダラーの名前。</td>
+      <td>_必須_</td>
+    </tr>
+    <tr>
+      <td>for</td>
+      <td>これがレンダラーとなるヒット・タイプまたはソースの名前。</td>
+      <td>_section 内の場合: これはセクション全体のレンダラーです。</td>
+    </tr>
+  </tbody>
+</table>
+source 内の場合: これはこのソースからのヒットのデフォルト・レンダラーです。_ |
+
+## choice
+
+複数の代替の(リストの)ページ要素間の選択です。リゾルバーが、実行時にリクエストごとに可能な選択肢の中から選択します。`alternative` タグは選択肢を囲むために使用します。選択肢がページ要素タグ 1 つだけで構成される場合、それを囲む alternative タグは省略できます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>説明</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>method</td>
+      <td>選択を行う方法の名前。使用中のオプティマイザーによってサポートされていなければなりません。</td>
+      <td>_任意の方法_</td>
+    </tr>
+  </tbody>
+</table>
+
+### 含まれるタグ
+
+以下のいずれか:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>タグ</th>
+      <th>説明</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>[page-element]</td>
+      <td>単一のページ要素からなる選択肢。</td>
+      <td>0-n</td>
+    </tr>
+    <tr>
+      <td>alternative</td>
+      <td>複数のページ要素からなる選択肢。</td>
+      <td>0-n</td>
+    </tr>
+  </tbody>
+</table>
+
+または
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>タグ</th>
+      <th>説明</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#map" aria-label="map">map</a></td>
+      <td>すべての選択肢を単一のマッピング関数として指定します。</td>
+      <td>0-1</td>
+    </tr>
+  </tbody>
+</table>
+
+## map
+
+choice のすべての選択肢を、要素からプレースホルダーへのマッピング関数として指定します。map は、各プレースホルダーが一意な要素を受け取るという制約のもとで、要素のコレクションをプレースホルダーの集合にマップすべき場合に、多数の選択肢を書くことの便利な短縮記法です。これは、たとえばソースの集合をセクションの集合にマップする場合に有用です。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>説明</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>to</td>
+      <td colSpan={2}>map の値がマップされるべきプレースホルダー id のスペース区切りリスト。プレースホルダー id の数が、この map 内の値の数より多くなることはできません(少ない分には問題ありません)。</td>
+    </tr>
+  </tbody>
+</table>
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>含まれるタグ</th>
+      <th>説明</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>[page-element]</td>
+      <td>プレースホルダーにマップされる単一のページ要素からなる map のアイテム。</td>
+      <td>0-n</td>
+    </tr>
+    <tr>
+      <td>item</td>
+      <td>単一のプレースホルダーにマップされる複数のページ要素を含むアイテム。</td>
+      <td>0-n</td>
+    </tr>
+  </tbody>
+</table>
+
+## include
+
+指定されたページ・テンプレートの `page` 要素に直接含まれるページ要素をインクルードします(page タグ自体はインクルードされません)。インクルードは、`include` タグがインクルードされるページの内容にそのまま置き換えられた場合とまったく同じように機能します。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>説明</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>idref</td>
+      <td>インクルードするページの id 指定。バージョンの一部を未指定のままにして、一致する最新のバージョンを取得できます。</td>
+      <td>_(必須)_</td>
+    </tr>
+  </tbody>
+</table>

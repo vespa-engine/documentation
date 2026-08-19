@@ -1,0 +1,753 @@
+---
+title: "FAQ - よくある質問"
+sidebarTitle: "Frequently asked questions"
+description: "その他のサポート・オプションについては Vespa Support を参照してください。"
+---
+
+## ランキング
+
+<AccordionGroup>
+<Accordion title="Vespa は柔軟なランキング・スコアをサポートしていますか?">
+[ランキング](/ja/basics/ranking)はおそらく Vespa の最も中心的な機能です。私たちはこれをスケーラブルなオンライン計算と捉えています。rank profile はアプリケーションのロジックを実装する場所であり、`double` のような単純な型と `tensor` のような複雑な型をサポートします。ランキング・データは、クエリーのクエリー・フィーチャーとして供給する(例: 顧客ごとに異なる重み)か、[Searcher](/ja/applications/searchers) でルックアップします。典型的には、ドキュメント(例: 商品)の「フィーチャー・ベクトル」/「重み」が、ユーザー固有のベクトル(テンソル)と比較されます。
+</Accordion>
+
+<Accordion title="顧客固有の重み付けはどこに保存すればよいですか?">
+Vespa には、顧客データそのものを保存するための特別なサポートはありません。このデータを Vespa の別のドキュメント・タイプとして保存してクエリーを渡す前にルックアップするか、この顧客メタデータを顧客のその他のメタデータ(つまりログイン情報)の一部として保存し、バックエンドに送信するときにクエリーと一緒に渡すことができます。データのルックアップ方法の例は [album-recommendation-docproc](https://github.com/vespa-engine/sample-apps/tree/master/examples/document-processing) を参照してください。
+</Accordion>
+
+<Accordion title="ランキング式の中でオンザフライでテンソルを作成するには?">
+`tensorFrom...` 関数を使用して、配列または weighted set からランキング関数内でテンソルを作成します - [document features](/ja/reference/ranking/rank-features#document-features) を参照してください。
+</Accordion>
+
+<Accordion title="動的な(クエリー時の)ランキング・ドロップ閾値を設定するには?">
+`query(threshold)` のようなランキング・フィーチャーを渡し、ランキング式で `if` 文を使用します - [retrieval and ranking](/ja/ranking/ranking-intro#retrieval-and-ranking) を参照してください。例:
+
+```txt
+rank-profile drop-low-score {
+   function my_score() {
+     expression: ..... #custom first phase score
+   }
+   rank-score-drop-limit:0.0
+   first-phase {
+     if(my_score() < query(threshold), -1, my_score())
+   }
+}
+```
+</Accordion>
+
+<Accordion title="ランキング式や関数は遅延評価されますか?">
+ランキング式は遅延評価されません。いいえ、これにはラムダ引数が必要になります。関数間で受け渡しできるのは double とテンソルのみです。
+
+例:
+
+```txt
+function inline foo(tensor, defaultVal) {
+    expression: if (count(tensor) == 0, defaultValue, sum(tensor))
+}
+
+function bar() {
+    expression: foo(tensor, sum(tensor1 * tensor2))
+}
+```
+</Accordion>
+
+<Accordion title="Vespa はマッチングとランキングの早期終了をサポートしていますか?">
+はい。これは rank profile で [match-phase](/ja/reference/schemas/schemas#match-phase) を設定するか、クエリー・ツリーに *hitLimit* を使用した range クエリー・アイテムを追加することで実現できます。[capped numeric range search](/ja/reference/querying/yql#numeric) を参照してください。どちらの方法も *fast-search* を指定した *attribute* フィールドが必要です。capped range クエリーの方が高速ですが、クエリーに他の制限の強いフィルターがある場合、ヒット数が 0 になる可能性があることに注意してください。追加のフィルターは、capped range クエリーのヒットに対するポスト・フィルタリングのステップとして適用されます。一方、*match-phase* はフィルターや他のクエリー・タームと組み合わせても安全に使用でき、capped range クエリー・タームがサポートしていない多様化(diversification)もサポートしています。
+</Accordion>
+
+<Accordion title="relevance フィールドが -Infinity になる原因は何ですか?">
+ランキング・プロファイルが NaN や Infinity を生成した場合 - これらは JSON の数値として表現できないため - 文字列 "Infinity" または "-Infinity"(NaN は "-Infinity" になります)が結果セットで返され、クライアント・ライブラリーがデフォルトでそれを処理することがあります(例: Golang)。
+
+ヒットに対して返される [relevance](/ja/reference/querying/default-result-format#relevance) は、double ではなく "-Infinity" になることがあります:
+
+- [ランキング](/ja/basics/ranking)式が `NaN`(Not a Number)になるフィーチャーを使用した場合。例えば、`log(0)` は `-Infinity` を生成します。これを防ぐには [isNan](/ja/reference/ranking/ranking-expressions#isnan-x) を使用してください。
+- [グルーピング](/ja/querying/grouping)を使用して低スコアのヒットを表示する場合、つまり、Vespa が計算してヒープにキャッシュした範囲外の低ランクのヒットを `each(output(summary()))` でレンダリングする場合。これは [total-keep-rank-count](/ja/reference/schemas/schemas#total-keep-rank-count) パラメーターで制御されます。
+- ランキング関数で未設定のフィールドを使用した場合
+
+これは以下の 1 つ以上の方法で解決できます:
+
+- これらの文字列を明示的に処理するようにクライアント・コードを拡張する
+- すべてのドキュメントでフィールドに何らかの値が設定されるようにする
+- rank profile でフィールドにアクセスするときにデフォルト値を追加する: `if (isNan(attribute(last_update)), 0, attribute(last_update))`
+- ランキング式に最終的なガードを追加して何らかの小さい数値に強制変換し、有限でないスコアを有効な数値のまま下位に沈める:
+
+```txt
+function finite_or_sentinel(x) {
+      expression: if (isNan(x - x), -1e9, x)
+}
+```
+
+- JSON の代わりに CBOR を使用する - バイナリー・フォーマットを使用すると NaN や Infinity を問題なく表現でき、より高速/効率的でもあります
+</Accordion>
+
+<Accordion title="クエリー結果をピン留めするには?">
+結果セット内の位置にドキュメントをハードコードするには、[pin results example](/ja/ranking/multivalue-query-operators#pin-results-example) を参照してください。
+</Accordion>
+</AccordionGroup>
+
+## ドキュメント
+
+<AccordionGroup>
+<Accordion title="ドキュメント・サイズにはどのような制限がありますか?">
+[最大ドキュメント・サイズ](/ja/reference/applications/services/container#document-api)は 100 MiB で、services.xml でコンテント・クラスターごとに設定可能です。
+</Accordion>
+
+<Accordion title="多値フィールドにサイズ制限はありますか?">
+リソース使用量(メモリー)以外に強制される制限はありません。
+</Accordion>
+
+<Accordion title="ドキュメントはリスト(キーと値のペア)を持てますか?">
+例えば、商品が店舗のリストで提供され、店舗ごとに数量があるような場合です。[多値フィールド](/ja/querying/searching-multivalue-fields)(struct の配列)または[親子関係](/ja/schemas/parent-child)を使用してください。どちらを選ぶかはユースケースによります。後者のリンク内の議論を参照してください。
+</Accordion>
+
+<Accordion title="ドキュメント全体を更新して再インデックスする必要がありますか?">
+例えば、店舗ごとの価格や在庫数量は、実際の商品属性に比べて頻繁に変わることがあります。Vespa はドキュメントの[部分更新](/ja/writing/reads-and-writes)をサポートしています。また、親/子機能は、子要素が頻繁に更新される一方で、より限られた親要素の更新頻度が低いユースケースをサポートするために実装されています。
+</Accordion>
+
+<Accordion title="単一の書き込み / 更新 / 削除とバッチ操作などについて、Vespa はどのような ACID 保証を提供しますか?">
+[Vespa Consistency Model](/ja/content/consistency) を参照してください。Vespa は従来の意味でのトランザクショナルではなく、厳密な ACID 保証はありません。Vespa は、結果整合性を許容可能な(そしてある程度設定可能な)トレードオフとする、高パフォーマンスのユースケース向けに設計されています。
+</Accordion>
+
+<Accordion title="Vespa はワイルドカード・フィールドをサポートしていますか?">
+ワイルドカード・フィールドは Vespa ではサポートされていません。回避策は、map を使用してワイルドカード・フィールドを保存することです。map は `indexing: attribute` で定義する必要があるため、メモリーに保存されます。[map](/ja/reference/schemas/schemas#map) を参照してください。
+</Accordion>
+
+<Accordion title="配列に保存できる要素数の上限を設定できますか?">
+これには[ドキュメント・プロセッサー](/ja/applications/document-processors)を実装してください。
+</Accordion>
+
+<Accordion title="ドキュメントを自動的に期限切れにする / ガベージ・コレクションを設定するには?">
+`services.xml` の `document` 要素に selection 条件を設定します。この条件は<u>保持する</u>ドキュメントを選択します。つまり、「2 週間より古い」ドキュメントをパージするには、式は「2 週間より新しい」であるべきです。詳細は [document expiry](/ja/schemas/documents#document-expiry) を参照してください。
+</Accordion>
+
+<Accordion title="冗長性を高め、データ移行の進捗を追跡するには?">
+redundancy の変更はライブで安全な変更です(ディスク / メモリーに余裕があることが前提です - 例えば 2 から 3 への変更は 50% 増になります)。移行にかかる時間は、最初のフィードにかかった時間とほぼ同程度になりますが、一般論としては断言しにくく、IO や、HNSW インデックスを構築するかどうかなどのインデックス設定に依存します。進捗を監視するには、_clustercontroller_ ステータス・ページについて [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) サンプル・アプリケーションを参照してください - これは保留中・稼働中のバケットを表示します。最後に、`.idealstate.merge_bucket.pending` メトリクスを使用して進捗を追跡します - 0 になれば、データ同期操作はもう残っていません - [monitor distance to ideal state](/ja/operations/self-managed/admin-procedures#monitor-distance-to-ideal-state) を参照してください。データ同期中もノードは通常どおり動作し、クエリーのカバレッジは変わりません。
+</Accordion>
+
+<Accordion title="namespace はスキーマとどう関係しますか?">
+関係ありません。_namespace_ はドキュメント空間をドキュメント・セレクションに使用できる部分に分割するためのメカニズムです - [ドキュメント](/ja/schemas/documents#namespace)を参照してください。namespace はインデックスされず、query api で検索することはできませんが、[visiting](/ja/writing/visiting) で使用できます。
+</Accordion>
+
+<Accordion title="visiting がすべてのドキュメントをダンプしない、および/またはハングします。">
+これを引き起こす原因は複数あります。[visiting troubleshooting](/ja/writing/visiting#troubleshooting) を参照してください。
+</Accordion>
+
+<Accordion title="インデックス内のドキュメント数を確認するには?">
+`vespa query "select * from sources * where true"` のようなクエリーを実行し、`totalCount` フィールドを確認します。あるいは、メトリクスまたは `vespa visit` を使用します - [例](/ja/writing/batch-delete#example)を参照してください。
+</Accordion>
+
+<Accordion title="フィールドにデフォルト値を定義できますか?">
+フィールド定義では不可能ですが、インデキシング・ステートメントの [choice](/ja/writing/indexing#choice-example) 式で実現できます。
+</Accordion>
+</AccordionGroup>
+
+## クエリー
+
+<AccordionGroup>
+<Accordion title="階層ファセットはサポートされていますか?">
+ファセットは Vespa では<a href="/ja/querying/grouping">グルーピング</a>と呼ばれます。グループはマルチレベルにできます。
+</Accordion>
+
+<Accordion title="フィルターはサポートされていますか?">
+[YQL](/ja/querying/query-language) を使用して、boolean、数値、および[テキスト・マッチング](/ja/querying/text-matching)によるフィルターをクエリーに追加します。クエリー・タームはフィルターとしてアノテーションでき、その場合、結果を太字にする際にハイライトされません。
+</Accordion>
+
+<Accordion title="類似アイテムをクエリーするには?">
+1 つの方法は、アイテムをテンソルで表現し、[nearest neighbor](/ja/reference/querying/yql#nearestneighbor) をクエリーすることです - 完全精度または近似(ANN)を使用します。後者はセットが大きすぎて正確な計算ができない場合に使用します。クエリーにフィルターを適用して近傍候補セットを制限します。[dot products](/ja/ranking/multivalue-query-operators) や [weak and](/ja/ranking/wand) の使用も代替手段です。
+</Accordion>
+
+<Accordion title="Vespa はストップワード除去をサポートしていますか?">
+Vespa には本質的にストップワードという概念はありません。[filter terms](/ja/reference/querying/yql#annotations) の使用方法については[サンプル・アプリ](https://github.com/vespa-engine/sample-apps/pull/335/files)を参照してください。[Tripling the query performance of lexical search](https://blog.vespa.ai/tripling-the-query-performance-of-lexical-search/) はこのテーマに関する良いブログ記事です。
+</Accordion>
+
+<Accordion title="クエリーごとに 400 件を超えるヒットを取得し、すべてのドキュメントを取得するには?">
+クエリーで 400 件を超えるヒットをリクエストしようとすると、次のエラーが発生します: `{'code': 3, 'summary': 'Illegal query', 'message': '401 hits requested, configured limit: 400.'}`。
+
+- 最大結果セット・サイズを増やす(つまり、より大きな [hits](/ja/reference/api/query#hits) を許可する)には、[query profile](/ja/reference/api/query#queryprofile) で `maxHits` を設定します。例えば、`search/query-profiles/default.xml`(必要に応じて作成)に `<field name="maxHits">500</field>` を記述します。[クエリー・タイムアウト](/ja/reference/api/query#timeout)を増やすことはできますが、それでもコストが高く、他のクエリーに影響を与える可能性があります - 大きな limit は大きな offset よりも影響が大きくなります。より小さな[ドキュメント・サマリー](/ja/querying/document-summaries)を使用し、可能であればディスク上のフィールドを避けることで、コストを抑えることができます。
+- すべてのデータをダンプするには、通常は [document/v1/ API](/ja/writing/document-v1-api-guide) の _visit_ を使用する方が良い選択肢です。
+</Accordion>
+
+<Accordion title="ユーザー・プロファイルの取得など、クエリーを強化するためのデータを取得するサブクエリーを作成するには?">
+データを取得するための新しいクエリーの作成方法については [UserProfileSearcher](https://github.com/vespa-engine/sample-apps/blob/master/news/app-6-recommendation-with-searchers/src/main/java/ai/vespa/example/UserProfileSearcher.java) を参照してください - これは新しい Query を作成し、新しい root とパラメーターを設定してから、Hits を `fill` します。
+</Accordion>
+
+<Accordion title="定期的に自動更新されるキャッシュを作成するには?">
+上記のサブクエリーの質問を参照し、さらに次のようなものを追加します:
+```java expandable
+public class ConfigCacheRefresher extends AbstractComponent {
+
+    private final ScheduledExecutorService configFetchService = Executors.newSingleThreadScheduledExecutor();
+    private Chain<Searcher> searcherChain;
+
+    void initialize() {
+        Runnable task = () -> refreshCache();
+        configFetchService.scheduleWithFixedDelay(task, 1, 1, TimeUnit.MINUTES);
+        searcherChain = executionFactory.searchChainRegistry().getChain(new ComponentId("configDefaultProvider"));
+    }
+
+    public void refreshCache() {
+        Execution execution = executionFactory.newExecution(searcherChain);
+        Query query = createQuery(execution);
+
+    public void deconstruct() {
+        super.deconstruct();
+        try {
+            configFetchService.shutdown();
+            configFetchService.awaitTermination(1, TimeUnit.MINUTES);
+        }catch(Exception e) {..}
+    }
+}
+```
+</Accordion>
+
+<Accordion title="ドキュメント ID のリストを使用して Vespa をクエリーすることは可能ですか?">
+はい、[in クエリー演算子](/ja/reference/querying/yql#in)を使用します。例:
+```sql
+select * from data where user_id in (10, 20, 30)
+```
+このテーマに関する最良の記事は [multi-lookup set filtering](/ja/performance/feature-tuning#multi-lookup-set-filtering) です。[Java Searcher](/ja/applications/searchers) でプログラムから使用する方法については、[in operator example](/ja/ranking/multivalue-query-operators#in-example) を参照してください。
+</Accordion>
+
+<Accordion title="1 つのフィールドがリスト内のいずれかの値にマッチするドキュメントをクエリーするには? SQL の IN 演算子のような使い方">
+[in クエリー演算子](/ja/reference/querying/yql#in)を使用します。例:
+```sql
+select * from data where category in ('cat1', 'cat2', 'cat3')
+```
+詳細は上記の [multi-lookup set filtering](#is-it-possible-to-query-vespa-using-a-list-of-document-ids) を参照してください。
+</Accordion>
+
+<Accordion title="結果を返さずにヒット数 / 全ドキュメント数をカウントするには?">
+[select * from doc where true](/ja/querying/query-language) のようなクエリーですべてのドキュメントをカウントします - これは "doc" ソースのすべてのドキュメントをカウントします。`select * from doc where true limit 0` を使用するとカウントのみが返されヒットは返されません。あるいは [hits=0](/ja/reference/api/query#hits) を追加します。[ranking.profile=unranked](/ja/reference/api/query#ranking.profile) を渡すと、クエリーの実行コストが下がります。_推定値_ で十分な場合は、[hitcountestimate=true](/ja/reference/api/query#hitcountestimate) を使用してください。
+</Accordion>
+
+<Accordion title="fieldset 内のすべてのフィールドは互換性のある型とマッチング設定を持つ必要がありますか?">
+はい - トークナイゼーションが競合するフィールドを同じ [fieldset](/ja/reference/schemas/schemas#fieldset) に入れると、_This may lead to recall and ranking issues_ というデプロイ警告が出力されます。これは、1 つの fieldset を検索するクエリー・アイテムは一度だけトークナイズされるため、この場合にトークナイゼーションの正しい選択が存在しないからです。異なるトークナイゼーションを持つ複数のフィールドに同じテキストを適用したい場合は、そのテキストをクエリーに複数回含めてください:
+```sql
+select * from sources * where fieldsetOrField1 contains text(@query) or fieldsetOrField2 contains text(@query)
+```
+詳細は [stack overflow](https://stackoverflow.com/questions/72784136/why-vepsa-easily-warning-me-this-may-lead-to-recall-and-ranking-issues) を参照してください。
+</Accordion>
+
+<Accordion title='"the" のような一般的な単語が、なぜリコールを低下させ、fieldset 全体で significance を潰してしまうのですか?'>
+症状 - タームの DF がメンバー・フィールド間で大きく異なる場合に現れることがあります:
+- 一般的なタームと稀なタームを組み合わせたクエリー(例: `"the cure"`、`"the X"`)でリコールが低下します。[weakAnd](/ja/ranking/wand) が一般的なタームを落とすことがあるため、良いマッチが表示されなくなります。
+- rank-feature ダンプで、`term(n).significance` と `fieldMatch(field).significance` がメンバー・フィールド間で同一の値になります - タームが実際には稀なフィールドでもそうなります。
+
+原因: タームが [fieldset](/ja/reference/schemas/schemas#fieldset)([userQuery()](/ja/reference/querying/yql#userquery) が使用する暗黙の `default` を含む)にマッチする場合、Vespa はすべてのメンバー・フィールドにわたってドキュメント頻度を集約します。
+
+DF がメンバー間で大きく異なる場合、DF の高いフィールドが支配的になり、fieldset 全体でそのタームの significance を引き下げます。
+
+**例:**
+
+`fieldset default { fields: title, artist }` の場合、`"the"` は `title` では一般的ですが(無数の _"The Watcher"_、_"The Best Of the ..."_)、`artist` では稀です。
+
+集約された significance は `title` の DF に引きずられて低下するため、アーティスト `"The Cure"` を検索すると `"the"` からのシグナルが失われます。
+
+同じ集約 DF が、すべての DF/IDF フィーチャーを駆動します: [bm25](/ja/ranking/bm25)、[nativeRank](/ja/ranking/nativerank)、`term(n).significance`、`fieldMatch.significance`。
+
+リトリーバルを通過したマッチは、フィールドごとの統計ではなく、集約された DF を使用してスコアリングされます。
+
+解決策: フィールドごとに [defaultIndex](/ja/reference/querying/yql#defaultindex) アノテーションを付けた [userInput](/ja/reference/querying/yql#userinput) 句を OR で結合する形に書き換えます。これにより、各フィールドは独自の DF を使用します:
+
+*fieldset 全体で結合された DF:*
+
+```php
+vespa query 'select * from sources * where userQuery()' \
+  query='the cure'
+```
+
+*フィールドごとの DF:*
+
+```bash
+vespa query 'select * from sources * where ({defaultIndex:"title"}userInput(@q)) or ({defaultIndex:"artist"}userInput(@q))' \
+  q='the cure'
+```
+
+<Warning>
+**重要**
+
+フィールドごとの DF に切り替えると、BM25 と significance フィーチャーの値のスケールが変わります。学習済みランカーは、新しいクエリー形式で収集したフィーチャーで再学習してください。
+</Warning>
+</Accordion>
+
+<Accordion title="クエリーのタイムアウトはどのように計算されますか?">
+クエリー・タイムアウトの詳細は [Query API Guide](/ja/querying/query-api#timeout) と [Query API Reference](/ja/reference/api/query#timeout) を参照してください。
+</Accordion>
+
+<Accordion title="バックスラッシュのエスケープはどのように機能しますか?">
+バックスラッシュは YQL で特殊文字をエスケープするために使用されます。例えば、正規表現で役立つリテラルのバックスラッシュでクエリーするには、別のバックスラッシュでエスケープする必要があります: \\。YQL でエスケープされていないバックスラッシュは "token recognition error at: '\'" を引き起こします。
+
+さらに、Vespa CLI は二重バックスラッシュを単一にアンエスケープします(単一のバックスラッシュはそのまま残ります)。そのため、Vespa CLI でクエリーする場合は、さらに別のバックスラッシュでエスケープする必要があります: \\\\。Java の文字列でも同様です。
+
+また、ログ・メッセージと JSON の結果はどちらもバックスラッシュをエスケープするため、\ は \\ になります。
+</Accordion>
+
+<Accordion title="1 回の呼び出しで複数の SELECT 文(サブクエリー)を実行することは可能ですか?">
+例えば、フィルター条件がわずかに異なる 2 つの select クエリーを実行し、各サブクエリーに limit 演算子を設定するようなケースです。これは、両方のドキュメント・コレクションを選択する OR 条件では実現できません - 次のようなものに相当します:
+
+SELECT 1 AS x UNION ALL SELECT 2 AS y;
+
+これは不可能で、2 つのクエリーを実行する必要があります。あるいは、1 つの受信クエリーを [Searcher](/ja/applications/searchers) で並列実行する 2 つのクエリーに分割します - 例:
+
+```java
+FutureResult futureResult = new AsyncExecution(settings).search(query);
+FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery);
+```
+</Accordion>
+
+<Accordion title="配列内の要素数をクエリーすることは可能ですか?">
+配列フィールドが特定の数の要素やアイテムを持つドキュメントを効率的に_検索_できるインデックスや attribute のデータ構造はありません。_グルーピング言語_には、クエリーで使用できる [size()](/ja/reference/querying/grouping-language#list-expressions) 演算子があります。
+</Accordion>
+
+<Accordion title="NaN / 値未設定 / null / none のフィールドをクエリーすることは可能ですか?">
+ドキュメント・セレクションを使用する [visiting](/ja/writing/visiting#analyzing-field-values) API がこれをサポートしており、全ドキュメントの線形スキャンを行います。フィールドが _attribute_ の場合は、グルーピングを使用したクエリーで NaN 値を特定できます。[fields with NaN](/ja/querying/grouping#count-fields-with-nan) のカウントと一覧を参照してください。
+
+逆のこと - 値が設定されて_いる_ドキュメントをマッチさせる - を行うには、クエリー・フィルターを使用します:
+- 数値フィールド: 全体を包含する [range](/ja/reference/querying/yql#numeric) - `where range(size, -Infinity, Infinity)` は、フィールドが設定されているドキュメントにマッチします。
+- 文字列 _attribute_: [正規表現](/ja/querying/text-matching#regular-expression-match) - `where album matches "^."` は、空でない値を持つドキュメントにマッチします。大規模なコーパスでこれを効率的にするには、attribute に [fast-search](/ja/reference/schemas/schemas#attribute) を追加してください。
+</Accordion>
+
+<Accordion title='YQL を使用してランダムなドキュメントを取得するには? MySQL の "ORDER BY rand()" のような機能'>
+[random.match](/ja/reference/ranking/rank-features#random.match) ランク・フィーチャーを参照してください - 例:
+
+```txt
+rank-profile random {
+    first-phase {
+        expression: random.match
+    }
+}
+```
+
+乱数生成器にシードを与えてクエリーを実行します:
+
+```bash
+$ vespa query 'select * from music where true' \
+  ranking=random \
+  rankproperty.random.match.seed=2
+```
+</Accordion>
+
+<Accordion title="クエリー結果の一部に同じソースからのヒットが多すぎます。多様な結果セットを作成するには?">
+異なるソースから結果セットを作成する戦略については、[result diversity](/ja/querying/result-diversity) を参照してください。
+</Accordion>
+
+<Accordion title="clip_query_embedding というエンベディング・フィールドで最も遠い近傍を見つけるには?">
+最も似ていないアイテムを検索したい場合、angular distance であれば `clip_query_embedding` にスカラー -1 を掛けることで実現できます。これにより、`clip_query_embedding` から最も遠い点に最も近い点を検索することになります。
+
+[pyvespa example](https://vespa-engine.github.io/pyvespa/examples/pyvespa-examples#Neighbors) も参照してください。
+</Accordion>
+</AccordionGroup>
+
+## フィード
+
+<AccordionGroup>
+<Accordion title="フィードの 400 レスポンスをデバッグするには?">
+最良の選択肢は、`vespa feed --verbose myfile.jsonl` のように `--verbose` オプションを使用することです - [ドキュメント](/ja/clients/vespa-cli#documents)を参照してください。よくある問題は、スキーマ名と[ドキュメント ID](/ja/schemas/documents#document-ids) の不一致です - 次のようなスキーマの場合:
+```yaml
+schema article {
+    document article {
+        ...
+    }
+}
+```
+
+ドキュメント・フィードは次のようになります:
+
+```json
+{"put": "id:mynamespace:article::1234", "fields": { ... }}
+```
+
+[namespace](/ja/learn/glossary#namespace) はスキーマ内には記述されず、スキーマ名はドキュメント名と同じであることに注意してください。
+</Accordion>
+
+<Accordion title="ドキュメント・プロセッシング・チェーンの設定をデバッグするには?">
+この設定はコンテントとコンテナーのクラスター設定の組み合わせです。[indexing](/ja/writing/indexing) と [feed troubleshooting](/ja/operations/self-managed/admin-procedures#troubleshooting) を参照してください。
+</Accordion>
+
+<Accordion title="エラーなしでドキュメントをフィードしていますが、インデックスに存在しません">
+これは [document expiry](/ja/schemas/documents#document-expiry) を使用している場合によくある問題です。すでに期限切れのドキュメントは永続化されず、静かにドロップされて無視されます。document-expiry と組み合わせて古いタイムスタンプを持つ古いテスト・データをフィードすると、この挙動を引き起こすことがあります。
+</Accordion>
+
+<Accordion title="429 エラーを避けながら多数のファイルをフィードするには?">
+HTTP クライアントを使いすぎると 429 レスポンス・コードが生成されることがあります。Vespa のサンプル・アプリは、高スループットのために HTTP/2 を使用する [vespa feed](/ja/clients/vespa-cli#documents) を使用しています - フィード・ファイルはこのクライアントを通してストリームするのが良い方法です。
+</Accordion>
+
+<Accordion title="Kafka を使用して Vespa にフィードできますか?">
+Vespa には Kafka コネクターはありません。[kafka-connect-vespa](https://github.com/vinted/kafka-connect-vespa) のようなサードパーティー・コネクターを参照してください。
+</Accordion>
+</AccordionGroup>
+
+## テキスト検索
+
+<AccordionGroup>
+<Accordion title="Vespa はドキュメントや検索クエリーに対する柔軟な NLP 処理の追加をサポートしていますか?">
+例えば、NER、語義曖昧性解消、特定のインテント検出の統合などです。Vespa はこれらを十分にサポートしています:
+- [クエリー(および結果)処理](/ja/applications/searchers)
+- [ドキュメント処理](/ja/applications/document-processors)と、テキストのセマンティック・アノテーションを扱うドキュメント・プロセッサー
+</Accordion>
+
+<Accordion title="Vespa は転置インデックスのカスタマイズをサポートしていますか?">
+例えば、ターム(term)や n-gram を単位として使用する代わりに、特定の語義を持つタームを使用するようなケースです - 例: bark(犬の吠え声)と bark(木の樹皮)、あるいは BCG(企業)と BCG(ワクチン名)。新しいインデックス*フォーマット*を作ることはコアの変更を意味します。しかし、上記の例では、インデックス(およびクエリー)されるトークンを制御できれば十分です。それはいくらかの Java コードで簡単に実現できます。最も簡単な方法は、[custom tokenizer](/ja/linguistics/linguistics) をプラグインすることです。これは、クエリー・パーサーや同梱の言語処理 [Searchers](/ja/applications/searchers)、そしてインデキシング操作で消費されるアノテーションを作成する [Document Processor](/ja/applications/document-processors) から呼び出されます。これらはすべて Searcher と Docproc であり、置き換えたり前後にカスタム・コンポーネントを追加したりできるため、プラットフォーム自体を変更することなく、これらを完全に制御することもできます。
+</Accordion>
+
+<Accordion title="Vespa は固有表現抽出のサポートを提供していますか?">
+ビルディング・ブロックは提供していますが、すぐに使えるソリューションは提供していません。クエリー側のエンティティーを検出してクエリーを書き換える [Searcher](/ja/applications/searchers) を書き、インデキシング側で特別な処理をしたい場合は [DocProc](/ja/applications/document-processors) を書くことができます。
+</Accordion>
+
+<Accordion title="Vespa はテキスト抽出のサポートを提供していますか?">
+テキスト抽出用のドキュメント・プロセッサーを書くことができます。Vespa はこれをすぐに使える形では提供していません。
+</Accordion>
+
+<Accordion title="インポートされたフィールドでテキスト検索を行うには?">
+親ドキュメントからの[インポートされたフィールド](/ja/schemas/parent-child)は [attribute](/ja/content/attributes) として定義され、テキスト・マッチ・モードが制限されます(つまり `indexing: index` は使用できません)。[詳細](https://stackoverflow.com/questions/71936330/parent-child-mode-cannot-be-searched-by-parent-column)。
+</Accordion>
+</AccordionGroup>
+
+## セマンティック検索
+
+<AccordionGroup>
+<Accordion title="なぜすべてのベクトルで closeness が 1 になるのですか?">
+ドキュメントとクエリーにベクトルを追加し、ランク・フィーチャー closeness(field, yourEmbeddingField) がすべてのドキュメントで 1.0 を生成している場合、おそらく [distance-metric](/ja/reference/schemas/schemas#distance-metric): innerproduct/prenormalized-angular を使用しているのにベクトルが正規化されていません。解決策は通常、[distance-metric: angular](/ja/reference/schemas/schemas#angular) に切り替えるか、[distance-metric: dotproduct](/ja/reference/schemas/schemas#dotproduct)(Vespa 8.170.18 から利用可能)を使用することです。
+
+正規化されていないベクトルでは、しばしば負の距離が発生し、それらは 0 に切り上げられるため、closeness が 1.0 になります。sbert.net のモデルなど、一部のエンベディング・モデルは正規化されたベクトルを出力すると主張していますが、実際にはそうでない場合があります。
+</Accordion>
+</AccordionGroup>
+
+## Vespa のプログラミング
+
+<AccordionGroup>
+<Accordion title="Python プラグインはサポートされていますか / スクリプト言語はありますか?">
+プラグインは JVM 内で実行される必要があります - [jython](https://www.jython.org/) が代替になるかもしれませんが、Vespa チームには使用経験がありません。Vespa には [painless](https://www.elastic.co/guide/en/elasticsearch/reference/current/modules-scripting-painless) のような言語はありません - [Searchers](/ja/applications/searchers) と [Document Processors](/ja/applications/document-processors) を使用し、JVM がサポートする言語でアプリケーション・ロジックを書く方が柔軟です。
+</Accordion>
+
+<Accordion title="Searcher で ID によりドキュメントをバッチ取得するには?">
+[Searcher](/ja/applications/searchers) はクエリーおよび/または結果をインターセプトします。Searcher や[ドキュメント・プロセッサー](/ja/applications/document-processors)のような他のコンポーネントで ID により複数のドキュメントを取得するには、[com.yahoo.documentapi.DocumentAccess](/ja/reference/applications/components#injectable-components) のインスタンスをインジェクトし、HTTP API の代わりにそれを使用して ID でドキュメントを取得できます。
+</Accordion>
+
+<Accordion title="Vespa は Java 20 で動作しますか?">
+Vespa は Java 17 を使用しています - 将来的に 20 をサポートする予定です。
+</Accordion>
+
+<Accordion title="カスタム・コンポーネントからデバッグ出力を書き込むには?">
+`System.out.println` を使用して [vespa.log](/ja/reference/operations/log-files) にテキストを書き込みます。
+</Accordion>
+</AccordionGroup>
+
+## パフォーマンス
+
+<AccordionGroup>
+<Accordion title="ドキュメントの取り込みから、インデックスされて検索可能になるまでのレイテンシーはどのくらいですか?">
+Vespa はニア・リアルタイムのインデキシング・コアを持ち、ドキュメントの取り込みからインデックス完了までのレイテンシーは通常 1 秒未満です。これはユースケース、利用可能なリソース、システムのチューニング方法に依存します。より多くの例や考察は[スケーリング・ガイド](/ja/performance/sizing-search)にあります。
+</Accordion>
+
+<Accordion title="バッチ取り込みモードはありますか? どのような制限がありますか?">
+Vespa には「バッチ取り込み」という概念はありません。これは、[サービングの弾力性](/ja/content/elasticity)や 1 秒未満のインデキシング・レイテンシーなど、Vespa の強みである中核機能の多くと矛盾するためです。とはいえ、本番環境では、(場合によっては全体の)ドキュメント・セットの大部分に高スループットの更新を行うユースケースが数多くあります。インデキシング・レイテンシーよりフィード・スループットが重要な場合は、要件に合わせてチューニングできます。この一部は[フィード・サイジング・ガイド](/ja/performance/sizing-feeding)で詳しく説明されています。
+</Accordion>
+
+<Accordion title="インデックスはメモリー内で最大 512 GB のインデックス・サイズをサポートできますか?">
+はい。[コンテント・ノード](/ja/content/proton)は C++ で実装されており、オペレーティング・システムによる制約以外のメモリー制約はありません。
+</Accordion>
+
+<Accordion title="ドキュメントがすべてのレプリカ・ノードで同期していない場合の get リクエストはどうなりますか?">
+レプリカが同期している場合、リクエストはプライマリーのコンテント・ノードにのみ送信されます。そうでない場合は、レプリカのメタデータに応じて複数のノードに送信されます。例: あるバケットに 3 つのレプリカ A、B、C があり、A と B が両方ともメタデータ状態 X を持ち、C がメタデータ状態 Y を持つ場合、リクエストは A と C に送信されます(B には送信されません。B は A と同じ状態を持つため、異なる可能性のあるドキュメントを返すことはないからです)。
+</Accordion>
+
+<Accordion title="インデックスをメモリーに保持するには?">
+[Attribute](/ja/content/attributes)(`fast-search` の有無にかかわらず)は常にメモリー内にありますが、トークナイズされたマッチングはサポートしません。これは構造化データ用です。[Index](/ja/basics/schemas#document-fields)(常に高速であるため fast-search というものは存在しません)は、利用可能なメモリーがある限りメモリー内にあり、トークナイズされたマッチングをサポートします。これは非構造化テキスト用です。
+
+`mmap` から `populate` に変更することで、`index` で定義されたフィールドの辞書とポスティングの両方がメモリー内にあることを保証できます。[index > io > search](/ja/reference/applications/services/content#index-io-search) を参照してください。コンテント・ノードは十分なメモリーが利用可能なノードで実行されるようにしてください。インデックスの切り替え中は、メモリー・フットプリントが 2 倍になります。`pmap` のような Linux ツールに慣れておくと、何がマップされていて、それが常駐しているかどうかの診断に役立ちます。
+
+`attribute` で定義されたフィールドはメモリー内にあります。`index` と `attribute` の両方を持つフィールドは別々のデータ構造を持ち、クエリーは `text` マッチングをサポートするデフォルトのディスク上にマップされたデータ構造を使用しますが、グルーピング、サマリー、ランキングは `attribute` ストアからフィールドにアクセスできます。
+
+Vespa のクエリーは、[sizing search](/ja/performance/sizing-search) に記載されているように 2 つのフェーズで実行され、サマリー・リクエストはディスクに触れることがあります(こちらもデフォルトで `mmap` を使用します)。サイズが大きくなる可能性があるため、ここには populate オプションはありませんが、`attribute` で定義されたフィールドのみを含む[専用のドキュメント・サマリー](/ja/querying/document-summaries#performance)を定義できます。
+
+Vespa のクエリー実行、`index` と `attribute` の違い、サマリー取得のパフォーマンスを理解するには、[practical performance guide](/ja/performance/practical-search-performance-guide) も良い出発点になります。
+</Accordion>
+
+<Accordion title="ドキュメントを削除するとメモリーは解放されますか?">
+[document API](/ja/writing/reads-and-writes) や[ガベージ・コレクション](/ja/schemas/documents#document-expiry)を使用してドキュメントを削除すると、コンテント・ノードの容量は増加します。ただし、これは必ずしもシステム・メトリクスで観測できるとは限りません - 解放されるメモリーの種類、[flush](/ja/content/proton#proton-maintenance-jobs) ジョブの実行タイミング、ドキュメントの[スキーマ](/ja/basics/schemas)など、多くの要因に依存します。
+
+簡潔に言えば、Vespa は一度使用したメモリーを解放するようには設計されていません。持続的な高スループットと低レイテンシーのために設計されており、[feed block](/ja/writing/feed-block) のような機能を使用して、使用される<u>最大</u>メモリーを制御下に保ちます。
+
+ドキュメントを削除すると、メモリーがわずかに<u>増加</u>することがあります。削除されたドキュメントは [tombstone](/ja/operations/self-managed/admin-procedures#content-cluster-configuration) を使用して表現され、後で削除されます。[removed-db-prune-age](/ja/reference/applications/services/content#removed-db-prune-age) を参照してください。ガベージ・コレクションの実行時には、サマリー・ストアが mmap を使用してスキャンされ、VIRT とページ・キャッシュの両方のメモリー使用量が増加します。
+
+このようなフィールドがどのように保存・管理されるかについては、[attributes](/ja/content/attributes) を読んで理解を深めてください。[Paged attributes](/ja/content/attributes#paged-attributes) は、最大メモリー使用量を抑えるために、メモリー使用量とクエリー・レイテンシーをトレードオフします。
+</Accordion>
+
+<Accordion title="空のフィールドはメモリーを消費しますか?">
+フィールドは _index_ 型または _attribute_ 型です - [詳細](/ja/querying/text-matching#index-and-attribute)。
+
+_index_ を持つフィールドは、値がない場合、デプロイ時に追加のメモリーを使用しません。
+
+_attribute_ を持つフィールドは、フィールド値が設定されていなくてもメモリーを使用します。
+
+attribute はランダム・アクセスに最適化されています: 任意のドキュメントの値に O(1) 時間でジャンプできるようにするためです。それには、値の有無にかかわらず、ドキュメントごとに一定量のメモリー(値またはポインター)を割り当てる必要があります。要するに、attribute にとっては値が未設定であると知っていること自体が 1 つの値であるため、attribute を持つ新しいフィールドや新しいスキーマをデプロイすると、メモリーが増加します。未使用のスキーマやフィールドが多いアプリケーションでは、メモリーのサイジング時にこれを考慮できます。詳細は [attributes](/ja/content/attributes#attribute-memory-usage) を参照してください。
+</Accordion>
+
+<Accordion title="昼と夜で Vespa をスケーリングするベスト・プラクティスは?">
+システムのサイジングと自動スケーリングの方法を理解するには、[Autoscaling](/ja/operations/autoscaling) が最良のガイドです。コンテナー・クラスターはステートレスであり、コンテント・クラスターよりも迅速に自動スケーリングできます。
+</Accordion>
+
+<Accordion title="スループット要件が 5 分間で 8 倍にスパイクすることがあります。">
+5 分間で 8 倍の負荷増加に対してコンテント・クラスターを自動スケーリングすることはできません。これにはプロビジョニングとデータ移行の両方が必要だからです。このようなユースケースは、リソースのボトルネック、トレードオフ、緩和策を理解するために、Vespa チームと相談するのが最善です。[Graceful Degradation](/ja/performance/graceful-degradation) も読んでください。
+</Accordion>
+
+<Accordion title="低レベルの設定はどの程度必要ですか? 例えば、コンテナーあたりのスレッド数を変更する必要がありますか?">
+場合によります。Vespa はリソースへの適応(仮想ノードのスレッド数に基づく自動スレッド設定など)や実際の使用状況への適応(コンパクションなどのメンテナンス・ジョブの実行タイミング)を目指していますが、アプリケーション所有者が行える/行うべきトレードオフもあります。まず [Vespa Serving Scaling Guide](/ja/performance/sizing-search) を読み、その後[ベンチマーク](/ja/performance/benchmarking-cloud)を実行して[ダッシュボード](/ja/operations/monitoring)を使用してください。
+</Accordion>
+</AccordionGroup>
+
+## 管理
+
+<AccordionGroup>
+<Accordion title="セルフマネージド: すべてのノード設定をデプロイせずに、コンフィグ・サーバーへの部分デプロイ / スキーマの更新はできますか?">
+はい、デプロイメントはこの Web サービス API を使用しており、現在デプロイされているパッケージから編集セッションを作成し、変更を加えてデプロイ(prepare+activate)できます: [deploy-rest-api-v2](/ja/reference/api/deploy-v2)。ただし、これはコンフィグ・サーバーへの不要なデータ転送を避けたい場合にのみ有用です。すべてを再送信した場合でも、コンフィグ・サーバーは、例えばノード設定が実際には変更されていないことを検知し、不要な noop 変更を回避します。
+</Accordion>
+
+<Accordion title="稼働中のクラスターへのノードの追加・削除はどれくらい速くできますか?">
+[弾力性](/ja/content/elasticity)は Vespa の中核的な強みです - サービングへの影響を最小限に(あるいはまったくなしに)、簡単にノードを追加・削除できます。必要な正確な時間は、システムが[理想的なデータ分散](/ja/content/idealstate)に収束するためにバックグラウンドで移行する必要のあるデータ量に依存します。
+</Accordion>
+
+<Accordion title="Vespa API の検索呼び出しはロード・バランスすべきですか? それとも Vespa が自動的に行いますか?">
+[ステートレスな Java コンテナー・クラスター](/ja/learn/overview)を実行しているノード間で、受信リクエストをロード・バランスする必要があります。これは通常、ほとんどのクラウド・サービスで利用できるシンプルなネットワーク・ロード・バランサーで実現できます。[Vespa Cloud](/) を使用する場合はこれが含まれており、HTTPS エンドポイントはすでにロード・バランスされています - リージョン内のローカルにも、リージョン間のグローバルにも対応しています。
+</Accordion>
+
+<Accordion title="インデックス・パーティションのサポート">
+[Search sizing](/ja/performance/sizing-search) がこの入門です。トポロジーは重要であり、これは大規模な Vespa アプリケーションでレイテンシーとコストを最適化するために多く使われています。
+</Accordion>
+
+<Accordion title="稼働中のクラスターをダウンタイムなしでアップグレードできますか?">
+[Vespa Cloud](/) では、目立ったサービングへの影響なしに、毎日自動バックグラウンド・アップグレードを行っています。Vespa を自身でホストしている場合もこれは可能ですが、これを処理するために必要なオーケストレーション・ロジックを実装する必要があります。高レベルの手順は [live-upgrade](/ja/operations/self-managed/live-upgrade) にあります。
+</Accordion>
+
+<Accordion title="Vespa はマルチリージョンにデプロイできますか?">
+[Vespa Cloud](/ja/operations/zones) には統合サポートがあります - グローバル・エンドポイントにクエリーします。書き込みは各ゾーンに行う必要があります。ゾーン間の自動同期はありません。
+</Accordion>
+
+<Accordion title="Vespa はオフライン・インデックスをサービングできますか?">
+オフラインでインデックスを構築するには、オフライン・システムがパーティション・レイアウトを知っている必要がありますが、これは弾力性と自動リカバリー(ノードがサービスに影響なく増減できること)と矛盾します。また、リアルタイム書き込みとも相容れません。これらの理由から、推奨されておらず、サポートもされていません。
+</Accordion>
+
+<Accordion title="Vespa はインデックスと attribute のデータを閲覧するツールを提供していますか?">
+[visiting](/ja/writing/visiting) を使用して、ドキュメントの全部または一部をダンプします。詳細は [data-management-and-backup](/ja/operations/data-management) を参照してください。
+</Accordion>
+
+<Accordion title="データが一部のノードにのみ書き込まれ、すべてのレプリカ・ノードに書き込まれなかった場合(コンテント・クラスターの redundancy 数に基づく)、どのようなレスポンスになりますか?">
+ドキュメントが一部のレプリカ・ノードに書き込まれなかった場合、失敗レスポンスが返されます。
+</Accordion>
+
+<Accordion title="ドキュメントが一部のノードに書き込まれなかった場合、レプリカの調整(reconciliation)によってドキュメントは利用可能になりますか?">
+はい、最終的には利用可能になります。[Multinode testing and observability](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) も試してみてください。
+</Accordion>
+
+<Accordion title="Vespa はソフト・デリート機能を提供していますか?">
+はい。`deleted` attribute を追加し、それに [fast-search](/ja/content/attributes#fast-search) を追加して、クエリーに `andnot deleted` アイテムを追加する searcher を作成するだけです。
+</Accordion>
+
+<Accordion title="ノードがダウンしてもすぐにバケットが再分散されないよう、バケット分散の猶予期間を設定できますか?">
+services.xml で [transition-time](/ja/reference/applications/services/content#transition-time) を設定すると、ノードが自動的にダウンとマークされるまでメンテナンス・モードに保持される時間をクラスター・コントローラーに設定できます。
+</Accordion>
+
+<Accordion title="グルーピング分散を使用する場合、redundant/searchable-copies の推奨設定は?">
+グループ分散は検索レイテンシーを削減するために使用されます。コンテントは、ドキュメント・コレクション全体が各グループに含まれるように、設定されたグループのセットに分散されます。redundancy と searchable-copies をグループ数と同じ値に設定すると、すべてのグループからデータをクエリーできることが保証されます。
+</Accordion>
+
+<Accordion title="ディザスター・リカバリー / バックアップを設定するには?">
+選択肢の議論については [#17898](https://github.com/vespa-engine/vespa/issues/17898) を参照してください。
+</Accordion>
+
+<Accordion title="セルフマネージド: 稼働中のインスタンスの Vespa バージョンを確認するには?">
+[/state/v1/version](/ja/reference/api/state-v1#state-v1-version) を使用して Vespa バージョンを確認します。
+</Accordion>
+
+<Accordion title="デプロイのロールバック">
+選択肢については [rollback](/ja/applications/deployment#rollback) を参照してください。
+</Accordion>
+</AccordionGroup>
+
+## トラブルシューティング
+
+<AccordionGroup>
+<Accordion title="デプロイメントがレスポンス・コード 413 で失敗します">
+デプロイメントがエラー・メッセージ "Deployment failed, code: 413 ("Payload Too Large.")" で失敗する場合は、コンフィグ・サーバーの JVM ヒープ・サイズを増やす必要があるかもしれません。コンフィグ・サーバーのデフォルトの JVM ヒープ・サイズは 2 Gb です。例えば大きなモデルを含むアプリをデプロイする場合、これでは足りないことがあります。'docker run ...' の実行時にコマンドラインに環境変数を追加して、ヒープを例えば 4 Gb に増やしてみてください:
+
+```bash
+docker run --env VESPA_CONFIGSERVER_JVMARGS=-Xmx4g <other options> <image>
+```
+</Accordion>
+
+<Accordion title="デプロイ後にエンドポイントが起動しません">
+何らかのエラーを含むアプリケーション・パッケージをデプロイすると、エンドポイントが次のように失敗することがあります:
+```bash
+$ vespa deploy --wait 300
+
+Uploading application package ... done
+
+Success: Deployed target/application.zip
+
+Waiting up to 5m0s for query service to become available ...
+Error: service 'query' is unavailable: services have not converged
+```
+別の例:
+
+```text
+[INFO]     [03:33:48]  Failed to get 100 consecutive OKs from endpoint ...
+```
+
+失敗の原因はさまざまですが、最初のステップは Vespa コンテナーを確認することです:
+
+```bash
+$ docker exec vespa vespa-logfmt -l error
+
+[2022-10-21 10:55:09.744] ERROR   container
+Container.com.yahoo.container.jdisc.ConfiguredApplication
+Reconfiguration failed, your application package must be fixed, unless this is a JNI reload issue:
+Could not create a component with id 'ai.vespa.example.album.MetalSearcher'.
+Tried to load class directly, since no bundle was found for spec: album-recommendation-java.
+If a bundle with the same name is installed,
+there is a either a version mismatch or the installed bundle's version contains a qualifier string.
+...
+```
+
+[Bundle plugin troubleshooting](/ja/applications/bundles#bundle-plugin-troubleshooting) は、Vespa コンテナーの起動 / バンドルのロードの問題を分析するのに良いリソースです。
+</Accordion>
+
+<Accordion title="M1 で Docker を使用した Vespa の起動が失敗します">
+M1 MacBook Pro / AArch64 を使用すると、Docker の実行が失敗します:
+
+```txt
+WARNING: The requested image’s platform (linux/amd64) does not match the detected host platform (linux/arm64/v8)
+and no specific platform was requested
+```
+
+最新バージョンの Docker イメージを実行していることを確認してください。`docker pull vespaengine/vespa` を実行します。
+</Accordion>
+
+<Accordion title="デプロイメントが失敗する / 19071 で何もリッスンしていません">
+すべての[コンフィグ・サーバー](/ja/operations/self-managed/configuration-server#troubleshooting)が起動していて、(複数ある場合は)ZooKeeper のクォーラムを確立できることを確認してください - [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) サンプル・アプリケーションを参照してください。コンテナーに[十分なメモリー](/ja/operations/self-managed/docker-containers)があることを検証してください。
+</Accordion>
+
+<Accordion title="マルチノード Kubernetes クラスターでの起動の問題 - 19071 を使用する readinessProbe が失敗します">
+3 ノードのコンフィグ・サーバー・クラスターが起動に失敗します。コンフィグ・サーバーが使用する ZooKeeper クラスターはネットワーク上のホストを待ち、ホストは ZooKeeper を待つという、いわゆる catch 22(にっちもさっちもいかない状態)です - [sampleapp troubleshooting](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations#troubleshooting) を参照してください。
+</Accordion>
+
+<Accordion title="vespa.log を表示するには?">
+[vespa-logfmt](/ja/reference/operations/self-managed/tools#vespa-logfmt) を使用してログをダンプします。Vespa がローカル・コンテナー("vespa" という名前)で実行されている場合は、`docker exec vespa vespa-logfmt` を実行します。
+</Accordion>
+
+<Accordion title="ドキュメント・テキストのエンコーディングの問題を修正するには?">
+ドキュメント・フィードから制御文字を処理・除去する方法については、[encoding troubleshooting](/ja/linguistics/troubleshooting-encoding) を参照してください。
+</Accordion>
+</AccordionGroup>
+
+## ログイン、テナント、プラン
+
+<AccordionGroup>
+<Accordion title="どうやって始めればよいですか?">
+[アプリケーションをデプロイ](/ja/basics/deploy-an-application)してテナントを作成し、[無料トライアル](https://vespa.ai/free-trial/)を開始してください。このテナントは個人用テナントにすることも、他の人と共有することもできます。名前の変更はできません。
+</Accordion>
+
+<Accordion title="会社のテナントを作成するには?">
+テナントがすでに作成されている場合は、そこにユーザーを追加します。Vespa Cloud コンソールで [**Account > Users**](https://console.vespa-cloud.com/link/tenant/account/users) を開きます。このビューからテナント内のユーザーとそのロールを管理できます - ここからテナント管理者の追加/設定ができます。
+</Accordion>
+
+<Accordion title="利用規約(Terms of Service)に同意するには?">
+無料トライアルを開始するときに、利用規約への同意を求められます。有料プランの場合は、契約でカバーされます。
+</Accordion>
+
+<Accordion title="無料トライアルから有料プランに切り替えるには?">
+コンソールで [**Account > Billing**](https://console.vespa-cloud.com/link/tenant/account/billing) を開き、請求に必要な情報を入力します。コンソールにログインせずにこの情報を提供する必要がある場合は、[Vespa Support](https://vespa.ai/support/) を利用してください。
+</Accordion>
+
+<Accordion title="Vespa Cloud はシングル・サインオン(SSO)をサポートしていますか?">
+はい、セットアップするには [Vespa Support](https://vespa.ai/support/) にお問い合わせください。
+</Accordion>
+</AccordionGroup>
+
+## Vespa Cloud の運用
+
+<AccordionGroup>
+<Accordion title="Vespa Cloud の使用コストを変更するには?">
+現在のリソースと自動提案されたリソースを評価するには [node resources](/ja/performance/node-resources) を、自動化する方法については [autoscaling](/ja/operations/autoscaling) を参照してください。
+</Accordion>
+
+<Accordion title="使用リソースを手動で変更するには?">
+ほとんどの変更は自動化されているため、リソースの管理は簡単です。ノードの追加 / 削除 / 変更は自動データ移行を開始します。[elasticity](/ja/content/elasticity) を参照してください。
+</Accordion>
+
+<Accordion title="スキーマを変更するには?">
+スキーマの変更にはデータの再インデックスが必要な場合があります。これは自動化されていますが、時間がかかります。その他のスキーマ変更にはデータの再フィードが必要です - [詳細](/ja/reference/schemas/schemas#modifying-schemas)
+</Accordion>
+
+<Accordion title="フィールドが使用しているメモリー量を評価するには?">
+[Memory Visualizer](/ja/performance/memory-visualizer) を使用して、メモリーがフィールドにどのように割り当てられているかを評価します。フィールドは `index`、`attribute`、`summary`、およびこれらの組み合わせにでき、`fast-search` などの設定がメモリー使用量に影響します。Vespa のメモリー使用量を理解するには [Attributes](/ja/content/attributes) が優れた読み物です。
+</Accordion>
+
+<Accordion title="アーカイブ・アクセスが Permission 'serviceusage.services.use' denied で失敗しました">
+アーカイブされたオブジェクトの一覧表示が失敗することがあります。例えば `gsutil -u my_project ls gs://vespa-cloud-data-prod-gcp-us-central1-f-12345f/my_tenant` は `AccessDeniedException: 403 me@mymail.com does not have serviceusage.services.use access to the Google Cloud project. Permission \'serviceusage.services.use\' denied on resource (or it may not exist).` で失敗することがあります。これは、Google プロジェクト(上記の例では my_project)での権限不足が原因である可能性があります \- Google のドキュメントから: _「Cloud Storage バケットにアクセスするユーザー・アカウントは、バケット使用コストを指定されたユーザー・プロジェクトに課金するために、Service Usage Consumer ロール([https://cloud.google.com/service-usage/docs/access-control](https://cloud.google.com/service-usage/docs/access-control) を参照)を付与されている必要があります」_
+</Accordion>
+
+<Accordion title="現在の監視インフラと統合するには?">
+Vespa Cloud アプリケーションには Prometheus エンドポイントがあります。Grafana や AWS Cloudwatch との統合方法のガイドは [monitoring](/ja/operations/monitoring) にあります。
+</Accordion>
+
+<Accordion title="Vespa で今起きていることを即座に監視する最良の方法は? CPU 使用率? メモリー使用率? htop? Cloudwatch メトリクス?">
+Vespa Cloud には、コンソールの _monitoring_ タブからリンクされた詳細なダッシュボードがあり、インスタンスがデプロイされているゾーンごとに 1 つずつ用意されています。
+</Accordion>
+
+<Accordion title="Vespa バージョンのアップグレードはどのように処理されますか - 新しいデプロイのみですか?">
+Vespa は通常、毎日アップグレードされます。休日や週末などの例外はあります。アップグレード中、ノードはクラスターごとに 1 台ずつ停止されます。すべてのクラスターには冗長ノードが 1 台あるため、サービングと書き込みトラフィックはアップグレードの影響を受けません。アップグレードの前に、アプリケーションの [system および staging テスト](/ja/operations/automated-deployments)が実行され、失敗するとアップグレードは中止されます。次のノードに進む前に、ドキュメントはアップグレードされたノードに再移行されます。詳細は [Elastic Vespa](/ja/content/elasticity) を参照してください。
+</Accordion>
+
+<Accordion title="Feed Block のような問題や、検索可能コピーのオフラインをどのように知ることができますか?">
+Feed Blocked、デプロイメント、非推奨の警告などの問題はコンソールに表示されます。redundancy レベル / searchable copies に関する警告はありません。冗長なドキュメント・バケットは自動的にクエリー用にアクティベートされ、ノードの障害 / 交換に対しては自動データ移行が開始されるためです。
+</Accordion>
+
+<Accordion title="スキーマ変更をデプロイする際に必要なアクションは何ですか?">
+- [サービスの再起動が必要な](/ja/reference/schemas/schemas#changes-that-require-restart-but-not-re-feed)スキーマ変更は Vespa Cloud によって自動的に処理されます。デプロイメント・ジョブにはこれらの完了を待つことが含まれます。
+- データの[再インデックスが必要な](/ja/reference/schemas/schemas#changes-that-require-reindexing)スキーマ変更には validation override が必要で、自動再インデックスがトリガーされます。ステータスはコンソールのアプリケーション・ビューで追跡できます。Vespa Cloud はまた、言語処理(linguistics)ライブラリーの変更を考慮するために、最小限のリソース使用量で定期的にすべてのデータを再インデックスします。
+- データの[再フィードが必要な](/ja/reference/schemas/schemas#changes-that-require-re-feed)スキーマ変更には validation override が必要で、ユーザーはデプロイ後にデータを再フィードする必要があります。
+</Accordion>
+
+<Accordion title="Vespa Cloud のデータ保持ポリシーは何ですか?">
+Vespa Cloud 上で実行されるアプリケーションに保存されるデータの管理はアプリケーション所有者の責任であり、したがって、アプリケーションによって保存されている限り、Vespa Cloud はこのデータに対する保持ポリシーを持ちません。
+
+Vespa Cloud には以下のデータ保持ポリシーが適用されます:
+- アプリケーションに以前割り当てられていたノードが割り当て解除された後(例: アプリケーション所有者によるアプリケーションの削除)、すべてのアプリケーション・データは _4 時間以内_に削除されます。
+- すべてのアプリケーション・ログ・データは、ログ量、割り当てられたディスク・リソースなどに応じて、最大でも _30 日_以内(多くの場合はそれより早く)に Vespa のサーバーから削除されます。*注意:* これは理論上の最大保持期間です - アプリケーション・ログへのアクセスを確保する方法については[アーカイブ・ガイド](/ja/operations/archive/archive-guide)を参照してください。
+</Accordion>
+
+<Accordion title="Vespa Cloud は ISO 27001 または SOC 2 の認証を受けていますか?">
+はい、Vespa.ai は SOC 2 の認証(attestation)を受けています: [Trust Center](https://trust.vespa.ai)。
+</Accordion>
+
+<Accordion title="Vespa Cloud は GDPR に準拠していますか?">
+詳細は [GDPR](https://cloud.vespa.ai/en/gdpr?_gl=1*1uexiwi*_gcl_au*ODE0ODM4MTI2LjE3Nzk3MjQ3OTY.) をご覧ください。
+</Accordion>
+
+<Accordion title="Vespa は、統合されている情報ソースからの情報を保存しますか?">
+Vespa は、情報ソースから書き込まれたデータに対するクエリーに使用されることが最も多いですが、モデル・サービングなど、データなしで使用することもできます。データを書き込むために Vespa Cloud との統合を書くのはアプリケーション所有者です。
+</Accordion>
+
+<Accordion title="保存時(at rest)に使用される暗号化アルゴリズムは何ですか?">
+Vespa Cloud は以下のクラウド・プロバイダーを使用しています:
+- AWS EC2 インスタンス(ローカルまたはリモート・ストレージ)
+- GCP Compute インスタンス(ローカルまたはリモート・ストレージ)
+- Azure Compute インスタンス(ローカルまたはリモート・ストレージ)
+
+ストレージ・デバイスは、クラウド・プロバイダーごとに保存時に暗号化されます。
+</Accordion>
+
+<Accordion title="Vespa コンソールには監査証跡/ログ・モジュールがあり、Admin ユーザーがアクセスできますか?">
+ロールと権限については[セキュリティ・ガイド](/ja/security/guide)を参照してください。Vespa Cloud コンソールにはログ・ビュー・ツールがあり、ログ / アクセス・ログは顧客の AWS アカウントに簡単にエクスポートできます。デプロイメント操作は、履歴とともにデプロイメント・ビューで追跡されます。Vespa Cloud のオペレーターは、顧客から特別に許可されない限りノードにアクセスできず、アクセスは監査ログに記録されます。
+</Accordion>
+
+<Accordion title="Vespa で購入したサービスが終了した場合、顧客から収集した情報の安全な削除手順はありますか?">
+終了時には、テナントを無効化する前に、すべてのアプリケーション・インスタンスがデータとともに削除されます。
+</Accordion>
+
+<Accordion title="なぜアプリケーションの CPU 使用率が 100% を超えているのですか?">
+`dev` ゾーンでは共有リソースを使用しているため、各ホスト/インスタンスに複数のノードがあります。全体として可能な限り良好な応答性を提供するために、個々のアプリケーション・ノードの CPU リソースを制限していません。
+</Accordion>
+</AccordionGroup>
+

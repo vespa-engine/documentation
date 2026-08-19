@@ -1,0 +1,481 @@
+---
+title: "services.xml - 'search'"
+sidebarTitle: "services.xml - search"
+---
+
+これはコンテナー設定の *search* 部分のリファレンスです。関連: [チェーン化されたコンポーネント](/ja/applications/chaining)および[フェデレーションのチュートリアル](/ja/querying/federation)。検索設定のルート要素は、[container](/ja/reference/applications/services/container) のサブ要素として宣言します:
+
+```yaml
+search
+    binding
+    searcher [id, class, bundle, provides, before, after]
+    federation [id]
+        source [idref]
+            federationoptions [timeout, requestTimeout, optional]
+        source-set [inherits]
+        target-selector
+    chain [id, inherits, excludes]
+        searcher [id, class, bundle, provides, before, after]
+        federation [id]
+            source [idref]
+                federationoptions [timeout, requestTimeout, optional]
+            source-set [inherits]
+            target-selector
+    provider [id, type, cluster, excludes]
+        federationoptions [timeout, requestTimeout, optional]
+        source [id]
+            searcher [id, class, bundle, provides, before, after]
+    renderer [id, class, bundle]
+    significance
+    threadpool
+        threads [ max ]
+        queue
+```
+
+[config](/ja/reference/applications/config-files#generic-configuration-in-services-xml) は、個々の検索チェーンや searcher によってオーバーライドされない限り、JDisc クラスターの検索チェーン内のすべての searcher に適用されます。
+
+## binding
+
+SearchHandler をマップする URI です。デフォルトのバインディングは `http://*/search/*` です。複数の要素を指定できます。例:
+
+```xml
+<binding>http://*/search/*</binding>
+```
+
+## searcher
+
+searcher 要素は、[chain](#chain) 要素の中、または search ルートに含まれます。
+
+searcher 要素は、*定義*(*id* を使用)または*参照*(*idref* を使用)のいずれかです。
+
+searcher の定義により、ちょうど 1 つの searcher インスタンスが生成されます。このインスタンスは searcher 要素の内容に従ってセットアップされます。検索チェーン要素の中に含まれる searcher 定義は、*インナー searcher* を定義します。それ以外の場合は、*アウター searcher* を定義します。
+
+searcher の定義:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;id&#42;&#42;</td>
+      <td>必須</td>
+      <td>string</td>
+      <td></td>
+      <td>searcher インスタンスのコンポーネント id です。インナー searcher の場合、id は検索チェーン内で一意でなければなりません。アウター searcher の場合、id は一意でなければなりません。インナー searcher がアウター searcher と同じ id を持つことは許可されません。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;class&#42;&#42;</td>
+      <td>省略可能</td>
+      <td></td>
+      <td></td>
+      <td>searcher インスタンスを生成するためにインスタンス化するクラスの名前を含むコンポーネント仕様です。省略した場合は id からコピーされます</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;bundle&#42;&#42;</td>
+      <td>省略可能</td>
+      <td></td>
+      <td></td>
+      <td>バンドルの選択に使用される、バンドルのシンボリック名とバージョンを含むコンポーネント仕様です: pom.xml の <code>{`<artifactId>`}</code> にある名前です。クラスはこのバンドルからロードされます。バンドルが指定されていない場合、Vespa にバンドルされている searcher を含むバンドルがデフォルトになります。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;provides&#42;&#42;</td>
+      <td>省略可能</td>
+      <td></td>
+      <td></td>
+      <td>この searcher が生成するものを表す、スペース区切りの名前のリストです。provides、before、after の詳細については、<a href="/ja/applications/chaining" aria-label="chained components">チェーン化されたコンポーネント</a>を参照してください</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;before&#42;&#42;</td>
+      <td>省略可能</td>
+      <td></td>
+      <td></td>
+      <td>フェーズまたは provides で提供される名前の、スペース区切りのリストです。これらの名前を提供するフェーズや searcher は、検索チェーン内でこの searcher より後に配置されます</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;after&#42;&#42;</td>
+      <td>省略可能</td>
+      <td></td>
+      <td></td>
+      <td>フェーズまたは provides で提供される名前の、スペース区切りのリストです。これらの名前を提供するフェーズや searcher は、検索チェーン内でこの searcher より前に配置されます</td>
+    </tr>
+  </tbody>
+</table>
+
+例:
+
+```xml
+<searcher id="componentId"
+          class="className:versionSpecification"
+          bundle="the name in <artifactId> in pom.xml" />
+```
+
+searcher の参照:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;idref&#42;&#42;</td>
+      <td>必須</td>
+      <td>string</td>
+      <td></td>
+      <td>searcher 定義への参照</td>
+    </tr>
+  </tbody>
+</table>
+
+例:
+
+```xml
+<searcher idref="componentId" />
+```
+
+## federation
+
+federation は [searcher](/ja/applications/searchers#searchers) の一種です(上記参照)。この要素は*フェデレーション*を実装します。つまり、各クエリーを一連の検索チェーンに並列に送信し、その結果を結合する searcher インスタンスを定義します。フェデレーションおよびその子要素である [source](#source)、[source-set](#source-set)、[target-selector](#target-selector)、そして [provider](#provider) の使い方や例については、[フェデレーションガイド](/ja/querying/federation)を参照してください。
+
+```xml
+<federation id="componentId">
+    <source idref="componentSpecification" />
+    <target-selector />
+</federation>
+```
+
+## target-selector
+
+フェデレーション先の検索チェーンを選択するために使用するコンポーネントを指定します。このコンポーネントは com.yahoo.search.federation.selection.TargetSelector を継承していなければなりません。属性とサブ要素については [component](/ja/reference/applications/services/container#component) を参照してください。
+
+## source-set
+
+たとえば組み込みの federation searcher のソースを複製するために使用します:
+
+```xml
+<federation id="combinator">
+    <source-set inherits="default" />
+    …
+</federation>
+```
+
+## source
+
+それを囲む federation searcher が使用するソースへの参照です。子要素の [federationoptions](#federationoptions) は省略可能です。
+
+```xml
+<source idref="componentSpecification">
+    <federationoptions/>
+</source>
+```
+
+## federationoptions
+
+[source](#source) または [provider](#provider) に含まれます。federation searcher が特定の検索チェーンに*どのように*フェデレーションするかを指定します。フェデレーションオプション A が別のフェデレーションオプション B を*オーバーライド*する場合、結果は次の内容を含む新しいフェデレーションオプションになります:
+
+- A に存在しない B のすべてのオプション
+- A のすべてのオプション
+
+ソースまたはプロバイダーにフェデレーションする際、federation searcher はデフォルトでは検索チェーンのフェデレーションオプションを使用します。[source 参照](#source-reference)にフェデレーションオプションが含まれている場合、それを囲む federation searcher から使用されるときには、検索チェーンのオプションをオーバーライドします。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;timeout&#42;&#42;</td>
+      <td>省略可能</td>
+      <td>number</td>
+      <td></td>
+      <td>federation searcher が、クエリーを実行するフェデレーション先の検索チェーンを待機する最小秒数またはミリ秒数(ms が付いている場合)です</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;requestTimeout&#42;&#42;</td>
+      <td>省略可能</td>
+      <td>number</td>
+      <td></td>
+      <td>クエリーを実行する検索チェーンが実行を継続すべき最小秒数またはミリ秒数(ms が付いている場合)です。場合によっては、これを timeout より大きく設定すると便利です。そうすることで、クエリーがチェーンを待つ時間よりも長く、チェーンが要求したデータを待ち続けられるようになります。これにより、キャッシュへの投入にクエリーのタイムアウトより長い待機が必要な場合でも、クエリーが検索チェーン内のキャッシュを投入できるようになります</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;optional&#42;&#42;</td>
+      <td>省略可能</td>
+      <td>true/false</td>
+      <td>false</td>
+      <td>federation searcher がこの検索チェーンをそもそも待機するかどうかを決定します。通常は必須(つまり optional ではない)検索チェーンのみを待機し、それらが完了すると、まだ終わっていない残りの検索チェーンをキャンセルします。フェデレーション先のすべての検索チェーンが optional である場合、それらすべてが必須として扱われます。すべての検索チェーンはデフォルトでは必須です</td>
+    </tr>
+  </tbody>
+</table>
+
+例:
+
+```xml
+<federationoptions timeout="2.0" requestTimeout="2500ms" optional="true" />
+```
+
+## renderer
+
+[検索結果レンダラー](/ja/applications/result-renderers)の定義です。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;id&#42;&#42;</td>
+      <td>必須</td>
+      <td>string</td>
+      <td></td>
+      <td>コンポーネント ID</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;class&#42;&#42;</td>
+      <td>省略可能</td>
+      <td>string</td>
+      <td></td>
+      <td>コンポーネントのクラスです。デフォルトは id です</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;bundle&#42;&#42;</td>
+      <td>省略可能</td>
+      <td>string</td>
+      <td></td>
+      <td>コンポーネントをロードするバンドルです: pom.xml の <code>{`<artifactId>`}</code> にある名前です。バンドルが指定されていない場合、Vespa が提供するレンダラーを含むバンドルが使用されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+例:
+
+```xml
+<renderer id="componentId"
+          class="className:versionSpecification"
+          bundle="the name in <artifactId> in pom.xml" />
+```
+
+## significance
+
+[searcher](#searcher) に含まれます。1 つ以上のグローバルな significance [モデル](#model)を指定します。
+
+```xml
+<significance>
+    <model model-id="significance-en-wikipedia-v1"/>
+    <model url="https://some/uri/my-model.model.multilingual.json"/>
+    <model path="models/my-model.no.json.zst"/>
+</significance>
+```
+
+モデルは *Vespa* によって提供されるか、[vespa-significance ツール](/ja/reference/operations/self-managed/tools#vespa-significance)で生成します。順序がモデルの優先度を決定し、最後の要素が最も高い優先度を持ちます。これらのモデルを使用するには、スキーマで [rank-profile 内の significance モデルを有効化](/ja/reference/schemas/schemas#significance)する必要があります。
+
+サブ要素:
+
+- [model](#model)(必須、1 つ以上)
+
+## model
+
+[significance](#significance) に含まれます。[グローバル significance モデル](/ja/ranking/significance#global-significance-model)を指定します。モデルは `model-id` によって、またはアプリケーション・パッケージ内のモデルファイルへの `url` もしくは `path` を指定することによって識別されます。
+
+`model-id` を持つモデルは *Vespa* によって提供されており、[こちら](/ja/rag/model-hub#significance-models)に一覧があります。`model-id` を使用した例:
+
+```xml
+<model model-id="significance-en-wikipedia-v1"/>
+```
+
+`url` および `path` で指定されるモデルは JSON ファイルであり、[zstandard](https://facebook.github.io/zstd/) で圧縮することもできます。モデルファイルは [vespa-significance ツール](/ja/reference/operations/self-managed/tools#vespa-significance)を使用して生成できます。`url` を使用した例:
+
+```xml
+<model url="https://some/uri/mymodel.multilingual.json"/>
+```
+
+`path` を持つモデルは、アプリケーション・パッケージ内に配置する必要があります。パスはアプリケーション・パッケージのルートからの相対パスです。`path` を使用した例:
+
+```xml
+<model path="models/mymodel.no.json.zst"/>
+```
+
+## chain
+
+検索チェーンをどのようにインスタンス化するか、および含まれる searcher をどのように順序付けるかを指定します。属性と子要素については[チェーンのリファレンス](/ja/reference/applications/services/processing#chain)を参照してください。チェーンは他のチェーンから searcher を[継承](/ja/reference/applications/services/processing#inherits)でき、順序付けに[フェーズ](/ja/reference/applications/services/processing#phase)を使用できます。なお、[provider](#provider) 要素と [source](#source) 要素もチェーンです。クエリー内で検索チェーンを指定するには [searchChain](/ja/reference/api/query#searchchain) を使用します。
+
+searcher がコンテント・クラスターにクエリーをディスパッチできるように、組み込みの *vespa* チェーンを継承する例:
+
+```xml
+<chain id="common" inherits="vespa">
+    <searcher class="com.yahoo.vespatest.ExtraHitSearcher" id="CommonSearcher" bundle="the name in <artifactId> in your pom.xml" >
+        <config name="vespatest.extra-hit">
+            <exampleString>A searcher for ...</exampleString>
+        </config>
+    </searcher>
+</chain>
+```
+
+省略可能なサブ要素:
+
+- searcher または federation(1 つ以上)。参照または定義のいずれかです。searcher に指定した名前が*アウター searcher* と一致する場合、それは *searcher 参照*です。それ以外の場合は *searcher 定義*です。searcher 定義である場合、それは同時に「*まさに*この searcher を使用する」という暗黙的な searcher 参照でもあります。これらの searcher 要素はすべて異なる名前を持たなければなりません。
+- [phase](/ja/reference/applications/services/processing#phase)(1 つ以上)。
+- [config](/ja/reference/applications/config-files#generic-configuration-in-services-xml)(1 つ以上。この検索チェーン内のすべての*インナー* searcher に適用されます。ただし、個々のインナー searcher によってオーバーライドされる場合を除きます)。
+
+[include](/ja/reference/applications/services/container#include) を使用して、アプリケーション・パッケージ配下のディレクトリ内の個別ファイルに検索設定を置くことができます。各ファイルには上記のような `<search>` 要素を 1 つ含める必要があります。Vespa は、そこに設定された各チェーンがあたかも `services.xml` に「インライン」で書かれているかのように動作します。これは、複数の開発者がそれぞれの検索チェーンを、たとえば別々のパッケージでデプロイする必要がある場合に便利です。
+
+<Note>
+**注:** 
+
+複数のコンテナー・クラスターを使用している場合、モジュール化された検索チェーンはすべてのクラスターで利用可能になります。
+</Note>
+
+各 searcher 参照は、searcher 定義の*タイプ*と一致していなければなりません。たとえば、searcher 参照 *federation idref="myId"* は、*searcher id="myId"* ではなく、*federation id="myId"* として定義されたアウター searcher と一致する必要があります。
+
+## provider
+
+provider は、外部サービスとの通信を担う検索チェーンです。[chain](#chain) で説明した内容はすべて provider にも当てはまります。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;id&#42;&#42;</td>
+      <td>必須</td>
+      <td>string</td>
+      <td></td>
+      <td>ID</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;excludes&#42;&#42;</td>
+      <td>省略可能</td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;type&#42;&#42;</td>
+      <td>省略可能</td>
+      <td>local</td>
+      <td></td>
+      <td>外部サービスと通信するために、この検索チェーンにどの searcher が暗黙的に追加されるかを決定します。</td>
+    </tr>
+  </tbody>
+</table>
+
+### local provider
+
+local provider とは、type を *local* に設定した provider であり、ローカルの Vespa クラスター(つまり同じアプリケーション内のコンテント・クラスター)にアクセスします。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;cluster&#42;&#42;</td>
+      <td>必須</td>
+      <td>string</td>
+      <td></td>
+      <td>ローカルクラスターの名前。</td>
+    </tr>
+  </tbody>
+</table>
+
+```xml
+<provider id="music" cluster="music" type="local" excludes="com.yahoo.prelude.querytransform.StemmingSearcher" />
+```
+
+## source
+
+ソース検索チェーンと、それに関連付けられたソースを定義します。
+
+```xml
+<provider id="providerA">
+    <source id="commonSource">
+        <searcher id="com.yahoo.example.AddHitSearcher" bundle="the name in <artifactId> in your pom.xml" >
+            <config name="vespatest.hit-title">
+                <hitTitle>providerA</hitTitle>
+            </config>
+        </searcher>
+    </source>
+</provider>
+```
+
+指定されたコンポーネント id は、関連付けられたソースの id です。関連付けられたソースは、同じソース名を持つすべてのソース検索チェーンで構成されます。
+
+"id" 属性を使用してソース名を指定できるのは、単一のソース検索チェーンだけです。この検索チェーンは*リーダー*と呼ばれます。それ以外のソース検索チェーンは、"idref" 属性を使用してソース名を指定しなければなりません。後者の検索チェーンはパーティシパントと呼ばれます。
+
+ソースは*フェデレーション*に使用できます。ソースにフェデレーションする場合、通常はリーダー検索チェーンが使用されます。パーティシパント検索チェーンのいずれかを使用するには、次のクエリーパラメーターを設定する必要があります: source.*sourceId*.provider.*providerId*。
+
+ソース検索チェーンの id は *sourceId@providerId* です。この検索チェーンは、それを囲む provider を自動的に継承します。また、それを囲む provider のフェデレーションオプションも自動的に継承します。ソースにフェデレーションオプションが含まれている場合、継承したものをオーバーライドします。それ以外のすべての点において、この検索チェーンは他の検索チェーンと同様に動作します。
+
+## threadpool
+
+jdisc search handler のスレッドプールの設定を指定します。すべてのパラメーターは CPU コア数に対する相対値です。[コンテナー・チューニングの例](/ja/performance/container-tuning#container-worker-threads-example)を参照してください。このスレッドプールは省略可能な `max` 属性もサポートしており、負荷がかかるとプールは最大 `max * vCPU` スレッドまで拡張し、5 秒間アイドル状態が続くと元に戻ります。許可されたスレッド数に達し、すべてがビジーで、かつキューが満杯になると、リクエストは拒否されます。
+
+省略可能なサブ要素:
+
+- [threads](#threadpool-threads)
+- [queue](#threadpool-queue)
+
+### threads
+
+vCPU コア数に対する相対的な常設スレッド数です。デフォルト値は `10` です。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;max&#42;&#42;</td>
+      <td>省略可能</td>
+      <td>number</td>
+      <td><code>{`<threads>`}</code> と同じ</td>
+      <td>vCPU コア数に対する相対的な最大スレッド数です。値は <code>{`<threads>`}</code> 以上でなければなりません。</td>
+    </tr>
+  </tbody>
+</table>
+
+### queue
+
+有効なスレッド数に対する相対的なリクエストキューのサイズです。キューイングを無効にするには `0` を指定します。デフォルト値は `40` です。

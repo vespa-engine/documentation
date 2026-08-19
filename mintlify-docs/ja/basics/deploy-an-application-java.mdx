@@ -1,0 +1,110 @@
+---
+title: Java コンポーネントを含むアプリケーションをデプロイする
+---
+
+次の手順に従って、Java コンポーネントを含む Vespa アプリケーションを Vespa Cloud の [dev ゾーン](/ja/operations/environments#dev)に(無料で)デプロイします。
+
+このガイドの別バージョン:
+
+- [pyvespa を使用してアプリケーションをデプロイする](https://vespa-engine.github.io/pyvespa/getting-started-pyvespa-cloud.html) - Python 開発者向け
+- [Java コンポーネントを含まないアプリケーションをデプロイする](/ja/basics/deploy-an-application)
+- [Vespa CLI を使わずにアプリケーションをデプロイする](/ja/basics/deploy-an-application-shell)
+- [アプリケーションをローカルにデプロイする](/ja/basics/deploy-an-application-local)
+- [Java コンポーネントを含むアプリケーションをローカルにデプロイする](/ja/basics/deploy-an-application-local-java)
+
+  
+<Warning>
+**前提条件:**
+
+- [Java 17](https://openjdk.org/projects/jdk/17/)。
+- アプリケーションをビルドするための [Apache Maven](https://maven.apache.org/install.html)。
+</Warning>
+
+セットアップ:
+
+<Steps>
+<Step>
+**Vespa Cloud に[テナント](/ja/learn/tenant-apps-instances)を作成します:**
+</Step>
+<Step>
+**[Homebrew](https://brew.sh/) を使用して [Vespa CLI](/ja/clients/vespa-cli) をインストールします:**
+
+```bash
+$ brew install vespa-cli
+```
+</Step>
+<Step>
+**Vespa クライアントを設定します:**
+
+```bash
+$ vespa config set target cloud
+$ vespa config set application vespa-team.autotest
+```
+</Step>
+<Step>
+**Vespa Cloud のコントロール・プレーンへのアクセスを取得します:**
+
+```bash
+$ vespa auth login
+```
+
+</Step>
+<Step>
+**サンプル・[アプリケーション](/ja/basics/applications)をクローンします:**
+
+```bash
+$ vespa clone album-recommendation myapp && cd myapp
+```
+</Step>
+<Step>
+**[データ・プレーン・アクセス](/ja/security/guide#data-plane)用の証明書をアプリケーションに追加します:**
+
+```bash
+$ vespa auth cert app
+```
+
+</Step>
+</Steps>
+
+手順:
+
+<Steps>
+<Step>
+**アプリケーションをビルドします:**
+
+```bash
+$ mvn install -f app
+```
+</Step>
+<Step>
+**アプリケーションを[デプロイ](/ja/basics/applications#deploying-applications)します:**
+
+```bash
+$ vespa deploy --wait 600 ./app
+```
+</Step>
+<Step>
+**[ドキュメント](/ja/schemas/documents)を[フィード](/ja/writing/reads-and-writes)します:**
+
+```bash
+$ vespa feed app/src/test/resources/*.json
+```
+</Step>
+<Step>
+**[クエリー](/ja/querying/query-api)を実行します:**
+
+```bash
+vespa query "select * from music where album contains 'head'"
+```
+```bash
+vespa query \
+    "select * from music where true" \
+    "ranking=rank_albums" \
+    "ranking.features.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+```
+</Step>
+</Steps>
+
+おめでとうございます。最初の Vespa アプリケーションのデプロイが完了しました! [dev ゾーン](/ja/operations/environments#dev)のアプリケーション・インスタンスは、デフォルトでは最後のデプロイから 14 日間稼働し続けます。これは[コンソール](https://console.vespa-cloud.com/)で制御できます。
+
+このアプリのソースコードは [sample-apps](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java) で確認できます。

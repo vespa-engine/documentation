@@ -1,0 +1,254 @@
+---
+title: "基本的な HTTP テスト"
+sidebarTitle: "システムテスト"
+---
+
+これは、[Vespa アプリケーションのシステムテスト](/ja/applications/testing)の記述に使用する、基本的な HTTP テストのための Vespa Testing リファレンスです。
+
+これらのテストは、Vespa アプリケーションの HTTP インターフェースを使って、その動作を検証します。基本的な HTTP テストは JSON で記述します。より高度なテストを書くには、[Java テストリファレンス](/ja/reference/applications/testing-java)を参照してください。
+
+テストの実行例については[テストガイド](/ja/applications/testing)を参照してください。
+
+## テストスイート
+
+[テストのドキュメント](/ja/applications/testing)では、4 つのテストコードカテゴリーから構成される 3 つのテストシナリオを定義しています。基本的な HTTP テストでは、テストのカテゴリーは、アプリケーションの tests ディレクトリ内の配置場所によって決まります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>カテゴリー</th>
+      <th>ディレクトリ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>システムテスト</td>
+      <td>tests/system-test/</td>
+      <td>独立した機能テスト</td>
+    </tr>
+    <tr>
+      <td>ステージングセットアップ</td>
+      <td>tests/staging-setup/</td>
+      <td>アップグレード前に状態を設定</td>
+    </tr>
+    <tr>
+      <td>ステージングテスト</td>
+      <td>tests/staging-test/</td>
+      <td>アップグレード後に状態を検証</td>
+    </tr>
+    <tr>
+      <td>本番テスト</td>
+      <td>tests/production-test/</td>
+      <td>ドメイン固有のメトリクスを検証</td>
+    </tr>
+  </tbody>
+</table>
+
+<Note>
+**注:** 
+
+アプリケーション・パッケージに Java コードがある場合、`tests` ディレクトリは `src/test/application/tests` です
+</Note>
+
+各テストは JSON ファイルで記述され、相対パスを使って他のファイルを含めることができます:
+
+```bash
+$ ls -1 tests/*/*
+
+tests/production-test/metrics-test.json
+tests/staging-setup/set-up-old-documents.json
+tests/staging-test/verify-search-still-works.json
+tests/system-test/data/document.json
+tests/system-test/feed-and-search-test.json
+tests/system-test/ranking-test.json
+```
+
+実際のシステムテストとステージングテストの例については、Vespa Cloud の[サンプルテストスイート](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/CI-CD)を確認してください。本番テストはアプリケーションに強く依存するため、このスイートには含まれていませんが、そのようなテストの例は次のようになります:
+
+```json
+{
+    "steps": [
+        {
+            "request": {
+                "uri": "https://my.external.service/metrics/?query=customer-engagement"
+            }
+        }
+    ]
+}
+```
+
+## テストファイルの構造
+
+上記のいずれかのディレクトリ直下にある各 `.json` ファイルは、1 つのテストを記述します。各テストは一連のステップから構成され、各ステップは、実行する HTTP リクエストと、得られるレスポンスに関するいくつかのアサーションを指定します。テストレベルとステップレベルの両方で、いくつかの追加プロパティも指定できます。`//` コメント付きの完全な例:
+
+```json expandable
+{
+    "name": "my test",
+    "defaults": {
+        "cluster": "default",
+        "parameters": {
+            "timeout": "1.618s"
+        }
+    },
+    "steps": [
+        {
+            "name": "clear existing documents",
+            "request": {
+                "method": "DELETE",
+                "uri": "/document/v1/",
+                "parameters": {
+                    "cluster": "music",
+                    "selection": "true"
+                }
+            }
+        },
+        {
+            "name": "feed foo",
+            "request": {
+                "method": "POST",
+                // should contain payload as expected by /document/v1/
+                "body": "foo/body.json",
+                // specify only the path and query for Vespa requests
+                "uri": "/document/v1/test/music/docid/foo?timeout=8s",
+                // JSON object file; merged with query from "uri"
+                "parameters": "foo/parameters.json"
+            }
+            // no response spec: just assert code 200
+        },
+        {
+            "name": "query for foo",
+            "request": {
+                // no "uri": defaults to "/search/"
+                "parameters": {
+                    "query": "artist: foo"
+                }
+            },
+            "response": {
+                "body": {
+                    "root": {
+                        "children": [
+                            // assert "children" has a single element ...
+                            {
+                                // ... which has the field "fields" ...
+                                "fields": {
+                                    // ... where the field "artist" is "Foo Fighters" ...
+                                    "artist": "Foo Fighters"
+                                },
+                                // ... and the field "relevance" close to 0.381862383599
+                                "relevance": 0.381862383599
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    ]
+}
+```
+
+### テスト JSON 仕様
+
+フィールドの全リストと説明:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>親</th>
+      <th>型</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>root   step</td>
+      <td>string</td>
+      <td>ファイル名、step &#42;n&#42;</td>
+      <td>テストレポートでの表示に使用される名前です。テストにはデフォルトでファイル名が使用され、ステップには 1 始まりの「step n」が使用されます。</td>
+    </tr>
+    <tr>
+      <td>defaults</td>
+      <td>root</td>
+      <td>object</td>
+      <td></td>
+      <td>このテスト内のすべてのステップに対するデフォルト設定です。各ステップでオーバーライドできます。</td>
+    </tr>
+    <tr>
+      <td>steps</td>
+      <td>root</td>
+      <td>array</td>
+      <td></td>
+      <td>このテストを構成する、空でないステップのリストです。</td>
+    </tr>
+    <tr>
+      <td>request</td>
+      <td>step</td>
+      <td>object</td>
+      <td></td>
+      <td>Vespa または外部サービスに送信するリクエストの仕様です。</td>
+    </tr>
+    <tr>
+      <td>cluster</td>
+      <td>defaults request</td>
+      <td>string</td>
+      <td></td>
+      <td><a href="/ja/reference/applications/services/services" aria-label="services.xml">services.xml</a> で指定された、リクエストの送信先となる Vespa クラスターの名前です。これが指定されておらず、アプリケーションに単一のコンテナー・クラスターがある場合は、それが使用されます。</td>
+    </tr>
+    <tr>
+      <td>method</td>
+      <td>request</td>
+      <td>string</td>
+      <td>"GET"</td>
+      <td>リクエストに使用する HTTP メソッドです。</td>
+    </tr>
+    <tr>
+      <td>uri</td>
+      <td>request</td>
+      <td>string</td>
+      <td>"/search/"</td>
+      <td>これがパス +(エンコード済み)クエリーの場合、ホストは指定されたクラスターによって決まります。それ以外の場合は、(スキームを含む)絶対 URI でなければならず、そのホストが使用されます。ここで指定されたクエリーパラメーターは、defaults で指定されたものをオーバーライドします。</td>
+    </tr>
+    <tr>
+      <td>parameters</td>
+      <td>defaults request</td>
+      <td>string object</td>
+      <td></td>
+      <td>HTTP リクエストのクエリーパラメーターです。値はエンコードしないでください。これらは指定された URI のパラメーターとマージされ、defaults で指定されたものをオーバーライドします。値が文字列の場合、それはパラメーターオブジェクトへの相対ファイル参照でなければなりません。</td>
+    </tr>
+    <tr>
+      <td>body</td>
+      <td>request response</td>
+      <td>string object</td>
+      <td></td>
+      <td>リクエストのボディ、またはレスポンスの部分ボディ(<a href="#json-matching" aria-label="マッチング">マッチング</a>を参照)です。値が文字列の場合、それは代わりに使用される JSON オブジェクトへの相対ファイル参照でなければなりません。</td>
+    </tr>
+    <tr>
+      <td>response</td>
+      <td>step</td>
+      <td>object</td>
+      <td></td>
+      <td>同じステップの HTTP リクエストを実行して得られる HTTP レスポンスのボディに対して行うアサーションの仕様です。</td>
+    </tr>
+    <tr>
+      <td>code</td>
+      <td>response</td>
+      <td>number</td>
+      <td>200</td>
+      <td>レスポンスが持つべきステータスコードです。</td>
+    </tr>
+  </tbody>
+</table>
+
+### JSON マッチング
+
+すべてのリクエストとレスポンスは JSON 形式でなければなりません。テストでは、実際のレスポンスに*何が存在すべきか*を記述することで、シンプルな JSON 検証を行えます。これは、各レスポンスに対して JSON 構造(*テンプレート*)を指定し、テンプレートに存在する各フィールドが実際のレスポンスのフィールドとマッチすることを要求することで行います。マッチしないフィールドはテスト失敗となり、次のルールが適用されます:
+
+- オブジェクトは、列挙されたすべてのフィールドを含んでいなければならず、列挙されていないフィールドを含んでいても構いません。
+- 配列は要素ごとにマッチしなければなりません。
+- 数値は精度 `1e-9` の範囲内でマッチしなければなりません。
+- その他すべての値は完全に一致しなければなりません。
+
+空のオブジェクト `{ }` は他の任意のオブジェクトにマッチするため、それ以上の検証を必要としない配列要素を埋めるために使用できます。

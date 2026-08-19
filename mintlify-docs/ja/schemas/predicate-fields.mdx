@@ -1,0 +1,329 @@
+---
+title: "Predicateフィールド"
+---
+
+[Predicate](/ja/reference/schemas/schemas#predicate)フィールドは、クエリーをドキュメント内の*ブール制約（boolean constraints）*のセットにマッチさせる方法を提供します。ユースケースの例:
+
+- 広告におけるブール制約で、ターゲット・グループを指定するもの。インプレッションのセット、つまり特定のユーザーに対する具体的な値でクエリーを実行し、そのユーザーにどの広告を表示できるかを調べます。
+- eコマースにおける保存済み検索。ユーザーがpredicateの形で検索を保存し、新しいアイテムが保存済み検索とマッチングされます。
+
+`target`という[predicateフィールド](/ja/reference/schemas/schemas#predicate)を使ったドキュメントとクエリーの例:
+
+```json
+{
+  "put": "id:ns:user::12345",
+  "fields": {
+    "target": "gender in ['male'] and age in [30..40] and income in [200..50000]",
+    "name": "John Doe"
+  }
+}
+```
+
+```js
+select name from user where predicate(target, {"gender":"male"}, {"income":30000L})
+```
+
+詳細は[Predicate Searchサンプルアプリケーション](https://github.com/vespa-engine/sample-apps/blob/master/examples/predicate-fields/README.md)を参照してください。
+
+predicateフィールドを設定する際には、インデックスのサイズとクエリーのパフォーマンスの間にいくつかのトレードオフがあります。[設定](#configuration)を参照してください。
+
+predicateフィールドは、実務者がPercolator Queryを使用してきたような問題を解決するのに適しています。
+
+<Note>
+**注:**
+
+predicateフィールドは[ストリーミング検索](/ja/performance/streaming-search#differences-in-streaming-search)ではサポートされていません。
+</Note>
+
+## ブール制約
+
+ブール制約（predicate）は、クエリーが着地するターゲット領域を指定します。その属性は、単純なtrue/falseの基準、マッチさせるセットの部分集合、または値の範囲です。
+
+### Predicate
+
+predicateとは、ブール式の形式によるブール制約の指定です。たとえば、predicate `gender in [Female] and age in [20..30] and pos in [1..4]` は、広告のターゲット・ユーザーが20歳から30歳の女性であることを要求し、かつ広告が上位4つのポジションのいずれかに配置されなければならないことを指定できます。
+
+詳細は[文法](#grammar)を参照してください。
+
+### 属性
+
+predicate内の変数は*属性（attribute）*と呼ばれます。属性には2つのタイプがあります:
+
+- **通常属性（Regular attributes）**。通常属性は文字列値を取ります。predicate内で、通常属性が複数の選択肢のうちいずれかの値を持たなければならないことを指定します。たとえば `hobby in [Music, Hiking]` は、hobbyに`Music`または`Hiking`のいずれか（または両方）が割り当てられている場合にtrueと評価されます。
+- **範囲属性（Range attributes）**。範囲属性は整数値を取り、範囲式でのみ使用できます。範囲式は、下限、上限、またはその両方を指定します:
+  1. `age in [10..]` - ageは10以上でなければならない
+  2. `age in [..10]` - ageは10以下でなければならない
+  3. `age in [10..15]` - ageは10以上15以下でなければならない（両端を含む）
+
+### Predicateのサンプル
+
+部分集合式は、通常属性に角括弧内に列挙された値のいずれかが割り当てられている場合にtrueと評価されます:
+
+```js
+hobby in [Music, Hiking, Biking]
+```
+
+範囲式は、範囲属性が指定された範囲内にある場合にtrueと評価されます（境界値を含みます）:
+
+```js
+age in [20..29]
+```
+
+範囲式では下限または上限のみを指定することもできます:
+
+```js
+age in [..29]
+```
+
+論理和（disjunction）を作るには`or`演算子を使用します:
+
+```js
+age in [..29] or hobby in [Music, Biking]
+```
+
+同様に、論理積（conjunction）を作るには`and`演算子を使用します:
+
+```js
+age in [20..29] and hobby in [Music]
+```
+
+括弧を使用して、より複雑なpredicateを作成できます:
+
+```js
+(age in [20..29] and gender in [Male]) or (age in [30..39] and gender in [Female])
+```
+
+部分集合式と範囲式は`not`演算子を使用して否定できます:
+
+```js
+age not in [20..29] and hobby not in [Music]
+```
+
+```js
+not age in [20..29] and not hobby in [Music]
+```
+
+`not`演算子は括弧と組み合わせることもできます:
+
+```js
+not (age in [20..29] or hobby in [Music])
+```
+
+英数字以外の文字を含む属性と値は、引用符で囲む必要があります:
+
+```js
+"profile.gender" in ['Male', "Female"]
+```
+
+二重引用符で囲まれた文字列に二重引用符が含まれる場合は、バックスラッシュでエスケープします。一重引用符で囲まれた文字列内の一重引用符にも同じルールが適用されます。一重引用符で囲まれた文字列内の二重引用符、および二重引用符で囲まれた文字列内の一重引用符はエスケープしてはいけません。
+
+```js
+"single'quote" in ["double\"quote", 'double"quote', 'single\'quote']
+```
+
+predicateに値trueを設定すると、常にマッチするようになります。predicateにfalseを設定すると、決してマッチしないようになります。
+
+```js
+true
+```
+
+```js
+false
+```
+
+## クエリー
+
+ブール・クエリーは、属性に対する具体的な値のセットを表し、それらは1つ以上のブール制約のセットが描くターゲット領域内に収まる場合があります。クエリーは、値を持つ属性の2つのリストで指定されます。1つのリストは、それぞれ1つ以上の離散値を持つ通常属性を保持し、もう1つのリストは、それぞれ単一の値を持つ範囲属性を保持します。
+
+### YQL+を使用した検索
+
+ブール・クエリーはYQL+の`predicate`関数を使用して行います。predicate関数は3つのパラメーターを取ります: predicateフィールド、通常属性のキー/値ペアのマップ、および範囲属性のキー/値ペアのマップです。
+
+```js
+select * from sources * where predicate(predicate_field, {"gender":"Female", "gender":"Male", hobby:"Hiking"}, {"age":20L, "pos":2L})
+```
+
+属性を指定する際には空のマップを使用できます:
+
+```js
+select * from sources * where predicate(predicate_field, {}, {"age":20L})
+```
+
+同じキーに複数の値を指定する場合は、値として配列を使用できます:
+
+```js
+select * from sources * where predicate(predicate_field,{"gender":["Female","Male"], "hobby":"Hiking"}, {"age":20L})
+```
+
+### サブクエリー
+
+効率上の理由から、一度に複数のクエリーを指定することが可能です。これは、各タームにビットマップを付与することで行います。このビットマップは、そのタームが（64個のうち）どのサブクエリーに属するかを表します。この典型的なユースケースは、ページ上の複数のポジション向けの広告を検索したい場合です。この場合、ユーザー・プロファイル情報はすべてのサブクエリーに含まれ、広告の配置場所だけが変わります。すべてのサブクエリーが毎回使用されるため、空のサブクエリーにもマッチが発生し得ることに注意してください。
+
+#### YQLでのサブクエリーの指定
+
+サブクエリーは、キーが16進数またはビット番号のリストのいずれかの文字列表現であり、値が属性のキー/値ペアのマップであるマップとして指定します。以下の2つのクエリーは、属性をサブクエリーにマッピングする2つの異なる方法を示しています。
+
+```js
+select * from sources * where predicate(predicate_field, {"0x3":{"gender":"Female"}, "0x1":{"hobby":["music","hiking"]}}, {"0x2":{"age":23L}})
+```
+
+```js
+select * from sources * where predicate(predicate_field, {"[0,1]":{"gender":"Female"}, "[0]":{"hobby":["music","hiking"]}}, {"[1]":{"age":23L}})
+```
+
+上記のクエリーは、以下の2つのクエリーから構成されています:
+
+```js
+select * from sources * where predicate(predicate_field, {"gender":"Female", "hobby":["music","hiking"]},{})
+select * from sources * where predicate(predicate_field, {"gender":"Female"}, {"age":23L})
+```
+
+サブクエリーのビット番号はゼロ始まりの番号付けを使用することに注意してください。たとえば、最初のサブクエリーのインデックスは`0`です。有効な最大のサブクエリーのインデックスは`63`です。  
+
+`0x1`〜`0xFFFFFFFFFFFFFFFF`の任意の値が有効なサブクエリー・ビットマップです。
+
+<Note>
+**注:**
+
+サブクエリーのマッピングが指定されていない場合、その属性はすべてのサブクエリーに適用されます。
+</Note>
+
+#### 結果内のサブクエリーの識別
+
+サブクエリーを使用する場合は、スキーマに`subqueries`サマリー・フィーチャーを追加する必要があります。各ヒットについて、サブクエリーは2つの異なるサマリー・フィーチャーで報告されます。1つは下位32ビット用で`lsb`という名前、もう1つは上位32ビット用で`msb`という名前です。
+
+各ヒットのサブクエリー・ビットマップを取得するために必要なカスタム*searcher*、*services.xml*、*スキーマ*の設定方法については、[predicate searchの例](https://github.com/vespa-engine/sample-apps/tree/master/examples/predicate-fields)を参照してください。
+
+#### Predicateの例
+
+サブクエリー機能の典型的なユースケースは、ページ上の複数のポジション向けの広告を検索したい場合です。ユーザー・プロファイル情報はすべてのサブクエリーで同一であり、広告の配置場所だけが変わります。以下の例では、`age`、`gender`、`pos`の3つの異なる属性を使用します。前者2つの属性はユーザー・プロファイルを表し、`pos`属性は広告の配置場所を決定します。以下の3つのドキュメントがインデックスされていると仮定します:
+
+```json
+[
+   {
+      "fields" : {
+         "target" : "age in [20..30] and gender in [Female, Male] and pos in [1]"
+      },
+      "put" : "id:test:ad::1"
+   },
+   {
+      "fields" : {
+         "target" : "gender in [Male] and pos in [1, 2]"
+      },
+      "put" : "id:test:ad::2"
+   },
+   {
+      "fields" : {
+         "target" : "age in [20..] and gender in [Female, Male] and pos in [2]"
+      },
+      "put" : "id:test:ad::3"
+   }
+]
+```
+
+広告配置場所1と2に対して、25歳の男性をターゲットとするすべての広告を検索します。そのためには、2つのサブクエリーから成るクエリーを作成します。1つは配置場所1用、もう1つは配置場所2用です:
+
+```js
+select * from sources * where predicate(target, {"[0,1]":{"gender":"Male"}, "[0]":{"pos": "1"}, "[1]":{"pos": "2"}}, {"[0,1]":{"age":25L}})
+```
+
+各サブクエリーは`pos`に対して別々の値を持ち、一方で`gender`と`age`の値は両方のサブクエリーで共通であることに注意してください。
+
+このクエリーは3件のヒットを返し、各ドキュメントにつき1件です。各ドキュメントには、サブクエリー・ビットマップ（64ビット）を持つサマリー・フィーチャーが付きます。これは、サンプルアプリの`SubqueriesSearcher`を使用していることを前提としています。そうでない場合、各ドキュメントには2つのサマリー・フィーチャーが付きます。1つはサブクエリー・ビットマップの下位32ビット用、もう1つは上位32ビット用です。
+
+- id `id:test:ad::1`のドキュメントのサブクエリー・ビットマップは`0x1`になります。このドキュメントはサブクエリー#1のヒットであるため、最下位ビットが1に設定されます。
+- id `id:test:ad::2`のドキュメントは両方のサブクエリーのヒットであり、下位2ビットが1に設定され、サブクエリー・ビットマップは`0x3`になります。
+- 同じ原則に従い、`id:test:ad::3`のサブクエリー・ビットマップは`0x2`です。
+
+## 設定
+
+<Note>
+**注:**
+
+predicateフィールドの使用は複雑であり、パフォーマンスのための設定チューニングには、基盤となるアルゴリズムへの深い理解が必要です。
+</Note>
+
+predicate型のフィールドには、必須パラメーター`arity`を含むインデックス定義が必要です。この値は、インデックスのサイズとクエリーの複雑さのトレードオフを決めます。詳細は[インデックスのサイズ](#index-size)を参照してください。predicate型のフィールドは、他に3つのオプション・パラメーターも受け付けます: `lower-bound`、`upper-bound`、`dense-posting-list-threshold`です。これらのプロパティは、クエリーのパフォーマンスとインデックスのサイズを最適化するのに役立ちます。前者2つのパラメーターは、範囲属性の値の下限と上限を設定します。後者の値は、ブール・インデックスの構造を決定し、インデックスのサイズと引き換えにクエリー・パフォーマンスの向上が期待できます。
+
+predicateをフィードするには、[predicate](/ja/reference/schemas/schemas#predicate)型のフィールドに文字列として格納します - [JSONリファレンス](/ja/reference/schemas/document-json-format#predicate)を参照してください。
+
+### スキーマ
+
+以下のスキーマ例では、必須のarityパラメーターを含むattributeのpredicateフィールドを設定しています。
+
+```js
+schema example {
+    document example {
+
+        field predicate_field type predicate {
+            indexing: attribute
+            index {
+                arity: 2  # mandatory
+                lower-bound: 3
+                upper-bound: 200
+                dense-posting-list-threshold: 0.25
+            }
+        }
+
+    }
+
+    # For subquery reporting:
+    rank-profile default {
+        summary-features: subqueries(predicate_field).lsb subqueries(predicate_field).msb
+    }
+}
+```
+
+### 上限と下限
+
+`upper-bound`および`lower-bound`パラメーターは、ブール式が操作することが想定される値の範囲を指定します。この範囲外の値を持つクエリーは拒否されます。インデックスはこれらの境界に基づいて最適化されるため、境界を変更した場合はインデックスの再構築が必要です。
+
+### Dense Posting List Threshold
+
+`dense-posting-list-threshold`パラメーターは、ブール・インデックスがメモリ内でどのように構造化されるかに影響するしきい値です。ブール・インデックスは、いくつかのスパースなデータ構造（B-treeベースのポスティング・リスト）で構成されています。最も大きなポスティング・リストは、密なベクトルベースの構造にも格納されます。密なポスティング・リストは検索が高速ですが、インデックス全体のサイズを大幅に増加させる可能性があります。相対サイズがしきい値を超えるポスティング・リストのみが密な形式で格納されます（100万ドキュメントのコーパスでthreshold=0.5の場合、サイズが50万を超えるすべてのポスティング・リストがベクトルとして格納されます）。最適な値はコーパスの特性に依存し、0.15〜0.50の間のどこかになります。しきい値が低すぎると、クエリー・パフォーマンスとインデックスのサイズの両方に大きな悪影響を及ぼし、しきい値が大きすぎるとクエリー・パフォーマンスがわずかに低下する可能性があります。
+
+デフォルト値は0.40です。有効な範囲は(0, 1]です。
+
+### インデックスのサイズ
+
+範囲属性を使用する場合、属性は、全体の範囲を合わせてカバーするサブ範囲用の属性のセットに展開されます。サブ範囲の粒度はパラメーター`arity`によって制御されます。arityが低いとインデックスは小さくなりますが、クエリーにより多くのタームが必要になります。逆に、arityが高いとインデックスは大きくなりますが、クエリー・タームは少なくなります。
+
+インデックスのサイズに影響を与えるもう1つの要素は、ブール制約で受け入れられる区間のサイズです。典型的なケースは、無限の端点を持つ区間、つまり*x*より大きいすべての数にマッチさせるものです。無限大として2^63を使用すると区間が大きくなり、インデックスのサイズに影響します。最大値を低くするとインデックスのサイズが小さくなります。最大値は`upper-bound`および`lower-bound`パラメーターで簡単に制御できます。
+
+`dense-posting-list-threshold`パラメーターは、インデックスのサイズに対して逆方向の影響を持ちます。クエリー・パフォーマンスよりも小さいインデックス・サイズを優先する場合は、しきい値を上げることが有益です。
+
+以下の図は、arityと範囲の上限が増加するにつれて、単一のドキュメントに対するターム数がどのように増加するかを示しています:
+
+<Frame>
+![](/assets/graph-image.png)
+</Frame>
+
+## 文法
+
+```js
+predicate   = disjunction <EOF> ;
+disjunction = conjunction [ 'or' disjunction ] ;
+conjunction = ( leaf  | [ 'not' ], '(', disjunction, ')' ) [ 'and' conjunction ] ;
+leaf        = value, [ 'not' ], 'in', ( value | multivalue | range )
+            | 'true'
+            | 'false' ;
+
+value       = alphanum { alphanum } | string ;
+multivalue  = '[' value, { ',', value } ']' ;
+range       = '[' [ integer ] '..' [ integer ] ']' ;
+
+alphanum    = alpha | digit | '_';
+string      = '\'', { stdchars_1 | escape_1 }, '\''
+            | '"', { stdchars_2 | escape_2 }, '"' ;
+
+integer     = [ '-' | '+' ], ( posdigit, { digit } | '0' );
+
+alpha       = ? ASCII characters in the range a-z and A-Z ? ;
+digit       = '0' | posdigit ;
+posdigit    = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' ;
+stdchars_1  = ? All unicode chars except '\\' and '\'' ? ;
+stdchars_2  = ? All unicode chars except '\\' and '"' ? ;
+escape_1    = '\\', ( '\\' | 't' | 'n' | 'f' | 'r' | '\'' | 'x', hexdigit, hexdigit )
+escape_2    = '\\', ( '\\' | 't' | 'n' | 'f' | 'r' | '"' | 'x', hexdigit, hexdigit )
+hexdigit    = digit | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' ;
+```

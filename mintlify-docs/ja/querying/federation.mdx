@@ -1,0 +1,589 @@
+---
+title: "フェデレーション"
+---
+
+<Frame>
+![](/assets/img/federation-simple.svg)
+</Frame>
+
+Vespa Container を使うと、複数のデータソースを共通の検索サービスに *フェデレーション* できます。データソースは、同じアプリケーションに属する検索クラスターでも、Vespa またはその他の種類のサービスが背後にある外部サービスでもかまいません。外部サービスへフェデレーションするコンテナーノードのみで構成されるシステムをセットアップすることで、コンテナーを純粋な *フェデレーション・プラットフォーム* として使用することもできます。
+
+このドキュメントでは、フェデレーションの簡単な導入を行い、フェデレーションを行うアプリケーション・パッケージの作成方法を説明し、クエリーに応じてソースを選択するため、およびクエリーとソース固有の結果から最終結果を作成するために、どのようなサポートが利用できるかを示します。
+
+*フェデレーション* により、ユーザーは 1 つのインターフェースを通じて、さまざまな種類の複数のソースのデータにアクセスできます。これは次のような場合に役立ちます:
+
+-   ニュース記事に添える適切な画像を見つけるなど、アプリケーションが返す結果を補助データで強化する。
+-   アプリケーションがデータを持たない場合に代替ソースからデータを見つけることで、より包括的な結果を提供する。例えば Web 検索結果によるバックフィルなど。
+-   主目的があるデータセットへのアクセス提供ではなく、ユーザーやフロントエンドアプリケーションに、さまざまなソースの多様なデータへアクセスするための単一の起点を提供するアプリケーションを作成する。例としては、外部ソースからデータを集めて任意のトピックについて動的に生成されるブラウズページがあります。
+
+フェデレーションソリューションを作成する際の主なタスクは次のとおりです:
+
+<Steps>
+<Step>
+さまざまなソースへのコネクターを作成する
+</Step>
+<Step>
+特定のクエリーを受け取るデータソースを選択する
+</Step>
+<Step>
+受け取ったリクエストを、各ソースから目的のデータを返す実行可能なクエリーに書き換える
+</Step>
+<Step>
+選択された各ソースから返されたデータの選別、整理、結合によって最終結果を作成する
+</Step>
+</Steps>
+
+コンテナーは、アプリケーション・パッケージを通じて設定できるサーチチェーンの集合としてフェデレーション実行を組織する方法を提供することで、これらのタスクを支援します。先に進む前に、[Container の概要](../applications/containers)と[チェーンされたコンポーネント](../applications/chaining)をお読みください。`com.yahoo.search.federation` の [Javadoc](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/federation/package-summary) も参照してください。
+
+## プロバイダーの設定
+
+*プロバイダー* は、データソースから(Result の形で)データを生成するサーチチェーンです。プロバイダーには、データソースに接続し、返されたデータから Result を生成する Searcher が含まれている必要があります。プロバイダーは次のように設定します:
+
+```xml
+<search>
+    <provider id="my-provider">
+        <searcher id="MyDataFetchingSearcher"
+                  bundle="the name in artifactId in pom.xml" />
+    </provider>
+</search>
+```
+
+他のチェーンと同様に、プロバイダー内に複数のサーチャーを追加できます。
+
+同じアプリケーション内のコンテント・クラスターからデータを提供するサーチチェーンも *プロバイダー* です。内部のコンテント・クラスターと通信するプロバイダーを明示的に設定するには、プロバイダーに type="local" 属性を設定します。これにより、内部のコンテント・クラスターとの通信に必要なサーチャーがサーチチェーンに自動的に追加されます。例: このプロバイダーへのクエリーでは、語の小文字化やステミングは行われません:
+
+```xml
+<provider id="myProvider"
+          type="local"
+          cluster="mydocs"
+          excludes="com.yahoo.prelude.searcher.BlendingSearcher
+              com.yahoo.prelude.querytransform.StemmingSearcher
+              com.yahoo.search.querytransform.VespaLowercasingSearcher">
+```
+
+## ソースの設定
+
+1 つのプロバイダーを使用して、複数の種類の結果を生成できます。それぞれの種類の結果を実装・提示するために、*ソース* を使用できます。*ソース* は、1 つ以上のプロバイダーの動作を拡張または変更することで、特定の種類の結果を提供するサーチチェーンです。
+
+my-provider から Web 検索結果と Java API ドキュメントという 2 種類の結果を取得したいとします:
+
+```xml
+<search>
+    <provider id="my-provider">
+        <searcher id="MyDataFetchingSearcher"
+                  bundle="the name in artifactId in pom.xml" />
+        <source id="web" />
+        <source id="java-api">
+            <searcher id="com.yahoo.example.JavaApiSearcher"
+                      bundle="the name in artifactId in pom.xml" />
+        </source>
+    </provider>
+```
+
+これにより、`web@my-provider` と `java-api@my-provider` という 2 つの *ソース・サーチチェーン* が作成されます。それぞれが 1 つのソース、すなわち `web` と `java-api` を構成します。この例が示すように、これらのサーチチェーンはソースとそれを囲むプロバイダーにちなんで命名されます。名前の中の @ 記号は *in* と読むべきもので、例えば `web@my-provider` は *my-provider 内の web* と読みます。
+
+JavaApiSearcher は、Java API ドキュメントからのヒットのみを取得するようにクエリーを変更する責務を持ちます。このサーチャーは source 要素の直下に追加しました。ソース・サーチチェーンとプロバイダーはどちらもサーチチェーンのインスタンスです。したがって、通常のサーチチェーンを設定するためのすべてのオプションが、これらにも利用できます。
+
+`web@my-provider` と `java-api@my-provider` のソース・サーチチェーンは、どのようにして `my-provider` プロバイダーを使用して外部サービスにクエリーを送信するのでしょうか?内部的には、ソース・サーチチェーンはそれを囲むプロバイダーから *継承* します。プロバイダーには外部サービスとの通信方法を知っているサーチャーが含まれているため、ソースにも同じサーチャーが含まれることになります。例として "web" サーチチェーンを考えてみましょう。これは `my-provider` サーチチェーンとまったく同じサーチャーインスタンスを含みます。データプロバイダーと通信するためのチェーンを組織化することで、リモートサービス("プロバイダー")との通信に使う同じ接続とロジックを、複数の目的("ソース")のために再利用できます。
+
+プロバイダー・サーチチェーン `my-provider` は、ソースを追加しても *変更されません*。これを確認するには、`my-provider`、`web@my-provider`、`java-api@my-provider` の 3 つのサーチチェーンにクエリーを送信してみてください。
+
+### ソースごとの複数プロバイダー
+
+複数のプロバイダーのソース・サーチチェーンで構成されるソースを作成できます。これにより、ソースへの各リクエストを処理するために使用するプロバイダーを実質的に切り替えられます:
+
+```xml
+<search>
+    <provider id="my-provider">
+        <searcher id="MyDataFetchingSearcher"
+                  bundle="the name in artifactId in pom.xml" />
+        <source id="common-search" />
+    </provider>
+
+    <provider id="news-search">
+        <searcher id="MyNewsDataFetchingSearcher"
+                  bundle="the name in artifactId in pom.xml" />
+        <source idref="common-search" />
+    </provider>
+```
+
+ここでは、`common-search@news-search` と `common-search@my-provider` という 2 つのソース・サーチチェーンが、単一のソース `common-search` を構成しています。`idref` 属性を使用するソース・サーチチェーンはパーティシパント(participant)と呼ばれ、`id` 属性を使用するものはリーダー(leader)と呼ばれます。各ソースは、1 つのリーダーと 0 個以上のパーティシパントで構成されなければなりません。
+
+デフォルトでは、ソースへ *フェデレーション* する際にはリーダーのサーチチェーンのみが使用されます。代わりにパーティシパントのいずれかを使用するには、[sources](../reference/api/query#model.sources) と *source* を使用します:
+
+```text
+http://[host]:[port]/?sources=common-search&source.common-search.provider=news-search
+```
+
+## フェデレーション
+
+これで、Web と Java API ドキュメントの両方を同時に検索し、結合された結果セットを取得できるようになりました。これは *フェデレーション* サーチャーをセットアップすることで実現します:
+
+```xml
+<search>
+    <provider id="my-provider">
+        <searcher id="MyDataFetchingSearcher"
+                  bundle="the name in artifactId in pom.xml" />
+        <source id="web" />
+        <source id="java-api">
+            <searcher id="com.yahoo.example.JavaApiSearcher"
+                      bundle="the name in artifactId in pom.xml" />
+        </source>
+    </provider>
+    <chain id="combined">
+        <federation id="combinator">
+            <source idref="web" />
+            <source idref="java-api" />
+        </federation>
+    </chain>
+```
+
+Federation 要素の中に、使用したいソースをリストします。*source* という名前に惑わされないでください。ソースのように振る舞うものであれば、ソースとして使用できます(つまり、プロバイダーを含むすべてのタイプのサーチチェーンが受け入れられます)。例として、*web* への参照を *my-provider* に置き換えてみてください。
+
+検索時には、[sources](../reference/api/query#model.sources) クエリーパラメーターを指定することで、federation 要素で指定したソースのサブセットを選択できます。
+
+## 組み込みのフェデレーション
+
+組み込みのサーチチェーン *native* と *vespa* には、*federation* という名前のフェデレーション・サーチャーが含まれています。このサーチャーは、以下へフェデレーションするように設定されています:
+
+-   すべてのソース
+-   ソースを含まないすべてのプロバイダー
+
+独自のフェデレーション・サーチャーを設定する場合、これらのソースのサブセットに限定されることはありません。任意のプロバイダー、ソース、またはサーチチェーンを使用できます。
+
+## デフォルトソースの継承
+
+組み込みのフェデレーション・サーチャーと同じソースを取得するには、デフォルトのソースセットを継承します:
+
+```xml
+<search>
+    <chain id="my-chain">
+        <federation id="combinator">
+            <source-set inherits="default" />
+            ...
+        </federation>
+    </chain>
+</search>
+```
+
+## コンテント・クラスターのチェーンの変更
+
+上記の情報を使って、単一のコンテント・クラスターにクエリーを送信し、そこからクエリーを受け取るサーチチェーンを変更する設定を作成できます(ここでは、あるサーチャーを削除して別のサーチャーを追加しています):
+
+```xml
+<search>
+    <chain id="default" inherits="vespa">
+        <federation id="federationSearcher">
+            <source id="local"/>
+        </federation>
+    </chain>
+    <provider cluster="my_content" id="local" type="local"
+              excludes="com.yahoo.search.querytransform.NGramSearcher">
+        <searcher id="ai.vespa.example.OrNGramSearcher"
+                  bundle="the name in artifactId in pom.xml"/>
+    </provider>
+</search>
+```
+
+## タイムアウトの動作
+
+プロバイダーがクエリーに応答するために使用できる時間を制限したい場合はどうすればよいでしょうか?
+
+```xml
+<search>
+    <provider id="my-provider">
+        <federationoptions timeout="100 ms" />
+        <searcher id="MyDataFetchingSearcher"
+                  bundle="the name in artifactId in pom.xml" />
+        <source id="web" />
+        <source id="java-api">
+            <searcher id="com.yahoo.example.JavaApiSearcher"
+                      bundle="the name in artifactId in pom.xml" />
+        </source>
+    </provider>
+```
+
+これにより、プロバイダーのサーチチェーンは各クエリーの実行に 100 ms までしか使用できなくなります。フェデレーション層は、最も長いタイムアウトを持つ必須(non-optional)プロバイダーが完了またはキャンセルされるまで、すべてのプロバイダーの実行継続を許可します。
+
+場合によっては、その特定のクエリーで待つつもりの時間よりも長く、プロバイダーへのリクエストを実行し続けられると便利なことがあります。これにより、キャッシュが構築されて初めてタイムアウト内に応答できるようになるソース内部のキャッシュを、事前に構築できます。このオプションを使用するには、プロバイダーに [request timeout](../reference/applications/services/search#federationoptions) を指定します:
+
+```xml
+<search>
+    <provider id="my-provider">
+        <federationoptions timeout="100 ms" requestTimeout="10000ms" />
+        ...
+    </provider>
+```
+
+[Searcher のタイムアウト](../applications/searchers#timeouts)も参照してください。
+
+## 必須ではないプロバイダー
+
+次に、広告を取得するプロバイダーを追加してみましょう:
+
+```xml
+<search>
+    <provider id="ads">
+        <searcher id="MyAdFetcher"
+                  bundle="the name in artifactId in pom.xml" />
+    </provider>
+```
+
+広告を取得することよりも、できるだけ早くユーザーに結果を返すことのほうが重要だとします。これを示すために、ads プロバイダーを *optional* としてマークします:
+
+```xml
+<search>
+    <provider id="ads">
+        <federationoptions optional="true" />
+        <searcher id="MyAdFetcher"
+                  bundle="the name in artifactId in pom.xml" />
+    </provider>
+```
+
+これにより、フェデレーション・サーチャーは、必須プロバイダーを待つ時間の範囲内でのみ広告を待ちます。広告が間に合えば使用され、そうでなければ破棄されます。
+
+フェデレーションの対象として optional なプロバイダーのみが選択された場合、それらはすべて必須として扱われます。そうしないと、結果を返す機会がまったくなくなってしまうためです。
+
+## フェデレーション・オプションの継承
+
+ソースは、それを囲むプロバイダーと同じフェデレーション・オプションを自動的に使用します。ソース側でフェデレーション・オプションの 1 つ以上を *オーバーライド* するには:
+
+```xml
+<search>
+    <provider id="my-provider">
+        <federationoptions timeout="100ms" />
+        <searcher id="MyDataFetchingSearcher"
+                  bundle="the name in artifactId in pom.xml" />
+        <source id="web">
+            <federationoptions timeout="200ms" />
+        </source>
+        <source id="java-api">
+            <searcher id="com.yahoo.example.JavaApiSearcher"
+                      bundle="the name in artifactId in pom.xml" />
+        </source>
+    </provider>
+```
+
+単一のソースを異なるフェデレーション・サーチャーで使用できます。異なるフェデレーション・サーチャーから同じソースにコストの異なるクエリーを送信する場合は、それらが使用される際のフェデレーション・オプションも *オーバーライド* するとよいでしょう:
+
+```xml
+<search>
+    <provider id="my-provider">
+        <federationoptions timeout="100ms" />
+        <searcher id="MyDataFetchingSearcher"
+                  bundle="the name in artifactId in pom.xml" />
+        <source id="web">
+            <federationoptions timeout="200ms" />
+        </source>
+        <source id="java-api">
+            <searcher id="com.yahoo.example.JavaApiSearcher"
+                      bundle="the name in artifactId in pom.xml" />
+        </source>
+    </provider>
+    <chain id="combined">
+        <federation id="combinator">
+            <source idref="web">
+                <federationoptions timeout="2.5s" />
+            </source>
+            <source idref="java-api" />
+        </federation>
+    </chain>
+```
+
+## サーチチェーンをプログラムで選択する
+
+サーチチェーンをいつ使用するかについて複雑なルールがある場合は、services.xml の federation の下にソースを設定する代わりに、プログラムでサーチチェーンを選択できます。選択コードは [TargetSelector](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/federation/selection/TargetSelector) として実装します。この TargetSelector は、フェデレーション・サーチャーに登録することで使用されます。
+
+```java expandable
+package com.yahoo.example;
+
+import com.google.common.base.Preconditions;
+import com.yahoo.component.chain.Chain;
+import com.yahoo.processing.execution.chain.ChainRegistry;
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.search.result.Hit;
+import com.yahoo.search.Searcher;
+import com.yahoo.search.federation.selection.FederationTarget;
+import com.yahoo.search.federation.selection.TargetSelector;
+import com.yahoo.search.searchchain.model.federation.FederationOptions;
+
+import java.util.Arrays;
+import java.util.Collection;
+
+class MyTargetSelector implements TargetSelector {
+
+    @Override
+    public Collection> getTargets(Query query,
+                                                           ChainRegistry searcherChainRegistry) {
+        Chain searchChain = searcherChainRegistry.getComponent("my-chain");
+        Preconditions.checkNotNull(searchChain, "No search chain named 'my-chain' exists in services.xml");
+
+        return Arrays.asList(new FederationTarget<>(searchChain, new FederationOptions(), null));
+    }
+
+    @Override
+    public void modifyTargetQuery(FederationTarget target, Query query) {
+        query.setHits(10);
+    }
+
+    @Override
+    public void modifyTargetResult(FederationTarget target, Result result) {
+        for (Hit hit: result.hits()) {
+            hit.setField("my-field", "hello-world");
+        }
+    }
+
+}
+```
+
+ターゲットセレクターは、フェデレーション・サーチャーのためにサーチチェーンを選択します。この例では、MyTargetSelector.getTargets は、`services.xml` でセットアップされた "my-chain" という名前の単一のチェーンを返します。
+
+各サーチチェーンを実行する前に、フェデレーション・サーチャーは modifyTargetQuery を呼び出すことで、ターゲットセレクターにクエリーの変更を許可します。この例では、取得するヒット数が 10 に設定されます。
+
+サーチチェーンの実行後、フェデレーション・サーチャーは modifyTargetResult を呼び出すことで、ターゲットセレクターに結果の変更を許可します。この例では、各ヒットに "my-field" というフィールドが値 "hello-world" とともに追加されます。
+
+``services.xml`` で、ターゲットセレクターを使用するフェデレーション・サーチャーを設定します。ターゲットセレクターは 1 つのみサポートされます。
+
+```js
+<search>
+    <chain id="my-chain">
+      <federation id="my-federation">
+          <target-selector id="com.yahoo.example.MyTargetSelector"
+                           bundle="the name in artifactId in pom.xml" />
+      </federation>
+    </chain>
+```
+
+target-selector と通常のソースの両方をセットアップすることもできます。その場合、フェデレーション・サーチャーは、プログラムで選択されたソースと、ターゲットセレクターなしで通常選択されるソースの両方にクエリーを送信します:
+
+```js
+<search>
+    <chain id="my-chain">
+        <federation id="my-federation">
+            <target-selector id="com.yahoo.example.MyTargetSelector"
+                             bundle="the name in artifactId in pom.xml" />
+            <source idref="java-api" />
+            <source-set inherits="default" />
+            ...
+        </federation>
+    </chain>
+```
+
+## 例: フェデレーションサービスのセットアップ
+
+フェデレーション・アプリケーションは、基本的なフェデレーションタスクを実行するカスタムサーチャー・コンポーネントを用意し、[services.xml](/ja/reference/applications/services/services) のフェデレーション設定でそれらをチェーンに組み合わせることで作成します。例えば、以下は、別の Vespa サービス(news)とある Web サービスにフェデレーションする、(1 ノードからなる)コンテナーノードのクラスターをセットアップする完全な設定です:
+
+```js expandable
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0">
+    <admin version="2.0">
+        <adminserver hostalias="node1"/>
+    </admin>
+
+    <container id="test" version="1.0">
+        <nodes>
+            <node hostalias="node1"/>
+        </nodes>
+        <search>
+            <provider id="news">
+                <searcher id="com.yahoo.example.NewsCustomerIdSearcher"
+                          bundle="the name in artifactId in pom.xml" />
+            </provider>
+            <provider id="webService">
+                <searcher id="com.yourdomain.WebProviderSearcher"
+                          bundle="the name in artifactId in pom.xml" />
+            </provider>
+        </search>
+    </container>
+</services>
+```
+
+これにより、次のようなサーチチェーンの構成が作成されます:
+
+<Frame>
+![](/assets/img/federation.svg)
+</Frame>
+
+各プロバイダーは、リモートサービスにクエリーを転送する Searcher で終わるサーチチェーンです。加えて、(デフォルトで含まれる)メインチェーンがあり、これは FederationSearcher で終わります。FederationSearcher はデフォルトで、すべてのプロバイダーに並列にクエリーを転送します。プロバイダーのチェーンはその結果を上位のフェデレーション・サーチャーに返し、フェデレーション・サーチャーはそれらをマージして完全な結果とし、メインチェーンを上って返します。
+
+この services ファイル、例示クラスの実装(後述)、およびコンテナーノードをリストした [hosts.xml](/ja/reference/applications/hosts) があれば、複数のソースにフェデレーションするアプリケーションをセットアップして[デプロイ](/ja/basics/applications#deploying-applications)するのに必要なものはすべて揃います。これらの XML セクションのリファレンスについては、[chains リファレンス](/ja/reference/applications/services/search#chain)を参照してください。
+
+以下のセクションでは、これをよりユーザーフレンドリーなフェデレーション結果を生成するソリューションへと発展させる方法の概要を説明します。
+
+### ソースの選択
+
+関連性の高いデータをユーザーに届けるという仕事を最善の形で行うには、すべてのクエリーをすべてのソースに送信し、すべての結果が揃い、手元に可能な限り多くの情報がある状態で、どのデータを含めるかを決定すべきです。しかし一般的には、リソースコストの観点からこれは推奨されないため、クエリー内の情報に基づいてサブセットを選択しなければなりません。これは確率的な最適化問題として捉えるのが最適です。すなわち、選択されるソースは、クエリーを送るコストに見合うだけの十分に高い有用性の確率を持つものであるべきです。
+
+ソースの選択や結果全体の処理に関与するサーチャーは、上記の例で暗黙的に作成されていたメインサーチチェーンに追加すべきです。そのためには、メインチェーンを明示的に作成する必要があります:
+
+```js expandable
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0">
+    <admin version="2.0">
+        <adminserver hostalias="node1"/>
+    </admin>
+    <container id="test" version="1.0">
+        <nodes>
+            <node hostalias="node1"/>
+        </nodes>
+        <search>
+            <chain id="default" inherits="native">
+                <searcher id="com.yahoo.example.ResultBlender"
+                          bundle="the name in artifactId in pom.xml" />
+            </chain>
+            <provider id="news">
+                <searcher id="com.yahoo.example.NewsCustomerIdSearcher"
+                          bundle="the name in artifactId in pom.xml" />
+            </provider>
+            <provider id="webService">
+                <searcher id="com.yahoo.example.ExampleProviderSearcher"
+                          bundle="the name in artifactId in pom.xml" />
+            </provider>
+        </search>
+    </container>
+</services>
+```
+
+これにより、FederationSearcher を含む native チェーンから継承したものに加えて、2 つのサーチャーを追加した明示的なメインチェーンが設定に追加されます。Vespa の全機能が必要な場合は、`native` ではなく `vespa` チェーンを継承すべきであることに注意してください。
+
+default という名前のチェーンは、クエリーに searchChain パラメーターが指定されていない場合に呼び出されます。
+
+Searcher コンポーネントの作成について詳しくは、[サーチャー開発](/ja/applications/searchers)を参照してください。
+
+### 各プロバイダー向けのクエリーの書き換え
+
+プロバイダー・サーチャーは、Query オブジェクトを受け取り、対象のバックエンドに適したリクエストに変換し、レスポンスを Result オブジェクトにデシリアライズする責務を持ちます。クエリーを渡す前に、プロバイダーの特性に合わせてクエリーを変更する必要があることがよくあります:
+
+- 判定された解釈と意図にできるだけよく一致する結果をプロバイダーから取得するために、プロバイダーに関する詳細な情報を使用してクエリーを書き換える必要がある場合があります
+- 各プロバイダー・サーチャーがサポートする基本的なパラメーター以外のパラメーターを、プロバイダー向けに変換する必要がある場合があります
+- プロバイダー固有のビジネスルールが必要な場合があります
+
+これらのクエリーの変更は、クエリーパラメーターを設定するだけの単純なものから、ソース固有の情報をクエリーに適用するもの、関連するすべてのクエリー状態をプロバイダー・サーチャーが消費する新しいオブジェクト表現に移し替えるものまで、複雑さはさまざまです。
+
+以下は、news リクエストに顧客 ID を追加するサーチャーの例です:
+
+```java expandable
+package com.yahoo.example;
+
+import com.yahoo.search.searchchain.Execution;
+import com.yahoo.search.*;
+
+public class NewsCustomerIdSearcher extends Searcher {
+
+    @Override
+    public Result search(Query query, Execution execution) {
+        String customerId="provider.news.custid";
+        if (query.properties().get(customerId) == null)
+            query.properties().set(customerId, "yahoo/test");
+        if (query.getTraceLevel() >= 3)
+            query.trace("News provider: Will use "
+                + customerId + "=" + query.properties().get(customerId), false, 3);
+        return execution.search(query);
+    }
+
+}
+```
+
+このサーチャーは、上記のように news ソースチェーンに追加してください。
+
+サービスと通信するサーチチェーンを **プロバイダー** と呼ぶ一方で、選択については **ソース** の選択と表現していることにお気づきかもしれません。この区別を設けている理由は、同じサービスとの間のクエリーおよび結果の異なる種類の処理を、異なるソースとして扱うことが有用な場合があるためです。そのため、services.xml では、プロバイダーチェーンに加えてソース・サーチチェーンを作成することが可能です。そのような各ソースは(プロバイダーチェーンを継承することで)プロバイダーを参照しますが、そのソースに固有のサーチャーをいくつか含みます。フェデレーション・サーチャーからのクエリーの選択とルーティングは、常にプロバイダーではなくソースに対して行われます。デフォルトでは、プロバイダーに source タグが追加されていない場合、各プロバイダーは同じ名前のソースを暗黙的に作成します。
+
+## 結果の処理
+
+ソースを選択し、各ソースから結果を取得するのに適したクエリーを作成し、それらのクエリーを実行すると、各ソースからのヒットのリストを含む、ソースごとの HitGroup を持つ結果が生成されます。これらの結果は、[page](/ja/reference/querying/page-result-format) 結果フォーマットをリクエストすることで、構造を XML として保持したまま、そのまま XML で返すことができます:
+
+```bash
+http://[host]:[port]/search/?query=test&presentation.format=page
+```
+
+しかし、これはほとんどの場合、ユーザーに提示するのに適していません。私たちがやりたいのは、ユーザーにとって最も高い有用性が見込まれるヒットのサブセットを選択し、ユーザーエクスペリエンスを最大化する形で整理することです。これは簡単なタスクではなく、ここで解決を試みることはしませんが、どのような解決策も、意図モデル内の情報と各ソースからの結果内の情報の両方を活用すべきであること、そして、あるデータを結果に含めることの有用性は他にどのようなデータが含まれるかに依存するため、これが高度に相互接続された最適化問題であることを指摘するにとどめます。
+
+ここでは、これが原理的にどのように行われるかを示すサーチャーを使用するだけにします。このサーチャーは、news と webService のヒットグループを単一のヒットリストにフラット化し、news のヒットは最も高くランクされたもののみを含めます:
+
+```java expandable
+package com.yahoo.example;
+
+import com.yahoo.search.*;
+import com.yahoo.search.result.*;
+import com.yahoo.search.searchchain.Execution;
+
+public class ResultBlender extends Searcher {
+
+    @Override
+    public Result search(Query query,Execution execution) {
+        Result result = execution.search(query);
+        HitGroup news = (HitGroup)result.hits().remove("source:news");
+        HitGroup webService = (HitGroup)result.hits().remove("source:webService");
+        if (webService == null) return result;
+        result.hits().addAll(webService.asList());
+        if (news == null) return result;
+        for (Hit hit : news.asList())
+            if (shouldIncludeNewsHit(hit))
+                result.hits().add(hit);
+        return result;
+    }
+
+    private boolean shouldIncludeNewsHit(Hit hit) {
+        if (hit.isMeta()) return true;
+        if (hit.getRelevance().getScore() > 0.7) return true;
+        return false;
+    }
+
+}
+```
+
+ユーザーに返す最適な結果は、必ずしも 1 つのフラット化されたリストとは限りません。場合によっては、ソースごとの構成を維持したり、別の構成を選択したりするほうがよいこともあります。上記のクエリーでリクエストした [page 結果フォーマット](/ja/reference/querying/page-result-format)は、任意の階層構成を XML として表現できます。このサーチャーのより現実的なバージョンでは、これを利用して、対象のフロントエンドが処理方法を知っているいくつかの定義済みレイアウトから選択し、選択したレイアウトに適した形で利用可能なヒットをグルーピングする方法を選ぶことになるでしょう。
+
+このサーチャーは、SourceSelector とともに services.xml のメイン(`default`)サーチチェーンに追加してください(順序は問いません)。
+
+## 結果プロセッサーのユニットテスト
+
+上記のサーチャーのユニットテストの例:
+
+```java expandable
+package com.yahoo.search.example.test;
+
+import org.junit.Test;
+import com.yahoo.search.searchchain.*;
+import com.yahoo.search.example.ResultBlender;
+import com.yahoo.search.*;
+import com.yahoo.search.result.*;
+
+public class ResultBlenderTestCase {
+
+    @Test
+    public void testBlending() {
+        Chain chain = new Chain(new ResultBlender(), new MockBackend());
+        Context context = Execution.Context.createContextStub(null);
+        Result result = new Execution(chain, context).search(new Query("?query=test"));
+        assertEquals(4, result.hits().size());
+        assertEquals("webService:1", result.hits().get(0).getId().toString());
+        assertEquals("news:1", result.hits().get(1).getId().toString());
+        assertEquals("webService:2", result.hits().get(2).getId().toString());
+        assertEquals("webService:3", result.hits().get(3).getId().toString());
+    }
+
+    private static class MockBackend extends Searcher {
+
+        @Override
+        public Result search(Query query,Execution execution) {
+            Result result = new Result(query);
+            HitGroup webService = new HitGroup("source:webService");
+            webService.add(new Hit("webService:1",0.9));
+            webService.add(new Hit("webService:2",0.7));
+            webService.add(new Hit("webService:3",0.5));
+            result.hits().add(webService);
+            HitGroup news = new HitGroup("source:news");
+            news.add(new Hit("news:1",0.8));
+            news.add(new Hit("news:2",0.6));
+            news.add(new Hit("news:3",0.4));
+            result.hits().add(news);
+            return result;
+        }
+    }
+
+}
+```
+
+これは、テスト対象のサーチャーの機能を検証するのに適した結果を生成するモックバックエンドを使って、サーチチェーンをプログラムで作成する方法を示しています。

@@ -1,0 +1,194 @@
+---
+title: "ドキュメントサマリー"
+---
+
+*ドキュメントサマリー*は、クエリー結果内の各ドキュメントについて表示される情報です。どの情報を含めるかは、*ドキュメントサマリークラス*によって決まります。これは、どの情報を含めるべきかの設定を持つ、名前付きのフィールドセットです。
+
+`default` という名前の特別なドキュメントサマリーは常に存在し、デフォルトで使用されます。これには次が含まれます:
+
+-   インデキシング文でサマリーに含めてよいと指定されているすべてのフィールド
+-   いずれかのドキュメントサマリーで指定されているすべてのフィールド
+-   [sddocname](../reference/querying/default-result-format#sddocname)
+-   [documentid](../reference/querying/default-result-format#documentid)。
+
+サマリークラスはスキーマで定義します:
+
+```js
+schema music {
+
+    document music {
+        field artist type string {
+            indexing: summary | index
+        }
+        field album type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+        field year type int {
+            indexing: summary | attribute
+        }
+        field category_scores type tensor<float>(cat{}) {
+            indexing: summary | attribute
+        }
+    }
+
+    document-summary my-short-summary {
+        summary artist {}
+        summary album {}
+    }
+}
+```
+
+詳細は[スキーマリファレンス](../reference/schemas/schemas#summary)を参照してください。
+
+クエリーに使用するサマリークラスは、パラメーター [presentation.summary](../reference/api/query#presentation.summary) によって決まります:
+
+```bash
+$ vespa query "select * from music where album contains 'head'" \
+  "presentation.summary=my-short-summary"
+```
+
+ドキュメントサマリークラスを定義するよくある理由は[パフォーマンス](#performance)です。attribute のみを含むドキュメントサマリーを構成することで、ディスクアクセスなしで結果を生成できます。すべてのフィールドが attribute であっても、[ドキュメント ID](../schemas/documents#document-ids) は attribute として保存されないため、メモリーのみへのアクセスを保証するにはこれが必要であることに注意してください。
+
+ドキュメントサマリーには、[動的スニペットとハイライトされた語](#dynamic-snippets)を含めることもできます。
+
+使用するドキュメントサマリークラスは、サーチャーから `fill()` メソッドにプログラムで指定することもできます。サーチャーでプログラムによるフィルタリングを使用する場合、プログラムによるフィルタリングを挟んだ複数の fill 操作を使って、データアクセスと転送を最適化できます。
+
+## YQL でのサマリーフィールドの選択
+
+[YQL](/ja/querying/query-language) 文を使って、ドキュメントサマリーのどのフィールドを結果に含めるかをフィルターすることもできます。これはコンテナー内での単なるフィールドフィルターであることに注意してください - サマリークラスのすべてのフィールドを含むサマリーが常にコンテントノードから取得されるため、パフォーマンスを最適化するにはカスタムサマリークラスを作成する必要があります。
+
+```js
+$ vespa query "select artist, album, documentid, sddocname from music where album contains 'head'"
+```
+
+```json
+{
+    "root": { },
+        "children": [
+            {
+                "id": "id:mynamespace:music::a-head-full-of-dreams",
+                "relevance": 0.16343879032006284,
+                "source": "mycontentcluster",
+                "fields": {
+                    "sddocname": "music",
+                    "documentid": "id:mynamespace:music::a-head-full-of-dreams",
+                    "artist": "Coldplay",
+                    "album": "A Head Full of Dreams"
+                }
+            }
+        ]
+    }
+}
+```
+
+使用する選択されたドキュメントサマリークラス(デフォルトでは `default`)のすべてのフィールドを選択するには、`*` を使用します。
+
+```js
+$ vespa query "select * from music where album contains 'head'"
+```
+
+```json
+{
+    "root": { },
+        "children": [
+            {
+                "id": "id:mynamespace:music::a-head-full-of-dreams",
+                "relevance": 0.16343879032006284,
+                "source": "mycontentcluster",
+                "fields": {
+                    "sddocname": "music",
+                    "documentid": "id:mynamespace:music::a-head-full-of-dreams",
+                    "artist": "Coldplay",
+                    "album": "A Head Full of Dreams",
+                    "year": 2015,
+                    "category_scores": {
+                        "type": "tensor(cat{})",
+                        "cells": {
+                            "pop": 1.0,
+                            "rock": 0.20000000298023224,
+                            "jazz": 0.0
+                        }
+                    }
+                }
+            }
+        ]
+    }
+}
+```
+
+## サマリーフィールドのリネーム
+
+サマリークラスは、ドキュメントタイプで使用されていない名前でフィールドを定義できます:
+
+```js
+document-summary rename-summary {
+        summary artist_name {
+            source: artist
+        }
+    }
+```
+
+[attribute](../reference/schemas/schemas#add-or-remove-an-existing-document-field-from-document-summary) フィールドおよび[非 attribute](../reference/schemas/schemas#add-or-remove-a-new-non-attribute-document-field-from-document-summary) フィールドの追加については[スキーマリファレンス](../reference/schemas/schemas#source)を参照してください - 一部の変更には再インデックスが必要です。
+
+## 動的スニペット
+
+クエリーキーワードに基づいてフィールドから動的スニペットを生成するには、[dynamic](../reference/schemas/schemas#summary) を使用します。Vespa Documentation Search の例 - [スキーマ](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/application/schemas/doc.sd)を参照してください:
+
+```js
+document doc {
+
+    field content type string {
+        indexing: summary | index
+        summary : dynamic
+    }
+```
+
+*document summary* のクエリーは次を返します:
+
+> *Use document summaries to configure which fields ... indexing: summary | index `}}` document-summary titleyear `{ summary title ...`*
+
+上の例は、マッチした語をハイライトした動的サマリーを作成します。後者は[ボールディング](../reference/schemas/schemas#bolding)と呼ばれ、動的サマリーとは独立して有効にできます。
+
+レスポンス形式については[リファレンス](../reference/schemas/schemas#summary)を参照してください。
+
+### 動的スニペットの設定
+
+動的スニペットの生成は、対象のコンテント・クラスターの `<content>` クラスタータグ内の services.xml に [vespa.config.search.summary.juniperrc config](https://github.com/vespa-engine/vespa/blob/master/searchsummary/src/vespa/searchsummary/config/juniperrc.def) のインスタンスを追加することで設定できます。例:
+
+```xml
+<content ...>
+    ...
+    <config name="vespa.config.search.summary.juniperrc">
+      <max_matches>2</max_matches>
+      <length>1000</length>
+      <surround_max>500</surround_max>
+      <min_length>300</min_length>
+    </config>
+    ...
+</content>
+```
+
+ここでの数値の単位はバイトです。
+
+## パフォーマンス
+
+[Attribute](../content/attributes) フィールドはメモリーに保持されます。つまり、要求されるすべてのフィールドが attribute であれば、サマリーはメモリーのみの操作となり、高いクエリースループットを得るための最適な方法です。それ以外のドキュメントフィールドは、[ドキュメントストア](../content/proton#document-store)に blob として保存されます。したがって、これらのフィールドを要求するとディスクアクセスが必要になる場合があり、レイテンシーが増加します。
+
+<Warning>
+**重要:**
+
+default サマリークラスは、ドキュメントストアに保存されている [documentid](../reference/querying/default-result-format#documentid) フィールドを含むため、ドキュメントストアにアクセスします。メモリーのみのアクセスで最大のクエリースループットを得るには、attribute のみを持つ専用のサマリークラスを使用してください。
+</Warning>
+
+パフォーマンス向上のために追加のサマリークラスを使用する場合、変わるのはネットワーク上のデータサイズのみです - ストレージから読み取られるデータは変わりません。したがって、サマリーが有効な「デバッグ」フィールドを持つことも、ディスクから読み取る必要のある情報量に影響します。
+
+[クエリー実行](/ja/querying/query-api#query-execution)を参照してください - サマリー(結果処理、レンダリングとも呼ばれます)フェーズの内訳:
+
+-   コンテントノードでのドキュメントサマリーのレイテンシー。[content_proton_search_protocol_docsum_latency_average](../operations/metrics) で追跡されます。
+-   コンテントノードからコンテナーへのデータの転送。
+-   [サーチャー](../applications/searchers)で触れられた場合の、内部バイナリ形式から(場合によっては)Java オブジェクトへのデシリアライズ、そして最終的な JSON(デフォルトのレンダリング)へのシリアライズ + レンダリングとネットワーク。
+
+処理量、つまりレイテンシーは、[hits](../reference/api/query#hits) が増えるほど増加します。パフォーマンスの分析には[クエリートレース](/ja/querying/query-api#query-tracing)を使用してください。
+
+[コンテントノードのサマリーキャッシュ](../performance/caches-in-vespa#content-node-summary-cache)を参照してください。

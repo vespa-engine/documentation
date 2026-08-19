@@ -1,0 +1,286 @@
+---
+title: "Transformer クロスエンコーダー・モデルによるランキング"
+sidebarTitle: "クロスエンコーダー Transformer ランキング"
+---
+
+[クロスエンコーダー Transformer](https://blog.vespa.ai/pretrained-transformer-language-models-for-search-part-4/) ベースのテキスト・ランキング・モデルは、クエリーとドキュメントの両方を入力として受け取り、すべてのクエリー・トークンとドキュメント・トークンの間で完全なクロス・アテンションを行うため、一般に[テキスト埋め込み](/ja/rag/embedding)モデルよりも効果的です。 
+
+クロスエンコーダー・モデルの欠点は計算の複雑さです。このドキュメントは、[huggingface](https://huggingface.co/) からクロスエンコーダー Transformer ベースのモデルをエクスポートする方法と、Vespa で使用するためにそれらを設定する方法のガイドです。 
+
+
+## クロスエンコーダー・モデルのエクスポート 
+
+HF から [ONNX](/ja/ranking/onnx) へモデルをエクスポートするには、[Optimum](https://huggingface.co/docs/optimum/main/en/index) ライブラリを推奨します。関連する 2 つのランキング・モデルの使用例を示します。
+
+英語テキスト向けの BERT ベースの Transformer モデルである [intfloat/simlm-msmarco-reranker](https://huggingface.co/intfloat/simlm-msmarco-reranker) をエクスポートします:
+
+
+```bash
+$ optimum-cli export onnx --task text-classification -m intfloat/simlm-msmarco-reranker ranker
+```
+
+
+英語と中国語のテキスト向け(多言語)の ROBERTA ベースの Transformer モデルである [BAAI/bge-reranker-base](https://huggingface.co/BAAI/bge-reranker-base) をエクスポートします:
+
+
+```bash
+$ optimum-cli export onnx --task text-classification -m BAAI/bge-reranker-base ranker
+```
+
+
+これら 2 つのランキング・モデルの例は、異なる言語モデル[トークナイゼーション](/ja/reference/rag/embedding#huggingface-tokenizer-embedder)を使用しており、Transformer への入力も異なります。
+
+上記の Optimum エクスポート・コマンドの後、モデルを Vespa にインポートするために必要な 2 つの重要なファイルができています: 
+
+
+```bash
+├── ranker
+│   └── model.onnx
+    └── tokenizer.json
+```
+
+
+Optimum ツールは、より高速な推論のためにモデルを最適化する量子化を含む、さまざまな Transformer 最適化もサポートしています。 
+
+
+## ONNX とトークナイザーのモデル・ファイルの Vespa へのインポート
+
+Optimum によって作成された `ranker` ディレクトリから、生成された `model.onnx` と `tokenizer.json` ファイルを Vespa の[アプリケーション・パッケージ](/ja/basics/applications)に追加します:
+
+
+```bash
+├── models
+│   └── model.onnx
+    └── tokenizer.json
+├── schemas
+│   └── doc.sd
+└── services.xml
+```
+
+
+
+## トークナイザー embedder の設定
+
+推論を高速化するために、Vespa はドキュメント・トークンの再トークナイズを避けます。そのため、`services.xml` ファイルで [huggingface-tokenizer-embedder](/ja/reference/rag/embedding#huggingface-tokenizer-embedder) を設定する必要があります:
+
+
+```xml
+<container id="default" version="1.0">
+    ..
+    <component id="tokenizer" type="hugging-face-tokenizer">
+      <model path="models/tokenizer.json">
+    </component>
+    ..
+</container>
+```
+
+
+これにより、Vespa でドキュメントをインデックスする際にトークナイザーを使用でき、またクエリー時にクエリー・テキストを言語モデルのトークンにマップ(埋め込み)することもできます。
+
+
+## スキーマでのトークナイザーの使用 
+
+インデックスして再ランキングに使用したい 2 つのフィールド(title、body)があると仮定すると、`embed` インデクシング式を使用して、上で設定したトークナイザーを呼び出せます:
+
+
+```js
+schema my_document {
+    document my_document {
+        field title type string {..}
+        field body type string {..}
+    }
+    field tokens type tensor<float>(d0[512]) {
+        indexing: (input title || "") . " "  .  (input body || "") | embed tokenizer | attribute
+    }
+}
+```
+
+
+上記は、ドキュメントの入力フィールド title と body を連結し、`hugging-face-tokenizer` トークナイザーに入力します。トークナイザーは出力トークンを float (101.0) として保存します。生成された `tokens` テンソルをランキングで使用するには、テンソル・フィールドを [attribute](/ja/content/attributes) として定義しなければなりません。
+
+## ランキングでのクロスエンコーダー・モデルの使用 
+
+クロスエンコーダー・モデルはその複雑さのため、大量のドキュメントに対する*リトリーバル(取得)*には実用的ではありません。そのため、[フェーズド・ランキング](/ja/ranking/phased-ranking)を使用して設定します。 
+
+### BERT ベースのモデル
+
+BERT ベースのモデルには 3 つの入力があります:
+
+- input_ids
+- token_type_ids
+- attention_mask
+
+
+[onnx-model](/ja/reference/schemas/schemas#onnx-model) 設定は、モデルの入力名とその計算方法を指定します。また、ファイル `models/model.onnx` も指定します。[GPU](/ja/operations/self-managed/vespa-gpu-container) にも注目してください。GPU 推論は必須ではなく、GPU デバイスが見つからない場合、Vespa は CPU にフォールバックします。[パフォーマンス](#performance)のセクションを参照してください。
+
+
+```js expandable
+rank-profile bert-ranker inherits default {
+    inputs {
+        query(q_tokens) tensor<float>(d0[32])
+    }
+    onnx-model cross_encoder {
+        file: models/model.onnx
+        input input_ids: my_input_ids
+        input attention_mask: my_attention_mask
+        input token_type_ids: my_token_type_ids
+        gpu-device: 0
+    }
+    function my_input_ids() {
+        expression: tokenInputIds(256, query(q_tokens), attribute(tokens))
+    }
+
+    function my_token_type_ids() {
+        expression: tokenTypeIds(256, query(q_tokens), attribute(tokens))
+    }
+
+    function my_attention_mask() {
+        expression: tokenAttentionMask(256, query(q_tokens), attribute(tokens))
+    }
+
+    first-phase {
+        expression: #depends on the retriever used
+    }
+
+    # The output of this model is a tensor of size ["batch", 1]
+    global-phase {
+        rerank-count: 25
+        expression: onnx(cross_encoder){d0:0,d1:0}
+    }
+}
+```
+
+
+上記の例では、Transformer モデルへのトークン・シーケンス入力を生成するための組み込みの[便利関数](/ja/reference/ranking/rank-features#tokenInputIds(length, input_1, input_2, ...))を使用して、シーケンス長を `256` に制限しています。`tokenInputIds` はシーケンスの開始として 101、パディングとして 102 を使用することに注意してください。これは BERT ベースのトークナイザーとのみ互換性があります。シーケンス長と推論パフォーマンスへの影響については、[パフォーマンス](#performance)のセクションを参照してください。
+
+
+### ROBERTA ベースのモデル
+
+ROBERTA ベースのモデルには入力が 2 つしかありません(input_ids と attention_mask)。加えて、デフォルトのトークナイザーのシーケンス開始トークンは 1、シーケンス終了トークンは 2 です。この場合、`my_input_ids` 関数の中で `customTokenInputIds` 関数を使用します。[customTokenInputIds](/ja/reference/ranking/rank-features#customTokenInputIds(start_sequence_id, sep_sequence_id, length, input_1, input_2, ...)) を参照してください。
+
+
+```js expandable
+rank-profile roberta-ranker inherits default {
+    inputs {
+        query(q_tokens) tensor<float>(d0[32])
+    }
+    onnx-model cross_encoder {
+        file: models/model.onnx
+        input input_ids: my_input_ids
+        input attention_mask: my_attention_mask
+        gpu-device: 0
+    }
+    function my_input_ids() {
+        expression: customTokenInputIds(1, 2, 256, query(q_tokens), attribute(tokens))
+    }
+
+    function my_attention_mask() {
+        expression: tokenAttentionMask(256, query(q_tokens), attribute(tokens))
+    }
+
+    first-phase {
+        expression: #depends on the retriever used
+    }
+
+    # The output of this model is a tensor of size ["batch", 1]
+    global-phase {
+        rerank-count: 25
+        expression: onnx(cross_encoder){d0:0,d1:0}
+    }
+}
+```
+
+## クエリー時のクロスエンコーダー・モデルの使用 
+
+クエリー時には、[embed](/ja/rag/embedding#embedding-a-query-text) サポートを使用してユーザーのクエリーをトークナイズする必要があります。 
+
+クエリー・テキストの `embed` は、ランキング・プロファイルで定義した `query(q_tokens)` テンソルを設定します。
+
+
+```json
+{
+    "yql": "select title,body from doc where userQuery()",
+    "query": "semantic search",
+    "input.query(q_tokens)": "embed(tokenizer, \"semantic search\")",
+    "ranking": "bert-ranker",
+}
+```
+
+
+リトリーバー(クエリー + first-phase ランキング)には、バイエンコーダーを使用した密なリトリーバル、いわゆる[最近傍検索](/ja/querying/nearest-neighbor-search)を含め、どのようなものでも使用できます。
+
+
+## パフォーマンス
+
+主要なスケーリングの次元は 3 つあります:
+
+- 再ランキングされるヒット数 [rerank-count](/ja/reference/schemas/schemas#globalphase-rerank-count)。計算量は再ランキングされるヒット数に対して線形です。
+- 使用する Transformer モデルのサイズ。
+- 入力シーケンス長。Transformer モデルは入力シーケンス長に対して 2 乗でスケールします。
+
+パラメーター数が 30~40M を超えるモデルには、推論を高速化するために GPU の使用を推奨します。モデルの重みの量子化は、CPU でのサービング効率を劇的に向上させることができます。[Optimum Quantization](https://huggingface.co/docs/optimum/onnxruntime/usage_guides/quantization) を参照してください
+
+
+## 例
+
+[MS Marco](https://github.com/vespa-engine/sample-apps/tree/master/msmarco-ranking) サンプル・アプリケーションは、クロスエンコーダーの使用方法をデモしています。 
+
+## マルチベクトル・インデクシングでのクロスエンコーダーの使用
+
+[マルチベクトル・インデクシング](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/)を使用する場合、[closest()](../reference/ranking/rank-features#closest(name)) フィーチャーを使用して、最良の(最も近い)パラグラフをクロスエンコーダー・モデルによる再ランキングにフィードするには、次のようにします。 
+
+
+```js
+schema my_document {
+    document my_document {  
+        field paragraphs type array<string>string {..}
+    }
+    field tokens type tensor<float>(p{}, d0[512]) {
+        indexing: input paragraphs | embed tokenizer | attribute
+    }
+    field embedding type tensor<float>(p{}, x[768]) {
+        indexing: input paragraphs | embed embedder | attribute
+    }
+}
+```
+
+
+両方のトークンが同じ mapped 埋め込み次元名 `p` を使用していることに注目してください。 
+
+
+```js expandable
+rank-profile max-paragraph-into-cross-encoder inherits default {
+    inputs {
+        query(tokens) tensor<float>(d0[32])
+        query(q) tensor<float>(x[768])
+    }
+    first-phase {
+        expression: closeness(field, embedding)
+    }
+    function best_input() {
+        expression: reduce(closest(embedding)*attribute(tokens), max, p)
+    }
+    function my_input_ids() {
+        expression: tokenInputIds(256, query(tokens), best_input)
+    }
+    function my_token_type_ids() {
+        expression: tokenTypeIds(256, query(tokens), best_input)
+    }
+
+    function my_attention_mask() {
+        expression: tokenAttentionMask(256, query(tokens), best_input)
+    }
+    match-features: best_input my_input_ids my_token_type_ids my_attention_mask
+    global-phase {
+        rerank-count: 25
+        expression: onnx(cross_encoder){d0:0,d1:0} #Slice 
+    }
+}
+```
+
+
+`best_input` は、`closest(embedding)` テンソルと `tokens` テンソルの間のテンソル join を使用しており、最良マッチ(最も近い)パラグラフのトークンを返します。 
+
+このテンソルは、他の Transformer 関連の関数(`tokenTypeIds tokenAttentionMask tokenInputIds`)でドキュメント・トークンとして使用されます。  
+
+

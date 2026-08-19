@@ -1,0 +1,456 @@
+---
+title: "相互認証TLS(mTLS)によるVespaのセキュリティ保護"
+sidebarTitle: "mTLS"
+---
+
+<Note>
+**注:**
+
+このドキュメントは**セルフホスト型Vespa**のみに関連します。
+</Note>
+
+[Transport Layer Security (TLS)](https://datatracker.ietf.org/doc/html/rfc5246)は、暗号技術を使用してネットワーク上で安全かつ改ざん不可能な通信を実現するプロトコルです。このドキュメントでは、VespaにおけるTLS機能とその設定方法について説明します。適切に設定されたTLSは、信頼されたVespaサービス同士のみが通信できることを保証します。設定構文の詳細については、対応する[リファレンス](/ja/reference/security/mtls)を参照してください。
+
+デフォルトでは、セルフホスト型Vespaのノード間のすべての通信は*認証されておらず*、*暗号化もされていません*。つまり、ネットワークにアクセスできる者は誰でもデータの読み書きができ、場合によってはシステム上でコマンドを実行できる可能性があります。*したがって、TLSの有効化は安全なVespaインストールの基本的な要素です*。
+
+外部からシステムへの接続を防ぐためのファイアウォールをすでに設定している場合でも、TLSを設定するべきです。TLSは、攻撃者がプライベート・ネットワーク内部への足がかりを得てしまった場合でも保護に役立ちます。Vespaは将来のバージョンで、すべての内部通信にTLSを必須とする予定です。これに備えるため、できるだけ早くシステムをセキュリティ保護してください。
+
+Vespaは、2つの独立したTLS接続のプレーンを提供します:
+
+- **HTTP(S)アプリケーション・コンテナー。** これは検索クエリーやフィード・リクエストが処理されるクラスターのエッジです。このプレーンの認証と認可はVespa内部トラフィックとは別に処理されます。これについては[HTTPサーバーとフィルターの設定](/ja/applications/http-servers-and-filters#tls)で説明しています。[アプリケーション・コンテナーのセキュリティ保護](/ja/security/securing-your-vespa-installation#securing-the-application-container)も参照してください。
+- **Vespa内部通信。** これはクラスター内のノード上で実行されるプロセス間のすべての通信です。アプリケーション・コンテナーのAPIを経由せずにバックエンドへ直接接続するクライアントも含まれます。このトラフィックには、相互認証TLS(mTLS)のみが設定可能です。
+
+このドキュメントでは**Vespa内部通信**のみを扱います。
+
+VespaでTLSを有効にすると、ステータス・ページやメトリクス用のHTTPサーバーを含め、すべての内部エンドポイントがmTLSで保護されます。Vespaバックエンドから低レベルのメトリクスやステータス・ページを収集・集約する独自のソリューションを導入している場合は、この点に特に注意してください。このドキュメントでは*TLS*と*mTLS*という用語を同じ意味で使用することがありますが、すべてのVespa内部トラフィックにおいて*TLS*は*mTLS*を意味します。
+
+動作する例については、[multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)サンプル・アプリケーションを参照してください。
+
+## 前提条件
+
+このセクションは、証明書と秘密鍵の生成および使用について、ある程度の経験があることを前提としています。入門としては、単一のVespaアプリケーション内部で使用できる証明書のセットアップを段階的に説明している[付録A: 自己署名認証局によるセットアップ](#appendix-a-setting-up-with-a-self-signed-certificate-authority)を参照してください。
+
+TLSを有効にするには、Vespaアプリケーションのすべてのノードにいくつかの追加ファイルが存在する必要があります:
+
+- 信頼するすべての認証局のX.509証明書をPEM形式で含むファイル。
+- ノード上のVespaプロセスが使用するX.509証明書チェーンを含むファイル。これは標準のPEM形式です。ホスト自身の証明書をファイルの最初に記載し、その後に(存在する場合は)中間証明書を改行で区切って続けます。
+- 上記チェーンの証明書に対応する秘密鍵を、PKCS#8 PEM形式で含むファイル。なお、Vespaは現在、暗号化された秘密鍵ファイルをサポートしていません。
+- どの証明書/鍵ファイルを使用するかをVespaに指示し、認可のための追加オプションを提供するJSON設定ファイル。書き方については[TLS設定ファイルの作成](#writing-a-tls-configuration-file)を参照してください。
+
+証明書と鍵のマテリアルをノードに配布する方法は、この記事の範囲外です。TLS認証情報の自動的なライブ・リロードに対するVespaのサポートについては、[専用セクション](#automatic-reloading-of-crypto-material)を参照してください。
+
+<Warning>
+**警告:** 
+
+信頼する認証局のリストに、パブリックな認証局を決して含めないでください。自分(または組織)が直接管理または信頼するCAのみを使用してください。これは、悪意のある攻撃者がパブリックCAのバグや認証の欠陥を悪用してあなたの組織になりすまし、システムへ直接アクセスできる証明書を取得するリスクを最小限に抑えるためです。
+</Warning>
+
+<Warning>
+**警告:** 
+
+秘密鍵は秘密に保ち、不正アクセスから保護しなければなりません。Vespaプロセスを実行するユーザーのみが秘密鍵ファイルを読み取れるようにしてください。鍵ファイルと証明書ファイルは、管理者ユーザーのみが書き込み可能であるべきです。
+</Warning>
+
+## VespaのTLSの設定
+
+Vespaソフトウェアを実行するすべてのノードで、TLSは単一の環境変数によって制御されます。この変数には、JSON設定ファイルを指す絶対パスを設定します:
+
+```bash
+VESPA_TLS_CONFIG_FILE=/absolute/path/to/my-tls-config.json
+```
+
+この環境変数は、ノード上でVespaサービスが起動される前に、有効なファイルパスに設定されている必要があります。Vespaアプリケーション内のすべてのノードに、他のノードから信頼される証明書を指すTLS設定ファイルが必要です。
+
+Vespaの環境変数の設定については、[Vespa環境変数](/ja/operations/self-managed/files-processes-and-ports#environment-variables)を参照してください。
+
+`VESPA_TLS_CONFIG_FILE`を設定すると、ノード上のすべてのVespaプロセスでTLSが自動的に有効になります。Vespaのコマンドライン・ツールは必要な設定を自動的に取得し、透過的に動作します。
+
+<Warning>
+**重要:** 
+
+この変数が設定されていない場合、VespaはTLSなしの安全でないモードで起動します!
+</Warning>
+
+### TLS設定ファイルの作成
+
+最も単純な設定ファイルに必要なのは、信頼する証明書と、ノード自身を識別する証明書/鍵のペアだけです。例:
+
+```json
+{
+  "files": {
+    "ca-certificates": "/absolute/path/to/ca-certs.pem",
+    "certificates": "/absolute/path/to/host-certs.pem",
+    "private-key": "/absolute/path/to/private-key.pem"
+  }
+}
+```
+
+環境変数を設定します。たとえば[conf/vespa/default-env.txt](/ja/operations/self-managed/files-processes-and-ports#environment-variables)に追記します:
+
+```bash
+override VESPA_TLS_CONFIG_FILE /absolute/path/to/my-tls-config.json
+```
+
+すべてのファイルパスは絶対パスでなければなりません。Vespaプロセスが1つ以上のファイルを読み込めない場合、起動に失敗します。
+
+### TLSピア認可ルールの設定
+
+多くの比較的単純なデプロイメントでは、Vespaクラスター専用の自己署名認証局が使用されます。その場合、有効な証明書を所持していること自体が、クラスター・ノードへのアクセスを認可する十分な条件になります。Vespaノード以外がそのような証明書を持つことは想定されないからです。より複雑なデプロイメントでは、共有CA(たとえば多くのサービスや部門にまたがってノードに証明書を発行する企業CA)が使用されることがあります。その場合、有効な証明書を持っているだけでは、認可メカニズムとして使用するには不十分です。
+
+*認可ルール*を使用することで、どの証明書が内部Vespaサービスにアクセスできるかを制限できます。これらのルールはすべてのTLSハンドシェイクの一部として照会され、接続が確立される前に必ずパスしなければなりません。
+
+認可ルールは、JSON設定ファイルのトップレベルの[`authorized-peers`](/ja/reference/security/mtls#top-level-elements)メンバーの一部として指定します。
+
+#### 例
+
+Vespaクラスターが多数のノードで構成されており、各ノードが共有認証局によって署名された独自の証明書を持っていると仮定します。各証明書には`<unique-node-id>.mycluster.vespa.example.com`という形式のSubject Alternate Name (SAN) DNS名エントリーが含まれており、*unique-node-id*はクラスター・ノードごとに一意です。これらのノードは実際のVespaサービスを実行し、すべてが互いに通信できる必要があります。
+
+さらに、サービスへの低レベル・アクセスを必要とする監視サービスが存在すると仮定します。このサービスに属するノードが提示する証明書は、常に`vespa-monitoring.example.com`というCommon Name (CN)値と、`<instance>.<region>.monitor.example.com`という形式のDNS SANエントリーを持ちます。任意のus-eastリージョンにあるすべての監視インスタンスはクラスターにアクセスできる必要がありますが、それ以外はアクセスできてはなりません。
+
+これらのルールを実装したTLS設定ファイルは次のようになります:
+
+```json
+{
+  "files": {
+    "ca-certificates": "/absolute/path/to/ca-certs.pem",
+    "certificates": "/absolute/path/to/host-certs.pem",
+    "private-key": "/absolute/path/to/private-key.pem"
+  },
+  "authorized-peers": [
+    {
+      "required-credentials": [
+        { "field": "CN", "must-match": "vespa-monitoring.example.com" },
+        { "field": "SAN_DNS", "must-match": "*.us-east-*.monitor.example.com" }
+      ],
+      "description": "Backend monitoring service access"
+    }, 
+    {
+      "required-credentials": [
+        { "field": "SAN_DNS", "must-match": "*.mycluster.vespa.example.com" }
+      ],
+      "description": "Cluster-internal node P2P access"
+    }
+  ]
+}
+```
+
+構文とセマンティクスの詳細については、[リファレンス・ドキュメント](/ja/reference/security/mtls#peer-authorization-rules)を参照してください。
+
+### 暗号マテリアルの自動リロード
+
+Vespaは、指定されたTLS設定ファイルを定期的にリロードします。現在、これは60分ごとに行われます。このリロードはライブで行われ、サービスの可用性に影響を与えません。証明書、秘密鍵、認可ルールのすべてがリロードされます。Vespaは現在、設定ファイルの変更を監視していないため、設定ファイルやその依存ファイルを変更しただけではリロードはトリガーされません。
+
+ライブ・リロードが失敗した場合、古い設定が引き続き使用され、ローカルのVespaログに警告が出力されます。
+
+Vespaは現在、ファイルを読み取る前にロックを取得しません。書き込み中のファイルがVespaによってリロードされる競合状態を避けるため、ファイルの更新を複数のフェーズに分けることを検討してください:
+
+<Steps>
+<Step>
+既存の鍵/証明書ファイルを上書きする代わりに、異なるファイル名で*新しい*ファイルを書き込みます。
+</Step>
+<Step>
+これらのファイルを指す一時的なTLS設定JSONファイルを作成します。
+</Step>
+<Step>
+新しいTLS設定ファイルを、`VESPA_TLS_CONFIG_FILE`で指定された名前へアトミックにリネームします。
+</Step>
+<Step>
+古いファイルは後の時点(たとえば次の更新タイミング)でガベージ・コレクションします。
+</Step>
+</Steps>
+
+## 新しいVespaアプリケーションでのTLSのセットアップ、またはダウンタイムを伴うアップグレード
+
+どのノードでもVespaサービスが実行されていない状態で、すべてのノードにおいて環境変数`VESPA_TLS_CONFIG_FILE`が有効な設定ファイルパスに設定されており、[Vespaの起動スクリプトから参照できること](/ja/operations/self-managed/files-processes-and-ports#environment-variables)を確認します。通常どおりVespaサービスを起動します。[vespa-get-cluster-state](/ja/reference/operations/self-managed/tools#vespa-get-cluster-state)でクラスターの健全性を確認し、設定ミスを示すTLS関連のエラー・メッセージ(証明書の拒否など)がないか[vespa-logfmt](/ja/reference/operations/self-managed/tools#vespa-logfmt)を確認します。トラブルシューティングのセクションを参照してください。クラスターはすぐに利用可能な状態に収束するはずです。
+
+これはTLSを有効にする最も簡単で速い方法であり、ダウンタイムが許容できる場合には強く推奨されます。
+
+## 既存の非TLS VespaアプリケーションをダウンタイムなしでTLSにアップグレードする
+
+TLSを有効にするために完全に停止させたくない、稼働中のトラフィックを処理しているVespaアプリケーションがすでにある場合は、段階的なローリング・アップグレードを実行できます。これを行うには、安全でない接続とTLS接続をしばらくの間並行して使用し、より多くのノードを順次TLSへ移行していく必要があります。最後に、すべてのノードがTLSのみで通信するようになったら、安全でない接続のサポートを完全に削除しなければなりません。
+
+これを実現するため、Vespaは*insecure mixed mode*と呼ばれる機能をサポートしています。ミックス・モードを有効にすると、すべてのサーバーがTLSトラフィックと安全でないトラフィックの両方を同時に処理できるようになります。
+
+ミックス・モードは、環境変数`VESPA_TLS_INSECURE_MIXED_MODE`に設定された値によって制御されます。
+
+TLSのロールアウトは3つのフェーズで行われます:
+
+**フェーズ1:** クライアントはTLSを使用せず、サーバーはTLSクライアントとプレーンテキスト・クライアントの両方を受け入れる
+
+<Steps>
+<Step>
+`VESPA_TLS_INSECURE_MIXED_MODE=plaintext_client_mixed_server`を設定します。
+</Step>
+<Step>
+[VespaのTLSの設定](#configuring-vespa-tls)に記載のとおり`VESPA_TLS_CONFIG`ファイルを設定します。
+</Step>
+<Step>
+ミックス・モードを有効にするため、すべてのVespaサービスをローリング再起動します。
+</Step>
+</Steps>
+
+**フェーズ2:** クライアントはTLSを使用し、サーバーはTLSクライアントとプレーンテキスト・クライアントの両方を受け入れる
+
+<Steps>
+<Step>
+`VESPA_TLS_INSECURE_MIXED_MODE=tls_client_mixed_server`を設定します。
+</Step>
+<Step>
+ミックス・モードを有効にするため、すべてのVespaサービスをローリング再起動します。
+</Step>
+</Steps>
+
+**フェーズ3:** すべてのクライアントとサーバーがTLSのみを使用する
+
+<Steps>
+<Step>
+環境変数`VESPA_TLS_INSECURE_MIXED_MODE`を削除します。
+</Step>
+<Step>
+TLSの強制を有効にするため、すべてのVespaサービスをローリング再起動します。
+</Step>
+</Steps>
+
+<Warning>
+**警告:** 
+
+クラスターを安全とみなすには、その前に、insecure mixed modeの環境変数をすべてのノードから削除し(その後すべてのサービスを再起動し)なければなりません。insecure mixed modeが有効なまま残されたサービスが1つでもあれば、執念深い攻撃者によって、他の(安全と信じられている)サービスへの踏み台として悪用される可能性があります。
+</Warning>
+
+## TLS設定の検証
+
+すべてのノードでTLSが有効になったら、実行時に設定が正しく行われたことを検証するべきです。これには[openssl s_client](https://www.openssl.org/docs/man1.1.1/man1/openssl-s_client.html)ツールが適しています。Vespaサービス(たとえばポート19071のconfigserverやポート8080のコンテナー)に接続し、`openssl s_client`がTLSハンドシェイクを正常に完了することを確認します。
+
+```bash
+$ openssl s_client -connect <hostname>:<port> \
+  -CAfile /absolute/path/to/ca-certs.pem \
+  -key /absolute/path/to/private-key.pem \
+  -cert /absolute/path/to/host-cert.pem
+```
+
+さらに、上記コマンドから`-key`/`-cert`を省略して、サーバーがクライアントに認証を要求することを検証するべきです。`s_client`ツールはハンドシェイク中にエラーを出力し、即座に終了するはずです。
+
+```bash
+$ openssl s_client -connect <hostname>:<port> \
+  -CAfile /absolute/path/to/ca-certs.pem
+```
+
+## FAQ
+
+<AccordionGroup>
+<Accordion title="レイテンシーに敏感なリアルタイム検索アプリケーションでもTLSを使用するべきですか?">
+はい。Vespaクラウド・チームはそのようなアプリケーションを長期間にわたり数多く本番環境で運用してきましたが、TLSによるオーバーヘッドはごくわずかです。オーバーヘッドを最小限に抑えるため、VespaのTLS統合のチューニングには多大な労力が費やされてきました。
+</Accordion>
+<Accordion title="実際にはTLSはどの程度のオーバーヘッドをもたらしますか?">
+最新のCPUでは、対称暗号化(つまりアクティブな接続)によるCPU使用率の増加は1〜2%程度と見込まれます。接続ハンドシェイクは、より高コストな暗号操作により、CPU時間で2〜4ミリ秒の追加レイテンシー(ネットワーク・レイテンシーは含まない)が見込まれます。Vespaは、他のネットワーク・トラフィックの停滞を避けるため、ハンドシェイク操作を別スレッドで実行します。また、Vespaはハンドシェイクの回数を減らすため、内部的に長寿命の接続を使用します。
+</Accordion>
+</AccordionGroup>
+
+## トラブルシューティング
+
+### ホスト名の不一致により証明書の検証が失敗する
+
+Vespaはデフォルトで[HTTPSエンドポイント識別アルゴリズム](https://datatracker.ietf.org/doc/html/rfc2818#section-3)を有効にしています。この追加の検証は、すべての証明書のSubject / Subject Alternative Names拡張に、それぞれのホストのIPアドレスとホスト名が含まれている場合にのみ使用できます。そうでない場合は、[ホスト名検証を無効化](/ja/reference/security/mtls#top-level-elements)してください。
+
+## 付録A: 自己署名認証局によるセットアップ
+
+目標は、単一のVespaインストール内で安全なmTLS通信のためにVespaが使用できる暗号鍵と証明書を作成することです。
+
+これには以下のステップが必要で、以下で順に説明していきます:
+
+<Steps>
+<Step>
+[ルート認証局の作成](/ja/security/mtls#creating-a-root-certificate-authority-ca)。これは、セキュリティ保護したいVespaホストの数に関係なく、一度だけ行います。
+</Step>
+<Step>
+[各Vespaホスト用の秘密鍵と証明書署名要求(CSR)の作成](/ja/security/mtls#creating-a-private-key-and-certificate-for-a-vespa-host)。
+</Step>
+<Step>
+[CAによるCSRへの署名、各Vespaホスト用の証明書の作成](#sign-host-certificate)。
+</Step>
+</Steps>
+
+すべての暗号鍵と証明書の生成には、[OpenSSLコマンドライン・ツール](https://www.openssl.org/docs/man1.1.1/man1/)を使用します。
+
+<Note>
+**注:** 
+
+鍵と証明書のプロビジョニング手順がすでに存在する組織でVespaをセットアップする場合は、ベスト・プラクティスに従っていることを確認するため、まずその担当チームに相談するべきです。
+</Note>
+
+### ルート認証局(CA)の作成
+
+
+サーバー(またはクライアント)が自身のアイデンティティを証明するために証明書を提示するとき、その情報が信頼できるかどうかを判断する方法が必要です。これは、その証明書が、すでに信頼できると分かっている[認証局(CA)](https://en.wikipedia.org/wiki/Certificate_authority)によって*暗号的に署名*されているかを検証することで行います。証明書が、直接は信頼していないCAによって署名されているものの、そのCA自体が私たちの*信頼する*CAによって署名されている、ということもあり得ます。これらは*中間*認証局と呼ばれ、*証明書チェーン*として知られるものの一部です。チェーンには複数の中間CAが存在することもあります。今回のシンプルなセットアップでは、中間CAは使用しません。
+
+チェーンの頂点には*ルート*認証局が位置します。ルートCAを信頼するため、それが署名した中間CA、さらにその中間CAが署名したリーフ証明書も暗黙的に信頼することになります。
+
+ルート認証局が特別なのは、その上に署名してくれるCAが存在しない点です。ルートCAは*自己署名*されています。
+
+Vespaインストール用の独自のルートCAを作成するため、まずその[*秘密鍵*](https://en.wikipedia.org/wiki/Public-key_cryptography)を作成します。
+
+作成する鍵の種類には2つの選択肢があります。[RSA](https://en.wikipedia.org/wiki/RSA_\(cryptosystem\))ベースか、[楕円曲線(EC)](https://en.wikipedia.org/wiki/Elliptic-curve_cryptography)暗号ベースのいずれかです。EC鍵はRSAベースの鍵より処理が高速で占有スペースも小さいですが、古いOSバージョンや暗号ライブラリはこれをサポートしていない場合があります。後者の場合、RSA鍵が最も高い後方互換性を提供します。
+
+(推奨)楕円曲線の秘密鍵を作成する場合:
+
+```bash
+$ openssl ecparam -name prime256v1 -genkey -noout -out root-ca.key
+```
+
+**または:** RSAの秘密鍵を作成する場合:
+
+```bash
+$ openssl genrsa -out root-ca.key 2048
+```
+
+ルートCAの秘密鍵は`root-ca.key`に保存されます。この鍵は証明書の署名に使用されるため、このファイルは必ず秘密に保たなければなりません! この鍵が漏洩すると、攻撃者はあなたのVespaホストになりすます有効な証明書をいくらでも作成できてしまいます。
+
+次に、秘密鍵で自己署名したCAのX.509証明書を作成します。`-subj`で指定する情報は、それぞれの状況に合わせて置き換えてください。今回のシンプルな用途では、この内容はあまり重要ではありません。
+
+```bash
+$ openssl req -new -x509 -nodes \
+    -key root-ca.key \
+    -out root-ca.pem \
+    -subj '/C=US/L=California/O=ACME/OU=ACME test root CA' \
+    -sha256 \
+    -days 3650
+```
+
+作成された`root-ca.pem`ファイルをVespaノードにコピーし、TLS設定ファイルの`"ca-certificates"`フィールドを、ノード上のその絶対ファイルパスに向けます。
+
+CAの鍵と証明書の両方が揃ったので、Vespaが動作するホスト用の証明書に署名を始めるために必要なものが手に入りました。
+
+### Vespaホスト用の秘密鍵と証明書の作成
+
+<Note>
+***注:*** 
+
+*このセクションは、アプリケーション内の各Vespaホストごとに繰り返すことができます。このステップをホストごとに行わなくてよい(ただし安全性が下がる可能性のある)選択肢については、[個々のホストごとに一意の証明書を持つことの代替案](/ja/security/mtls#alternatives-to-having-a-unique-certificate-per-individual-host)を参照してください。*
+</Note>
+
+CAと同様に、ホストにも独自の秘密の暗号鍵が必要です。
+
+楕円曲線鍵を使用する場合:
+
+```bash
+$ openssl ecparam -name prime256v1 -genkey -noout -out host.key
+```
+
+**または:** RSA鍵を使用する場合:
+
+```bash
+$ openssl genrsa -out host.key 2048
+```
+
+証明書作成の一環として、まず[証明書署名要求(CSR)](https://en.wikipedia.org/wiki/Certificate_signing_request)を作成します。ここでも、`-subj`の情報はより適切なものに置き換えて構いません。
+
+```bash
+$ openssl req -new \
+    -key host.key -out host.csr \
+    -subj '/C=US/L=California/OU=ACME/O=My Vespa App' \
+    -sha256
+```
+
+#### ホスト証明書への署名
+
+デフォルトでは、VespaはTLSホスト名検証を有効にして動作します。これは、サーバーの証明書に、クライアントが接続しようとしている先と一致するホスト名が含まれていることを要求します。これはHTTPなどのプロトコルのセキュリティの基本ですが、mTLSではあまり使われないことが多い機能です。Vespaは追加のセキュリティ層としてこれをサポートしています。ホスト名を含む証明書を使用すると、証明書検証を明示的に無効化しなくても、VespaのHTTPSステータス・ページに対して`curl`のようなツールを実行できるという利点もあります。
+
+証明書には、["Subject Alternate Names" (SAN)](https://en.wikipedia.org/wiki/Subject_Alternative_Name)と呼ばれる、その証明書が発行されたDNS名とIPアドレスを列挙するエントリーを多数含めることができます。ここでは、ノードのホスト名を持つDNS SANエントリーを1つ追加します。あわせて、証明書の用途を正確に指定する特定のX.509拡張も証明書に追加します。
+
+以下では、`myhost.example.com`をあなたのVespaノードのホスト名に置き換えてください。
+
+```bash
+$ cat > cert-exts.cnf << EOF
+[host_cert_extensions]
+basicConstraints       = critical, CA:FALSE
+keyUsage               = critical, digitalSignature, keyAgreement, keyEncipherment
+extendedKeyUsage       = serverAuth, clientAuth
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid,issuer
+subjectAltName         = @host_sans
+[host_sans]
+DNS.1 = myhost.example.com
+EOF
+```
+
+これで、既存のCAの鍵と証明書を使ってホストのCSRに署名できます。その際、上記の証明書拡張ファイルもOpenSSLに渡します。
+
+```bash
+$ openssl x509 -req \
+    -in host.csr \
+    -CA root-ca.pem \
+    -CAkey root-ca.key \
+    -CAcreateserial \
+    -out host.pem \
+    -extfile cert-exts.cnf \
+    -extensions host_cert_extensions \
+    -days 3650 \
+    -sha256
+```
+
+これにより、署名時点から3650日間有効な、PEM形式のホスト用X.509証明書が作成されます。
+
+証明書は`openssl x509`コマンドで確認できます。以下はEC鍵を使用した証明書の出力例です。シリアル番号、日付、鍵の情報などが異なるため、あなたの出力はこれとは異なります。
+
+```bash expandable
+$ openssl x509 -in host.pem -text -noout
+Certificate:
+    Data:
+        Version: 3 (0x2)
+        Serial Number: 13516182920561857512 (0xbb9320c1234a93e8)
+        Signature Algorithm: ecdsa-with-SHA256
+        Issuer: C=US, L=California, O=ACME, OU=ACME test root CA
+        Validity
+            Not Before: Aug 19 13:09:37 2021 GMT
+            Not After : Aug 17 13:09:37 2031 GMT
+        Subject: C=US, L=California, OU=ACME, O=My Vespa App
+        Subject Public Key Info:
+            Public Key Algorithm: id-ecPublicKey
+                Public-Key: (256 bit)
+                pub:
+                    04:ed:01:0e:1e:c5:05:17:99:41:74:68:a0:c5:32:
+                    52:4f:45:d5:04:f8:a0:9c:35:26:ae:66:0c:e5:89:
+                    34:5c:21:09:b8:a9:ed:81:22:06:bb:d1:1c:9e:13:
+                    80:0a:9a:9e:0c:a0:78:ac:7c:c4:6f:1c:ec:e6:df:
+                    c1:59:2d:71:8e
+                ASN1 OID: prime256v1
+                NIST CURVE: P-256
+        X509v3 extensions:
+            X509v3 Basic Constraints: critical
+                CA:FALSE
+            X509v3 Key Usage: critical
+                Digital Signature, Key Encipherment, Key Agreement
+            X509v3 Extended Key Usage:
+                TLS Web Server Authentication, TLS Web Client Authentication
+            X509v3 Subject Key Identifier:
+                08:EF:C7:B4:95:36:64:EC:2A:2F:9F:5A:C3:EA:F0:98:2C:E5:78:EC
+            X509v3 Authority Key Identifier:
+                DirName:/C=US/L=California/O=ACME/OU=ACME test root CA
+                serial:94:77:40:20:69:50:87:45
+
+            X509v3 Subject Alternative Name:
+                DNS:myhost.example.com
+    Signature Algorithm: ecdsa-with-SHA256
+         30:45:02:21:00:91:58:bb:7f:47:75:60:c3:49:09:b3:d2:54:
+         ad:d2:47:58:1c:17:c7:5a:5f:f0:f4:9c:67:e9:6a:44:21:8e:
+         08:02:20:23:9c:99:42:1b:91:29:26:f7:83:58:d1:09:65:38:
+         c1:18:e8:0d:55:3a:57:f6:e0:c6:5b:72:57:e4:d9:6a:d8
+```
+
+`host.key`と`host.pem`をVespaホストにコピーし、TLS設定の`"private-key"`と`"certificates"`フィールドをそれぞれの絶対パスに向けます。CSRと拡張設定ファイルは安全に破棄して構いません。
+
+<Warning>
+**警告:** 
+
+ホスト上で`host.key`がVespaユーザーのみ読み取り可能であることを確認してください
+</Warning>
+
+### 個々のホストごとに一意の証明書を持つことの代替案
+
+ホストごとに個別の証明書を作成する代わりに、すべてのホストで共有する単一の証明書を使用することも可能です。
+
+- TLS設定ファイルでホスト名検証を明示的に無効化した場合、ホスト名SANを追加する(または一致させる)必要はありません。**注意点:** これにより、クライアントは自分が想定したホストと通信しているかを検証できなくなります。
+- 拡張ファイルにホストごとに1つずつ、多数のSANエントリーを追加できます。**注意点:** SANリストにまだ含まれていない新しいホストをVespaアプリケーションに追加する場合、新しい証明書を生成しなければなりません。
+- すべてのホストが共通のパターン(たとえば`foo.vespa.example.com`と`bar.vespa.example.com`)を共有している場合は、すべてのホストを列挙する代わりに、ワイルドカードのDNS SANエントリー(`*.vespa.example.com`)を使用できます。
+
+ただし、本番環境のデプロイメントでは、ホストが侵害された場合の影響を軽減するため、ホストごとに個別の証明書を使用することを推奨します。

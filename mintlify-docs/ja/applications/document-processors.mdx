@@ -1,0 +1,278 @@
+---
+title: "ドキュメント・プロセッサー"
+description: "このドキュメントでは、*ドキュメント・プロセッサー*(本ドキュメントでは *docproc* と呼ばれることが多い)の開発とデプロイの方法を説明します。ドキュメント処理は、ドキュメント操作を読み取り、変更する、設定可能な[コンポーネント](/ja/applications/components)の[チェーン](/ja/applications/chaining)を作成するためのフレームワークです。"
+---
+
+入力ソースは、入力データを[ドキュメント](/ja/schemas/documents)と呼ばれる論理単位に分割します。[フィーダーアプリケーション](/ja/writing/reads-and-writes)は、ドキュメントをドキュメント処理チェーンに送信します。このチェーンは、ドキュメント・プロセッサーの順序付きリストです。ドキュメント処理の例は、言語検出、HTML の除去、自然言語処理から、メール添付ファイルの処理、文字セットの変換、画像のサムネイル生成まで多岐にわたります。処理チェーンの最後で、抽出されたデータは通常、ドキュメント内のいくつかのフィールドに設定されます。
+
+ドキュメント処理の利点は、他のすべての Vespa コンポーネントと同様に、コードと設定がアトミックにデプロイされることです。また、処理の一部として Vespa 内のデータにアクセスするコンポーネントを簡単に構築できます。
+
+始めるには、[サンプルアプリケーション](https://github.com/vespa-engine/sample-apps/tree/master/examples/document-processing)を参照してください。デプロイとルーティングを理解するには、[インデックス作成](/ja/writing/indexing)をお読みください。ドキュメント・プロセッサーは Searcher と同様にチェーン化されたコンポーネントであるため、[Searcher の開発](/ja/applications/searchers)もお読みください。リファレンスとしては、[Javadoc](https://javadoc.io/doc/com.yahoo.vespa/docproc) と [services.xml](/ja/reference/applications/services/docproc) を参照してください。
+
+<Frame>
+![](/assets/img/vespa-overview-docproc.svg)
+</Frame>
+
+## ドキュメント・プロセッサーのデプロイ
+
+始めるには [album-recommendation-docproc](https://github.com/vespa-engine/sample-apps/tree/master/examples/document-processing) を参照してください。[LyricsDocumentProcessor.java](https://github.com/vespa-engine/sample-apps/blob/master/examples/document-processing/src/main/java/ai/vespa/example/album/LyricsDocumentProcessor.java) はドキュメント・プロセッサーの例です。ドキュメント・プロセッサーを [services.xml](/ja/reference/applications/services/docproc) に追加し、次に[チェーン](#chains)に追加します。プロセッサーが行う処理の種類によって、どのチェーンに属するべきかが決まります:
+
+- 他のフィールドから一部のドキュメント・フィールドを生成する、外部サービスのデータを参照するなど、一般的なデータ処理を行う場合は、一般的な docproc チェーンに追加します。
+- *インデックス作成*に必要な処理を行う場合、その場合に限り
+- あるいはインデックス作成が既に実行されていることを必要とする場合 — *indexing* チェーンを継承し、コンテント・クラスターがインデックス作成に使用するチェーンに追加します。
+
+一般的なドキュメント・プロセッサーを「default」チェーンに追加し、インデックス作成関連のプロセッサーを特定のコンテント・クラスター用のチェーンに追加する例:
+
+```xml highlight={4, 8, 18}
+<services>
+    <container version="1.0" id="default">
+        <document-processing>
+            <chain id="default">
+                <documentprocessor id="ai.vespa.example.album.LyricsDocumentProcessor"
+                                   bundle="albums-docproc"/>
+            </chain>
+            <chain id="my-indexing" inherits="indexing">
+                <documentprocessor id="ai.vespa.example.album.PostIndexingDocumentProcessor"
+                                   bundle="albums-docproc"/>
+            </chain>
+        </document-processing>
+    </container>
+
+    <content version="1.0" id="content">
+        <documents>
+            ...
+            <document-processing cluster="default" chain="my-indexing" />
+        </documents>
+    </content>
+</services>
+```
+
+「default」チェーンが存在する場合、インデックス作成に使用されるチェーンの前に、デフォルトで実行されます。デフォルトのインデックス作成チェーンは「indexing」と呼ばれ、これを置き換えるチェーンは*必ず*これを継承しなければなりません。
+
+任意のチェーンを通して実行するには、そのチェーンを含む[ルート](/ja/writing/document-routing)を指定します。たとえば、ルート `default/chain.my-chain indexing` は、フィード操作を「default」コンテナー・クラスターの「my-chain」チェーンを通してルーティングし、その後「indexing」ホップに送ります。このホップは、ドキュメントの送信先となる各コンテント・クラスターに対して指定されたインデックス作成チェーンに解決されます。詳細は[インデックス作成](/ja/writing/document-routing#document-processing)を参照してください:
+
+## ドキュメント・プロセッサー
+
+ドキュメント・プロセッサーは、`com.yahoo.docproc.DocumentProcessor` を拡張するコンポーネントです。すべてのドキュメント・プロセッサーは `process()` を実装する必要があります:
+
+```txt
+public Progress process(Processing processing);
+```
+
+コンテナーはドキュメント操作を受信すると、新しい `Processing` を作成し、`DocumentPut`、`DocumentUpdate`、`DocumentRemove` を `Processing.getDocumentOperations()` からアクセスできる `List` に追加します。後者は、たとえばブロックリストの用途で `DocumentPut/Update` を停止するために、`Progress.DONE` の前に `Processing.getDocumentOperations().clear()` を実行して処理を中止したい場合にも役立ちます。
+
+さらに、当該ドキュメント処理チェーンのコールスタックは `Processing.callStack()` に*コピー*されるため、ドキュメント・プロセッサーは、進行中の他のすべての処理に影響を与えることなく、その処理の制御フローを自由に変更できます。作成後、`Processing` は内部キューに追加されます。
+
+ワーカースレッドが入力キューから `Processing` を取り出し、そのドキュメント操作をコールスタックに通します。したがって、最小の何もしないドキュメント・プロセッサーの実装は次のようになります:
+
+```java
+import com.yahoo.docproc.*;
+public class SimpleDocumentProcessor extends DocumentProcessor {
+    public Progress process(Processing processing) {
+        return Progress.DONE;
+    }
+}
+```
+
+`process()` メソッドは、`Processing.getDocumentOperations()` 内のすべてのドキュメント操作をループし、それらに対して必要な処理を行い、`Progress` を返します:
+
+```java
+public Progress process(Processing processing) {
+    for (DocumentOperation op : processing.getDocumentOperations()) {
+        if (op instanceof DocumentPut) {
+            DocumentPut put = (DocumentPut) op;
+            // TODO do something to 'put here
+        } else if (op instanceof DocumentUpdate) {
+        DocumentUpdate update = (DocumentUpdate) op;
+        // TODO do something to 'update' here
+    } else if (op instanceof DocumentRemove) {
+    DocumentRemove remove = (DocumentRemove) op;
+    // TODO do something to 'remove' here
+  }
+}
+return Progress.DONE;
+}
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>戻り値</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`Progress.DONE`}</code></td>
+      <td>ドキュメント・プロセッサーが <code>{`Processing`}</code> の処理に成功した場合に返します。</td>
+    </tr>
+    <tr>
+      <td><code>{`Progress.FAILED`}</code></td>
+      <td>処理が失敗し、入力メッセージがフィード元のアプリケーションに&#42;致命的な&#42;失敗を返すべき場合です。つまり、そのアプリケーションはこのドキュメント操作の再フィードを試みません。エラーメッセージ/理由を返すには <code>{`withReason()`}</code> を呼び出します。この結果は、<a href="/ja/writing/document-v1-api-guide" aria-label="Document v1">Document v1</a> では <code>{`500 Internal Server Error`}</code> レスポンスとして表されます。例:<code>{`if (op instanceof DocumentPut) { return Progress.FAILED.withReason("PUT is not supported"); }`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`Progress.INVALID_INPUT`}</code></td>
+      <td>8.584 以降で利用可能。不正な形式のドキュメント操作など、無効な入力によって処理が失敗した場合です。この結果は、<a href="/ja/writing/document-v1-api-guide" aria-label="Document v1">Document v1</a> では <code>{`400 Bad Request`}</code> レスポンスとして表されます。</td>
+    </tr>
+    <tr>
+      <td><code>{`Progress.LATER`}</code></td>
+      <td><a href="#execution-model" aria-label="execution model">実行モデル</a>を参照してください。ドキュメント・プロセッサーが呼び出し元のスレッドを解放し、後で再度呼び出されることを望む場合です。これは、レイテンシーの高い外部サービスを呼び出す場合などに有用です。この場合、ドキュメント・プロセッサーは <code>{`Processing`}</code> に状態を保存し、後で再度呼び出されたときに再開できます。この <code>{`Processing`}</code> でプロセッサーが&#42;いつ&#42;再度呼び出されるかについての保証はなく、単に入力キューの末尾に追加されます。<code>{`Progress.LATER`}</code> を使用することで、これはドキュメント操作の処理がその全期間にわたって 1 つのスレッドを消費する必要のない非同期モデルとなります。ただし、ドキュメント・プロセッサー自体はチェーン内のすべての処理操作で共有されるため、<a href="#state" aria-label="thread-safe">スレッドセーフ</a>に実装しなければならないことに注意してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>例外</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`com.yahoo.docproc.TransientFailureException`}</code></td>
+      <td>処理が失敗し、入力メッセージがフィード元のアプリケーションに&#42;一時的な&#42;失敗を返すべき場合です。つまり、そのアプリケーションはこのドキュメント操作の再フィードを試みる&#42;可能性があります&#42;。</td>
+    </tr>
+    <tr>
+      <td><code>{`RuntimeException`}</code></td>
+      <td>その他の <code>{`RuntimeException`}</code> をスローした場合の動作は <code>{`Progress.FAILED`}</code> と同じです。</td>
+    </tr>
+  </tbody>
+</table>
+
+## チェーン
+
+前述のコールスタックは、*ドキュメント・プロセッサー・チェーン*の別名です。ドキュメント・プロセッサー・チェーンは、一般的な[コンポーネント・チェーン](/ja/applications/chaining)の特殊なケースです。混乱を避けるため、ここでもいくつかの概念を説明します。ドキュメント・プロセッサー・チェーンは、id を持ち、スタックとして表現される、ドキュメント・プロセッサーのインスタンスのリストにすぎません。ドキュメント・プロセッサー・チェーンは通常、処理ごとに作成されるのではなく、設定の一部です。複数のチェーンが同時に存在でき、実行するチェーンは受信メッセージのメッセージバスの宛先によって指定されます。同じドキュメント・プロセッサーのインスタンスが複数のドキュメント・プロセッサー・チェーンに存在できるため、特定のメッセージにおいて次に呼び出すドキュメント・プロセッサーを把握する責任は `Processing` の `CallStack` にあります。
+
+チェーン内のドキュメント・プロセッサーの実行順序は明示的に指定されるのではなく、ドキュメント・プロセッサーまたはその設定で宣言された[順序制約](/ja/applications/chaining#ordering-components)によって決まります。
+
+## 実行モデル
+
+ドキュメント処理フレームワークは次のように動作します:
+
+<Steps>
+  <Step>
+  メッセージバス層のスレッドが、受信メッセージを、ノード上に設定されたすべてのドキュメント処理チェーンで共有される内部優先度キューに追加します。優先度はメッセージのメッセージバス優先度に基づいて設定されます。同じ優先度のメッセージは FIFO 順で並べられます。
+  </Step>
+
+  <Step>
+  docproc スレッドプールのワーカースレッドの 1 つがキューの先頭からメッセージを 1 つ取り出し、デシリアライズし、対象のコールスタック(チェーン)をコピーして、ドキュメント・プロセッサーに通します。
+  </Step>
+
+  <Step>
+  処理は、**(a)** ドキュメントがチェーン全体を正常に通過した場合、または **(b)** チェーン内のドキュメント・プロセッサーが `Progress.FAILED` を返したか例外をスローした場合に終了します。
+  </Step>
+
+  <Step>
+  同じスレッドがメッセージをメッセージバス層に渡し、宛先へのさらなる転送を行います。
+  </Step>
+
+</Steps>
+
+各ドキュメント・プロセッサー・チェーンのインスタンスは 1 つだけです。各チェーン内には、各ドキュメント・プロセッサーのインスタンスが 1 つだけ存在します。ただし、チェーンに複数の同一のドキュメント・プロセッサーが設定されている場合を除きますが、これはまれなケースです。
+
+上記のモデルから明らかなように、複数のワーカースレッドがチェーン内のドキュメント・プロセッサーを並行して実行します。したがって、1 つのドキュメント・プロセッサーの `process()` を、多数の実行スレッドが同時に通過する可能性があります。
+
+このモデルは、ドキュメント・プロセッサーのクラスに重要な制約を課します:*インスタンス変数は安全ではありません。*インスタンス変数は排除するか、何らかの方法でスレッドセーフにする必要があります。
+
+[リソース管理](/ja/applications/components#resource-management)も参照してください。リソースをリークさせないために `deconstruct()` を使用してください。
+
+### 非同期実行
+
+上で説明した実行モデルは、もう 1 つの重要な制約も示しています。ドキュメント・プロセッサーが process() メソッド内でレイテンシーの高い操作を実行すると、docproc ワーカースレッドが占有されます。*n* 個のワーカースレッドすべてが外部リソースでブロックすると、スループットが制限されます。これは、Processing オブジェクトに状態を保存し、`Progress.LATER` を返すことで解決できます。レイテンシーの高い操作を行うドキュメント・プロセッサーは、次のようなパターンを使用すべきです:
+
+<Steps>
+  <Step>
+  Processing 内の自己定義のコンテキスト変数でステータスを確認します。要するに、*この Processing を以前に見たことがあるか?*を確認します。
+  </Step>
+
+  <Step>
+  見たことがない場合:
+
+  1. ネットワークから届いたばかりの Processing オブジェクトを受け取っており、これを以前に見たことはありません。レイテンシーの高い操作の直前まで処理します。
+  2. レイテンシーの高い操作を開始します(場合によっては別スレッドで)。
+  3. 操作の状態を Processing 内の自己定義のコンテキスト変数に保存します。
+  4. `Progress.LATER` を返します。この Processing は入力キューの末尾に追加され、後で再度呼び出されます。
+  </Step>
+
+  <Step>
+  見たことがある場合:
+
+  1. Processing 内の自己定義のコンテキスト変数に設定した参照を取得します。
+  2. レイテンシーの高い操作は完了しましたか?完了していれば `Progress.DONE` を返します。
+  3. まだ完了していませんか?再度 `Progress.LATER` を返します。
+  </Step>
+</Steps>
+
+明らかなように、これにより有限のドキュメント処理スレッドが同時により多くの作業を行えるようになります。
+
+## 状態
+
+特定の Processing に対するドキュメント・プロセッサー内の状態は、process メソッドのローカル変数として保持すべきです。一方、すべての Processing で共有すべき状態は、メンバー変数として保持すべきです。後者の種類は常に複数のスレッドからアクセスされるため、そのようなメンバー変数の状態は*スレッドセーフ*でなければなりません。この重要な制約は、Servlet API などのものと同様です。インスタンス変数を持つマルチスレッドセーフなドキュメント・プロセッサーを実装するための選択肢:
+
+1. イミュータブル(できれば final)なオブジェクトを使用します。それらは構築後に決して変化せず、DocumentProcessor のコンストラクターが戻った後にその状態が変更されることはありません。
+2. スレッドセーフなクラスの単一インスタンスを使用します。
+3. 単一インスタンスを作成し、すべてのスレッドでそのアクセスを同期します(ただし、これはスケーラビリティを大きく制限します)。
+4. `ThreadLocal` などを使用して、各スレッドが独自のインスタンスを持つようにします。
+
+### Processing のコンテキスト変数
+
+`Processing` には、ドキュメント・プロセッサー間で情報を渡すために使用できる `String -> Object` のマップがあります。これは、`Progress.LATER` を使用する際に処理の状態を保存するのにも便利です。`get/setVariable` などについては、[Processing.java](https://github.com/vespa-engine/vespa/blob/master/docproc/src/main/java/com/yahoo/docproc/Processing.java) を参照してください。
+
+[サンプルアプリケーション](https://github.com/vespa-engine/sample-apps/tree/master/examples/document-processing)でも、このようなコンテキスト変数を使用しています。
+
+## 操作の順序
+
+### フィードの順序
+
+フィード操作の順序は保証されません。異なるドキュメントに対する操作は並行して実行されるため、順序付けはされません。ただし、Vespa は、*同じ*フィード・エンドポイントから Vespa に入力された場合、同じドキュメントに対する操作はフィードされた順序で処理されることを保証します。
+
+### ドキュメント処理の順序
+
+ドキュメント・プロセッサー内で生成されたドキュメント操作は、フィード時と同じルールに従います。入力を他のドキュメントに分割する場合でも、同じドキュメントに対する複数の操作に分割する場合でも、Vespa は同じドキュメント ID に対する操作が順序付けられ、投入された順序で配信されることを保証します。
+
+## ドキュメント処理の(再)設定
+
+次の設定を考えてみましょう:
+
+```xml highlight={7-9}
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0">
+    <container version="1.0" id="default">
+        <document-processing>
+            <chain id="default">
+                <documentprocessor id="SomeDocumentProcessor">
+                    <config name="foo.something">
+                        <variable>value</variable>
+                    </config>
+                </documentprocessor>
+            </chain>
+        </document-processing>
+    </container>
+</services>
+```
+
+チェーン id、チェーン内のコンポーネント、コンポーネント設定、スキーマ・マッピングの変更は、いずれもデプロイ後に反映され、再起動は不要です。*クラスター名*(すなわちコンテナー id)の変更には、*vespa activate* 後に docproc サービスの再起動が必要です。
+
+実行中のクラスターで処理チェーンを追加または変更する際の注意点として、同時に*新しい*ドキュメント・プロセッサー(すなわち、クラスターの起動時に Vespa が認識していなかったドキュメント・プロセッサー)をデプロイする場合は、コンテナーを再起動する必要があります:
+
+```txt
+$ vespa-sentinel-cmd restart container
+```
+
+## クラス図
+
+<Frame>
+![](/assets/img/document-processing-class-diagram.svg)
+</Frame>
+
+フレームワークのコアは、非同期処理、1 つまたは複数のドキュメントやドキュメント更新の同時処理、処理フローについて動的に判断するドキュメント・プロセッサー、そしてドキュメントやドキュメント更新の外部でのプロセッサー間の情報の受け渡しをサポートします:
+
+- 1 つ以上の名前付き `Docproc Services` を作成できます。そのうちの 1 つのサービスが*デフォルト*です。
+- サービスは、処理対象として `DocumentOperation` のサブクラス、すなわち `DocumentPuts`、`DocumentUpdates`、`DocumentRemoves` を受け付けます。サービスは `Call Stack` を持ち、サービスに渡された各 DocumentOperation を処理するために、さまざまな `DocumentProcessors` に対して行う呼び出しを列挙します。
+- Call Stack は `Calls` で構成され、呼び出すドキュメント・プロセッサーのインスタンスを参照します。
+- ドキュメントの put とドキュメントの更新は非同期に処理され、その状態は(スレッドやプロセスではなく)その期間中 `Processing` に保持されます。ドキュメント・プロセッサーは、(通常はリモートサービスに対して)いくつかの非同期呼び出しを行い、その呼び出しの結果を処理するために同じ Processing について後で再度呼び出されるべきであるとフレームワークに返すことができます。
+- 各 Processing は、次に何を呼び出すかを把握するために、Docproc Service の Call Stack の独自のコピーを保持します。ドキュメント・プロセッサーはこの Call Stack を変更して、DocumentOperation の処理に必要な処理ステップを動的に決定できます。
+- 1 つの Processing には、1 つの単位として処理される 1 つ以上の DocumentOperation を含めることができます。
+- Processing は `context` を持ちます。これは名前付き値の Map で、プロセッサー間で引数を渡すために使用できます。
+- Processing はディスクへの保存に対応しており、ノードあたり多数の長期的な処理を進行させることができます。

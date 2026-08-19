@@ -1,0 +1,73 @@
+---
+title: "HTTP/2"
+---
+
+このドキュメントには、コンテナーにおける HTTP/2 のパフォーマンスに関する考慮事項が記載されています。コンテナー・クラスターの一般的なチューニングについては、[コンテナーのチューニング](/ja/performance/container-tuning)を参照してください。
+
+## コンテナーでの HTTP/2 の有効化
+
+HTTP/2 は、コンテナー上のすべてのコネクターでデフォルトで有効になっています。セキュリティの向上に加えて、より堅牢なコネクションのアップグレード機構のためにも、TLS を用いた HTTP/2 を推奨します。Web ブラウザーは通常、TLS 上での HTTP/2 のみを許可します。
+
+### TLS を用いた HTTP/2
+
+HTTP/1.1 と HTTP/2 はどちらも、[TLS ALPN Extension](https://datatracker.ietf.org/doc/html/rfc7301) を使用して同じコネクター上で提供されます。Application-Layer Protocol Negotiation（ALPN）拡張により、クライアントは TLS ハンドシェイク中にサポートするプロトコルのリストを送信できます。コンテナーは、そのリストからサポートされているプロトコルを選択します。
+
+[HTTP/2 の仕様](https://datatracker.ietf.org/doc/html/rfc7540)は、TLS 接続に対して複数の要件を定めています。Vespa はこれらの制約の一部またはすべてを強制することがあります。完全なリストについては HTTP/2 の仕様を参照してください。最も重要なものを以下に挙げます:
+
+- クライアントは少なくとも TLSv1.2 を使用しなければなりません。
+- クライアントは TLS Server Name Indication（SNI）Extension でターゲットドメインを提供しなければなりません。
+- クライアントは、禁止されている [TLSv1.2 の暗号スイート](https://datatracker.ietf.org/doc/html/rfc7540#appendix-A)を使用してはなりません。
+
+### TLS を用いない HTTP/2
+
+jdisc コンテナーは、TLS を用いない HTTP/2 のための両方の機構をサポートしています。[テスト](#testing)を参照してください:
+
+1. HTTP/1 から HTTP/2 へのアップグレード
+2. prior knowledge を用いた HTTP/2
+
+## HTTP/2 でのフィード
+
+HTTP/2 の主要な改善点の 1 つは、単一の TCP コネクション上での複数の同時リクエストの多重化です。これにより、[/document/v1/](/ja/reference/api/document-v1) HTTP API を通じた高スループットのフィードが可能になります。1 操作 1 リクエストというシンプルなモデルでありながら、十分な並行性を得るために HTTP/1.1 で必要となる数百の並列コネクションのオーバーヘッドを避けられます。
+
+[Vespa CLI](/ja/clients/vespa-cli#documents) の `vespa feed` と [vespa-feed-client](/ja/clients/vespa-feed-client) は、HTTP/2 上で /document/v1/ を使用します。
+
+## パフォーマンス・チューニング
+
+### クライアント
+
+コネクションあたりの同時リクエスト数は、通常 HTTP/2 のクライアント／ライブラリで調整可能です。Document v1 API は高い並行性のために設計されており、数千の同時リクエストを容易に処理できます。その実装は非同期であり、最大並行数はスレッドプールのサイズによって制限されないため、フィード用コンテナーを飽和させるのに十分な同時リクエスト／ストリームを許可するようにクライアントを設定してください。[クエリー API](/ja/querying/query-api) などの他の API は同期実装に基づいており、最大並行数は[基盤となるスレッドプールのサイズ](/ja/performance/container-tuning#container-worker-threads)によって制限されます。同時ストリームが多すぎると、コンテナーが 503 レスポンスでリクエストを拒否する可能性があります。
+
+また、HTTP/2 であっても、複数の TCP コネクションを使用する理由がまだいくつかあります:
+
+- **複数のコンテナーの活用**。単一のコンテナーではコンテント層を飽和させられない場合があります。コンテナーがロードバランサーの背後にある場合、クライアントはコンテナーノード数より多くのコネクションを使用する必要があるかもしれません。
+- **より高いスループット**。多くのクライアントは、各コネクションを単一のスレッドでしか操作できません。複数の CPU コアを活用するには、複数のコネクションが必要になる場合があります。
+
+## クライアントの推奨
+
+Document v1 API を通じたフィードには [vespa-feed-client](/ja/clients/vespa-feed-client) を使用してください（JDK8 以降）。
+
+負荷テストには [h2load ベンチマークツール](https://nghttp2.org/documentation/h2load-howto.html)を推奨します。[vespa-fbench](/ja/reference/operations/tools#vespa-fbench) は現時点では HTTP/2 をサポートしていません。
+
+Java には 4 つの優れた選択肢があります:
+
+1. [Jetty Client](https://javadoc.jetty.org/jetty-11/org/eclipse/jetty/client/HttpClient.html)
+2. [OkHttp](https://square.github.io/okhttp/)
+3. [Apache HttpClient 5.x](https://hc.apache.org/httpcomponents-client-5.1.x/)
+4. [java.net.http.HttpClient (JDK11+)](https://docs.oracle.com/en/java/javase/11/docs/api/java.net.http/java/net/http/HttpClient.html)
+
+## テスト
+
+リクエストにコンテンツが含まれる場合（ペイロード付きの POST、PUT、PATCH）、サーバーはプロトコルのアップグレードを実行しません。これは、Vespa で使用されている HTTP サーバーである Jetty の制限である可能性があります。クライアントは HTTP/2 がサポートされていることを前提とすべきです。`curl --http2-prior-knowledge` を使用した例:
+
+```bash highlight={6}
+$ curl -i --http2-prior-knowledge \
+  -X POST -H 'Content-Type: application/json' \
+  --data-binary @ext/A-Head-Full-of-Dreams.json \
+  http://127.0.0.1:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+
+HTTP/2 200
+date: Tue, 06 Dec 2022 11:04:13 GMT
+content-type: application/json;charset=utf-8
+vary: Accept-Encoding
+content-length: 122
+```

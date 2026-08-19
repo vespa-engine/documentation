@@ -1,0 +1,129 @@
+---
+title: Vespa CLI を使わずにアプリケーションをデプロイする
+---
+
+このガイドでは、Vespa Cloud の [dev zone](/ja/operations/environments#dev) にアプリケーションを（無料で）デプロイします。
+
+このガイドの別バージョン:
+
+- [pyvespa を使ってアプリケーションをデプロイする](https://vespa-engine.github.io/pyvespa/getting-started-pyvespa-cloud.html) - Python 開発者向け
+- [アプリケーションをデプロイする](/ja/basics/deploy-an-application)
+- [Java コンポーネントを含むアプリケーションをデプロイする](/ja/basics/deploy-an-application-java)
+- [アプリケーションをローカルにデプロイする](/ja/basics/deploy-an-application-local)
+- [Java コンポーネントを含むアプリケーションをローカルにデプロイする](/ja/basics/deploy-an-application-local-java)
+
+  
+
+<Warning>
+**前提条件:**
+
+- git - または [album-recommendation](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation) からファイルをダウンロード
+- zip - または .zip ファイルを作成できる他のツール
+- curl - またはセキュリティ認証情報付きの HTTP リクエストを送信できる他のツール
+- OpenSSL
+</Warning>
+
+手順:
+
+<Steps>
+<Step>
+**Vespa Cloud で[テナント](/ja/learn/tenant-apps-instances)を作成する:**
+
+[console.vespa-cloud.com](https://console.vespa-cloud.com/) にアクセスし、テナントを作成します（既に持っている場合は不要です）。
+</Step>
+<Step>
+**サンプル[アプリケーション](/ja/basics/applications)をクローンする:**
+```bash
+git clone --depth 1 https://github.com/vespa-engine/sample-apps.git && \
+  cd sample-apps/album-recommendation
+```
+クローンできる他のサンプルアプリについては [sample-apps](https://github.com/vespa-engine/sample-apps) を参照してください
+</Step>
+<Step>
+**[データプレーンアクセス](/ja/security/guide#data-plane)用の証明書をアプリケーションに追加する:**
+
+Unix または Mac では、`openssl` を使用します:
+
+```bash
+openssl req -x509 -nodes -days 14 -newkey rsa:4096 \
+  -subj "/CN=cloud.vespa.example" \
+  -keyout data-plane-private-key.pem -out data-plane-public-cert.pem
+```
+Windows では、PowerShell の [New-SelfSignedCertificate](https://learn.microsoft.com/en-us/powershell/module/pki/new-selfsignedcertificate) で証明書を作成し、[certutil](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/certutil) を使用して PEM 形式にエクスポートする必要があります。
+
+証明書を作成したら、アプリケーション・パッケージに追加します。
+
+```bash
+mkdir -p app/security && \
+  cp data-plane-public-cert.pem app/security/clients.pem
+```
+</Step>
+
+<Step>
+**デプロイ可能なアプリケーション・パッケージの zip を作成する:**
+```bash
+( cd app && zip -r ../application.zip . )
+```
+</Step>
+
+<Step>
+**アプリケーションをデプロイする:**
+
+[コンソール](https://console.vespa-cloud.com/)で *Deploy Application* をクリックします。アプリケーション名に「myapp」を使用し、他はデフォルトのままにします。*DEV* が選択されていることを確認し、`application.zip` をアップロードします。*Create and deploy* をクリックします。
+
+初回のデプロイメントは、ノードがプロビジョニングされる間、数分かかることがあります。
+</Step>
+
+<Step>
+**アプリケーションのエンドポイントを確認する:**
+
+```bash
+ENDPOINT=https://name.myapp.tenant-name.aws-us-east-1c.dev.z.vespa-app.cloud/
+```
+```bash
+curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem $ENDPOINT
+```
+エンドポイントはコンソールのデプロイメント出力で確認できます。後で使うために設定し、テストします。[ブラウザーで行う](/ja/security/guide#using-a-browser)こともできます。
+</Step>
+<Step>
+**[ドキュメント](/ja/schemas/documents)を[フィード](/ja/writing/reads-and-writes)する:**
+```bash
+curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -H "Content-Type:application/json" \
+  --data-binary @ext/A-Head-Full-of-Dreams.json \
+  $ENDPOINT/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+```
+```bash
+curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -H "Content-Type:application/json" \
+  --data-binary @ext/Love-Is-Here-To-Stay.json \
+  $ENDPOINT/document/v1/mynamespace/music/docid/love-is-here-to-stay
+```
+```bash
+curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -H "Content-Type:application/json" \
+  --data-binary @ext/Hardwired...To-Self-Destruct.json \
+  $ENDPOINT/document/v1/mynamespace/music/docid/hardwired-to-self-destruct
+```
+</Step>
+<Step>
+**[クエリー](/ja/querying/query-api)を実行する:**
+```bash
+curl --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  -X POST -H "Content-Type: application/json" --data '
+  {
+      "yql": "select * from music where true",
+      "ranking": {
+          "profile": "rank_albums",
+          "features": {
+              "query(user_profile)": "{{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+          }
+      }
+  }' \
+  $ENDPOINT/search/
+```
+</Step>
+</Steps>
+  
+
+おめでとうございます。最初の Vespa アプリケーションをデプロイできました！ [dev zone](/ja/operations/environments#dev) のアプリケーション・インスタンスは、デフォルトでは最後のデプロイメントから 14 日間稼働し続けます。これは[コンソール](https://console.vespa-cloud.com/)で管理できます。

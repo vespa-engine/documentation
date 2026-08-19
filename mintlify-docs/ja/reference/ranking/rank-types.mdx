@@ -1,0 +1,164 @@
+---
+title: "ランク・タイプ"
+---
+
+このドキュメントでは、nativeRank でサポートされる [rank-types](/ja/reference/schemas/schemas#rank-type) と、その使用によって制御される主なランキング機能を紹介します。nativeRank 機能の詳細については、[native rank リファレンス](/ja/reference/ranking/nativerank)を参照してください。まず、ランク・タイプによるランキング制御の汎用的な仕組みを説明します。その後、各ランキング・タイプについて、さまざまなランキング制御をどのように使用するかの詳細とともに説明します。
+
+## rank-type の使用
+
+フィールドの [rank-types](/ja/reference/schemas/schemas#rank-type) は、[rank-profile](/ja/reference/schemas/schemas#rank-profile) 単位、またはフィールド単位のいずれかで制御されます。rank-profile 単位で使用すると、より柔軟な制御ができます:
+
+```js
+rank-profile product inherits default {
+    rank-type title: identity
+    rank-type body: about
+    first-phase {
+        expression: nativeRank
+    }
+}
+```
+
+## ランキング制御
+
+このセクションでは、ランキング・タイプの選択によって影響を受ける、さまざまな汎用的なランキング制御について説明します。
+
+### FirstOcc ブースト
+
+ドキュメントのフィールド内でタームが最初に出現する位置を `FirstOcc` と呼びます。FirstOcc ブースト・テーブルは、FirstOcc の特定の値 _**x**_ をランクへの寄与にマッピングします。FirstOcc がテーブルのサイズ(デフォルト 256)以上の場合は、テーブルの最後の要素の値が使用されます。
+
+式 1. FirstOcc ブースト・テーブル関数の例:
+
+$$
+firstocc(x) = expdecay(x) = w \times e^{-\frac{x}{t}}
+$$
+
+ここで _**w**_ は重み(振幅を制御)、_**t**_ はチューニング・パラメーター(傾きを制御)です。曲線の形状は図 1-2 に示します。
+
+<Frame caption="図 1. FirstOcc の重みのプロット: w を大きくすると振幅が上がります(x 軸は最初の出現位置、y 軸は firstocc ブースト)">
+![FirstOcc Plot weight](/assets/img/relevance/plot-firstocc-weight.png)
+</Frame>
+<br/>
+<Frame caption="図 2. FirstOcc のチューニングのプロット: t を大きくすると指数的な減衰が緩やかになります(x 軸は最初の出現位置、y 軸は firstocc ブースト)">
+![FirstOcc Plot tune](/assets/img/relevance/plot-firstocc-tune.png)
+</Frame>
+### NumOcc ブースト
+
+ドキュメントのフィールド内でのタームの出現回数を `NumOcc` と呼びます。NumOcc ブースト・テーブルは、所与の出現回数 _**x**_ を特定のランクへの寄与にマッピングします。テーブルのサイズ(デフォルト 256)以上の回数出現するタームについては、テーブルの最後の要素の値が使用されます。
+
+式 2. NumOcc ブースト・テーブル関数の例:
+
+$$
+numocc(x) = loggrowth(x) = w \times log(1+\frac{x}{s}) + t
+$$
+
+ここで _**w**_ は重み(振幅を制御)、_**t**_ はチューニング・パラメーター(オフセットを制御)です。_**s**_ はスケール・パラメーター(numocc 変数 x に対する感度を制御)です。
+
+<Frame caption="図 3. NumOcc の重みのプロット: w を大きくすると対数の振幅/形状がスケールします(x 軸はフィールド内の出現回数、y 軸は numocc ブースト)">
+![NumOcc Plot weight](/assets/img/relevance/plot-numocc-weight.png)
+</Frame>
+<br/>
+<Frame caption="図 4. NumOcc のチューニングのプロット: t を大きくするとオフセット値の分だけブーストが増加します(x 軸はフィールド内の出現回数、y 軸は numocc ブースト)">
+![NumOcc Plot tune](/assets/img/relevance/plot-numocc-tune.png)
+</Frame>
+
+### 近接(Proximity)ブースト
+
+複数のクエリー・タームを持つクエリーが実行されると、クエリー・タームのペア間でペアワイズの近接度が計算されます。所与のペアについて、実際のランキング値は、近接ブースト・テーブルのルックアップに基づきます。
+
+所与のクエリー・タームのペア _`a`_ _`b`_ について、両タームの位置間のドキュメント・フィールド内での距離は、クエリーとドキュメントで同じ順序で出現する場合に正になるように計算されます。クエリーとドキュメントで順序が逆の場合、値は負になります。いずれの場合も、絶対値はドキュメント内の単語位置の差の絶対値です。
+
+順方向の近接度計算では、ランク・ブーストは順方向の近接テーブル(forward proximity table)から選択されます。逆方向の近接度には、同様の逆方向近接テーブル(reverse proximity table)が使用されます。
+
+通常、順方向の近接テーブルのランク・スコアは逆方向の近接テーブルより高く、全体として非対称なランキング関数になります。
+
+式 3. 近接ブースト・テーブル関数の例:
+
+$$
+prox(x) = expdecay(x) = w \times e^{-\frac{x}{t}}
+$$
+
+ここで _**x**_ はクエリーのターム間距離とドキュメントのターム間距離の差の絶対値、_**w**_ は重み(振幅を制御)、_**t**_ はチューニング・パラメーター(傾きを制御)です。図 5 と 6 を参照してください: FirstOcc の例と同じ式が使われていますが、パラメーターが異なります。
+
+<Frame caption="図 5. 近接の重みのプロット: w は振幅をスケールします(x 軸は近接ターム・ペアの距離、y 軸は近接ブースト)">
+![Proximity Plot weight](/assets/img/relevance/plot-proximity-weight.png)
+</Frame>
+<br/>
+<Frame caption="図 6. 近接のチューニングのプロット: t を大きくすると曲線の減衰が緩やかになります(x 軸は近接ターム・ペアの距離、y 軸は近接ブースト)">
+![Proximity Plot tune](/assets/img/relevance/plot-proximity-tune.png)
+</Frame>
+
+### 重み(Weight)ブースト
+
+weightboost テーブルは、属性(attribute)からのランク・ブーストへの寄与を計算するためのものです。式 4 は、属性の重みの値が weightboost テーブルのテーブル・ルックアップにどのように使用されるかを示しています。
+
+式 4. Weightboost ブースト・テーブルの例:
+
+$$
+weight(x) = sign(x) \times weightboost[abs(x)]
+$$
+
+ここで \(\text{sign}(x)\) は \(x\) の符号、\(\text{abs}(x)\) は \(x\) の絶対値です。したがって、属性は負のランク寄与を持つことができます。このブースト・テーブルの入力として使用される引数 \(x\) は、属性の型に依存します:
+
+- **Weighted set:** \(x\) は属性の重みに等しくなります。
+- **Array:** \(x\) は属性配列内でのマッチの出現回数に等しくなります。
+- **Single value:** \(x\) は 1 に等しくなります。
+
+## ランク・タイプ
+
+このセクションでは、個々のランキング・タイプについて説明し、さまざまな汎用的なランキング制御をどのように使用するかを詳しく述べます。
+
+### 「identity」ランク・タイプ
+
+このランキング・タイプは、ドキュメントのアイデンティティを含むフィールド用です。書籍のタイトルや、製品の製品名がその例です。
+
+タイトルは通常、ドキュメントの早い位置に現れます。そのため、FirstOcc テーブルは高い値から始まり、急激に下降します。
+
+タイトルは通常繰り返されないため、出現回数はそれほど重要ではありません。中程度の高さから始まり、ゆっくりと上昇します。
+
+アイデンティティのタームは互いに強く結び付いており、フィールドはかなり小さいものです。そのため、近接テーブルは鋭く高いピークを持ち、重要度は急速に低下します。
+
+nativeRank では次のテーブルを使用してサポートされます:
+
+- nativeFieldMatch.firstOccurrenceTable: "expdecay(100,12.50)"
+- nativeFieldMatch.occurrenceCountTable: "loggrowth(1500,4000,19)"
+- nativeProximity.proximityTable: "expdecay(5000,3)"
+- nativeProximity.reverseProximityTable: "expdecay(3000,3)"
+- nativeAttributeMatch.weightTable: "linear(1,0)"
+
+### 「about」ランク・タイプ
+
+これは、ドキュメントに直接関連する情報、つまりそれが何であるかを説明する情報を含むフィールド用です。カタログの説明フィールドや、製品仕様の機能リストが典型的な例です。
+
+通常、最も重要な特徴が最初に置かれるため、出現の順序はある程度重要です。FirstOcc ブースト・テーブルは中程度の高さから始まり、かなりゆっくりと下降します。
+
+説明の「about らしさ」(about-ness)は、説明的なタームが何回使われているかと大きく関係します。そのため、NumOcc ブースト・テーブルはかなり低い値から始まりますが、高くまで上昇し、最大の増加(曲率点)は 5 回の出現あたりになります。
+
+近接度は about らしさにとってかなり重要です。近接ブーストは `identity` タイプにある程度似ていますが、ピークがやや低く、減衰がわずかに緩やかになります。
+
+`about` は、使用するタイプが明示的に指定されていない場合に使用される**デフォルトのランキング・タイプ**です。
+
+nativeRank では次のテーブルを使用してサポートされます:
+
+- nativeFieldMatch.firstOccurrenceTable: "expdecay(8000,12.50)"
+- nativeFieldMatch.occurrenceCountTable: "loggrowth(1500,4000,19)"
+- nativeProximity.proximityTable: "expdecay(500,3)"
+- nativeProximity.reverseProximityTable: "expdecay(400,3)"
+- nativeAttributeMatch.weightTable: "linear(1,0)"
+
+### 「tags」ランク・タイプ
+
+これは、属性をタグとして使用する場合の検索用です。たとえば、頻繁に更新される可能性のある画像の名前タグなどです。tags ランク・タイプは、低い範囲でより大きな相対ブーストを与えるために対数テーブルを使用します: タグが追加されるとランク・スコアに大きな影響を与えるべきですが、タグが増えれば増えるほど、新しいタグ 1 つあたりの寄与は小さくなるべきです。
+
+`tags` ランク・タイプは `about` ランク・タイプに基づいています。つまり、重みブースト・テーブルだけが異なります。他のランク・タイプでは 1 対 1 の線形テーブルが使用されますが、empty ランク・タイプは例外で、ゼロのテーブルを持ちます。
+
+nativeRank では次のテーブルを使用してサポートされます:
+
+- nativeAttributeMatch.weightTable: "loggrowth(38,50,1)"
+
+他のテーブルは `about` ランク・タイプと同じです。
+
+### 「empty」ランク・タイプ
+
+これは、マッチが関連性(relevancy)に一切影響を与えないようにしたいフィールドに使用します。たとえば、フィールドにデータセットを分割するためのキーワードが含まれている場合に使用してください。
+
+empty ランク・タイプも nativeRank でサポートされています。

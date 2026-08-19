@@ -1,0 +1,156 @@
+---
+title: "Searcher における構造化データの検査"
+description: "[Data Access API](https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/data/access/package-summary) は、配列や重み付きセットなどの構造化データへのアクセスに使用されます。"
+---
+
+## ユースケース: 配列アトリビュートへのアクセス
+
+以下は、配列型のフィールドにアクセスする例です:
+
+```java expandable
+import com.yahoo.search.*;
+import com.yahoo.search.result.*;
+import com.yahoo.search.searchchain.*;
+import com.yahoo.data.access.*;
+@After(PhaseNames.TRANSFORMED_QUERY)
+@Before(PhaseNames.BLENDED_RESULT)
+public class SimpleTestSearcher extends Searcher {
+    public Result search(Query query, Execution execution) {
+        Result r = execution.search(query);
+        execution.fill(r);
+        for (Hit hit : r.hits().asList()) {
+            if (hit.isMeta()) continue;
+            Object o = hit.getField("titles");
+            if (o instanceof Inspectable) {
+                StringBuilder pasteBuf = new StringBuilder();
+                Inspectable field = (Inspectable) o;
+                Inspector arr = field.inspect();
+                for (int i = 0; i < arr.entryCount(); i++) {
+                    pasteBuf.append(arr.entry(i).asString(""));
+                    if (i+1 < arr.entryCount()) {
+                        pasteBuf.append(", ");
+                    }
+                }
+                hit.setField("titles", pasteBuf.toString());
+            }
+        }
+        return r;
+    }
+}
+```
+
+ここでは、スキーマに次のようなフィールドがあると仮定しています:
+
+```text
+field titles type array<string> {
+indexing: attribute | summary
+}
+```
+
+再び各ヒットを処理します。今回は配列を走査してすべてのタイトルを含む文字列を構築し、次のようなフィールドを:
+
+```json
+"titles": [
+"Bond",
+"James Bond"
+]
+```
+
+次の出力に変換します:
+
+```json
+"titles": "Bond, James Bond"
+```
+
+## ユースケース: 重み付きセットのアトリビュートへのアクセス
+
+次の例は、重み付きセットに保持されているデータへのアクセスを示しています。Data Access API には「セット」や「重み付きセット」という概念がないことに注意してください。重み付きセットは、それぞれが「item」フィールドと「weight」フィールドを持つオブジェクトの順序なし配列として表現されます。weight は long 整数値であり、item の型はスキーマで宣言されたフィールドの型によって異なります。
+
+```java expandable
+import com.yahoo.search.*;
+import com.yahoo.search.result.*;
+import com.yahoo.search.searchchain.*;
+import com.yahoo.data.access.*;
+@After(PhaseNames.TRANSFORMED_QUERY)
+@Before(PhaseNames.BLENDED_RESULT)
+public class SimpleTestSearcher extends Searcher {
+    public Result search(Query query, Execution execution) {
+        Result r = execution.search(query);
+        execution.fill(r);
+        for (Hit hit : r.hits().asList()) {
+            processHit(hit);
+        }
+        return r;
+    }
+    void processHit(Hit hit) {
+        if (hit.isMeta()) return;
+        Object o = hit.getField("titles");
+        if (o instanceof Inspectable) {
+            StringBuilder pasteBuf = new StringBuilder();
+            Inspectable field = (Inspectable) o;
+            Inspector arr = field.inspect();
+            for (int i = 0; i < arr.entryCount(); i++) {
+                String sval = arr.entry(i).field("item").asString("");
+                long weight = arr.entry(i).field("weight").asLong(0);
+                pasteBuf.append("title: ");
+                pasteBuf.append(sval);
+                pasteBuf.append("[");
+                pasteBuf.append(weight);
+                pasteBuf.append("]");
+                if (i+1 < arr.entryCount()) {
+                    pasteBuf.append(", ");
+                }
+            }
+            hit.setField("alternates", pasteBuf.toString());
+        }
+    }
+}
+```
+
+ここでは、スキーマに次のようなフィールドがあると仮定しています:
+
+```txt
+field titles type weightedset<string> {
+indexing: attribute | summary
+}
+```
+
+再び各ヒットを処理し、重み付きセットの各要素をフォーマットして、次の入力を:
+
+```json
+"titles": {
+"Bond": 15,
+"James Bond": 89
+}
+```
+
+次の出力に変換します:
+
+```json
+"alternates": "title: Bond[15], title: James Bond[89]"
+```
+
+## 構造化データを使ったユニットテスト
+
+ユニットテストでは、構造化データのフィールドをプログラムで作成できると便利です。これは `Slime` を使用して行えます:
+
+```java
+import com.yahoo.slime.*;
+import com.yahoo.data.access.slime.SlimeAdapter;
+// Struct example:
+Slime slime = new Slime();
+Cursor struct = slime.setObject();
+struct.setString("foo", "bar");
+struct.setDouble("number", 1.0);
+myHit.setField("mystruct", new SlimeAdapter(struct));
+// Array example:
+Slime slime = new Slime();
+Cursor array = slime.setArray();
+array.addString("foo");
+array.addString("bar");
+myHit.setField("myarray", new SlimeAdapter(array));
+// Arrays and objects can be arbitrarily nested
+// Alternatively, create the slime structure from a JSON string:
+Slime slime = SlimeUtils.jsonToSlime(myJsonString.getBytes(StandardCharsets.UTF_8));
+myHit.setField("myfield", new SlimeAdapter(slime.get()));
+```

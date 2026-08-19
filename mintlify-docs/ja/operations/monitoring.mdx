@@ -1,0 +1,720 @@
+---
+title: "モニタリング"
+---
+
+<Frame>
+![Vespa コンソールのダッシュボードのサンプル](/assets/img/grafana-metrics.png)
+</Frame>
+
+Vespa Cloud コンソールには、パフォーマンスメトリクスを把握するためのダッシュボードがあります。アプリケーションのゾーンビューにある METRICS タブを使用してください。
+
+これらのメトリクスは、Prometheus メトリクス API を使用して外部のモニタリングツールに取り込むこともできます。
+
+## Vespa Cloud メトリクスダッシュボード
+
+Vespa Cloud メトリクスダッシュボード(アプリケーションのゾーンビューの METRICS タブ)は、*症状 → レイヤー → リソース*というワークフローを軸に構成されており、「レイテンシーが上がっている」から始まった調査を、すべてのチャートを確認することなく「この特定のレイヤーがボトルネックである」という結論に導けるようになっています。
+
+### タブとフィルター
+
+<Frame>
+![ダッシュボードのタブバー](/assets/img/monitoring-dashboard-tabs.png)
+</Frame>
+
+ダッシュボードは 7 つのタブで構成されています:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>タブ</th>
+      <th>表示内容</th>
+      <th>使いどころ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Overview&#42;&#42;</td>
+      <td>ヘルスインジケーター、リクエストレート、QoS、レイテンシーサマリー、HTTP ステータスコード、リソース使用率</td>
+      <td>日次のヘルスチェック、インシデント発生時の最初の確認先</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Query&#42;&#42;</td>
+      <td>コンテナーおよびコンテントノードのクエリーレイテンシー、rank-profile ごとの内訳、match/docsum エグゼキューター</td>
+      <td>読み取りレイテンシーやクエリー品質の問題の調査</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Feed&#42;&#42;</td>
+      <td>各レイヤーでのフィード操作のレートとレイテンシー、フィードブロック</td>
+      <td>書き込みレイテンシーやスループットの問題の調査</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Nearest Neighbor Search&#42;&#42;</td>
+      <td>NNS の距離計算、訪問効率</td>
+      <td>HNSW パラメーターのチューニング(未使用時は非表示)</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Content Node&#42;&#42;</td>
+      <td>ドキュメント数、Proton のリソース使用状況、エグゼキューター使用率、メンテナンスジョブ</td>
+      <td>検索エンジン内部の詳細な調査</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Resources&#42;&#42;</td>
+      <td>CPU、メモリー、ディスク、GPU、JVM、スレッドプール</td>
+      <td>サイジングとスケーリングの判断</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Health&#42;&#42;</td>
+      <td>クラスター状態、データ整合性、再起動、再インデックス、リソース制限</td>
+      <td>安定性のモニタリング、インシデント後のレビュー</td>
+    </tr>
+  </tbody>
+</table>
+
+上部のフィルターはすべてのタブに適用されます:
+
+- **Cluster** — メトリクスを特定のクラスターに限定します
+- **Per host metrics** — クラスター集約ビューとノードごとの内訳を切り替えます
+- **Rank Profile** — Query タブの rank-profile ごとのパネルをフィルターします(デフォルトは「All」)
+
+Query、Feed、Content Node、Resources、Health の各タブでは、メトリクスがクラスターごとにグループ化されます — 次のクラスターへスクロールする前に、1 つのクラスターのすべてのメトリクスを確認できます。コンテナーのメトリクスはコンテナークラスターごとに、コンテントのメトリクスはコンテント・クラスターごとにグループ化されます。
+
+### アノテーション
+
+<Frame>
+![Service restart と Core dump のアノテーションが表示されたレイテンシーチャート](/assets/img/monitoring-annotations-example.png)
+</Frame>
+
+アノテーションは、すべてのチャートに描画される、運用イベントを示す縦線です。レイテンシーやスループットの異常がアノテーションと一致すれば、グラフだけから推測することなく、変化のコンテキストを把握できます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>アノテーション</th>
+      <th>トリガー条件</th>
+      <th>重要な理由</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Feed blocked in cluster&#42;&#42;</td>
+      <td>コンテントノードがディスク/メモリーのフィードブロック制限を超えた</td>
+      <td>解消されるまで、クラスター全体で書き込みが一時停止されます</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Vespa upgrade&#42;&#42;</td>
+      <td>新しい Vespa バージョンがロールアウトされた</td>
+      <td>このマーカーの前後では、ローリングリスタートによる短時間のレイテンシースパイクが想定されます</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Data migration&#42;&#42;</td>
+      <td>保留中のバケットマージがしきい値を超えた</td>
+      <td>再分配中の CPU/IO およびレイテンシーの上昇を説明します</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Document re-indexing&#42;&#42;</td>
+      <td>再インデックスジョブが実行中</td>
+      <td>CPU および検索側の負荷の上昇を説明します</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Auto-scaling&#42;&#42;</td>
+      <td>オートスケーラーがクラスター構成を変更した</td>
+      <td>再配置中に短時間のキャパシティ低下が発生します</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Service restart&#42;&#42;</td>
+      <td><code>{`delta(sentinel_totalRestarts[10m]) > 0`}</code> — 1 つ以上のノードで Vespa サービスプロセスが再起動した</td>
+      <td>予期しない再起動は通常、クラッシュ、OOM、または強制停止を示します。計画されたアップグレード以外では、常に調査する価値があります</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Core dump&#42;&#42;</td>
+      <td><code>{`delta(coredumps_processed[1h]) > 0`}</code> — プロセスがコアダンプした</td>
+      <td>クラッシュの兆候です。Service restart と突き合わせて確認してください。極めてまれであるべきです</td>
+    </tr>
+  </tbody>
+</table>
+
+### Overview タブ
+
+Overview タブは「明らかに壊れているものはないか?」に最も速く答えられる場所であり、日々のモニタリングに必要なものすべてを一目で確認できます。
+
+#### Health Indicators
+
+<Frame>
+![Overview タブの Health Indicators 行](/assets/img/monitoring-health-indicators.png)
+</Frame>
+
+Overview タブは専用の **Health Indicators** 行から始まります — 安定性の問題を一目で浮かび上がらせるように設計された 5 つの統計パネルです。緑のゼロが並んでいればそこで確認終了の合図であり、ゼロ以外の値があれば次に見るべきタブを教えてくれます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>インジケーター</th>
+      <th>カウント対象</th>
+      <th>正常値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Core Dumps (1h)&#42;&#42;</td>
+      <td>直近 1 時間に全クラスターで処理されたコアダンプ</td>
+      <td>0 — ゼロ以外の値は調査すべきクラッシュです</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Restarts (1h)&#42;&#42;</td>
+      <td>直近 1 時間の全クラスターでの Vespa サービス再起動</td>
+      <td>定常状態では 0。アップグレード中の短時間のスパイクは正常です</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Feed Blocked&#42;&#42;</td>
+      <td>現在フィードブロックのリソース制限を超えているノード</td>
+      <td>0 — ゼロ以外は、クラスター全体で書き込みが拒否されていることを意味します</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Content: Groups/Nodes Down&#42;&#42;</td>
+      <td>少なくとも 1 つのノードがダウンしているコンテントグループ</td>
+      <td>定常状態では 0。ローリングリスタートやメンテナンス中に 1 グループがダウンするのは正常です。2 つ以上の場合は調査が必要です</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Container: Services Down&#42;&#42;</td>
+      <td>一部のサービスが動作していないアクティブなコンテナーノード</td>
+      <td>定常状態では 0。デプロイ中の短時間のスパイクは想定内です</td>
+    </tr>
+  </tbody>
+</table>
+
+#### QoS とレイテンシーの概要
+
+**QoS(Quality of Service)** は成功したリクエストの割合を示します。読み取りと書き込みの QoS は別々に表示されます。健全なアプリケーションでは 99.9% を超えているはずです。QoS が低下した場合は、HTTP Response Code Reference 行(デフォルトでは折りたたまれています)を参照してください。観測されたすべてのステータスコードと、Vespa の文脈におけるその意味を説明する表があります。4xx レスポンスはクライアントエラーで、5xx レスポンスはサーバーエラーであり、直ちに調査すべきです。
+
+**レイテンシーサマリー**は、クエリーとフィードのレイテンシーを読み取り行と書き込み行に分けて表示します。平均値と p99 を比較してください — 差が大きい場合は、平均値には現れないテールレイテンシーがあることを示します。目安として、p99 が平均の 5 倍を超える場合はテールを調査してください。
+
+#### リソース使用率
+
+最下段の行では、全クラスターの CPU、メモリー、ディスクを素早く確認できます。いずれかのリソースが恒常的に 80% を超えている場合は注意が必要です。
+
+### Query タブ
+
+クエリーレイテンシーが増加したとき、Query タブはレイヤーごとに原因を特定するのに役立ちます。メトリクスは、コンテナークラスターごと(コンテナーレベルのメトリクス)およびコンテント・クラスターごと(コンテントノードのメトリクス)にグループ化されます。
+
+クエリーは複数のレイヤーを通過し、それぞれに固有のレイテンシーメトリクスがあります:
+
+```bash
+Client
+  → HTTP Read Latency             (end-to-end including network I/O)
+    → Query Container Latency     (time in the container itself)
+      → Query Latency             (container-observed total, excluding HTTP overhead)
+        → Search Protocol Latency (time on each content node)
+          → Rank Profile Latency  (per rank-profile breakdown)
+```
+
+#### コンテナーレベルのメトリクス
+
+まず *Query Rate & Latency* 行から確認します:
+
+- QPS は増加しましたか? クエリーが増えれば負荷も増えます。
+- どのレイテンシーメトリクスが増加しましたか?
+	- **Query Latency** — コンテナーレベル。コンテントノードへのディスパッチを含みます
+	- **HTTP Read Latency** — HTTP I/O のオーバーヘッドを含みます
+	- **Search Protocol Latency** — コンテントノードでの実行のみ
+
+HTTP レイテンシーがクエリーレイテンシーよりはるかに高い場合、ボトルネックはネットワークまたはペイロードサイズです。Search Protocol レイテンシーが支配的な場合、ボトルネックはコンテントノード側にあります。
+
+*Query Quality* 行には次が表示されます:
+
+- **Failed queries** — 実際のエラー。ほぼゼロであるべきです。
+- **Degraded queries** — [ソフトドゥーム](/ja/performance/graceful-degradation)されたクエリー(マッチング中に時間切れになったもの)。これらは部分的な結果を返します。
+- **Empty results** — ヒット数ゼロを返したクエリー。急増している場合は、インデックスの問題やクエリーの変更を示している可能性があります。
+
+#### Rank profile メトリクス
+
+<Frame>
+![Query タブの rank profile サブ行](/assets/img/monitoring-rank-profile-rows.png)
+</Frame>
+
+Query タブでは、rank-profile ごとのメトリクスが 4 つのサブ行にグループ化されており、いずれも Rank Profile ドロップダウンでフィルターできます:
+
+- **Rank Profile — Latency & Volume** — クエリーレイテンシー(平均と最大)、プロファイルごとの QPS、プロファイルごとのマッチしたドキュメントの生数
+- **Rank Profile — Time Breakdown** — セットアップ時間、リランク時間、グルーピング時間。それぞれ平均とピークが表示されるため、プロファイルのコストが定常的なものか、時折スパイクするものかを判別できます
+- **Rank Profile — Quality** — クエリーあたりのマッチしたドキュメント数、ソフトドゥーム係数、ソフトドゥームされたクエリー。これらは、プロファイルが[時間予算を超過している](/ja/performance/graceful-degradation)ことを教えてくれます。
+- **Rank Profile — Query Distribution** — コンテントグループごとの QPS の内訳。ルーティングの偏りを見つけるのに役立ちます
+
+注目すべきポイント:
+
+- どの rank profile のレイテンシーが最も高いか?
+- ソフトドゥームされたクエリーは特定の rank profile に集中しているか?
+- リランク時間やグルーピング時間のピークが平均よりはるかに高くないか? これは多くの場合、一部のクエリーでのみ高コストになる特定のセカンドフェーズやグルーピング式を示しています。
+- クエリーあたりのマッチしたドキュメント数は増加したか? マッチするドキュメントが増えれば、ランキングの処理量も増えます。
+
+実例については後述の[レイテンシートラッキング](#latency-tracking)を、背景については [rank profiles](/ja/basics/ranking#rank-profiles) のドキュメントを参照してください。
+
+#### Match および Docsum エグゼキューターパネル
+
+Query タブには *Match Executor* と *Docsum Executor* のサブ行(キューサイズ + 受理レート)も含まれており、クエリーパスとサマリーパスを支えるコンテントノードのスレッドプールが飽和していないかを確認できます。これらは rank profile に紐付けられませんが、rank-profile メトリクスには現れないテールレイテンシーのスパイクを説明できることがよくあります。
+
+### Feed タブ
+
+フィードのレイテンシーが増加したりスループットが低下したりしたとき、Feed タブは書き込みパスのどこで遅延が発生しているかを示します。書き込み操作は次のように流れます:
+
+```bash
+Client
+  → HTTP Write Latency            (end-to-end)
+    → Container Feed Latency      (document processing chains, embedders)
+      → Distributor Latency       (routing based on bucket distribution)
+        → Content: Storage Latency(persistence, per document replica)
+          → Commit Latency        (transaction log)
+```
+
+上から順に確認し、レイテンシーが増加している箇所を見つけます。コンテナーのフィードレイテンシーは正常なのに HTTP 書き込みレイテンシーが高い場合、ボトルネックはネットワーク/ペイロードです。ディストリビューターのレイテンシーが高い場合は、Health タブでノード状態の問題を確認してください。ストレージレイテンシーが高い場合は、Resources タブでディスク I/O を確認してください。
+
+#### 典型的な正常値
+
+- フィードレイテンシー: put/update で 1〜50 ms が一般的。メンテナンス中のスパイクは正常です
+- ディストリビューター障害: ゼロ — ゼロ以外はノード状態の問題を示します
+- HTTP API 障害: ほぼゼロ
+- フィードブロック: 常にゼロ
+
+#### フィードブロック
+
+**Feed Blocked** は最も重要なフィードメトリクスです。コンテントノードがディスクまたはメモリーの[リソース制限](/ja/writing/feed-block)を超えると、クラスター全体でフィードが一時停止されます。HTTP クライアントは `507 Insufficient Storage` を受け取ります。
+
+フィードがブロックされている場合:
+
+<Steps>
+<Step>
+*Health > Feed Resource Limits* で、どのリソースが制限に近いかを確認します。
+</Step>
+<Step>
+Resources タブで、圧迫の原因となっている特定のノードを確認します。
+</Step>
+<Step>
+コンテント・クラスターにノードを追加します(常に追加してください。リサイズではなく — データは[自動的に再分配](/ja/content/elasticity)されます)。
+</Step>
+</Steps>
+
+Health タブには Resource Limits Reference パネルがあり、デフォルトの制限、ブロックの仕組み、および対処方法が説明されています。
+
+### Nearest Neighbor Search タブ
+
+このタブは、アプリケーションが[近似最近傍探索](/ja/querying/approximate-nn-hnsw)を使用している場合にのみ表示されます — NNS の距離計算が検出されない場合は自動的に非表示になります。
+
+Vespa は 2 つの NNS モードをサポートしています:
+
+- **Approximate NNS** — HNSW グラフインデックスを使用して、すべてのドキュメントをスキャンすることなく効率的に近傍を見つけます。高速ですが、真の最近傍を一部見逃す可能性があります。
+- **Exact NNS** — すべてのドキュメントとの距離を計算するブルートフォーススキャン。正確ですが高コストです。フィルターのヒット率が `approximate-threshold`(デフォルト 0.02)を下回ると、Vespa はこちらにフォールバックします。
+
+主要なメトリクス:
+
+- **Exact NNS Ratio** — ブルートフォース検索を使用したクエリーの割合。0.05(5%)未満であるべきです。値が高い場合、多くのクエリーが正確な検索にフォールバックしており、コストが大幅に増加していることを意味します。
+- **Approx NNS Visit Efficiency** — 訪問したグラフノード数と計算した距離数の比。1.0〜3.0 が一般的です。これよりはるかに高い場合は、HNSW インデックスをチューニングできる可能性があります。
+- **Distances Computed / Nodes Visited** — NNS の生のワークロードを示すレートメトリクス。
+
+チューニングパラメーター([rank profile](/ja/basics/ranking#rank-profiles) ごとに設定): `approximate-threshold`、`filter-first-threshold`、`target-hits-max-adjustment-factor`、`exploration-slack`。Exact NNS の割合が高い場合は、`approximate-threshold` を上げるか、フィルターの制約を緩めるように再構成することを検討してください。
+
+### Content Node タブ
+
+Content Node タブは、各コンテントノードで動作する [Proton](/ja/content/proton) 検索エンジンの内部を表示します。すべてのメトリクスはコンテント・クラスターごとにグループ化されます。
+
+#### ドキュメント
+
+- **Total** — データベース内のすべてのドキュメント(削除済みを含む)
+- **Ready** — 検索可能なドキュメント
+- **Active** — このノードで検索対象となるべきプライマリコピー
+- **Removed** — ガベージコレクション待ちのトゥームストーン
+
+#### Proton のリソース使用状況
+
+Proton の内部会計によるディスクとメモリーの使用状況です。Resources タブのノードレベルのメトリクスとは異なり、これらは Vespa が[フィードブロック](/ja/writing/feed-block)の判断に使用する値です。
+
+#### エグゼキューター使用率
+
+Proton は複数のスレッドプール(エグゼキューター)を使用します:
+
+- **Match** — クエリーを実行します。クエリーレイテンシーに直接影響します。
+- **Shared** — フラッシュやコンパクションなどのバックグラウンドタスクを処理します。
+- **Proton** — 内部の調整タスク。
+- **Field writer** — フィード中に属性データとインデックスデータを書き込みます。飽和するとフィードスループットに直接影響します。
+
+典型的な正常値:
+
+- 使用率 0.8(80%)未満 — これを超える値が持続する場合はボトルネックです
+- Field writer の飽和度は 1.0 を大きく下回ること
+- 定常状態ではキューサイズはほぼゼロ
+
+ダッシュボードでは平均が緑の実線、最大値が黄色の破線で描画されるため、最大値が平均に追従しているか、それとも懸念すべきスパイクがあるかを簡単に見分けられます。
+
+#### メンテナンスジョブ
+
+Proton はデータ構造を管理するバックグラウンドの[メンテナンスジョブ](/ja/content/proton#proton-maintenance-jobs)を実行します。ダッシュボードには、各ジョブとそのリソースへの影響を説明するリファレンスパネル(折りたたみ)が含まれています:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>ジョブ</th>
+      <th>リソースへの影響</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Attribute Flush</td>
+      <td>低</td>
+    </tr>
+    <tr>
+      <td>Memory Index Flush</td>
+      <td>中程度</td>
+    </tr>
+    <tr>
+      <td>Disk Index Fusion</td>
+      <td>高 — 一時的にディスク使用量が 2 倍になります</td>
+    </tr>
+    <tr>
+      <td>Document Store Compaction</td>
+      <td>高 — ファイルをメモリーに保持します</td>
+    </tr>
+    <tr>
+      <td>Bucket Move</td>
+      <td>高 — フィードと競合します</td>
+    </tr>
+    <tr>
+      <td>LID-Space Compaction</td>
+      <td>中程度</td>
+    </tr>
+  </tbody>
+</table>
+
+アクティブなメンテナンスと相関するレイテンシースパイクは想定内ですが、クラスターにより多くの余裕が必要であることを示している場合もあります。
+
+### Resources タブ
+
+Resources タブは、サイジングの判断のための主要なツールです。ノードレベルのリソース(CPU、メモリー、ディスク)はクラスターごとにグループ化されます。コンテナー固有のメトリクス(JVM、スレッドプール、GPU、ネットワーク)はコンテナークラスターごとにグループ化されます。
+
+#### 典型的な正常値
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>リソース</th>
+      <th>正常</th>
+      <th>懸念あり</th>
+      <th>対応が必要</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;CPU&#42;&#42;</td>
+      <td><code>{`< 70%`}</code></td>
+      <td><code>{`70-85%`}</code></td>
+      <td><code>{`> 85%`}</code> が持続</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;CPU IOWait&#42;&#42;</td>
+      <td><code>{`< 5%`}</code></td>
+      <td><code>{`5-10%`}</code></td>
+      <td><code>{`> 10%`}</code>(I/O ボトルネック)</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;メモリー&#42;&#42;</td>
+      <td><code>{`< 70%`}</code></td>
+      <td><code>{`70-80%`}</code></td>
+      <td>フィードブロック制限に接近</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;ディスク&#42;&#42;</td>
+      <td><code>{`< 70%`}</code></td>
+      <td><code>{`70-80% `}</code></td>
+      <td>フィードブロック制限に接近</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;JVM GC オーバーヘッド&#42;&#42;</td>
+      <td><code>{`< 5%`}</code></td>
+      <td><code>{`5-15%`}</code></td>
+      <td><code>{`> 15%`}</code>(レイテンシーへの深刻な影響)</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;スレッドプール使用率&#42;&#42;</td>
+      <td><code>{`< 70%`}</code></td>
+      <td><code>{`70-90%`}</code></td>
+      <td>タスク拒否 = リクエストの破棄</td>
+    </tr>
+  </tbody>
+</table>
+
+コンテントノードには追加の余裕が必要です。[メンテナンスジョブ](/ja/content/proton#proton-maintenance-jobs)(特に disk index fusion)が一時的にリソース使用量を増加させるためです。
+
+#### コンテナースレッドプール
+
+<Frame>
+![プールごとの avg/max パネルを持つコンテナースレッドプール行](/assets/img/monitoring-container-thread-pools.png)
+</Frame>
+
+コンテナーにどのスレッドプールが存在するかは、`services.xml` でどの要素が構成されているかによって決まります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>スレッドプール</th>
+      <th>存在する条件</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`default-handler-common`}</code></td>
+      <td>常に存在(専用プールを持たないものが使用するハンドラーエグゼキューター)</td>
+    </tr>
+    <tr>
+      <td><code>{`search-handler`}</code></td>
+      <td><code>{`<search>`}</code> 要素が存在する場合</td>
+    </tr>
+    <tr>
+      <td><code>{`feedapi-handler`}</code></td>
+      <td><code>{`<document-api>`}</code> 要素が存在する場合</td>
+    </tr>
+  </tbody>
+</table>
+
+ダッシュボードに空のパネルが表示されないように、Resources タブには 3 つのスレッドプール行があります — コンテナー構成のケースごとに 1 行ずつ — そして各行は、そのケースに該当するコンテナークラスターごとに繰り返されます:
+
+- **Container Thread Pools (search + document-api)** — 両方のプールを持つクラスター
+- **Container Thread Pools (search only)** — `<search>` はあるがフィード API がないクラスター
+- **Container Thread Pools (document-api only)** — フィード専用クラスター
+
+分類は自動です: 隠し変数がケースごとのクラスターリストを導出するため、特定のデプロイメントに関連する行のみが描画されます。各プールには 3 つのパネルがあります — **Utilization**、**Work Queue Size**、**Work Queue Utilization** — 平均は緑の実線、最大値は黄色の破線で表示されます。
+
+- **Utilization** — プールサイズに対するアクティブなスレッドの割合
+- **Work queue size** — スレッドを待っているタスク数。デフォルトプールは同期キュー(容量 0)を使用するためバッファリングはなく、利用可能なスレッドがなければタスクは拒否されます。
+- **Queue utilization** — 構成されたキュー容量のうち使用されている割合(有界キューを持つスレッドプールでのみ意味を持ちます)
+
+#### JVM メモリーの内訳
+
+<Frame>
+![JVM メモリーの内訳: ヒープ、ダイレクト、ネイティブ、GC](/assets/img/monitoring-jvm-memory.png)
+</Frame>
+
+Resources タブの JVM 行は、コンテナーメモリーの 3 つのレイヤーを分けて表示します:
+
+- **JVM Heap Usage** — Java オブジェクト(サーチャー、ドキュメントプロセッサー、キャッシュ)
+- **JVM Direct Memory** — NIO バッファー、Netty プール
+- **JVM Native Memory** — JNI アロケーション。ONNX エンベッダーの作業メモリーや、構成されている場合はローカル LLM の KV キャッシュおよび計算バッファーを含みます
+
+ノード全体のメモリーが高いのにヒープとダイレクトが正常に見える場合、たいていはネイティブレイヤーが原因です。これはエンベッダーやローカル LLM コンポーネントを実行するコンテナーノードでよくあります: モデルの重みはメモリーマップされて一部のみが常駐しますが、KV キャッシュと計算バッファーはネイティブメモリーとして事前に確保されます。
+
+### Health タブ
+
+Health タブは、クラスターの安定性とデータ整合性を、コンテント・クラスターごとにグループ化して追跡します。
+
+#### クラスター状態
+
+ノードは次の状態に分類されます: **up**(稼働中)、**down**(到達不能)、**initializing**(起動中)、**maintenance**(一時的に離脱)、**retired**(削除中)。通常運用時: すべて up、down はゼロ。[コンテントノードの状態](/ja/content/content-nodes)を参照してください。
+
+#### データ整合性
+
+- **Buckets Out of Sync** — まだレプリケーション/整合が完了していない[データバケット](/ja/content/buckets)の割合。定常状態では 0% であるべきです。スケーリング、再起動、障害の際にはゼロ以外になります。
+- **Merge Pending** — キューに入っているバケットマージ操作。データ再分配中は高くなります。
+
+スケーリングイベントの後は、同期していないバケットや保留中のマージが発生することが想定されます。これらはゼロに収束するはずです。収束しない場合は調査してください。
+
+#### 安定性
+
+- **Service Restarts** — クラスターごとの累積再起動数。増加はプロセスのクラッシュを示します。
+- **Core Dumps** — 常にゼロであるべきです。
+
+どちらのシグナルも、相互に補完する 3 つの形で表示されます: このタブのクラスターごとの時系列(履歴のコンテキスト用)、Overview タブの [Health Indicators 行](#health-indicators)の一目でわかるカウンター、そしてすべてのチャートに縦線として描画される *Service restart*/*Core dump* の[アノテーション](#dashboard-annotations)です。
+
+#### Feed Resource Limits
+
+構成された制限に対するメモリーとディスクの使用率を表示します。使用率が制限を超えると、[フィードがブロックされます](/ja/writing/feed-block)。ダッシュボードには Resource Limits Reference パネル(折りたたみ)があり、デフォルトの制限(ディスク 80%、メモリー 80%)、ブロックの仕組み、および対処方法が説明されています。
+
+### よくあるワークフロー
+
+#### 「クエリーレイテンシーが増加した」
+
+<Steps>
+<Step>
+Overview: レイテンシーの増加を確認し、QPS も変化したかを確認します。
+</Step>
+<Step>
+Query: どのパーセンタイルが最も増加しましたか?(avg vs p95 vs p99)
+</Step>
+<Step>
+Query → Rank Profile: 特定のクエリータイプだけか、それとも全体か?
+</Step>
+<Step>
+Resources: CPU、JVM GC オーバーヘッド。
+</Step>
+<Step>
+Content Node: match エグゼキューターの使用率、キューサイズは増加していますか?
+</Step>
+</Steps>
+
+#### 「フィードが遅い / フィードがブロックされている」
+
+<Steps>
+<Step>
+Overview: フィードレイテンシーとフィード操作レートを確認します。
+</Step>
+<Step>
+Feed: どのレイヤーでレイテンシーが増加していますか?
+</Step>
+<Step>
+Health: フィードはブロックされていますか? リソース制限を確認します。
+</Step>
+<Step>
+Resources: ディスクとメモリーの使用率、CPU IOWait。
+</Step>
+<Step>
+Content Node: field writer の飽和度、filestor キュー、アクティブなメンテナンスジョブ。
+</Step>
+</Steps>
+
+#### 「スケールアップすべきか?」
+
+<Steps>
+<Step>
+Resources: ボトルネックとなっているリソースを特定します。
+</Step>
+<Step>
+Content Node: エグゼキューター使用率を確認します(計算リソースが律速になっていませんか?)。
+</Step>
+<Step>
+Per host ビュー: 負荷は均等に分散されていますか?
+</Step>
+<Step>
+[オートスケーリング](/ja/operations/autoscaling)を有効にするか、`services.xml` でリソースを調整します。
+</Step>
+<Step>
+体系的なキャパシティテストについては、[ベンチマークガイド](/ja/performance/benchmarking)を参照してください。
+</Step>
+</Steps>
+
+## レイテンシートラッキング
+
+混在した負荷を持つクラスターでレイテンシーをモニタリングする場合、[rank profiles](/ja/basics/ranking#rank-profiles) を使って負荷を分離すると便利です。例として、あるアプリケーションでユーザークエリーと、エージェント的なバッチ指向のクエリーが混在しているとします。コンテナーレベルのクエリーレイテンシーを追跡すると、次のようになるかもしれません:
+
+<Frame>
+![全体のクエリーレイテンシーのチャート](/assets/img/latency-total.png)
+</Frame>
+
+コンテントノードレベルのメトリクスをランキングプロファイルごとに分けて見ると、次のようになります:
+
+<Frame>
+![rank profile ごとのクエリーレイテンシーのチャート](/assets/img/latency-rank-profile.png)
+</Frame>
+
+ここから、クエリーレイテンシーは使用される rank profile によって変動することがわかります。モニタリングシステムにエクスポートすべき関連メトリクスには次のものがあります:
+
+- [content.proton.documentdb.matching.rank\_profile.queries](/ja/reference/operations/metrics/searchnode#content_proton_documentdb_matching_rank_profile_queries)
+- [content.proton.documentdb.matching.rank\_profile.docs\_matched](/ja/reference/operations/metrics/searchnode#content_proton_documentdb_matching_rank_profile_docs_matched)
+- [content.proton.documentdb.matching.rank\_profile.query\_latency](/ja/reference/operations/metrics/searchnode#content_proton_documentdb_matching_rank_profile_query_latency)
+- [content.proton.documentdb.matching.rank\_profile.rerank\_time](/ja/reference/operations/metrics/searchnode#content_proton_documentdb_matching_rank_profile_rerank_time)
+
+まとめると、レイテンシーをデバッグする際は、rank profile ごとに次の変化を確認してください:
+
+- クエリーレートは増加しましたか?
+- マッチまたはランキングされたドキュメント数は変化しましたか?
+
+上記のメトリクスは、利用可能なメトリクスの一部です。クエリーのクラスごとに[クエリープロファイル](/ja/reference/querying/query-profiles)を設定し、各クエリープロファイルで異なる rank profile を選択するのがよい方法です。これにより、特定のクエリークラスの rank profile を設定変更だけで切り替えられます(クライアントを変更する必要はありません) - 良い例として、過負荷時に使用する軽量な rank profile を用意しておくことが挙げられます。これにより、rank profile ごとに個々のクエリークラスを追跡しやすくなります。
+
+## Prometheus メトリクス API
+
+Prometheus メトリクスは `$ENDPOINT/prometheus/v1/values` にあります:
+
+```bash
+$ curl -s --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  'https://b6718765.b68a1234.z.vespa-app.cloud/prometheus/v1/values'
+```
+
+このメトリクスは、Grafana Cloud やセルフホストの Grafana インスタンスなどに取り込むことができます。詳細は [Vespa メトリクスドキュメント](/ja/reference/operations/metrics/vespa-metric-set)を参照してください。
+
+## Grafana の使用
+
+このセクションでは、Prometheus API を使用して Vespa のメトリクスを取り込むように Grafana をセットアップする方法を説明します。
+
+### 1. Prometheus の設定
+
+Prometheus は `prometheus.yml` で設定します。サンプル設定は [prometheus](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/monitoring/album-recommendation-monitoring/prometheus) にあります。`prometheus-cloud.yml` を参照してください。これは任意の Vespa Cloud インスタンスで簡単にセットアップできるように設計されています。`<Endpoint>` と `<SERVICE_NAME>` を、それぞれアプリケーションのエンドポイントとサービス名に置き換えてください。加えて、エンドポイントへのデータプレーンで使用する秘密鍵と公開証明書のパスを指定する必要があります - [セキュリティ](/ja/security/guide)を参照してください。その後、この設定ファイルを使用するように Prometheus インスタンスを設定します。これで Prometheus インスタンスが Vespa Cloud からメトリクスの取得を開始します。Prometheus インスタンスを複数のサービスで使用している場合は、Vespa 用のターゲット設定を scrape\_configs に追記してください。
+
+### 2. Grafana の設定
+
+さらなる設定のベースラインとして、[provisioning フォルダー](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/monitoring/album-recommendation-monitoring/grafana/provisioning)を使用してください。
+
+provisioning フォルダーには、Grafana をローカルで設定するのに役立つ複数のファイルがあります。これらはデフォルト設定の良い例として機能しますが、最も重要なのは `Vespa-Engine-Advanced-Metrics-External.json` という名前のファイルです。これは、Vespa チームがパフォーマンスのモニタリングに使用しているメトリクスに基づいたデフォルトダッシュボードです。
+
+サイドバーの + ボタンをクリックして import に進みます。ファイルを Grafana インスタンスにアップロードします。これでダッシュボードが自動的に読み込まれて使用可能になるはずです。この時点では、データソースがまだ設定されていないため、データは表示されません。
+
+### 3. Grafana のデータソース
+
+可視化のためには、Prometheus データソースを Grafana インスタンスに追加する必要があります。左側の歯車をクリックし、「Data Sources」をクリックします。「Add data source」をクリックし、リストから Prometheus を選択します。Prometheus インスタンスの URL を、接続に適切なバインディングとともに追加します。バインディングの設定は、Prometheus インスタンスのホスティング方法によって異なります。設定内容を入力したら、下部の Save & Test をクリックし、Grafana が「Data source is working」と表示することを確認してください。
+
+データフローを検証するには、左側のダッシュボードシンボル(4 つのブロック)をクリックして manage をクリックし、Vespa Metrics をクリックして Vespa Metrics ダッシュボードに戻ります。Grafana ダッシュボードにデータが表示されるはずです。データが表示されない場合は、いずれかのデータセットを編集し、正しいデータソースが選択されていることを確認してください。ダッシュボードが期待しているデータソース名が、実際のデータソース名と異なっている可能性があります。それでもデータが表示されない場合は、Vespa インスタンスが使用されていないか、設定のどこかが間違っていることを意味します。
+
+## AWS Cloudwatch の使用
+
+Vespa アプリケーションのメトリクスを AWS Cloudwatch に取り込むには、AWS Lambda のセットアップ方法について [metrics-emitter](https://github.com/vespa-engine/metrics-emitter/tree/master/cloudwatch) のドキュメントを参照してください。
+
+## アラート
+
+[Vespa Grafana Terraform テンプレート](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/monitoring/vespa-grafana-terraform)は、一連のダッシュボードとアラートを提供します。別のモニタリングサービスを使用していて、同等のアラートセットをセットアップしたい場合は、次の表に従ってください:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>メトリクス名</th>
+      <th>しきい値</th>
+      <th>ディメンションの集約</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="/ja/reference/operations/metrics/searchnode#content_proton_resource_usage_disk" aria-label="content_proton_resource_usage_disk_average">content_proton_resource_usage_disk_average</a></td>
+      <td><code>{`>`}</code> 0.9</td>
+      <td>max by(applicationId, clusterId, zone)</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/reference/operations/metrics/searchnode#content_proton_resource_usage_memory" aria-label="content_proton_resource_usage_memory_average">content_proton_resource_usage_memory_average</a></td>
+      <td><code>{`>`}</code> 0.8</td>
+      <td>max by(applicationId, zone, clusterId)</td>
+    </tr>
+    <tr>
+      <td>cpu_util</td>
+      <td><code>{`>`}</code> 90</td>
+      <td>max by(applicationId, zone, clusterId)</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/reference/operations/metrics/searchnode#content_proton_resource_usage_feeding_blocked" aria-label="content_proton_resource_usage_feeding_blocked_last">content_proton_resource_usage_feeding_blocked_last</a></td>
+      <td><code>{`>=`}</code> 1</td>
+      <td>N/A</td>
+    </tr>
+  </tbody>
+</table>
+
+すべてのメトリクスは[デフォルトメトリクスセット](/ja/reference/operations/metrics/default-metric-set#metric-sets)のものです。メトリクスは [Prometheus メトリクス](/ja/reference/api/prometheus-v1#prometheus-v1-values) API の命名規則を使用しています。ディメンションの集約は任意ですが、アラートのノイズを減らせます - 例えば、クラスター全体が不調になった場合などです。すべてのアラートは、[prod 環境](/ja/operations/environments#prod)のゾーンでフィルターすることを推奨します。
+
+## Prometheus メトリクスのサンプル
+
+以下は、Vespa Cloud 上の最小構成アプリケーションに対する Prometheus メトリクスのサンプルリクエストとサンプルレスポンスです:
+
+
+```bash
+$ curl -s --cert data-plane-public-cert.pem --key data-plane-private-key.pem \
+  'https://b6718765.b68a1234.z.vespa-app.cloud/prometheus/v1/values'
+
+...
+jdisc_thread_pool_work_queue_size_min{threadpool="default-pool",zone="dev.aws-us-east-1c",applicationId="mytenant.myapp.default",serviceId="logserver-container",clusterId="admin/logserver",hostname="h97490a.dev.us-east-1c.aws.vespa-cloud.net",vespa_service="vespa_logserver_container",} 0.0 1733139324000
+jdisc_thread_pool_work_queue_size_min{threadpool="default-handler-common",zone="dev.aws-us-east-1c",applicationId="mytenant.myapp.default",serviceId="logserver-container",clusterId="admin/logserver",hostname="h97490a.dev.us-east-1c.aws.vespa-cloud.net",vespa_service="vespa_logserver_container",} 0.0 1733139324000
+# HELP content_proton_documentdb_matching_rank_profile_rerank_time_average 
+# TYPE content_proton_documentdb_matching_rank_profile_rerank_time_average untyped
+content_proton_documentdb_matching_rank_profile_rerank_time_average{rankProfile="rank_albums",documenttype="music",zone="dev.aws-us-east-1c",applicationId="mytenant.myapp.default",serviceId="searchnode",clusterId="content/music",hostname="h104562a.dev.us-east-1c.aws.vespa-cloud.net",vespa_service="vespa_searchnode",} 0.0 1733139324000
+content_proton_documentdb_matching_rank_profile_rerank_time_average{rankProfile="unranked",documenttype="music",zone="dev.aws-us-east-1c",applicationId="mytenant.myapp.default",serviceId="searchnode",clusterId="content/music",hostname="h104562a.dev.us-east-1c.aws.vespa-cloud.net",vespa_service="vespa_searchnode",} 0.0 1733139324000
+content_proton_documentdb_matching_rank_profile_rerank_time_average{rankProfile="default",documenttype="music",zone="dev.aws-us-east-1c",applicationId="mytenant.myapp.default",serviceId="searchnode",clusterId="content/music",hostname="h104562a.dev.us-east-1c.aws.vespa-cloud.net",vespa_service="vespa_searchnode",} 0.0 1733139324000
+...
+```
+
+関連するラベルには次のものがあります:
+
+- `chain` 一連のクエリーリクエストに使用される、コンテナー内のサーチチェーンの名前です。これは通常、各チェーンの時間経過に伴うレイテンシーやクエリー数などのメトリクスを個別に取得するために使用されます。
+- `documenttype` コンテント・クラスターで一連のクエリーが実行されるドキュメントタイプの名前です。これは通常、各チェーンの時間経過に伴うレイテンシーやクエリー数など、コンテントレイヤーのメトリクスを個別に取得するために使用されます。
+- `groupId` メトリクスの測定が行われるクラスターグループの id です。これは通常、コンテント・クラスター内のグループごとに個別のメトリクス集計を取得するために使用されます。このラベルは、複数のコンテントグループを実行しているコンテント・クラスターからのメトリクスで最も関連性があります。[Content Cluster Elasticity](/ja/content/elasticity) を参照してください。値は group 0、group 1、group 2 などの形式です。
+- `rankProfile` このラベルは、コンテント・クラスターからのメトリクスのうち、名前が `content_proton_documentdb_matching_rank_profile_` で始まる一部のメトリクスに存在します。このラベルは通常、複数の rank profile を使用していて、異なる rank profile 間のパフォーマンスの違いを分析したい場合や、特定の種類のパフォーマンス問題をより深く理解して候補を絞り込む必要がある場合に使用されます。
+- `source` 障害が発生したコンテント・クラスターごとにクエリー障害を分類するために、コンテナーのメトリクスに適用されるラベルです。
+
+異なる種類のクエリーを区別するためにラベルをどう使うかは、使用しているオブザーバビリティバックエンドによりますが、通常は、クエリーレイテンシーとクエリーボリュームの加重平均を計算し、システムのパフォーマンスとボトルネックをより深く理解するために、関連するラベルでグラフを分割します。
+
+コンテナーレベルのメトリクスでは `chain` ラベルを使用して異なるクエリーストリームを区別し、コンテントレベルでは同様に `rankProfile` ラベルを使用します。

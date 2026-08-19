@@ -1,0 +1,76 @@
+---
+title: "Azure での Vespa Cloud Enclave をはじめる"
+sidebarTitle: "Azure をはじめる"
+---
+
+Vespa Cloud Enclave のセットアップには、以下が必要です:
+
+<Steps>
+<Step>
+[Vespa Cloud](https://console.vespa-cloud.com) での登録、または既存の Vespa テナントの利用。
+</Step>
+<Step>
+サブスクリプションに必要な Azure リソースをプロビジョニングするための [Terraform](https://www.terraform.io/) 設定の実行。
+</Step>
+<Step>
+Vespa Cloud への Azure サブスクリプションの登録。
+</Step>
+<Step>
+Vespa アプリケーションのデプロイ。
+</Step>
+</Steps>
+
+### 1. Vespa Cloud テナントのセットアップ
+
+[Vespa Cloud](https://console.vespa-cloud.com) で登録するか、既存の Vespa テナントを使用します。テナントは[有料プラン](https://vespa.ai/pricing/)である必要があることに注意してください。
+
+### 2. Azure サブスクリプションの設定
+
+Vespa Cloud Enclave に使用する Azure サブスクリプションを選択します。
+
+<Note>
+**Note:** 
+
+Vespa Cloud Enclave には*専用の*サブスクリプションを使用することを推奨します。このサブスクリプション内のリソースは Vespa Cloud によって完全に管理されます。
+</Note>
+
+1 つのサブスクリプションですべての Vespa アプリケーションをホストできます。複数の Vespa テナントや Azure サブスクリプションは必要ありません。
+
+サブスクリプションは、Vespa アプリケーションをデプロイできるように準備しておく必要があります。Vespa チームが公開している [modules](https://registry.terraform.io/modules/vespa-cloud/enclave/azure/latest) を使い、[Terraform](https://www.terraform.io/) で必要なリソースをセットアップしてください。
+
+始めるにあたっては、[example](https://github.com/vespa-cloud/terraform-azure-enclave/blob/main/examples/basic/main.tf) を自由にご利用ください。
+
+Terraform をご存じない方へ: Terraform は、AWS、Azure、GCP などのさまざまなクラウドプロバイダーにおけるリソースとその設定を管理するためのツールです。Terraform は [Get Started - Azure](https://developer.hashicorp.com/terraform/tutorials/azure-get-started) のチュートリアルを公開しています。また、enclave のユーザーには、[CI/CD](https://developer.hashicorp.com/terraform/tutorials/automation/automate-terraform) に関する Terraform の推奨事項を読み、それに従うことを強くお勧めします。
+
+当社が提供する Terraform モジュールは、Vespa Cloud がお客様のアプリケーションの運用を自動化するために新たに必要となるリソースや追加のパーミッションを加えるべく、定期的に更新されます。enclave のアプリケーションで新機能を使用するには、最新リリースで terraform テンプレートを再適用する必要があります。新しいリリースが利用可能になると、[通知システム](/ja/operations/notifications)がお知らせします。
+
+### 3. オンボーディング
+
+[support@vespa.ai](mailto:support@vespa.ai) に連絡し、Terraform の適用後の `enclave_config` の出力を提供してください。[Outputs](https://github.com/vespa-cloud/terraform-azure-enclave?tab=readme-ov-file#outputs) を参照してください。`enclave_config` には、Vespa Cloud Enclave を利用するためにオンボーディングすべき Vespa テナントが含まれます。さらに、Azure テナント ID、サブスクリプション ID、Terraform が作成した Athenz アイデンティティのクライアント ID も含まれます。
+
+### 4. Vespa アプリケーションのデプロイ
+
+デフォルトでは、すべてのアプリケーションは Vespa Cloud のアカウント内のリソースにデプロイされます。代わりにお客様の Azure enclave サブスクリプションにデプロイするには、[deployment.xml](/ja/reference/applications/deployment) を更新して、ステップ 2 のサブスクリプション ID を参照するようにします:
+
+```bash
+<deployment version="1.0" cloud-account="azure:11111111-1111-1111-1111-111111111111">
+    <dev />
+</deployment>
+```
+
+参考になるリソースとして、[はじめに](/ja/basics/deploy-an-application)と [Vespa Cloud への移行](/ja/learn/migrating-to-cloud)があります。*deployment.xml* は *services.xml* と同じ場所に置いてください。
+
+## 次のステップ
+
+[dev](/ja/operations/environments#dev) 環境へのデプロイが成功したら、設定を反復的に改善して、Vespa 上でアプリケーションを実装していきます。*dev* 環境は迅速なデプロイサイクルを備えており、この作業に最適です。
+
+プロダクションでのサービス提供には、[prod](/ja/operations/environments#prod) 環境にデプロイします。[プロダクション・デプロイメント](/ja/reference/applications/deployment)の手順に従ってください。
+
+## Enclave の廃止
+
+Vespa Cloud Enclave システムを廃止するには、上記の手順を逆の順序で行います:
+
+1. [アプリケーションのアンデプロイ](/ja/operations/deleting-applications)
+2. Terraform の変更のアンデプロイ
+
+Vespa アプリケーションを先にアンデプロイすることが重要です。Terraform を実行した後は、Vespa Cloud は割り当てられたリソースを管理できないため、これらはご自身でクリーンアップする必要があります。

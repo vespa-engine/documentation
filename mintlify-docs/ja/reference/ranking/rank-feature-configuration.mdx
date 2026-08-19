@@ -1,0 +1,270 @@
+---
+title: "ランク・フィーチャーの設定"
+---
+
+一部の[ランク・フィーチャー](/ja/reference/ranking/rank-features)では、フィーチャーの計算方法に関する設定変数を設定できます。フィールドまたは属性（attribute）ごとのフィーチャーについては、変数はフィールド/属性ごとに個別に設定します。
+
+## プロパティ
+
+ランク・フィーチャーの設定プロパティは、ランク・プロファイルに以下を追加することで設定します:
+
+```js
+rank-properties {
+    <featurename>.<configuration-property>: <value>
+}
+```
+
+ここで、_\<featurename\>_はフィーチャー・クラスの名前（最初のドットまでのフィーチャー名）、_\<configuration-property\>_は以下のリストにある、そのフィーチャーに該当するプロパティ、_\<value\>_は数値または引用符で囲まれた文字列です。例:
+
+```js
+rank-profile my-profile inherits default {
+  rank-properties {
+    fieldMatch(title).maxAlternativeSegmentations: 10
+    fieldMatch(title).maxOccurrences: 5
+    bm25(title).k1: 1.5
+    bm25(title).b: 0.85
+    bm25(title).averageFieldLength: 200
+    elementwise(bm25(content),x,float).k1: 1.4
+    elementwise(bm25(content),x,float).b: 0.87
+    elementwise(bm25(content),x,float).averageElementLength: 50
+    elementSimilarity(tags).output.sumWeightSquared: "sum((0.35*p+0.15*o+0.30*q+0.20*f)*w^2)"
+    elementSimilarity(tags).output.avgWeightSquared: "avg((0.35*p+0.15*o+0.30*q+0.20*f)*w^2)"
+    elementSimilarity(tags).output.sumWeight: "sum(w)"
+  }
+}
+```
+
+以下のプロパティのリストにないフィーチャーについては、別の構文でランク・プロパティを設定できます。たとえば、_nativeFieldMatch_フィーチャーの_my\_field_に対して_averageFieldLength_を設定するには、次のようにします:
+
+```bash
+nativeFieldMatch.averageFieldLength.my_field: 512
+```
+
+ランク・プロファイルは、ランク・プロファイルの他の内容と同様に継承されます。
+
+## プロパティのリスト
+
+適用対象のフィーチャーごとのランク・プロパティの一覧（完全なリストではありません）。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>フィーチャー</th>
+      <th>パラメーター</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>term</td>
+      <td>numTerms</td>
+      <td>5</td>
+      <td>サマリー内のランク・フィーチャー・ダンプにこれが含まれるタームの数</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/reference/ranking/rank-features#bm25" aria-label="bm25(*fieldname*)">bm25(&#42;fieldname&#42;)</a></td>
+      <td>k1</td>
+      <td>1.2</td>
+      <td>単一のクエリー・タームがドキュメントのスコアに与える影響を制限するために使用されます。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>b</td>
+      <td>0.75</td>
+      <td>平均フィールド長と比較したフィールド長の影響を制御するために使用されます。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>averageFieldLength</td>
+      <td><a href="/ja/reference/applications/services/content#document" aria-label="インデックス検索">インデックス検索</a>ではコンテント・ノードごと、フィールドごとに自動計算され、<a href="/ja/performance/streaming-search" aria-label="ストリーミング検索">ストリーミング検索</a>では100です。</td>
+      <td>平均フィールド長（単語数）に明示的な値を設定するために使用されます。<a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="ストリーミング検索">ストリーミング検索</a>を使用する場合、インデックス構造は生成されず、平均フィールド長は自動計算されません。代わりに、より正確なBM25スコアのために平均フィールド長を手動で設定してください。</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/reference/ranking/rank-features#elementwise-bm25" aria-label="elementwise(bm25(*fieldname*,x,*celltype*))">elementwise(bm25(&#42;fieldname&#42;,x,&#42;celltype&#42;))</a></td>
+      <td>k1</td>
+      <td>1.2</td>
+      <td>単一のクエリー・タームがドキュメントのスコアに与える影響を制限するために使用されます。デフォルトの前に<code>{`bm25(fieldname).k1`}</code>がフォールバックとして使用されることに注意してください。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>b</td>
+      <td>0.75</td>
+      <td>平均要素長と比較した要素長の影響を制御するために使用されます。デフォルトの前に<code>{`bm25(fieldname).b`}</code>がフォールバックとして使用されることに注意してください。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>averageElementLength</td>
+      <td><a href="/ja/reference/applications/services/content#document" aria-label="インデックス検索">インデックス検索</a>ではコンテント・ノードごと、フィールド要素ごとに自動計算され、<a href="/ja/performance/streaming-search" aria-label="ストリーミング検索">ストリーミング検索</a>では100です。</td>
+      <td>平均要素長（単語数）に明示的な値を設定するために使用されます。<a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="ストリーミング検索">ストリーミング検索</a>を使用する場合、インデックス構造は生成されず、平均要素長は自動計算されません。代わりに、より正確なelementwise BM25スコアのために平均要素長を手動で設定してください。また、複数ノードのインデックス検索でノード間で一貫したスコアリングを得るためにも手動で設定するべきです。デフォルトの前に<code>{`bm25(fieldname).averageFieldLength`}</code>がフォールバックとして使用されることに注意してください。</td>
+    </tr>
+    <tr>
+      <td>nativeRank</td>
+      <td></td>
+      <td></td>
+      <td><a href="/ja/reference/ranking/nativerank#configuration-properties" aria-label="nativeRankの設定">nativeRankの設定</a>のドキュメントを参照してください</td>
+    </tr>
+    <tr>
+      <td>nativeFieldMatch</td>
+      <td></td>
+      <td></td>
+      <td><a href="/ja/reference/ranking/nativerank#configuration-properties" aria-label="nativeRankの設定">nativeRankの設定</a>のドキュメントを参照してください</td>
+    </tr>
+    <tr>
+      <td>nativeProximity</td>
+      <td></td>
+      <td></td>
+      <td><a href="/ja/reference/ranking/nativerank#configuration-properties" aria-label="nativeRankの設定">nativeRankの設定</a>のドキュメントを参照してください</td>
+    </tr>
+    <tr>
+      <td>fieldMatch</td>
+      <td>proximityLimit</td>
+      <td>10</td>
+      <td>セグメント内で許容される最大のギャップ。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>proximityTable</td>
+      <td>1/(2^(i/2)/3) for i in 9..0 followed by 1/2^(i/2) for i in 0..10</td>
+      <td>さまざまな距離の分離の重要度を決定する近接テーブル。テーブルのサイズはproximityLimit&#42;2+1でなければならず、前半は逆方向の距離用です。テーブルには0から1の間の値のみを含めなければなりません。1は「完璧」、0は「最悪」を意味します。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>maxAlternativeSegmentations</td>
+      <td>10000</td>
+      <td>最初に見つかったセグメンテーションに加えて許容される&#42;代替&#42;セグメンテーションの最大数。これにより、フィールド内の遠くにあり、クエリーの後方から始まるセグメントに対する反復は考慮されにくくなります。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>maxOccurrences</td>
+      <td>100</td>
+      <td>各単語の出現回数はこの値に対して正規化されます。これは、タームの追加の出現がもはや実質的な意味を持たなくなる回数として設定するべきです。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>proximityCompletenessImportance</td>
+      <td>0.9</td>
+      <td><code>{`match`}</code>および<code>{`completeness`}</code>メトリクスにおいて、クエリー完全性に対するフィールド完全性の重要度を決定する0から1の間の数値。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>relatednessImportance</td>
+      <td>0.9</td>
+      <td><code>{`match`}</code>メトリクスで使用される関連性（relatedness）の正規化された重要度。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>earlinessImportance</td>
+      <td>0.05</td>
+      <td><code>{`match`}</code>メトリクスにおける、segmentProximityImportance、occurrenceImportance、proximityCompletenessImportanceと比較した、マッチがクエリーの早い位置で発生することの重要度。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>segmentProximityImportance</td>
+      <td>0.05</td>
+      <td><code>{`match`}</code>メトリクスにおける、earlinessImportance、occurrenceImportance、proximityCompletenessImportanceと比較した、複数のセグメントが互いに近接していることの重要度。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>occurrenceImportance</td>
+      <td>0.05</td>
+      <td><code>{`match`}</code>メトリクスにおける、earlinessImportance、segmentProximityImportance、proximityCompletenessImportanceと比較した、クエリー・タームの出現回数が多いことの重要度。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>fieldCompletenessImportance</td>
+      <td>0.05</td>
+      <td><code>{`match`}</code>および<code>{`completeness`}</code>メトリクスにおいて、クエリー完全性に対するフィールド完全性の重要度を決定する0から1の間の数値。</td>
+    </tr>
+    <tr>
+      <td>fieldTermMatch</td>
+      <td>numTerms</td>
+      <td>5</td>
+      <td>サマリー内のランク・フィーチャー・ダンプにこれが含まれるタームの数</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>numTerms.&#42;fieldName&#42;</td>
+      <td>5</td>
+      <td>指定されたフィールドについて、サマリー内のランク・フィーチャー・ダンプにこれが含まれるタームの数。プロパティ名として<code>{`fieldTermMatch(fieldName).numTerms`}</code>を使用して設定することもできます。</td>
+    </tr>
+    <tr>
+      <td>elementCompleteness</td>
+      <td>fieldCompletenessImportance</td>
+      <td>0.5</td>
+      <td>値を高くするとフィールド完全性が優先され、低くするとクエリー完全性が優先されます。このパラメーターの調整は、どの要素が最良として選択されるかにも影響します。</td>
+    </tr>
+    <tr>
+      <td>elementSimilarity</td>
+      <td>output.default</td>
+      <td>"max( (0.35&#42;p + 0.15&#42;o + 0.30&#42;q + 0.20&#42;f) &#42; w)"</td>
+      <td>デフォルトの出力をどのように計算するかを記述します。値は<code>{`aggregator(expression)`}</code>の形式でなければなりません。expressionは、クエリーと、クエリーにマッチしたフィールド内の個々の要素との間の低レベルの類似度指標を組み合わせるために使用されます。aggregatorは、マッチした要素全体でexpressionの出力を集約するために使用されます。利用可能なaggregatorは<code>{`max`}</code>、<code>{`avg`}</code>、<code>{`sum`}</code>です。利用可能なexpressionの演算子は<code>{`+`}</code>、<code>{`-`}</code>、<code>{`*`}</code>、<code>{`/`}</code>、<code>{`^`}</code>です。括弧を使用してデフォルトの演算子の優先順位をオーバーライドできます。expressionは<code>{`"expression"`}</code>のように引用符で囲む必要があることに注意してください。<br/><br/>終端記号は数値または以下の記号のいずれかです:<br/><br/> | 記号 | 意味 | <br/> | -------- | ---------------------------- | <br/> | &#42;&#42;p&#42;&#42; | 正規化された近接度指標 | <br/> | &#42;&#42;o&#42;&#42; | 正規化された順序指標 | <br/> | &#42;&#42;q&#42;&#42; | 正規化されたクエリー・カバレッジ | <br/> | &#42;&#42;f&#42;&#42; | 正規化されたフィールド・カバレッジ | <br/> | &#42;&#42;w&#42;&#42; | 要素の重み | </td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>output.name</td>
+      <td>N/A</td>
+      <td><code>{`name`}</code>という追加のフィーチャー出力を定義します。値は出力の計算方法を記述し、上記の<code>{`default`}</code>出力と同じ構文を持ちます。例: <code>{`elementSimilarity(tags).sumW`}</code>としてアクセスできる新しい出力を作成します:<br/><code>{`elementSimilarity(tags).output.sumW: "sum(w)"`}</code></td>
+    </tr>
+    <tr>
+      <td>attributeMatch</td>
+      <td>fieldCompletenessImportance</td>
+      <td>0.05</td>
+      <td><code>{`match`}</code>および<code>{`completeness`}</code>メトリクスにおいて、クエリー完全性に対するフィールド完全性の重要度を決定する0から1の間の数値。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>maxWeight</td>
+      <td>256</td>
+      <td><code>{`attributeMatch(name).normalizedWeight`}</code>を計算する際の最大の重み。これより高い重みは、このフィーチャーに影響を与えません。</td>
+    </tr>
+    <tr>
+      <td>closeness</td>
+      <td>maxDistance</td>
+      <td>9013305.0</td>
+      <td><code>{`closeness(name)`}</code>を計算する際の最大距離。これより大きい距離は、このフィーチャーに影響を与えません。デフォルトは約1000 kmです（1 kmは約9013.305マイクロ度）。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>scaleDistance</td>
+      <td>45066.525</td>
+      <td><code>{`closeness(name).logscale`}</code>を計算する際の距離の基本スケール。デフォルトは約5 kmです。<br/>&#42;&#42;非推奨:&#42;&#42; 代わりに<code>{`halfResponse`}</code>を使用してください</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>halfResponse</td>
+      <td>593861.739</td>
+      <td><code>{`closeness(name).logscale`}</code>を計算する際に出力が0.5になるべき距離。デフォルトは約65.89 kmです（[1, maxDistance/2&gt;の範囲でなければなりません）。logscale関数のダイナミクスの半分が使用される距離範囲を微調整するには、このパラメーターを使用してください。</td>
+    </tr>
+    <tr>
+      <td>freshness</td>
+      <td>maxAge</td>
+      <td>3&#42;30&#42;24&#42;60&#42;60</td>
+      <td><code>{`freshness(name)`}</code>を計算する際の最大経過時間（秒）。これより古い経過時間は、このフィーチャーに影響を与えません。デフォルトは約3か月です。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>halfResponse</td>
+      <td>7&#42;24&#42;60&#42;60</td>
+      <td><code>{`freshness(name).logscale`}</code>を計算する際に出力が0.5になるべき経過時間（秒）。デフォルトは7日です（[1, maxAge/2&gt;の範囲でなければなりません）。logscale関数のダイナミクスの半分が使用される経過時間範囲を微調整するには、このパラメーターを使用してください。</td>
+    </tr>
+    <tr>
+      <td>random</td>
+      <td>seed</td>
+      <td>現在時刻（マイクロ秒）</td>
+      <td>乱数シード。</td>
+    </tr>
+    <tr>
+      <td>randomNormal</td>
+      <td>seed</td>
+      <td>現在時刻（マイクロ秒）</td>
+      <td>randomNormalの乱数シード。</td>
+    </tr>
+    <tr>
+      <td>foreach</td>
+      <td>maxTerms</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>

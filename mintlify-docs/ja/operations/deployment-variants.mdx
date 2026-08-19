@@ -1,0 +1,150 @@
+---
+title: "アプリケーション、インスタンス、リージョン、クラウド、環境のバリアント"
+sidebarTitle: "デプロイのバリアント"
+---
+
+デプロイのプロパティに応じて変化する構成を作成できると便利な場合があります。例えば、[Searcher](/ja/applications/searchers) が使用するサービスのリージョン固有のエンドポイントを設定したり、「beta」インスタンスには小さいクラスターを使用したり、同じアプリケーション・パッケージを複数のアプリケーションで共有する際に構成を変えたりする場合です。
+
+これは [services.xml](#services.xml-variants) と[クエリープロファイル](#query-profile-variants)の両方でサポートされています。
+
+## services.xml のバリアント
+
+[services.xml](/ja/reference/applications/services/services) ファイルは、異なる *tags*、*applications*、*instances*、*environments*、*clouds*、*regions* ごとに異なる構成設定をサポートしています。これを使用するには、*deploy* ネームスペースをインポートします:
+
+```xml
+<services version="1.0" xmlns:deploy="vespa">
+```
+
+deploy ディレクティブは、どのタグで、そしてどのアプリケーション、インスタンス、環境、クラウド、および/または[リージョン](/ja/operations/zones)で XML 要素を含めるかを指定するために使用します:
+
+```xml expandable
+<content version="1.0">
+    <min-redundancy>2</min-redundancy>
+    <documents>
+        <document type="music.sd" mode="index" />
+    </documents>
+    <nodes deploy:environment="dev"
+           count="1" />
+    <nodes deploy:environment="prod"
+           deploy:region="aws-us-east-1c"
+           count="20">
+        <resources vcpu="16.0" memory="128Gb" disk="3750Gb"/>
+    </nodes>
+    <nodes deploy:cloud="gcp" count="10" />
+    <nodes deploy:environment="prod"
+           deploy:region="aws-us-west-2a"
+           count="40">
+        <resources vcpu="8.0" memory="64Gb" disk="3750Gb"/>
+    </nodes>
+    <nodes deploy:environment="prod"
+           deploy:region="aws-ap-northeast-1a"
+           deploy:instance="alpha"
+           count="4">
+        <resources vcpu="16.0" memory="256Gb" disk="3750Gb"/>
+    </nodes>
+    <nodes deploy:application="my-app"
+           deploy:environment="prod"
+           count="30">
+        <resources vcpu="16.0" memory="128Gb" disk="3750Gb"/>
+    </nodes>
+    <nodes deploy:tags="myTag1 myTag2" count="8" />
+</content>
+```
+
+上記の例は、デプロイ先に応じて異なるノード数・構成を設定しています。このアプリケーションを *dev* 環境にデプロイすると、次のようになります:
+
+```xml
+<content version="1.0">
+    <min-redundancy>2</min-redundancy>
+    <documents>
+        <document type="music.sd" mode="index" />
+    </documents>
+    <nodes count="1" />
+</content>
+```
+
+一方、`aws-us-west-2a` では次のようになります:
+
+```xml
+<content version="1.0">
+    <min-redundancy>2</min-redundancy>
+    <documents>
+        <document type="music.sd" mode="index" />
+    </documents>
+    <nodes count="40">
+        <resources vcpu="8.0" memory="64Gb" disk="3750Gb"/>
+    </nodes>
+</content>
+```
+
+これは、デプロイ先に応じてあらゆる構成を変更するために使用できます。
+
+`deploy` ディレクティブには一連のオーバーライド・ルールがあります:
+
+- より多くの条件を指定したディレクティブは、より少ない条件を指定したディレクティブをオーバーライドします。
+- ディレクティブは子要素に継承されます。
+- 同じ名前の複数の XML 要素が指定されている場合（例: search チェーンや docproc チェーンを指定する場合）、ディレクティブの適用時には、要素名とともに要素の *id* 属性または *idref* 属性が使用されます。
+
+一部のオーバーライドは、特定の環境ではデフォルトで適用されます。[環境](/ja/operations/environments)を参照してください。環境に対して明示的に行われたオーバーライドは、その環境のデフォルトをオーバーライドします。
+
+### 複数のターゲットの指定
+
+属性には、複数のタグ、アプリケーション、インスタンス、リージョン、環境を、スペース区切りで指定できます。
+
+`tags` はデフォルトでは production インスタンスにのみ適用され、要素のタグとインスタンスのタグが交差する場合にマッチすることに注意してください。他の環境でタグをマッチさせるには、その環境に対する明示的な `deploy:environment` ディレクティブもマッチする必要があります。構成を変化させたい複雑なインスタンス構造がある場合は、タグを使用してください。
+
+このネームスペースはあらゆる要素に適用できます。例:
+
+```xml
+<container id="default" version="1.0" deploy:environment="test staging prod">
+    <search>
+        <chain id="default" inherits="vespa">
+            <searcher bundle="basic-application" id="vespa.ai.ExampleSearcher">
+                <config name="example.message">
+                    <message>Hello from application config</message>
+                    <message deploy:region="aws-us-east-1c">Hello from east colo!</message>
+                </config>
+            </searcher>
+        </chain>
+    </search>
+</container>
+```
+
+上記では、`container` 要素は 3 つの環境に対してのみ構成されており（`dev` には適用されません）、リージョン `aws-us-east-1c` では構成が異なります。
+
+## クエリープロファイルのバリアント
+
+[クエリープロファイル](/ja/querying/query-profiles)は、[クエリープロファイル・バリアント](/ja/querying/query-profiles#query-profile-variants)を通じて、異なる *applications*、*instances*、*environments*、*regions* ごとに異なる構成設定をサポートしています。これにより、これらのデプロイ属性に応じて、クエリータイプごとに異なるクエリーパラメーターを設定できます。
+
+この機能を使用するには、`application`、`instance`、`environment`、`region` のいずれかをディメンション名とする通常のクエリープロファイル・バリアントを作成し、それによってクエリープロファイルを変化させます。例:
+
+```xml expandable
+<query-profile id="default">
+
+    <dimensions>application, instance, environment, region</dimensions>
+
+    <field name="a">My default value</field>
+
+    <!-- Value for (any deployment of) the beta instance -->
+    <query-profile for="*, beta">
+        <field name="a">My beta value</field>
+    </query-profile>
+
+    <!-- Value for (any) dev deployment -->
+    <query-profile for="*, *, dev">
+        <field name="a">My dev value</field>
+    </query-profile>
+
+    <!-- Value for the default instance in prod -->
+    <query-profile for="*, default, prod">
+        <field name="a">My main instance prod value</field>
+    </query-profile>
+
+</query-profile>
+```
+
+これらのディメンションは、クエリーパラメーターとして送信される他のディメンションと自由に選択・組み合わせできます。例:
+
+```xml
+<dimensions>device, application, instance, usecase</dimensions>
+```

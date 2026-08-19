@@ -1,0 +1,320 @@
+---
+title: "ONNXモデルによるランキング"
+sidebarTitle: "ONNXモデルの使用"
+---
+
+Vespaは、テンソルAPIを通じて高度なランキング・モデルをサポートしています。
+モデルが [ONNXフォーマット](https://onnx.ai/)であれば、Vespaはモデルを直接インポートして使用できます。
+ONNXモデルは、Vespaの [embedder](/ja/rag/embedding)機能または[ランキング](/ja/ranking/ranking-intro)で使用できます。
+
+
+
+## ONNXモデル・ファイルのインポート
+
+ONNXモデルを含むファイルを、アプリケーション・パッケージ配下の任意の場所に追加します。
+たとえば、モデル・ファイルが `my_model.onnx` の場合、
+アプリケーション・パッケージの `files` ディレクトリ配下に次のように追加できます:
+
+```bash
+├── files
+│   └── my_model.onnx
+├── schemas
+│   └── main.sd
+└── services.xml
+```
+
+アプリケーション・パッケージは複数のonnxモデルを持つことができます。デプロイ時にモデルをダウンロードするには、
+[リモート・モデルのデプロイ](/ja/applications/deployment#deploying-remote-models)を参照してください。
+
+
+
+## ONNXモデルによるランキング
+
+上記のモデルをランキングで利用できるようにするには、スキーマ内でモデルを定義し、
+その後 `onnx`(または `onnxModel`)ランキング・フィーチャーを使ってモデルを参照します:
+
+```js
+schema my_schema {
+
+    document my_document {
+        field my_field type tensor(d0[1],d1[10]) {
+            indexing: attribute | summary
+        }
+    }
+
+    rank-profile my_rank_profile {
+
+        inputs {
+            query(myTensor) tensor(d0[1],d1[784])
+        }
+
+        onnx-model my_onnx_model {
+            file: files/my_model.onnx
+            input "model_input_0": attribute(my_field)
+            input "model_input_1": my_function
+            output "model_output_0": output_name
+        }
+
+        function my_function() {
+            expression: tensor<float>(d0[1],d1[10])(d1)
+        }
+
+        first-phase {
+            expression: sum( onnx(my_onnx_model).output_name )
+        }
+
+    }
+
+}
+```
+
+これは `my_onnx_model` という名前のモデルを定義します。このモデルは
+`onnx` [rankフィーチャー](/ja/reference/ranking/rank-features)を使って評価されます。
+このrankフィーチャーは、ランキング式の中でどのモデルを評価するか、
+また任意で、モデルのどの出力を使用するかを指定します。
+
+`onnx-model` セクションは、次の3つを定義します:
+
+1. アプリケーション・パッケージ内でのモデルの場所
+2. 評価に使用する入力と、その入力の取得元
+3. 評価に使用する出力
+
+上記の例では、モデルは `files/my_model.onnx` にあります。この
+モデルには2つの入力があります。入力については、最初の名前がONNXモデル・ファイル内で
+名付けられた入力を指定します。ソースは、入力の取得元です。
+これは次のいずれかです:
+
+- ドキュメントのフィールド:  `attribute(field_name)`
+- クエリー・パラメーター: `query(query_param)`
+- 定数: `constant(name)`
+- ユーザー定義関数: `function_name`
+
+出力については、出力名はVespa内で出力を指定するために使用される名前です。
+省略された場合、ONNXファイル内の最初の出力が使用されます。
+
+モデルの出力はテンソルですが、ランクスコアは単一のスカラー値でなければなりません。
+上記の例では、`sum` を使ってテンソルのすべての要素を合計し、単一の値にしています。
+Vespaの[テンソルAPI](/ja/reference/ranking/ranking-expressions#tensor-functions)を使って、
+結果の一部をスライスして取り出すこともできます。
+たとえば、上記の例の出力が `d0` と `d1` の2つの次元を持つテンソルで、
+最初の値を抽出したい場合は、次のように表現できます:
+
+```js
+onnx(my_onnx_model).output_name{d0:0,d1:0}
+```
+
+ONNXモデルへの入力はテンソルでなければならず、スカラーはサポートされていないことに注意してください。
+入力テンソルの次元名は、最初の次元が `"d0"` で始まり、次元ごとに増えていく必要があります
+(つまり `"d1"`、`"d2"` など)。評価の
+結果も同様に、`"d0"`、`"d1"` などの名前を持つテンソルになります。
+
+ドキュメントおよび入力のテンソルの型は、上に示したようにスキーマで指定します。
+HTTPパラメーター "input.query(myTensor)" を使って、HTTPリクエストでテンソルを渡すことができます
+(ランキング式に "query(myTensor)" が含まれていることが前提です)。
+
+テンソルの例は
+[サンプル・アプリケーション](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation)にあります。 https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation
+
+
+#### バッチ次元
+
+モデルを学習する際、通常はバッチ用の次元を含む入力を使用します。たとえばサイズが `[-1, 784]` の入力です。ここで、-1は通常バッチ次元を表します。ランキングにおけるONNX推論では、Vespaはバッチサイズ1を使用します。
+
+
+## モデルのサイズと複雑さに関する制限
+
+上記のrank profileの例では、`onnx` モデルの評価は
+first phaseで行われていました。一般に、この種のモデルの評価は
+`second-phase` または `global-phase` のフェーズで行う方が適しています。
+[段階的ランキング](/ja/ranking/phased-ranking)を参照してください。
+
+データ・テンソルが外部データファイルに置かれているモデルは、次の条件をすべて満たす場合に**のみ**サポートされます:
+- モデルが _embedder_ で使用されている。例: `hugging-face-embedder`([embedding](/ja/rag/embedding)を参照)。
+- モデルがURLで参照されている。例: `url="https://example.com/my-onnx-model/model.onnx"`。
+- すべての外部データファイルが、モデル・ファイルと同じ親パス/ディレクトリにある。
+  例: `https://example.com/my-onnx-model/model.onnx_data`。
+
+_ランキング_ については、Vespaは自己完結型(外部データファイルを持たない)で、サイズが2GB未満のONNXモデルのみをサポートします。
+アプリケーション・パッケージに含まれるモデルにも同じ制限が適用されます。
+
+
+
+## 例
+
+[MS Marco](https://github.com/vespa-engine/sample-apps/tree/master/msmarco-ranking)
+サンプル・アプリケーションは、クロスエンコーダー・モデルを使ってドキュメントを再ランキングします。
+[model-exporting](https://github.com/vespa-engine/sample-apps/tree/master/examples/model-exporting) の例は、
+埋め込み推論にonnxモデルを使用しています。
+[custom-embeddings](https://github.com/vespa-engine/sample-apps/tree/master/custom-embeddings)
+には、再ランキングで使用するためにonnxフォーマットにエクスポートされたPyTorchモデルの例があります。 
+
+
+### Optimumを使ってモデルをONNXフォーマットにエクスポートする
+
+Huggingfaceモデル・ハブでホストされているモデルのエクスポートには、
+[Optimum](https://huggingface.co/docs/optimum/index) ライブラリの使用を強くお勧めします。
+
+たとえば、モデル・ハブの [BAAI/bge-small-en](https://huggingface.co/BAAI/bge-small-en) をonnxフォーマットにエクスポートするには:
+
+```bash
+$ python3 -m pip install optimum onnx onnxruntime
+$ optimum-cli export onnx --library transformers --task feature-extraction -m BAAI/bge-small-en --optimize O3 model-output-dir
+```
+
+`model-output-dir` にエクスポートされたファイル `model.onnx` と `tokenizer.json` は、
+Vespaの [huggingface-embedder](/ja/rag/embedding#huggingface-embedder) に直接インポートできます。
+
+[ONNXのデバッグ](#debugging-onnx-models)を参照してください。
+
+多くの場合、onnxのチェックポイントも公開されています。
+たとえば [mixedbread-ai/mxbai-embed-large-v1](https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/tree/main) です。
+これらのモデルはダウンロードしてVespaで使用できます。
+
+```xml
+<container id="default" version="1.0">
+    <component id="mixedbread" type="hugging-face-embedder">
+        <transformer-model url="https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/resolve/main/onnx/model_quantized.onnx"/>
+        <tokenizer-model url="https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/raw/main/tokenizer.json"/>
+        <pooling-strategy>cls</pooling-strategy>
+    </component>
+    ...
+</container>
+```
+
+Vespaのデフォルトのpooling-strategyは `mean` です。
+使用されているプーリング手法についてはモデル・カードを確認してください。
+上記のURLパターンに注意してください。
+URLはモデル・カードではなく、実際のファイルを指す必要があります。
+
+外部データファイルを持つモデルの使用方法については、
+#[モデルのサイズと複雑さに関する制限](#limitations-on-model-size-and-complexity)を参照してください。
+
+Optimumライブラリを使ってクロスエンコーダーの再ランカーをエクスポートする例については、
+[クロスエンコーダー](/ja/ranking/cross-encoders#exporting-cross-encoder-models)のドキュメントを参照してください。
+
+
+### Auto Classesを使ってHFモデルをONNXフォーマットにエクスポートする
+
+Transformerベースのモデルには名前付きの入力と出力があり、これらは
+[embedder](/ja/rag/embedding)で使用される入力名・出力名と互換性がある必要があります。
+
+[model-exporting](https://github.com/vespa-engine/sample-apps/tree/master/examples/model-exporting)
+の例には、ONNXモデルを使用するembedderが期待するデフォルトの入力名・出力名を使って、
+モデルと語彙ファイルをエクスポートする2つのスクリプトが含まれています。
+embedderへの入力名・出力名は、
+[該当するembedderのconfig](/ja/reference/rag/embedding)の `transformer-` パラメーターで調整できます。
+
+
+### ONNXモデルのデバッグ
+
+Vespaネイティブの [embedder](/ja/rag/embedding)用に [ONNX](https://onnx.ai/) モデルをロードする場合、
+モデルは正しい入力・出力パラメーターを持っている必要があります。
+Vespaは、ONNXモデル・ファイルを検査するためのツールを提供しています。
+ここでは、_minilm-l6-v2.onnx_ がカレント・ワーキング・ディレクトリにあるとします:
+
+```bash
+$ docker run -v `pwd`:/w \
+  --entrypoint /opt/vespa/bin/vespa-analyze-onnx-model \
+  vespaengine/vespa \
+  /w/minilm-l6-v2.onnx
+
+...
+model meta-data:
+  input[0]: 'input_ids' long[batch][sequence]
+  input[1]: 'attention_mask' long[batch][sequence]
+  input[2]: 'token_type_ids' long[batch][sequence]
+  output[0]: 'output_0' float[batch][sequence][384]
+  output[1]: 'output_1' float[batch][384]
+...
+```
+
+上記のモデルの入力名と出力名は、
+デフォルトの [bert-embedderパラメーター](/ja/reference/rag/embedding#bert-embedder-reference-config)に適合しています。
+
+同様に、[hugging-face-embedderパラメーター](/ja/reference/rag/embedding#huggingface-embedder-reference-config)のデフォルトに適合するモデルは次のようになります:
+```bash
+model meta-data:
+  input[0]: 'input_ids' long[batch][sequence]
+  input[1]: 'attention_mask' long[batch][sequence]
+  input[2]: 'token_type_ids' long[batch][sequence]
+  output[0]: 'last_hidden_state' float[batch][sequence][384]
+```
+
+出力のシェイプは次のようになるべきです:
+```bash
+float[batch][sequence][vector-embedding-dimensionality]
+```
+Vespaのembedderは、出力ベクトル(シーケンス長ごとに1つ)に対するプーリング戦略を実装しています。
+
+期待される入力・出力パラメーター名を持たないモデルをロードすると、コンテナー・サービスは起動しません
+(Vespaを実行しているコンテナー内の _vespa.log_ を確認してください):
+
+```bash
+ WARNING container        Container.com.yahoo.container.di.Container
+  Caused by: java.lang.IllegalArgumentException: Model does not contain required input: 'input_ids'. Model contains: input
+```
+
+この状況が発生すると、デプロイは次のようになります:
+```bash
+$ vespa deploy --wait 300
+Uploading application package ... done
+
+Success: Deployed .
+
+Waiting up to 5m0s for query service to become available ...
+Error: service 'query' is unavailable: services have not converged
+```
+
+embedderは入力名・出力名の変更をサポートしています。
+[embeddingリファレンス](/ja/reference/rag/embedding)のドキュメントを参照してください。
+
+
+### vespa-analyze-onnx-modelの使用
+
+[vespa-analyze-onnx-model](/ja/reference/operations/tools#vespa-analyze-onnx-model)
+は、モデルの入力と出力を調べるのに便利です -
+モデルを含むアプリケーション・パッケージがデプロイされているConfigサーバーでの実行例:
+
+```bash
+$ docker exec vespa vespa-analyze-onnx-model \
+  /opt/vespa/var/db/vespa/config_server/serverdb/tenants/default/sessions/1/files/Network.onnx
+
+unspecified option[0](optimize model), fallback: true
+vm_size: 230228 kB, vm_rss: 44996 kB (before loading model)
+vm_size: 233792 kB, vm_rss: 54848 kB (after loading model)
+model meta-data:
+input[0]: 'input' float[input][4]
+output[0]: 'output' float[output][3]
+unspecified option[1](symbolic size 'input'), fallback: 1
+test setup:
+input[0]: tensor<float>(d0[1],d1[4]) -> float[1][4]
+output[0]: float[1][3] -> tensor<float>(d0[1],d1[3])
+unspecified option[2](max concurrent evaluations), fallback: 1
+vm_size: 233792 kB, vm_rss: 54848 kB (no evaluations yet)
+vm_size: 233792 kB, vm_rss: 54848 kB (concurrent evaluations: 1)
+estimated model evaluation time: 0.00227701 ms
+```
+
+対応する入力/出力テンソルは、次のように定義する必要があります:
+```js
+document doc {
+    ...
+    field flowercategory type tensor<float>(d0[1],d1[3]) {
+        indexing: attribute | summary
+    }
+}
+
+rank-profile myRank {
+    inputs {
+        query(myTensor) tensor<float>(d0[1],d1[4])
+    }
+    onnx-model my_onnx_model {
+        file: files/Network.onnx
+        input  "input" : query(myTensor)
+        output "output": outputTensor
+    }
+    first-phase {
+        expression: sum( onnx(my_onnx_model).outputTensor * attribute(flowercategory) )
+    }
+}
+```

@@ -1,0 +1,278 @@
+---
+title: "ニュース検索と推薦のチュートリアル - Searcher"
+---
+
+これは、パーソナライズされたニュース推薦のための Vespa アプリケーションをセットアップするチュートリアルシリーズの第 6 回です。シリーズの構成は以下のとおりです。
+
+1. [はじめに](/ja/learn/tutorials/news-1-deploy-an-application)
+2. [基本的なニュース検索アプリケーション](/ja/learn/tutorials/news-2-basic-feeding-and-query) - アプリケーション・パッケージ、フィード、クエリー
+3. [ニュース検索](/ja/learn/tutorials/news-3-searching) - ソート、グルーピング、ランキング
+4. [ユーザーとニュース記事の埋め込みの生成](/ja/learn/tutorials/news-4-embeddings)
+5. [ニュース推薦](/ja/learn/tutorials/news-5-recommendation) - 部分更新(ニュース埋め込み)、ANN、フィルタリング
+6. [Searcher を使ったニュース推薦](/ja/learn/tutorials/news-6-recommendation-with-searchers) - カスタム Searcher、ドキュメント・プロセッサー
+7. [親子関係を使ったニュース推薦](/ja/learn/tutorials/news-7-recommendation-with-parent-child) - 親子関係、テンソルランキング
+8. 高度なニュース推薦 - 間奏 - ランキングモデルの学習
+9. 高度なニュース推薦 - ML モデル
+
+このシリーズの前回では、ユーザー ID を与えると推薦を生成するために 2 回のリクエストを必要とする推薦システムをセットアップしました。1 回目はユーザー埋め込みの取得、2 回目は最近傍のニュース記事の検索です。今回は、クエリーを検索に渡す前に変更できるプロセッサーである `Searcher` を紹介します。これにより、Python スクリプトにあったロジックを Vespa の中に取り込むことができます。
+
+参考として、このチュートリアルの最終的な状態は、`news` サンプルアプリケーションの [app-6-recommendation-with-searchers](https://github.com/vespa-engine/sample-apps/tree/master/news/app-6-recommendation-with-searchers) ディレクトリにあります。
+
+
+## Searcher とドキュメント・プロセッサー
+
+まず、Vespa の全体アーキテクチャーを再確認しましょう。
+
+<Frame>
+![Vespa の概要](/assets/img/vespa-overview.svg)
+</Frame>
+
+アプリケーション・パッケージには、アプリケーションの実行に必要なものがすべて含まれていることを思い出してください。これがデプロイされると、config クラスターが各ノードへのサービスの配布を担当します。特に、主要な 2 種類のノードは、ステートレスな `container` ノードとステートフルな `content` ノードです。
+
+すべてのリクエストは、実際の検索とランキングが行われるコンテント・クラスターに渡される前に、`container` クラスターを通過します。クエリーは実際には Searcher のチェーンを通過し、それぞれの Searcher が少量の処理を行う場合があります。これは、クエリーに `&trace.level=5` を追加することで確認できます。
+
+```json expandable
+{ "message": "Invoke searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'" },
+{ "message": "Invoke searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'" },
+{ "message": "Invoke searcher 'com.yahoo.prelude.querytransform.PhrasingSearcher in vespa'" },
+{ "message": "Invoke searcher 'com.yahoo.prelude.searcher.FieldCollapsingSearcher in vespa'" },
+{ "message": "Invoke searcher 'com.yahoo.search.yql.MinimalQueryInserter in vespa'" },
+
+{ "message": "Federating to [mind]" },
+
+{ "message": "Got 10 hits from source:mind" },
+{ "message": "Return searcher 'federation in native'" },
+
+{ "message": "Return searcher 'com.yahoo.search.yql.MinimalQueryInserter in vespa'" },
+{ "message": "Return searcher 'com.yahoo.prelude.searcher.FieldCollapsingSearcher in vespa'" },
+{ "message": "Return searcher 'com.yahoo.prelude.querytransform.PhrasingSearcher in vespa'" },
+{ "message": "Return searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'" },
+{ "message": "Return searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'" },
+```
+
+これは、`trace.level` を使用したときの追加出力の一部を示しています。Searcher の呼び出しに注目してください。各 Searcher はチェーンに沿って呼び出され、チェーンの最後の Searcher が後処理されたクエリーを検索バックエンドに送信します。結果が返ってくると、処理はチェーンをさかのぼっていきます。Searcher は、結果を前の Searcher に渡す前に処理を行い、最終的にクエリーへのレスポンスとして返すことができます。
+
+<Note>
+[trace.level](/ja/reference/api/query#trace.level) の追加は、Vespa クエリーのデバッグ時に一般的に役立ちます。
+</Note>
+
+つまり、[Searcher](/ja/applications/searchers) は、クエリーチェーンに沿って何らかの処理を行う Java コンポーネントです。実際の検索の前にクエリーを変更したり、検索の後に結果を変更したり、あるいはその両方を組み合わせて行います。
+
+開発者は独自の Searcher を提供し、クエリーチェーンに注入できます。これを活用して、[user_search.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/user_search.py) が行うのと本質的に同じタスクを実行する Searcher を作成します。つまり、ユーザー埋め込みを取得し、それに基づいてニュース記事を検索します。その過程で、完全な YQL クエリーの代わりに `user_id` だけを Vespa に渡すようにします: `/search/?user_id=U33527&searchchain=user`
+
+実際のクエリーの作成は検索側が行ってくれます - さっそく始めましょう。
+
+
+## ユーザープロファイル Searcher の追加
+
+Vespa の `content` レイヤーは最大のパフォーマンスを得るために C++ で書かれていますが、`container` レイヤーは柔軟性のために Java で書かれています。そのため、すべての Searcher、つまりカスタム Searcher は Java で記述します。詳細については、[Searcher 開発ガイド](/ja/applications/searchers)を参照してください。
+
+`user_id` を受け取り、対応する埋め込みを見つけるクエリーを発行し、その後ニュース記事を取得する 2 番目のクエリーを発行する Searcher を作成します。
+
+これを行うには、基底の Searcher クラス `com.yahoo.search.Searcher` を継承する `UserProfileSearcher` を作成します。この Searcher は `search` という単一のメソッドを実装する必要があり、クエリーをリストの次の Searcher に渡す責任を持ちます。最小限の例を示します。
+
+```java
+public class UserProfileSearcher extends Searcher {
+    public Result search(Query query, Execution execution) {
+        // ... process query
+        Result results = execution.search(query)
+        // ... process results
+        return results;
+    }
+}
+```
+
+つまり、クエリーを渡す前(`execution.search(query)` の中)と結果を返す前に何をするかは、完全に私たち次第です。そこで、`UserProfileSearcher` を次のように実装します。
+
+```java expandable
+public class UserProfileSearcher extends Searcher {
+
+    public Result search(Query query, Execution execution) {
+
+        // Get tensor and read items from user profile
+        Object userIdProperty = query.properties().get("user_id");
+        if (userIdProperty != null) {
+
+            // Retrieve user embedding by doing a search for the user_id and extract the tensor
+            Tensor userEmbedding = retrieveUserEmbedding(userIdProperty.toString(), execution);
+
+            // Create a new search using the user's embedding tensor
+            NearestNeighborItem nn = new NearestNeighborItem("embedding", "user_embedding");
+            nn.setTargetNumHits(query.getHits());
+            nn.setAllowApproximate(true);
+
+            query.getModel().getQueryTree().setRoot(nn);
+            query.getRanking().getFeatures().put("query(user_embedding)", userEmbedding);
+            query.getModel().setRestrict("news");
+
+            // Override default rank profile
+            if (query.getRanking().getProfile().equals("default")) {
+                query.getRanking().setProfile("recommendation");
+            }
+        }
+
+        return execution.search(query);
+    }
+
+    private Tensor retrieveUserEmbedding(String userId, Execution execution) {
+        Query query = new Query();
+        query.getModel().setRestrict("user");
+        query.getModel().getQueryTree().setRoot(new WordItem(userId, "user_id"));
+        query.setHits(1);
+
+        Result result = execution.search(query);
+        execution.fill(result); // This is needed to get the actual summary data
+
+        if (result.getTotalHitCount() == 0)
+            throw new RuntimeException("User id " + userId + " not found...");
+        return (Tensor) result.hits().get(0).getField("embedding");
+    }
+
+}
+```
+
+まず、クエリーから `user_id` を取得します。これがクエリーで指定されている場合、最初に `retrieveUserEmbedding` メソッドを呼び出します。このメソッドは、ユーザーの埋め込みを見つけるための新しい `Query` を作成します。これは `user` ドキュメントタイプに限定された単純な検索です。`user_id` は一意であるため、ヒットは 1 件だけであると想定されます。次に、ユーザードキュメントから `embedding` テンソルを抽出します。
+
+<Note>
+結果を返す前に明示的に *fill* を呼び出しています。クエリーは通常、少なくとも 2 回検索バックエンドに渡されます。1 回目は上位にランクされた結果の取得、もう 1 回は最終的な結果セットのサマリーデータの取得です。これは、サービス間で余分なデータを送信しないようにするためです。たとえば、2 つの検索バックエンドで上位 10 件の結果を検索する場合、各バックエンドはそのノードのローカルコンテンツから上位 10 件の結果を取得します。Searcher がグローバルな上位 10 件のランク結果を決定し(多様化を含む場合もあります)、その上位 10 件のサマリー特徴量を取得するためだけに *fill* を発行します。
+</Note>
+
+ユーザー埋め込みを取得したので、プログラムで最近傍検索をセットアップし、ユーザー埋め込みをランキング特徴量 `query(user_embedding)` としてクエリーに追加します。その後、検索はチェーン内の次の Searcher に渡されます。ここでは結果を明示的に fill する必要はありません。最終的に結果をレンダリングする前に fill が行われることが保証されているためです。
+
+繰り返しになりますが、これらはすべて [user_search.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/user_search.py) で行ったこととほぼ同じです - Java で書かれているだけです。
+
+
+## 検索チェーンの追加
+
+この Searcher を Vespa に追加するには、`services.xml` を変更する必要があります。
+
+```xml
+<container id="default" version="1.0">
+    <search>
+        <chain id="user" inherits="vespa">
+            <searcher bundle="news-recommendation-searcher"
+                      id="ai.vespa.example.UserProfileSearcher" />
+        </chain>
+    </search>
+    ...
+</container>
+```
+
+ここでは、`user` という新しい検索チェーン(デフォルトの `vespa` 検索チェーンを継承)を追加し、その中に `UserProfileSearcher` を含めるよう Vespa に指示しています。Vespa はこの Searcher が `news-recommendation` というバンドルに含まれていることを想定しているため、このコードをコンパイルしてパッケージ化する必要があります。Vespa ではこれに [Apache Maven](https://maven.apache.org/) を使用します。Maven では、このアーティファクトのビルド方法を指定するプロジェクトオブジェクトモデル、つまり `pom.xml` が必要です。
+
+ここではその詳細には触れません。詳しくは、`news` サンプルアプリケーションの [app-6-recommendation-with-searchers](https://github.com/vespa-engine/sample-apps/tree/master/news/app-6-recommendation-with-searchers) を参照してください。このアプリケーションのディレクトリ構造は、チュートリアルの前回までの部分と比べて変更されている点に注意してください。構造は次のようになっています。
+
+```
+.
+├── pom.xml
+└── src
+    └── main
+        ├── application
+        │   ├── schemas
+        │   │   ├── news.sd
+        │   │   └── user.sd
+        │   ├── search
+        │   │   └── query-profiles
+        │   │       ├── default.xml
+        │   │       └── types
+        │   │           └── root.xml
+        │   └── services.xml
+        └── java
+            └── ai
+                └── vespa
+                    └── example
+                        └── UserProfileSearcher.java
+```
+
+Vespa アプリケーションは `src/main/application` の下に置かれ、すべてのカスタム Java コンポーネントは Java プロジェクトの標準どおり `src/main/java` の下に置かれます。これで、このアプリケーションをコンパイルしてパッケージ化できます。
+
+```bash
+$ (cd app-6-recommendation-with-searchers && mvn package)
+```
+
+[pom.xml](https://github.com/vespa-engine/sample-apps/blob/master/news/app-6-recommendation-with-searchers/pom.xml) は、`services.xml` で参照される `news-recommendation-searcher` というアーティファクトを作成するようセットアップされています。コマンドが完了すると、このアーティファクトは `target/application.zip` に確認できます。これには Java コンポーネントを含む完全な Vespa アプリケーションが含まれています - デプロイしましょう。
+
+```bash
+$ vespa deploy --wait 600 app-6-recommendation-with-searchers
+```
+
+アプリケーションがデプロイされたら、テストの準備は完了です。カスタム Searcher と Java API の詳細については、[Searcher 開発ガイド](/ja/applications/searchers)を参照してください。
+
+
+## テスト
+
+これで、`user_id` から直接、ユーザーへの推薦ニュース記事を検索できます。
+
+```bash
+$ vespa query -v \
+  'user_id=U33527' \
+  'searchChain=user'
+```
+
+これにより、このユーザーに対する推薦ニュース記事の上位 10 件が返されるはずです。実際に、ここで `trace.level=5` を追加すると、Searcher が呼び出されていることがわかります。
+
+```bash
+$ vespa query -v \
+  'user_id=U33527' \
+  'searchChain=user' \
+  'trace.level=5'
+```
+
+```json
+{ "message": "Invoke searcher 'ai.vespa.example.UserProfileSearcher in user'" },
+{ "message": "Invoke searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'" },
+{ "message": "Invoke searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'" },
+
+{ "message": "Return searcher 'com.yahoo.prelude.statistics.StatisticsSearcher in native'" },
+{ "message": "Return searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'" },
+{ "message": "Return searcher 'ai.vespa.example.UserProfileSearcher in user'" },
+```
+
+`searchChain` クエリーパラメーターはデフォルトとして設定できるため、クエリーリクエストのたびに渡す必要はありません。これは、[src/main/application/search/query-profiles/default.xml](https://github.com/vespa-engine/sample-apps/blob/master/news/app-6-recommendation-with-searchers/src/main/application/search/query-profiles/default.xml) のデフォルトのクエリープロファイルに追加することで行えます。
+
+```xml
+<query-profile id="default" type="root">
+    <field name="searchChain">user</field>
+</query-profile>
+```
+
+<Note>
+[src/python/evaluate.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/evaluate.py) をこの Searcher を使用するように変更できます。ただし、メトリクスを正しく計算するには、ニュース記事 ID のリストを受け取り、それらのみをリコールするように Searcher を変更する必要があります。これは読者への演習とします。
+</Note>
+
+
+## ドキュメント・プロセッサー
+
+上のアーキテクチャー概要からわかるように、他のコンポーネントタイプも存在します。その 1 つがドキュメント・プロセッサーで、概念的には Searcher と似ています。ドキュメントが Vespa にフィードされると、ストレージとインデックス作成のためにコンテント・ノードに渡される前に、ドキュメント・プロセッサーのチェーンを通過します。
+
+Vespa はカスタムのドキュメント・プロセッサーもサポートしています。詳細については、[ドキュメント処理のガイド](/ja/applications/document-processors)を参照してください。
+
+
+## 推薦の多様性の向上
+
+上のクエリーを詳しく見て、上位 100 件のヒットを検索してみます。
+
+```bash
+$ vespa query \
+  'user_id=U33527' \
+  'searchChain=user' \
+  'hits=100' | \
+  grep "category\": \"sports" | wc -l
+```
+
+このユーザーではすべてのヒットがカテゴリー `sports` であることがわかります。実際には、すべて `football_nfl` サブカテゴリーのものです。実際、インプレッションファイルを調べると、このユーザーは `sports` の記事しかクリックしていません。これは成功のように見えるかもしれませんが、一般的には、ユーザーの興味を保つために何らかの形の多様性を提供したいものです。これはフィルターバブルの悪影響に対抗するためでもあります。
+
+これを行う 1 つの方法は、さまざまなランクプロファイルを使ってバックエンドに複数のクエリーを実行する Searcher を作成することです。上の例では、`recommendation` ランクプロファイルからのみ結果を取得していました。しかし、ランクプロファイルはいくつでも持つことができます。複数のランクプロファイルで検索することで、ユーザーに返す前にこれらのソースからの結果をブレンドし、多様性を導入できます。
+
+これはしばしばフェデレーションと呼ばれます。Vespa は内部ソースと外部ソースの両方からのフェデレーションをサポートしています。詳細については、[フェデレーションのガイド](/ja/querying/federation)を参照してください。
+
+<Warning>
+同じドキュメントが複数のソースから返される可能性がある場合は、最終結果を返す前に何らかの重複排除を行うことが重要です!
+</Warning>
+
+複数のソースからのブレンドを行う一般的な方法は、専用のブレンド Searcher を実装することです。この Searcher では、たとえば [reciprocal rank fusion](https://research.google/pubs/pub36196/) のようなアプローチを使用でき、十分に良い結果が得られます。ただし、多様性に関しては、通常、制御する必要のある目標や制約が存在します。この場合、ビジネスルールをブレンド Searcher に手書きできます。Searcher はあらゆる種類の処理を実行できるだけの柔軟性を備えています。
+
+
+## まとめ
+
+これで、単一の `user_id` を受け取り、そのユーザーへの推薦を返す Vespa アプリケーションが稼働するようになりました。[チュートリアルの次のパート](/ja/learn/tutorials/news-7-recommendation-with-parent-child)では、履歴のない新規ユーザーが推薦システムを訪れたときにどうするかを扱います。

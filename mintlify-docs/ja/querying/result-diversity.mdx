@@ -1,0 +1,101 @@
+---
+title: "結果の多様性"
+---
+
+検索やレコメンデーションのアプリケーションでは、最もランキングの高いドキュメントがユーザーに表示されます。ドキュメントのランクスコアは、ランク・フィーチャーに対する関数によって計算されます。スコアはドキュメントごとに、他のドキュメントのスコアとは独立して計算されます（global-phase で特定のフィーチャーを使用する場合を除きます）。
+
+この貪欲なアプローチは、ドキュメント同士が十分に異なっている場合には全体として最良の結果をもたらしますが、そうでない場合は次のようになることがあります:
+
+<Frame>![結果の多様性の例](/assets/img/diversity-1.png)</Frame>
+
+これは、個々のランクスコアが低くても、より似ていないドキュメントを優先することで改善できます。これは通常、フィールドの値を使ってバリエーションを作ることで実現できます。上の例における domain フィールドのようなものです。
+
+Vespa には多様性を生み出すために使用できる一連の機能があります。このガイドでは、見栄えの良い結果セットを作成するための戦略とトレードオフを概説します。
+
+## Diversity
+
+スキーマ定義の [diversity](../reference/schemas/schemas#diversity) 要素を使用して、second-phase ランキングの前（および match-phase を使用している場合はその最中）に、多様性のない結果をフィルタリングできます:
+
+* [attribute](../reference/schemas/schemas#diversity-attribute) の値は、多様化の基準となる値を保持するアトリビュート・フィールドの名前です（上の例における domain を思い浮かべてください）。
+* [min-groups](../reference/schemas/schemas#diversity-min-groups) は、結果セットに含めるべきそのアトリビュートの異なる値の最小数です（利用可能な場合）。
+
+例:
+
+```js
+field domain type string {
+    indexing: attribute | summary
+}
+
+rank-profile diverse_example {
+
+    first-phase {
+        expression: ...
+    }
+
+    diversity {
+        attribute: domain
+        min-groups: 10
+    }
+
+    second-phase {
+        expression: ...
+    }
+
+}
+```
+
+## グルーピング
+
+グルーピングは、結果の整理と集約のための汎用的な機能で、多様化にも使用できます。グルーピングはクエリー実行時に指定されるため、rank-profile の設定は不要です。例えば、グルーピングでドメインごとに最もランキングの高い結果を取得するには、次を使用します:
+
+```bash
+all( group(domain) max(1) each( output(summary() ) ) )
+```
+
+グルーピングを使うと、グループあたりのアイテム数を指定できるなど、動作をより正確に制御できます。また、複数のアトリビュートで階層的にグルーピングしたり、値を集約したりすることもできます。
+
+グルーピングの結果構造は、通常のクエリー結果に追加される（または置き換わる）ため、グルーピングによる多様化を有効にすると、（返す前に Searcher でグルーピングされた結果をフラット化しない限り）レンダリングされる結果構造が変わります。
+
+グルーピングは second-phase ランキング後の結果に対して、すべてのノードにわたって実行されます。一般的に、このアプローチは、first-phase の後に結果をフィルタリングする diversity 要素を使う場合と比べてより多くのリソースを消費し、また各グループ内でも最良の結果を選ぶために second phase が使用されることを意味します（コストは高くなりますが、より良い関連性が得られます）。
+
+## Match-phase での多様性
+
+前述の diversity は、first-phase ランキング後の結果に対して実行されます。
+
+[match-phase](../reference/schemas/schemas#match-phase) 機能を使うと、first-phase ランキングにさらされるヒットを、あるアトリビュートの最大（最小）値に限定することで、パフォーマンスを向上させられます。match-phase の使用時に diversity 要素を追加すると、diversity のフィールド・アトリビュートは、match-phase のアトリビュートから返されるマッチの集合を生成する際にも使用されます。
+
+```js expandable
+field popularity type int {
+    indexing: attribute | summary
+}
+
+field domain type string {
+    indexing: attribute | summary
+}
+
+rank-profile diverse_example {
+
+    match-phase {
+        attribute: popularity
+        total-max-hits: 1000
+        max-filter-coverage: 1.0
+    }
+
+    diversity {
+        attribute: domain
+        min-groups: 10
+    }
+
+    first-phase {
+        expression: attribute(popularity)
+    }
+}
+```
+
+## Collapsefield
+
+結果を返す前の最終処理はコンテナーノードで行われます。詳細は[クエリー実行](/ja/querying/query-api#query-execution)を参照してください。
+
+[collapsefield](../reference/api/query#collapsefield) パラメーターを設定すると、1 つ以上のフィールドについて、より上位のヒットと同じ値を持つヒットをフィルタリングできます。
+
+collapsefield の使用は、すべての多様化処理を最後まで先送りするため、結果に平均して少数の重複しか含まれない場合には低コストな選択肢です。重複が多くなる可能性がある場合は、diversify タグまたはグルーピングの使用を優先すべきです。

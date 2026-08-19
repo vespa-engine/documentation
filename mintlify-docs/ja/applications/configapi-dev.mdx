@@ -1,0 +1,343 @@
+---
+title: "Cloud Config API"
+sidebarTitle: "Java Config API"
+description: "このドキュメントでは、Cloud config API(「config API」)の C++ 版および Java 版の使い方を説明します。この API は Vespa の内部で使用されているものであり、Vespa を使用するためや、Vespa コンテナー向けの Java コンポーネントを開発するためにこのドキュメントを読む必要はありません。その目的には、代わりに[コンポーネントの設定](/ja/applications/configuring-components)を参照してください。"
+---
+
+このドキュメント全体を通して、設定可能なメッセージを提供するアプリケーションを例として使用します。
+
+## コンフィグ定義の作成
+
+config API を使用すると決めたときに最初に行うことは、アプリケーションで使用したいコンフィグを定義することです。これについては[設定ファイルリファレンス](/ja/reference/applications/config-files)で説明されています。ここでは、このドキュメントの最後にある完全な例の定義 `motd.def` を使用します:
+
+```text
+namespace=myproject
+
+message string default="NO MESSAGE"
+port int default=1337
+```
+
+## ソースコードの生成とコードからのコンフィグへのアクセス
+
+プログラムでコンフィグにアクセスする前に、コンフィグ定義のソースコードを生成する必要があります。API コードを生成して API を使用するための簡単な手順は [Java](/ja/applications/configapi-dev#the-java-config-api) 向けに提供されています。[javadoc](https://javadoc.io/doc/com.yahoo.vespa/config-lib) も参照してください)
+
+高度な使用例と API の使用方法に関する推奨事項については、[一般的なガイドライン](#guidelines)もお読みになることをお勧めします。
+
+## Config ID
+
+コンフィグをリクエストするときに指定する config id は、本質的にはコンフィグをリクエストするコンポーネントの識別子です。コンフィグサーバーはコンフィグ・オブジェクトモデルを保持しており、指定されたコンフィグ名と config id に対するリクエストを正しい configproducer インスタンスにマッピングします。このインスタンスが、コンフィグ定義のデフォルト値を、オブジェクトモデルのコンフィグおよび `services.xml` で設定されたコンフィグとマージして、最終的なコンフィグインスタンスを生成します。
+
+config id は VESPA\_CONFIG\_ID 環境変数を介してサービスに渡されます。[config sentinel](/ja/operations/self-managed/config-sentinel) は、コンフィグモデルによって与えられた id をこの環境変数に設定します。サービスはこの id を使用してコンフィグをサブスクライブする必要があります。複数のサービスを実行している場合、それぞれのサービスに対して**一意の config id** が割り当てられ、サービスは自分自身のもの以外の config id を使用してサブスクライブすべきではありません。
+
+モデルの一部ではない(つまり services.xml で指定されていない)ものの、services.xml で値を指定したいサービスのコンフィグを取得する必要がある場合は、config id `client` を使用します。
+
+## スキーマ互換性ルール
+
+スキーマの非互換性は、コンフィグクラス(たとえば上の C++ および Java セクションの `MotdConfig`)が、サーバーが参照してコンフィグの提供に使用している def ファイルとは異なる def ファイルからビルドされた場合に発生します。このような非互換性の一部はコンフィグシステムによって自動的に処理され、それ以外はエラーになります。これは、コンフィグスキーマの開発やテストの際に知っておくと便利です。
+
+*S* をサーバーが使用している *motd* というコンフィグ定義とし、*C* をクライアントが使用している同じく *motd* というコンフィグ定義、つまりサブスクライブ時に使用される `MotdConfig` を生成したものとします。システムの動作は次のとおりです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>互換性のある変更</td>
+      <td>これらのスキーマの不一致は configserver によって自動的に処理されます: <br /> - C に S が持つコンフィグ値がない場合: サーバーはその値をレスポンスから省略します。<br /> - C にデフォルト値を持つ追加のコンフィグ値がある場合: サーバーはその値をレスポンスに含めます。<br /> - C と S の両方にコンフィグ値があるが、デフォルト値が異なる場合: サーバーは C のデフォルト値を使用します。</td>
+    </tr>
+    <tr>
+      <td>互換性のない変更</td>
+      <td>これらのスキーマの不一致はコンフィグサーバーでは処理されず、値の欠落により、通常はサブスクリプション API でエラーになります(ただし、原則として、コンフィグのコンシューマーによっては許容できる場合もあります): <br /> - C にデフォルト値のない追加のコンフィグ値がある場合: サーバーはその値については何も含めません。<br /> - C でコンフィグ値の型が変更された場合(たとえば string から int へ): サーバーはエラーメッセージを出力し、その値については何も含めません。そのような変更が必要な場合、ユーザーはコンフィグにまったく新しい名前を使用する必要があります。</td>
+    </tr>
+  </tbody>
+</table>
+
+他のデータスキーマと同様に、システムに今後新しいバージョンが登場するのであれば、スキーマの変更については保守的であることが賢明です。`def` スキーマの場合、コンフィグ値の削除は意味論的な変更にあたり、古いバージョンのコンフィグサブスクライバーがコンフィグを要求したときに問題を引き起こす可能性があります。大規模なデプロイメントでは、すべてを完全に再起動するコストが高くなるため、これに伴うリスクが増大します。
+
+したがって、スキーマからコンフィグ値を削除するよりも、新しいコンフィグ名を作成することを優先すべきです。
+
+## デプロイ可能なアプリケーション・パッケージの作成
+
+アプリケーション・パッケージは次のファイルで構成されます:
+
+```
+app/services.xml
+app/hosts.xml
+```
+
+services ファイルには、コンフィグモデルプラグインによって処理されるサービスが含まれます。hosts ファイルの内容は次のとおりです:
+```xml
+<hosts>
+  <host name="localhost">
+    <alias>node0</alias>
+  </host>
+</hosts>
+```
+
+## 稼働システムのセットアップ
+
+稼働するシステムを構築するには、まず cloudconfig パッケージをインストールし、コンフィグサーバーを起動してから、アプリケーションをデプロイします: アプリケーションを prepare します:
+
+$ vespa prepare /path/to/app/folder
+アプリケーションをアクティベートします:$ vespa activate /path/to/app/folder
+
+次に、vespa を起動します。これによりアプリケーションが起動し、VESPA\_CONFIG\_ID 環境変数を介して config id が渡されます。
+
+## config API の高度な使用法
+
+シンプルなアプリケーションであれば、コンフィグが 1 つだけで十分な場合もあります。しかし、典型的なサーバーアプリケーションでは、コンフィグ設定の数が多くなることがあります。そのため、コンフィグ設定を複数の論理クラスに分割することを**推奨**します。このセクションでは、ConfigSubscriber を使用して複数のコンフィグをサブスクライブする方法と、依存関係に基づいてコンフィグをグループ化する方法について説明します。コンフィグは次のいずれかになります:
+
+- 独立した静的コンフィグ
+- 依存関係のある静的コンフィグ
+- 依存関係のある動的コンフィグ
+
+これらのさまざまなシナリオへの対処方法の例をいくつか示します。コード例は C++ と Java に共通の疑似フォーマットで示していますが、それぞれの言語固有の等価なコードに簡単に変換できるはずです。
+
+### 独立した静的コンフィグ
+
+独立したコンフィグとは、一方が他方とは独立して更新されても問題がないことを意味します。この場合、コンフィグごとに 1 つの ConfigSubscriber を使用しても構いませんが、それらすべてをチェックするのは面倒になりがちです。そのため、推奨される方法は、これらのコンフィグすべてを 1 つの ConfigSubscriber で管理することです。この構成では、サブスクライブのフェーズをコンフィグのチェック/取得の部分から分離するのが一般的です。サブスクライブの部分:
+
+```c++ C ++	
+ConfigSubscriber subscriber;
+ConfigHandle<FooConfig>::UP fooHandle = subscriber.subscribe<FooConfig>(...);
+ConfigHandle<BarConfig>::UP barHandle = subscriber.subscribe<BarConfig>(...);
+ConfigHandle<BazConfig>::UP bazHandle = subscriber.subscribe<BazConfig>(...);
+```
+```java Java	
+ConfigSubscriber subscriber;
+ConfigHandle<FooConfig> fooHandle = subscriber.subscribe(FooConfig.class, ...);
+ConfigHandle<BarConfig> barHandle = subscriber.subscribe(BarConfig.class, ...);
+ConfigHandle<BazConfig> bazHandle = subscriber.subscribe(BazConfig.class, ...);
+```
+
+そして取得の部分:
+
+```
+if (subscriber.nextConfig()) {
+    if (fooHandle->isChanged()) {
+        // Reconfigure foo
+    }
+    if (barHandle->isChanged()) {
+        // Reconfigure bar
+    }
+    if (bazHandle->isChanged()) {
+        // Reconfigure baz
+    }
+}
+```
+
+これにより、コンフィグの取得部分を専用のスレッドで実行することも、アプリケーションの他のイベントスレッドの一部として実行することもできます。
+
+### 依存関係のある静的コンフィグ
+
+依存関係のあるコンフィグとは、あるコンフィグが別のコンフィグの値に依存していることを意味します。最も一般的なのは、2 つ目のコンフィグをサブスクライブする際に使用する config id を含むコンフィグを持つケースです。さらに、システムによっては、コンフィグが同じ**世代 (generation)** に更新されている必要がある場合もあります。
+
+<Note>
+**注:** 
+
+世代 (generation) とは、`vespa deploy` でアプリケーションがデプロイされるたびに増加する単調増加の番号です。アプリケーションによっては、一貫性を確保するためにすべてのコンフィグが同じ世代であることを必要とする場合があります。特にコンテナーのようなアプリケーションが該当します。1 つの ConfigSubscriber によってサブスクライブされたすべてのコンフィグは、同じ世代であることが保証されます。
+</Note>
+
+コンフィグが静的であるというのは、使用される config id が変わらないという意味です。推奨されるアプローチは 2 フェーズ構成を使用することです。第 1 フェーズで初期コンフィグを取得し、その後、初期コンフィグと派生コンフィグの両方をサブスクライブして、それらが同じ世代であることを保証します。InitialConfig コンフィグに *derived1* と *derived2* という 2 つのフィールドが含まれていると仮定します:
+
+```c++	C++
+ConfigSubscriber initialSubscriber;
+ConfigHandle<InitialConfig>::UP initialHandle = subscriber.subscribe<InitialConfig>(...);
+while (!subscriber.nextConfig()); // Ensure that we actually get initial config.
+std::auto_ptr<InitialConfig> initialConfig = initialHandle->getConfig();
+
+ConfigSubscriber subscriber;
+... = subscriber.subscribe<InitialConfig>(...);
+... = subscriber.subscribe<DerivedConfig>(initialConfig->derived1);
+... = subscriber.subscribe<DerivedConfig>(initialConfig->derived1);
+```
+
+```java Java	
+ConfigSubscriber initialSubscriber;
+ConfigHandle<InitialConfig> initialHandle = subscriber.subscribe(InitialConfig.class, ...);
+while (!subscriber.nextConfig()); // Ensure that we actually get initial config.
+InitialConfig initialConfig = initialHandle.getConfig();
+
+ConfigSubscriber subscriber;
+... = subscriber.subscribe(InitialConfig.class, ...);
+... = subscriber.subscribe(DerivedConfig.class, initialConfig.derived1);
+... = subscriber.subscribe(DerivedConfig.class, initialConfig.derived1);
+```
+
+その後、独立した静的コンフィグの場合と同じ方法でコンフィグをチェックでき、すべてのコンフィグが同じ世代であることを確信できます。新しい ConfigSubscriber を作成する必要がある理由は、**一度 nextConfig() を呼び出すと、新しいサブスクライバーを追加したり削除したりできない**ためです。
+
+### 依存関係のある動的コンフィグ
+
+動的コンフィグとは、サブスクライブするコンフィグのセットがデプロイメントごとに変わる可能性があることを意味します。これは解決が最も難しいケースであり、その難易度はコンフィグの階層がいくつあるかによって決まります。最も一般的なのは、ブートストラップ用のコンフィグのセットと、そのブートストラップコンフィグに応じて変化しうる別のコンフィグのセットを持つケースです(典型的にはプラグインを持つアプリケーション)。このケースに対応するには、`ConfigRetriever` というクラスを使用できます。現在、これは **C++ API でのみ利用可能**です。
+
+ConfigRetriever は、一貫したコンフィグのセットを確実に取得できるように、ConfigSubscriber と同じメカニズムを使用します。さらに、`ConfigKeySet` と `ConfigSnapshot` という 2 つのクラスが追加されています。ConfigRetriever はコンストラクターで、システムのブートストラップに使用されるコンフィグのセットを受け取ります。このセットは変化しません。そして、`getConfigs(ConfigKeySet)` という 1 つのメソッドを提供します。このメソッドは、次の世代のブートストラップコンフィグまたは派生コンフィグの ConfigSnapshot を返します。
+
+ConfigRetriever を作成するには、まずブートストラップコンフィグのセットを設定する必要があります:
+
+```xml
+ConfigKeySet bootstrapKeys;
+bootstrapKeys.add<BootstrapFooConfig>(configId);
+bootstrapKeys.add<BootstrapBarConfig>(configId);
+```
+
+ブートストラップコンフィグは、通常、アプリケーションが常に必要とするコンフィグです。セットを定義したら、retriever を作成してブートストラップコンフィグの ConfigSnapshot を取得できます:
+
+```
+ConfigRetriever retri ever(bootstrapKeys);
+ConfigSnapshot bootstrapConfigs = retriever.getConfigs();
+```
+
+ConfigSnapshot にはブートストラップコンフィグが含まれており、それを使用して個々のコンフィグを取得できます。スナップショットがどのコンフィグを探すべきかを判断できるように、config id と型を指定する必要があります:
+
+```xml
+if (!bootstrapConfigs.empty()) {
+    std::auto_ptr<BootstrapFooConfig> bootstrapFoo = bootstrapConfigs.getConfig<BootstrapFooConfig>(configId);
+    std::auto_ptr<BootstrapBarConfig> bootstrapBar = bootstrapConfigs.getConfig<BootstrapBarConfig>(configId);
+```
+
+retriever がコンフィグを取得できなかった場合、返されるスナップショットは空になります。その場合は、同じメソッドをもう一度呼び出してみることができます。
+
+ブートストラップコンフィグを取得すれば、サブスクライブすべき他のコンポーネントの config id が分かるので、新しいキーセットを定義できます。bootstrapFoo に、サブスクライブすべき config id の配列が含まれていると仮定しましょう。
+
+```java
+ConfigKeySet pluginKeySet;
+for (size_t i = 0; i < (*bootstrapFoo).pluginConfigId.size; i++) {
+    pluginKeySet.add<PluginConfig>((*bootstrapFoo).pluginConfigId[i]);
+}
+```
+
+この例ではリクエストするコンフィグの型が分かっていますが、プラグインがセットにキーを追加するようにして、別の方法で行うこともできます。
+
+派生コンフィグが pluginKeySet に追加されたので、それらのスナップショットをリクエストできます:
+
+```java
+ConfigSnapshot pluginConfigs = retriever.getConfigs(pluginKeySet);
+if (!pluginConfigs.empty()) {
+    // Configure each plugin with a config picked from the snapshot.
+}
+```
+これで完了です。キーパラメーターなしでこのメソッドを呼び出す場合、**タイムアウト内にコンフィグを取得できなかった**場合、または**コンフィグの世代が変わった**場合には、このメソッドが返すスナップショットが空になることがあります。getBootstrapConfigs() を再度呼び出すべきかどうかを確認するには、`bootstrapRequired()` メソッドを使用できます。true を返す場合は、プラグインコンフィグが更新されており、それに対応する新しいブートストラップ世代が必要なため、getBootstrapConfigs() を再度呼び出す必要があります。false を返す場合は、getConfigs() を再度呼び出して、新しい世代のプラグインコンフィグの取得を試みることができます。
+
+このようなユースケースがある場合は、retriever API を使用することをお勧めします。代替手段は、2 つの ConfigSubscriber クラスを使用して独自のメカニズムを作成することですが、これは推奨され**ません**。
+
+### コンフィグモデリングに関するアドバイス
+
+これらのどのタイプのコンフィグを使用する場合でも、システムの設定を開始する**前に**、必要なすべてのコンフィグを取得することを常にお勧めします。これは、ユーザーが複数の異なるバージョンのコンフィグをデプロイする可能性があり、それによってコンポーネントが矛盾したコンフィグ値を受け取る可能性があるためです。よくある落とし穴は、依存関係のあるコンフィグを独立したものとして扱うことで、コンフィグ A の更新がコンフィグ B より先に到着した場合にアプリケーションに不整合を引き起こします。ConfigSubscriber は、すべてのコンフィグが同じコンフィグリロードに由来することを保証することで、この間違いを犯す可能性を最小限に抑えるために作られました。
+
+**ヒント:** 一貫性を確保するため、コンフィグの*ツリー*全体を 1 つのスレッドでセットアップし、すべてのコンフィグが到着してからシステムを設定してください。ConfigSubscriber はスレッドセーフではないため、これは ConfigSubscriber にも最もよく適合します。
+
+## Java config API
+
+前提: コンフィグの 1 つのスキーマである [def ファイル](/ja/applications/configapi-dev)が作成され、`src/main/resources/configdefinitions/` に配置されていること。
+
+def ファイルのソースコードを生成するには、*pom.xml* の `<build>`、`<plugins>` セクションから `config-class-plugin` を呼び出します:
+
+```xml
+<plugin>
+  <groupId>com.yahoo.vespa</groupId>
+  <artifactId>config-class-plugin</artifactId>
+  <version>${vespa.version}</version>
+  <executions>
+    <execution>
+      <id>config-gen</id>
+      <goals>
+        <goal>config-gen</goal>
+      </goals>
+    </execution>
+  </executions>
+</plugin>
+```
+
+生成されたクラスは、ビルドの `generate-sources` フェーズが実行されるときに `target/generated-sources/vespa-configgen-plugin` に保存されます。このチュートリアルでは def ファイル [`motd.def`](/ja/applications/configapi-dev) を使用しており、`MotdConfig` というクラスが(`myproject` パッケージ内に)生成されました。これは `ConfigInstance` のサブタイプです。
+
+(Vespa の他の部分や JDisc コンテナーではなく)コンフィグシステムのみを使用する場合は、pom.xml で次の記述を使用して取り込みます:
+
+```xml
+<dependency>
+  <groupId>com.yahoo.vespa</groupId>
+  <artifactId>config</artifactId>
+  <version>${vespa.version}</version>
+  <scope>provided</scope>
+</dependency>
+```
+
+## サブスクライブとコンフィグの取得
+
+アプリケーションでコンフィグを取得するには、`ConfigSubscriber` を作成します。`ConfigSubscriber` は 1 つ以上のコンフィグをサブスクライブできます。ここに示す例では、エラー処理を簡略化しています:
+
+```java
+ConfigSubscriber subscriber = new ConfigSubscriber();
+ConfigHandle<MotdConfig> handle = subscriber.subscribe(MotdConfig.class, "motdserver2/0");
+if (!subscriber.nextConfig()) throw new RuntimeException("Config timed out.");
+if (handle.isChanged()) {
+  String message = handle.getConfig().message();
+  int port = handle.getConfig().port();
+}
+```
+
+`isChanged()` は `nextConfig()` の最初の呼び出しの後は常に true になることに注意してください。ここでは API を説明するために含めています。
+
+多くの場合、`nextConfig()` の呼び出しをループするスレッドからこれを行い、`isChanged()` が true の場合にアプリケーションを再設定します。
+
+`subscribe()` の 2 番目のパラメーター *"motdserver2/0"* は [config id](/ja/applications/configapi-dev#config-id) です。
+
+1 つの `ConfigSubscriber` が複数のコンフィグをサブスクライブしている場合、`nextConfig()` はコンフィグが同じ世代である場合、つまり「同期している」場合にのみ true を返します。
+
+詳細は [com.yahoo.config](https://javadoc.io/doc/com.yahoo.vespa/config-lib) の javadoc を参照してください。例:
+
+```java
+ConfigSubscriber subscriber = new ConfigSubscriber();
+ConfigHandle<MotdConfig> motdHandle = subscriber.subscribe(MotdConfig.class, "motdserver2/0");
+ConfigHandle<AnotherConfig> anotherHandle = subscriber.subscribe(AnotherConfig.class, "motdserver2/0");
+if (!subscriber.nextConfig()) throw new RuntimeException("Config timed out.");
+// We now have a synchronized new generation for these two configs.
+if (motdHandle.isChanged()) {
+  String message = motdHandle.getConfig().message();
+  int port = motdHandle.getConfig().port();
+}
+if (anotherHandle.isChanged()) {
+  String myfield = anotherHandle.getConfig().getMyField();
+}
+```
+
+## 簡略化されたサブスクリプション
+
+上記の最初の例のように 1 つのコンフィグのみをサブスクライブする場合は、`ConfigSubscriber.SingleSubscriber` インターフェイスを使用してサブスクライブすることもできます。この場合、インターフェイスの `configure()` メソッドを定義し、特別な `subscribe()` を呼び出します。このメソッドは、専用のコンフィグ取得スレッドを開始します。このメソッドは、初期設定に失敗した場合はユーザースレッドで例外をスローし、その後に失敗した場合はコンフィグスレッドで警告を出力します。例:
+
+```java
+public class MyConfigSubscriber implements ConfigSubscriber.SingleSubscriber<MotdConfig> {
+
+  public MyConfigSubscriber(String configId) {
+    new ConfigSubscriber().subscribe(this, MotdConfig.class, configId);
+  }
+
+  @Override
+  public void configure(MotdConfig config) {
+    // configuration logic here
+  }
+}
+```
+
+この方法を使用する欠点は、カスタムエラー処理を実装したり、その他の方法でコンフィグの変更を追跡したりできないことです。必要な場合は、上記の汎用的な方法を使用してください。
+
+## コンフィグのユニットテスト
+
+[ConfigSubscriber](https://javadoc.io/doc/com.yahoo.vespa/config/latest/com/yahoo/config/subscription/ConfigSubscriber.html) をインスタンス化するとき、[ConfigSource](https://javadoc.io/doc/com.yahoo.vespa/config/latest/com/yahoo/config/subscription/ConfigSource.html) を渡すことができます。そのようなソースの 1 つが `ConfigSet` です。これは `Builder` のセットで構成されます。以下は、これを使用してサブスクライバーをインスタンス化する例です<br /> - ここでは、ファイル `app.def` と `string.def` から生成された 2 種類のコンフィグを使用しています:
+
+```java
+ConfigSet myConfigs = new ConfigSet();
+AppConfig.Builder a0builder = new AppConfig.Builder().message("A message, 0").times(88);
+AppConfig.Builder a1builder = new AppConfig.Builder().message("A message, 1").times(89);
+myConfigs.add("app/0", a0builder);
+myConfigs.add("app/1", a1builder);
+myConfigs.add("bar", new StringConfig.Builder().stringVal("StringVal"));
+ConfigSubscriber subscriber = new ConfigSubscriber(myConfigs);
+```
+
+ユニットテストを支援するため、各コンフィグ型には対応するビルダー型があります。`Builder` はミュータブルですが、`ConfigInstance` はそうではありません。これを使用して、ユニットテスト用のコンフィグのフィクスチャをセットアップします。`ConfigSubscriber` には `reload()` メソッドがあり、テストでサブスクリプションを強制的に新しい世代に移行させるために使用されます。これは、`ConfigSet` を更新した後の `vespa activate` 操作をエミュレートします。
+
+完全な例は [ConfigSetSubscriptionTest.java](https://github.com/vespa-engine/vespa/blob/master/config/src/test/java/com/yahoo/config/subscription/ConfigSetSubscriptionTest.java) にあります。

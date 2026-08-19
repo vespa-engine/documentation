@@ -52,15 +52,29 @@ The best solution for this case is to slow down the batch job, as it is of short
 
 ## Examples
 
-Below is an example of node resources with autoscaling that would work well for a container cluster:
+The examples below show recommended starting points per cluster type. As a rule of thumb, container clusters can autoscale on any dimension, while content clusters work best with fixed node resources and a range on the number of nodes or groups.
+
+### Container clusters
+
+Container clusters are stateless, so nodes can be added, removed or replaced quickly, and no data needs to move. Scaling the number of nodes is the simplest option and a good starting point:
 
 ```xml
 <nodes count="[2, 8]">
-    <resources vcpu="[2, 3]" memory="[8Gb, 16Gb]" disk="[50Gb, 100Gb]"/>
+    <resources vcpu="4" memory="8Gb"/>
   </nodes>
 ```
 
-The above would in general **not be recommended for a content cluster.** Changing cpu, memory or disk usually leads to allocating new nodes to fulfil the new node resources spec. When that happens there will be redistribution of documents between the old and new nodes and this might impact service quality to some degree. For a content cluster it would usually be better to try to stick to the same node resources and add or remove nodes, e.g something like:
+You can also let autoscaling choose the node resources within ranges. Changing node resources usually means replacing nodes, but for a container cluster this causes little overhead:
+
+```xml
+<nodes count="[2, 8]">
+    <resources vcpu="[2, 4]" memory="[8Gb, 16Gb]"/>
+  </nodes>
+```
+
+### Content clusters
+
+Content clusters hold data, so scaling them means redistributing documents. Changing vcpu, memory or disk usually leads to allocating new nodes to fulfil the new node resource spec, replacing all nodes in the cluster and redistributing all documents. Keep node resources fixed and autoscale the number of nodes instead - then only the data on added or removed nodes has to move:
 
 ```xml
 <nodes count="[2, 8]">
@@ -68,15 +82,41 @@ The above would in general **not be recommended for a content cluster.** Changin
   </nodes>
 ```
 
-If a content cluster is configured to autoscale based on node resources (not just number of nodes or groups) this will work fine, but note that using paged attributes or HNSW indexes will make it more expensive and time-consuming to redistribute documents when scaling up or down. When doing the initial feeding of a cluster it will be best to avoid auto-scaling, as changing the topology will require redistribution of documents, possibly several times.
-
-When using groups in a content cluster it's possible to scale the number of groups instead of the number of nodes, e.g. with a fixed group size and a range for the number of groups:
+For content clusters using [groups](/en/reference/applications/services/services#nodes), express the topology with `groups` and `group-size` rather than a `count` range, and autoscale the number of groups:
 
 ```xml
 <nodes groups="[2, 4]" group-size="8">
     <resources vcpu="4" memory="16Gb" disk="500Gb"/>
   </nodes>
 ```
+
+This scales between 2 and 4 groups of 8 nodes each, 16 to 32 nodes in total. Since each query is handled by a single group, query capacity scales with the number of groups, and adding a group populates the new group without redistributing documents between the existing nodes.
+
+<Warning>
+**Important:** 
+
+Autoscaling node resources (vcpu, memory, disk) in a content cluster is supported, but each resource change replaces all nodes and redistributes all documents, which might impact service quality to some degree. Using [paged attributes](/en/content/attributes#paged-attributes) or HNSW indexes makes redistribution more expensive and time-consuming.
+</Warning>
+
+<Note>
+**Note:** 
+
+Avoid autoscaling during the initial feeding of a cluster, as changing the topology will require redistribution of documents, possibly several times - see [initial batch feed](/en/writing/initial-batch-feed).
+</Note>
+
+### Avoid ranges on every dimension
+
+For completeness, this is a configuration to avoid, in particular for content clusters:
+
+```xml
+<nodes count="[2, 8]">
+    <resources vcpu="[2, 8]" memory="[8Gb, 32Gb]" disk="[50Gb, 200Gb]"/>
+  </nodes>
+```
+
+As node resources often come in increments of x2, these ranges span 7 node counts x 3 vcpu x 3 memory x 3 disk steps - around 190 configurations the autoscaler can choose between. For a content cluster, every move between configurations with different node resources replaces all nodes and redistributes all documents. Wide ranges on many dimensions mostly give the autoscaler more expensive ways to reach the same utilization - prefer scaling a single dimension, and see [resource tradeoffs](#resource-tradeoffs).
+
+### GPU resources
 
 Note that at the moment it is not possible to autoscale GPU resources per node, but you can scale the number of nodes with GPUs:
 
@@ -87,6 +127,12 @@ Note that at the moment it is not possible to autoscale GPU resources per node, 
     </resources>
   </nodes>
 ```
+
+### Notes
+
+- Autoscaling requires a cluster of at least two nodes - single-node clusters are not autoscaled.
+- Ranges only take effect in production zones. The [dev environment](/en/operations/environments#dev) ignores `nodes` and `resources` settings by default.
+- Set the lower bound of a range close to your normal baseline load - a very wide range lets the autoscaler shed many nodes in quiet periods, making the swing back on the next load peak larger and slower.
 
 ## Related reading
 

@@ -1,0 +1,250 @@
+---
+title: "ニュース推薦チュートリアル - 親子関係とテンソル・ランキング"
+---
+
+これは、パーソナライズされたニュース推薦のためのVespaアプリケーションをセットアップするチュートリアルシリーズの第7回です。シリーズの構成は以下のとおりです:
+
+1. [はじめに](/ja/learn/tutorials/news-1-deploy-an-application)
+2. [基本的なニュース検索アプリケーション](/ja/learn/tutorials/news-2-basic-feeding-and-query) - アプリケーション・パッケージ、フィーディング、クエリー
+3. [ニュース検索](/ja/learn/tutorials/news-3-searching) - ソート、グルーピング、ランキング
+4. [ユーザーとニュース記事の埋め込みの生成](/ja/learn/tutorials/news-4-embeddings)
+5. [ニュース推薦](/ja/learn/tutorials/news-5-recommendation) - 部分更新（ニュース埋め込み）、ANN、フィルタリング
+6. [searcherを使ったニュース推薦](/ja/learn/tutorials/news-6-recommendation-with-searchers) - カスタムsearcher、document processor
+7. [親子関係を使ったニュース推薦](/ja/learn/tutorials/news-7-recommendation-with-parent-child) - 親子関係、テンソル・ランキング
+8. 高度なニュース推薦 - 間奏 - ランキングモデルのトレーニング
+9. 高度なニュース推薦 - MLモデル
+
+シリーズのこのパートでは、新しいランキング・シグナルを導入します: カテゴリのクリックスルー率（CTR）です。この考え方は、クリック履歴のないユーザーに対して人気のあるコンテンツを推薦できるようにするというものです。記事単位で推薦するのではなく、カテゴリに基づいて推薦します。しかし、これらのグローバルなCTR値は継続的に変化することが多いため、すべてのドキュメントに対してこの値を効率的に更新する方法が必要です。これは、Vespaのドキュメント間に親子関係を導入することで実現します。また、ランキングでスパース・テンソルを直接使用します。
+
+参考として、このチュートリアルの最終状態は、`news`サンプルアプリケーションの[app-7-parent-child](https://github.com/vespa-engine/sample-apps/tree/master/news/app-7-parent-child)ディレクトリにあります。
+
+
+## Vespaにおける親子関係
+
+ドキュメントをランキングする際、ほとんどのフィーチャーはドキュメント内の属性（attribute）またはクエリーと共に渡されるパラメーターのいずれかに由来することを思い出してください。親子関係は、他のドキュメントにある属性を使用するという選択肢を導入します。親子関係は、スケーラブルなドキュメント結合（join）の一形態として機能します。
+
+たとえば、スポーツ・カテゴリのグローバルなCTR値が`0.2`だとします。この値をランキング中に使用したい場合、各ニュース記事にこの値を保持するフィールドを持たせることもできます。しかし、この値を更新する必要があるとき、すべてのドキュメントに部分更新を発行しなければならず、無駄が多いように思えます。
+
+別の方法は、`UserProfileSearcher`からヒントを得ることです。そこでは、ニュース記事のクエリーと共に渡す前に、検索でユーザーのテンソル埋め込みを取得しました。すべてのグローバル値を保持する単一のドキュメントを用意し、クエリーのたびにそれを取得することもできます。しかし、それは特に効率的ではありません。
+
+このようなケースのために、Vespaは[親子関係](/ja/schemas/parent-child)を導入しました。親はグローバル・ドキュメントであり、すべてのコンテント・ノードに自動的に分散されます。他のドキュメントはこれらの親を参照し、ランキングで使用する値を「インポート」できます。利点は、グローバルなカテゴリCTR値を1か所（グローバル・ドキュメント）に書き込むだけで済むことです。
+
+詳細と例については、[親子関係のガイド](/ja/schemas/parent-child)を参照してください。
+
+
+## グローバルなカテゴリCTRドキュメントのセットアップ
+
+それでは、これをアプリケーションにセットアップしましょう。まず、CTR値を保持する新しいドキュメント・タイプを追加する必要があります。`category_ctr`ドキュメント・タイプを導入し、`schemas/category_ctr.sd`に追加します:
+
+```sd
+schema category_ctr {
+    document category_ctr {
+        field ctrs type tensor<float>(category{}) {
+            indexing: attribute
+            attribute: fast-search
+        }
+    }
+}
+```
+
+このドキュメントは単一のフィールドを保持します: `tensor<float>(category{})`型の[テンソル](/ja/ranking/tensor-user-guide)です。これは単一のスパース次元を持つテンソルで、これまで見てきたテンソルとは少し異なります。スパース・テンソルは、次元のアドレスとして数値インデックスではなく文字列を持ちます。より具体的には、このようなテンソルの例は次のとおりです（[テンソル・リテラル形式](/ja/reference/ranking/tensor#tensor-literal-form)を使用）:
+
+```
+{
+    {category: entertainment}: 0.2,
+    {category: news}: 0.3,
+    {category: sports}: 0.5,
+    {category: travel}: 0.4,
+    {category: finance}: 0.1,
+    ...
+}
+```
+
+このテンソルは、すべてのカテゴリのすべてのCTRスコアを保持します。このテンソルを更新する際、テンソル全体を更新する必要がなければ、個々のセルを更新できます。これは[tensor modify](/ja/reference/schemas/document-json-format#tensor-modify)と呼ばれ、大きなテンソルを扱う場合に役立ちます。
+
+このドキュメントを使用するには、`services.xml`に追加します:
+
+```xml
+<content id="mind" version="1.0">
+    <documents>
+        <document type="news" mode="index" />
+        <document type="user" mode="index" />
+        <document type="category_ctr" mode="index" global="true" />
+    </documents>
+</content>
+```
+
+`global="true"`を設定していることに注意してください。これにより、Vespaがこれらのドキュメントのコピーをすべてのコンテント・ノードに保持するように設定されます。これは親子関係で使用するために必要です。また、すべてのノードがすべての親ドキュメントをインデックスする必要があるため、システムが持てる親ドキュメントの数には制限が生じます。
+
+
+## 子ドキュメントへの親の値のインポート
+
+`news`ドキュメントのランキングで`category_ctr`テンソルを使用するには、そのテンソルを子ドキュメント・タイプに「インポート」する必要があります。セットアップすべきことは2つあります:
+
+1. 親ドキュメントへの参照
+2. どのフィールドをインポートするか。
+
+`schemas/news.sd`を変更します:
+
+```sd
+schema news {
+    document news {
+        ...
+        field category_ctr_ref type reference<category_ctr> {
+            indexing: attribute
+        }
+        ...
+    }
+    import field category_ctr_ref.ctrs as global_category_ctrs {}
+}
+```
+
+フィールド`category_ctr_ref`は、`category_ctr`ドキュメント・タイプの`reference`型のフィールドです。このフィールドをフィードする際、Vespaは完全修飾されたドキュメントIDを期待します。たとえば、グローバルCTRドキュメントのidが`id:category_ctr:category_ctr::global`である場合、このフィールドにはそれを設定しなければなりません。通常、子が参照できる親ドキュメントは多数存在しますが、このアプリケーションでは1つだけです。
+
+参照フィールドは親ドキュメントへの外部キーを保持するもの、インポートはこの外部キーを使用して子ドキュメントと親ドキュメントの間でリアルタイムの結合を実行するもの、と考えることができます。インポートされた値は、あたかも子と共に格納されているかのように使用できます。
+
+`import`文は、`category_ctr_ref`フィールドで参照されるドキュメントから`ctrs`フィールドをインポートすることを定義しています。これに`global_category_ctrs`という名前を付け、ランキング中に`attribute(global_category_ctrs)`として参照できます。
+
+
+## ランキングにおけるテンソル式
+
+ここまでは、テンソルをストレージとしてのみ使用してきました。ニュースとユーザーの埋め込みを保持するためにテンソルを使用し、Vespaは最近傍検索でドット積を計算するためにこれらのテンソルを使用しました。
+
+しかし、Vespaにはテンソルを使った計算を実行するための[豊かな言語](/ja/ranking/tensor-user-guide#ranking-with-tensors)があります。これを活用して、グローバルCTRテンソル内で`news`記事のカテゴリを検索し、それをランキングのフィーチャーとして使用します。
+
+現在、`news`ドキュメントには`category`を文字列として保持するフィールドがあります。残念ながら、テンソル式はテンソルに対してのみ機能するため、カテゴリのテンソルを保持する新しいフィールドを追加する必要があります:
+
+```sd
+field category_tensor type tensor<float>(category{}) {
+    indexing: attribute
+}
+```
+
+このようにテンソルを使用すると、1つのドキュメントが複数のカテゴリを持つことも可能になりますが、このデータセットでは記事ごとに1つのカテゴリしかありません。たとえば、`news`記事の`finance`カテゴリは次のように表現できます:
+
+```
+{category: finance}: 1.0
+```
+
+これはスパース・テンソルなので、他のカテゴリに言及する必要はありません。これで、このテンソルを使用して記事のカテゴリのグローバルCTRスコアを計算できます:
+
+```
+attribute(category_tensor) * attribute(global_category_ctrs)
+```
+
+上記のグローバル・カテゴリCTRの例では、これは値`0.1`になります。どのようにしてこの値に至ったのでしょうか？上記の例の`category`次元の`finance`セルの値が`0.1`だったことを思い出してください。これら2つのテンソルの乗算は概念的には「内部結合（inner join）」であり、マッチするセル同士を掛け合わせることができます。テンソルのスパース性により、`finance`セルのみがマッチし、その値がこのドキュメントの`1.0`と掛け合わされます。したがってこの場合、これは実質的にルックアップとして機能します。
+
+<Note>
+はるかに複雑な演算も利用できます。詳細については[テンソル・ユーザーガイド](/ja/ranking/tensor-user-guide#ranking-with-tensors)を参照してください。
+</Note>
+
+この計算を行う新しいランク・プロファイルを追加しましょう:
+
+```sd expandable
+rank-profile recommendation_with_global_category_ctr inherits recommendation {
+    function category_ctr() {
+        expression: sum(attribute(category_tensor) * attribute(global_category_ctrs))
+    }
+    function nearest_neighbor() {
+        expression: closeness(field, embedding)
+    }
+    first-phase {
+        expression: nearest_neighbor * category_ctr
+    }
+    summary-features {
+        attribute(category_tensor)
+        attribute(global_category_ctrs)
+        category_ctr
+        nearest_neighbor
+    }
+}
+```
+
+ここでは、最近傍スコアとカテゴリCTRスコアを掛け合わせる第一フェーズ（first phase）のランキング式を追加しました。それぞれ`nearest_neighbor`関数と`category_ctr`関数として実装されています。
+
+`category_ctr`式の周りに`sum`関数を追加しました - これは単に、単一値のテンソルを、第一フェーズの式で使用するのに適したdouble値にアンボックスするためのものです。
+
+最初の試みとして、最近傍スコアとカテゴリCTRスコアを単純に掛け合わせているだけであることに注意してください。これは必ずしもこれらの値を組み合わせる正しい方法ではありませんが、これについては後ほど戻ります。
+
+[サマリー・フィーチャー（summary features）](/ja/reference/schemas/schemas#summary-features)のセクションを追加しました。これは単に、このランク・プロファイルを使用したときにヒットと共に返されるフィーチャーのリストです。各フィールドの`indexing: summary`文で、どのフィーチャーをサマリーで返すかを指定できることを思い出してください。`summary-features`には関数の結果も含めることができます。これは便利なデバッグツールであり、データをフィードした後にどのように見えるかを確認します。
+
+
+## 親と子の更新のフィーディング
+
+アプリケーションをデプロイします:
+
+```bash
+$ (cd app-7-parent-child && mvn package)
+```
+
+```bash
+$ vespa deploy --wait 600 app-7-parent-child
+```
+
+アプリケーションのデプロイ後、グローバルCTRドキュメントをフィードする準備が整いました。便宜のため、MINDのコンテンツとインプレッション・データを読み込んで各カテゴリのCTRスコアを計算する[create_category_ctrs.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/create_category_ctrs.py)を用意しています。これは`mind`ディレクトリに2つのファイルを生成します:
+
+1. `mind/global_category_ctr.json` - 各カテゴリのCTRスコアを含む、グローバルCTRドキュメント用のフィードファイル。
+2. `mind/news_category_ctr_update.json` - グローバルCTRドキュメントへの参照とカテゴリのテンソルで`news`記事を部分更新するためのフィードファイル。
+
+これらのファイルをVespaにフィードできますが、子ドキュメントが参照する前にグローバル・ドキュメントが存在している必要があるため、`mind/global_category_ctr.json`を先にフィードする必要があることに注意してください。
+
+フィードファイルを作成します:
+
+```bash
+$ ./src/python/create_category_ctrs.py mind
+```
+
+作成したフィードファイルをフィードします:
+
+```bash
+$ vespa feed mind/global_category_ctr.json
+$ vespa feed mind/news_category_ctr_update.json
+```
+
+
+## アプリケーションのテスト
+
+上記のファイルをフィードした後、クエリーでアプリケーションをテストできます:
+
+```bash
+$ vespa query \
+  'user_id=U33527' \
+  'ranking.profile=recommendation_with_global_category_ctr' \
+  'hits=10'
+```
+
+使用するランク・プロファイルを指定していることに注意してください。このクエリーの最初の結果は次のようなものになります:
+
+```json expandable
+"fields": {
+    "title": "Matthew Stafford's status vs. Bears uncertain, Sam Martin will play",
+    "abstract": "Stafford's start streak could be in jeopardy, according to Ian Rapoport.",
+    "category": "sports",
+    ...
+    "summary-features": {
+        "attribute(category_tensor)": {"cells": [{"address": { "category": "sports"}, "value":1.0 }]},
+        "attribute(global_category_ctrs)": {"cells": [
+            ...
+            { "address": { "category": "sports" }, "value": 0.05611187964677811 },
+            ...
+        ]},
+        "rankingExpression(category_ctr)": 0.05611187964677811,
+        "rankingExpression(nearest_neighbor)": 0.14914761220236453,
+    }
+    ...
+    "relevance": 0.008368952865503413,
+}
+```
+
+これは明らかにスポーツの記事です。グローバルCTRドキュメントもここに表示されており、`sports`カテゴリのCTRスコアは`0.0561`です。したがって、`category_ctr`関数の結果は意図したとおり`0.0561`です。`nearest_neighbor`スコアは`0.149`で、結果として得られる関連度スコアは`0.00836`です。つまり、これは期待どおりに機能しました。
+
+グローバルCTRドキュメントに別の値をフィードすると、この更新された値はすぐに利用可能になります。このように、システムはグローバル・パラメーターの変化に素早く応答します。
+
+さて、これらのフィーチャー同士の単純な乗算では、望む結果が得られないかもしれません。たとえば、これらのフィーチャーは平均値も標準偏差も異なります。特に、複数の追加フィーチャーを加える場合、それらを単に掛け合わせるだけでは、おそらく優れたユーザー体験は得られません。上で示したような手動チューニングによる最終的な関連度計算の代わりに、これらをフィーチャー入力とする機械学習された関数を使用することもできます。
+
+最終的に、これらのフィーチャーはランキング中にすべてのニュース記事に対してリアルタイムで計算されます。そして、これらのフィーチャーは任意の機械学習ランキングモデルに追加できます。Vespaは、[XGBoost](/ja/ranking/xgboost)と[LightGBM](/ja/ranking/lightgbm)による勾配ブースティング木、および[PyTorch](https://pytorch.org/)や[Tensorflow](https://www.tensorflow.org/)などの人気MLフレームワークからエクスポートされた[ONNX](/ja/ranking/onnx)形式のニューラルネットワークもサポートしています。
+
+
+## まとめ
+
+このチュートリアルでは親子関係を導入し、ランキングで使用したグローバルCTRフィーチャーを通してそれを実証しました。このフィーチャーはテンソルに基づいていたため、テンソル式によるランキングも導入しました。親子テンソルを使用した実世界のユースケースについては、この[ブログ記事](https://blog.vespa.ai/parent-child-joins-tensors-content-recommendation/?_gl=1*1cqlj1i*_gcl_au*ODE0ODM4MTI2LjE3Nzk3MjQ3OTY.)を参照してください。

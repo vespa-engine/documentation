@@ -1,0 +1,236 @@
+---
+title: "チャンクの操作"
+---
+
+RAG アプリケーション、および一般にベクトル検索アプリケーションにおける重要な手法の 1 つは、長いテキストをチャンクに分割することです。これにより、次のことが可能になります:
+
+- ドキュメントのテキスト全体ではなくチャンクごとにベクトル埋め込みを生成し、意味のあるレベルでテキストのセマンティック情報を捉えます。
+- GenAI アプリケーションで、ドキュメントの内容全体ではなく、特定のチャンクをコンテキスト・ウィンドウに追加できます。
+
+Vespa には、チャンクを操作するための以下の機能があります。それぞれ以下のセクションで説明します。
+
+<CardGroup>
+<Card title="ドキュメントへのチャンクの取り込み" icon="file" href="#including-chunks-in-documents" horizontal/>
+<Card title="チャンクからのベクトル埋め込みの作成" icon="file" href="#creating-vector-embeddings-from-chunks" horizontal/>
+<Card title="チャンクの検索" icon="file" href="#searching-chunks" horizontal/>
+<Card title="チャンクを用いたランキング" icon="file" href="#ranking-with-chunks" horizontal/>
+<Card title="レイヤード・ランキング: 返却するチャンクの選択" icon="file" href="#layered-ranking-selecting-chunks-to-return" horizontal/>
+</CardGroup>
+
+## ドキュメントへのチャンクの取り込み
+
+同じテキストに属するチャンクは、同じドキュメントに追加すべきです。チャンクは string の配列として表現されます。
+
+次のようなスキーマを使って、自分でテキストをチャンクに分割できます:
+
+```js
+search myDocumentType {
+    document myDocumentType {
+        field myChunks type array<string> {
+            indexing: summary | index
+        }
+    }
+}
+```
+
+その後、この [document JSON](../reference/schemas/document-json-format.html) を使ってチャンクを Vespa に書き込めます:
+
+```json
+"myChunks": ["My first chunk text", "My second chunk text"]
+```
+
+あるいは、ドキュメントの外側にシンセティック・フィールドを使用することで、Vespa にチャンキングを任せることもできます:
+
+```js
+search myDocumentType {
+    document myDocumentType {
+        field myText type string {
+        }
+    }
+    field myChunks type array<string> {
+        indexing: input myText | chunk fixed-length 500 | summary | index
+    }
+}
+```
+
+[chunk 式](/ja/reference/writing/indexing-language#chunk)では、Vespa が提供するチャンカーから選ぶことも、独自のものをプラグインすることもできます。[チャンキングのリファレンス・ドキュメント](/ja/reference/rag/chunking)を参照してください。
+
+## チャンクからのベクトル埋め込みの作成
+
+ドキュメントに埋め込みを追加するには、テンソル・フィールドを使用します:
+
+```js
+search myDocumentType {
+    document myDocumentType {
+        field myEmbedding type tensor<float>(x[384]) {
+            indexing: attribute | index
+        }
+    }
+}
+```
+
+これで各ドキュメントに 1 つの埋め込みを追加できますが、通常は多数の埋め込みを持ちたいはずです。Vespa では、テンソルに [mapped 次元](/ja/ranking/tensor-user-guide#tensor-concepts)を追加することでこれを実現できます:
+
+```js
+search myDocumentType {
+    document myDocumentType {
+        field myEmbeddings type tensor<float>(chunk{}, x[384]) {
+            indexing: attribute | index
+        }
+    }
+}
+```
+
+これにより、書き込みの一部として [JSON フォーマットのテンソル](../reference/schemas/document-json-format#tensor-short-form-mixed)をフィードできます。たとえば、1 と 2 の番号が付いたチャンクを持つ埋め込みテンソルを書き込む場合:
+
+```js
+"myEmbeddings": {
+    "1":[2.0,3.0,...],
+    "2":[4.0,5.0,...]
+}
+```
+
+このような JSON のパースはコンテナー・クラスターで多くの CPU を消費することに気づくかもしれません。これを避けるために、埋め込みを [16 進数エンコードされた raw データ](/ja/reference/schemas/document-json-format#tensor-hex-dump)としてフィードすることもできます。
+
+また、Vespa が提供するモデルまたはアプリケーション・パッケージで指定したモデルを使用して、Vespa に埋め込みを任せることもできます:
+
+```js
+search myDocumentType {
+    document myDocumentType {
+        field myChunks type array<string> {
+        }
+    }
+    field myEmbeddings type tensor<float>(chunk{}, x[384]) {
+        indexing: input myChunks | embed | attribute | index
+    }
+}
+```
+
+embedder の設定方法は[埋め込みガイド](/ja/rag/embedding)を参照してください。
+
+もちろん、これをチャンキングと組み合わせて、単一のテキスト・フィールドを自動的にチャンク化して埋め込むこともできます:
+
+```js
+search myDocumentType {
+    document myDocumentType {
+        field myText type string {
+        }
+    }
+    field myChunks type array<string> {
+        indexing: input myText | chunk sentence | summary | index
+    }
+    field myEmbeddings type tensor<float>(chunk{}, x[384]) {
+        indexing: input myText | chunk sentence | embed | attribute | index
+    }
+}
+```
+
+注意すべき点がいくつかあります:
+
+- Vespa ドキュメントのすべてのフィールドは保存されるため、ここでテキストを単一フィールドとテキストのチャンクの両方として表現すると、多くの不要な領域を消費するのではないでしょうか? いいえ、現代の圧縮技術の素晴らしさのおかげで、このオーバーヘッドは無視できます。 
+- なぜ結果でテキスト・フィールド全体ではなくチャンク配列を返すのでしょうか? これは、大きなテキストの場合、テキスト全体を返すのではなく、テキスト・チャンクのサブセットを選択する必要があるためです。 
+- ここでは 2 回チャンキングしていますが、非効率ではないでしょうか? いいえ、このようなケースでは Vespa は最初の呼び出しの結果を再利用します。
+
+## チャンクの検索
+
+チャンクのテキスト(`index` を追加した場合)と、チャンクの埋め込み(埋め込みを作成した場合)を検索できます。テキスト検索は正確なマッチを提供し、埋め込みの最近傍検索は厳密でないセマンティックなマッチングを提供するため、通常は両方を行いたいはずです([ハイブリッド検索](/ja/learn/tutorials/hybrid-search))。
+
+シンプルなハイブリッド・クエリーは次のようになります:
+
+```bash
+yql=select * from doc where myField contains text(@query) or ({totalTargetHits:10}nearestNeighbor(myEmbeddings, e))
+input.query(e)=embed(@query)
+query=Do Cholesterol Statin Drugs Cause Breast Cancer?
+```
+
+ここで示した `embed` 関数は、チャンクに使用したのと同じモデルを使ってクエリー・テキストを埋め込むために使用できます。Vespa の外部で埋め込む場合は、代わりに[テンソル値を渡す](/ja/reference/ranking/tensor#tensor-literal-form)ことができます。詳細は[最近傍検索ガイド](/ja/querying/nearest-neighbor-search-guide#hybrid-sparse-and-dense-retrieval-methods-with-vespa)を参照してください。
+
+テキスト・マッチングは、チャンクが 1 つのテキスト・フィールドに再結合されたかのように、チャンクをまたいで機能します。ただし、各チャンクの間には近接ギャップ (proximity gap) が挿入されるため、フレーズ・マッチや near マッチを評価する際、異なるチャンク内のトークンはデフォルトで非常に(無限に)離れているものとして扱われます(ただし、[この設定について](/ja/reference/schemas/schemas#rank-element-gap)を参照してください)。
+
+多数のチャンクに対する最近傍検索は、いずれか 1 つのチャンク埋め込みがクエリー埋め込みに近いドキュメントを取得します。
+
+## チャンクを用いたランキング
+
+Vespa におけるランキングは、ランク・フィーチャーを組み合わせた[数学的な式](/ja/ranking/ranking-expressions-features)(手書きまたは機械学習によるもの)によって行われます。通常は、ベクトル埋め込みとテキストのクエリー・タームの両方がチャンクにどの程度マッチしたかを捉えるフィーチャーを使いたいはずです。
+
+ベクトル検索では、`closeness(dimension,field)` フィーチャーに、クエリー・ベクトルと*最も近い*チャンク埋め込みとの距離が含まれます。加えて、`closest(field)` フィーチャーは、最も近かったチャンクのラベルを提供するテンソルを返します。
+
+テキスト・マッチングでは、チャンク配列全体が単一の string フィールドであるかのようにすべてのフィーチャーが利用できますが、各要素を独立したものとして扱うため、各要素の間には無限に大きい近接ギャップが置かれます。配列の要素が同じテキストのチャンクである場合、隣接する要素へのマッチから関連度への寄与を得られる方が望ましいでしょう。それはソース・テキスト内の隣接する単語にマッチしていることを意味するからです。これを実現するには、チャンク配列の elementGap を低い値(チャンキング戦略がセマンティックな切れ目をどの程度うまく識別できるかに応じて、たとえば 0 から 3)に設定します:
+
+```js
+rank-profile myProfile {
+        rank myChunks {
+            element-gap: 1
+        }
+    }
+```
+
+ベクトルの closeness と通常のテキスト・マッチのフィーチャーを使用すると、主にクエリーに対して単一の最良マッチを持つテキストに基づいてドキュメントをランキングできます。テキスト全体としてクエリーにどの程度マッチしているかを捉えることが有用な場合もあります。ベクトルの場合、ランキング式の中で[テンソル式](/ja/ranking/tensor-user-guide#ranking-with-tensors)を使用して各ベクトルへの closeness を計算・集約することでこれを実現できます。テキスト・マッチングの場合は、`elementSimilarity(field)` フィーチャー、または各チャンクの bm25 スコアを含むテンソルを返す [elementwise(bm25(field),dimension,cell_type)](/ja/reference/ranking/rank-features#elementwise-bm25) フィーチャーを使用できます。
+
+## レイヤード・ランキング: 返却するチャンクの選択
+
+検索結果には、リクエストまたは[設定](/ja/querying/document-summaries)したすべてのフィールドを含む上位ランクのドキュメントが含まれ、関連の有無にかかわらず、それらのドキュメントのすべてのチャンクが含まれます。各ドキュメントのチャンクが少ない場合はこれで問題ありませんが、多数のチャンクを持ち得る場合は 2 つの問題があります:
+
+- 多くの無関係なチャンクを LLM のコンテキスト・ウィンドウに入れると品質が低下したり、コンテキスト・ウィンドウが実現不可能なほど大きくなったりする可能性があります。
+- 多くのチャンクをネットワーク越しに送信するとレイテンシーが増加し、同時に実行されている他のクエリーに影響を与える可能性があります。
+
+これらの両方を解決するために、[レイヤード・ランキング](https://blog.vespa.ai/introducing-layered-ranking-for-rag-applications/)を使用できます。最上位にランクされたドキュメント内のチャンクをランキングし、最良のものだけを選択します。
+
+これを行うには、`select-elements-by` を使用して、返却するチャンクを選択するランキング関数を指定します。完全な例を以下に示します:
+
+```js expandable
+schema docs {
+    document docs {
+
+        field myEmbeddings type tensor<float>(chunk{}, x[386]) {
+            indexing: attribute
+        }
+
+        field myChunks type array<string> {
+            indexing: index | summary
+            summary {
+                select-elements-by: best_chunks
+            }
+        }
+
+    }
+
+    rank-profile default {
+
+        inputs {
+            query(embedding) tensor<float>(x[386])
+        }
+
+        function my_distance() {
+            expression: euclidean_distance(query(embedding), attribute(myEmbeddings), x)
+        }
+
+        function my_distance_scores() {
+            expression: 1 / (1+my_distance)
+        }
+
+        function my_text_scores() {
+            expression: elementwise(bm25(myChunks), chunk, float)
+        }
+
+        function chunk_scores() {
+            expression: merge(my_distance_scores, my_text_scores, f(a,b)(a+b))
+        }
+
+        function best_chunks() {
+            expression: top(3, chunk_scores)
+        }
+
+        first-phase {
+            expression: sum(chunk_scores())
+        }
+
+        summary-features {
+            best_chunks
+        }
+
+    }
+}
+```
+
+これにより、Vespa の強力なランキング・フレームワークを使用して LLM に提供する最良のチャンクを選択でき、使用されないチャンクをネットワーク越しに送信せずに済みます。

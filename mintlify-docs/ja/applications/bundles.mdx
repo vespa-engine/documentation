@@ -1,0 +1,730 @@
+---
+title: "バンドル"
+description: "コンテナーは[OSGi](https://osgi.org)を使用して、多数の再利用可能なコンポーネントから構成できるアプリケーションを開発するためのモジュラー・プラットフォームを提供します。ユーザーは、これらのコンポーネントを実行時にデプロイ、アップグレード、削除できます。"
+---
+
+## OSGi
+
+OSGiは、Javaアプリケーションをモジュラーに開発するためのフレームワークであり、*バンドル*と呼ばれるリソースのセットをインストールできます。OSGiでは、バンドル内のどのリソース(Javaパッケージ)を他のバンドルから利用可能にするかを開発者が制御できます。これにより、バンドルの公開APIを明示的に宣言でき、さらに内部の実装詳細を確実に隠蔽できます。
+
+すでにOSGiに精通している場合を除き、Richard S. Hall氏のプレゼンテーション[Learning to ignore OSGi](https://cwiki.apache.org/confluence/download/attachments/7956/Learning_to_ignore_OSGi.pdf)を読むことをお勧めします。バンドル開発者として押さえておくべき最も重要な側面が説明されています。ほかにも優れたOSGiチュートリアルがあります:
+
+- [OSGi for Dummies](https://thiloshon.wordpress.com/2020/03/04/osgi-for-dummies/)
+- [OSGi Modularity and Services - Tutorial](https://www.vogella.com/tutorials/OSGi/article.html)(OSGiサービスに関する部分は読み飛ばして構いません。)
+
+JDiscはOSGiの*モジュール*レイヤーと*ライフサイクル*レイヤーを使用しており、*サービス*レイヤーの機能は提供していません。
+
+## OSGiバンドル
+
+OSGiバンドルは、その内容、バンドルが他のバンドルに要求(インポート)するもの、および他のバンドルに提供(エクスポート)するものを記述したMANIFEST.MFファイルを持つ、通常のJARファイルです。以下は、最も重要なヘッダーを含む典型的なバンドル・マニフェストの例です:
+
+```java
+Bundle-SymbolicName: com.yahoo.helloworld
+Bundle-Description: A Hello World bundle
+Bundle-Version: 1.0.0
+Export-Package: com.yahoo.helloworld;version="1.0.0"
+Import-Package: org.osgi.framework;version="1.3.0"
+```
+
+このバンドル・マニフェストのヘッダーの意味は次のとおりです:
+
+- `Bundle-SymbolicName` - バンドルの一意な識別子。
+- `Bundle-Description` - バンドルの機能を人間が読める形で記述したもの。
+- `Bundle-Version` - バンドルにバージョン番号を割り当てます。
+- `Export-Package` - バンドルに含まれるどのJavaパッケージを外部から利用可能にするかを表します。
+- `Import-Package` - バンドル内で必要な依存関係を満たすために、外部からどのJavaパッケージが必要になるかを示します。
+
+OSGiにはバージョン番号の厳密な定義があり、バンドルが正しく動作するにはそれに従う必要があることに注意してください。詳細は[OSGi javadoc](https://docs.osgi.org/javadoc/r4v42/org/osgi/framework/Version.html#Version(java.lang.String))を参照してください。一般的なアドバイスとして、バージョンには3つの数値(major、minor、micro)を超える数を使用しないでください。
+
+## OSGiバンドルのビルド
+
+[開発者ガイド](/ja/applications/developer-guide)の手順に従ってプロジェクトを作成していれば、コードはすでに[Maven bundle plugin](#maven-bundle-plugin)によってOSGiバンドルとしてパッケージングされています。ただし、既存のMavenプロジェクトを移行する場合は、packaging宣言を次のように変更してください:
+
+```xml
+<packaging>container-plugin</packaging>
+```
+
+さらに、ビルド設定にプラグインを追加します:
+
+```xml
+<plugin>
+    <groupId>com.yahoo.vespa</groupId>
+    <artifactId>bundle-plugin</artifactId>
+{/* Find latest version at <a href="https://search.maven.org/search?q=g:com.yahoo.vespa%20a:bundle-plugin">search.maven.org/search?q=g:com.yahoo.vespa%20a:bundle-plugin</a> */}
+    <version>{{site.variables.vespa_version}}</version>
+    <extensions>true</extensions>
+    <configuration>
+        <failOnWarnings>true</failOnWarnings>
+    </configuration>
+</plugin>
+```
+
+OSGiは、Mavenがユニットテスト実行時に提供するものとは異なるランタイム環境を導入するため、実行中のコンテナーにアプリケーションをデプロイしようとするまで、ローディングやリンキングのエラーは観測されません。この段階で発生するエラーは、`ClassNotFoundException`や`NoClassDefFoundError`のようなものです。この種のエラーをデバッグするには、[エラーログ](/ja/reference/operations/log-files)のスタックトレースを調べ、[トラブルシューティング](#troubleshooting)を参照してください。
+
+ログを読む際は、[vespa-logfmt](/ja/reference/operations/self-managed/tools#vespa-logfmt)の*--nldequote*オプションが役立ちます。
+
+テストスイートは、アプリケーション・バンドルの動的なローディングおよびリンキングの問題を確実にカバーするために、バンドルのデプロイまでを対象とする必要があります。
+
+ 
+
+## OSGi非対応ライブラリーへの依存
+
+残念ながら、多くの人気のあるJavaライブラリーは、OSGi互換にするための適切なマニフェストがまだ付属していません。これに対する最も簡単な解決策は、pom.xmlファイルで問題のある依存関係のスコープを**compile**に設定することです。これにより、bundle pluginはライブラリー全体をバンドルのJARファイルにパッケージングします。問題のライブラリーがOSGiバンドルとして利用可能になるまでは、バンドルが(バイト数として)大きくなり、そのライブラリーのクラスをアプリケーション・バンドル間で共有できないことを意味します。
+
+この機能の実際の動作としては、bundle pluginがcompileスコープの依存関係とその推移的依存関係を最終的なJARファイルにコピーし、それらの依存関係を参照する`Bundle-ClassPath`命令をマニフェストに追加します。
+
+このアプローチはほとんどの非OSGiライブラリーで機能しますが、jarファイルが*自己完結型*であるライブラリーに対してのみ有効です。一方、ライブラリーがインストール済みの他のファイルに依存している場合は、[JNIライブラリー](#depending-on-JNI-libraries)として扱う必要があります。
+
+## JNIライブラリーへの依存
+
+このセクションでは、コンテナーでネイティブ・コードを使用するための選択肢を詳しく説明します。
+
+### ネイティブ・コードを含むOSGiバンドル
+
+OSGiのjarには.soファイルを含めることができ、バンドル内のJavaコードから標準的な方法でロードできます。.soは同時に1つのインスタンスしかロードできないため、.soファイルを含むjarのホットスワップはできないことに注意してください。そのようなjarが変更された場合、[コンテナーが再起動されるまで新しい構成は有効になりません](/ja/applications/components#JNI-requires-restart)。したがって、コードを変更するたびにコンテナーを再起動しなくて済むように、.soファイルとそのJava APIを残りのコードとは別のバンドルにパッケージングするのが得策であることが多いです。
+
+### JNIコードをグローバル・クラスパスに追加する
+
+JNI依存関係をバンドルにパッケージングできず、かつコンテナー・ノードにローカルでファイルをインストールできる環境で実行している場合は、その依存関係をコンテナーのクラスパスに追加し、パッケージを明示的にエクスポートしてOSGiバンドルから見えるようにすることができます。
+
+[services.xml](/ja/reference/applications/services/container)のトップレベルの*services*要素に次の構成を追加します:
+
+```xml
+<services version="1.0">
+    <config name="search.config.qr-start">
+        <jdisc>
+            <classpath_extra>/lib/jars/foo.jar:/path/bar.jar</classpath_extra>
+            <export_packages>com.foo,com.bar</export_packages>
+        </jdisc>
+    </config>
+    ...
+</services>
+```
+
+トップレベルに設定を追加することで、すべてのjdiscクラスターに適用されるようになります。
+
+これでパッケージは利用可能かつ可視になりますが、ライブラリーを使用するアプリケーション・バンドルは、依然としてそれらをインポートする必要があります。バンドルへのパッケージのインポートを強制するようにbundle pluginを構成する方法は次のとおりです:
+
+```xml highlight={5-7}
+<plugin>
+    <groupId>com.yahoo.vespa</groupId>
+    <artifactId>bundle-plugin</artifactId>
+    <extensions>true</extensions>
+    <configuration>
+        <importPackage>com.foo,com.bar</importPackage>
+    </configuration>
+</plugin>
+```
+
+ライブラリーをクラスパスに追加すると、そのライブラリーはグローバルに可視となり、OSGiのパッケージ可視性管理の対象外になります。別のバンドルが同じライブラリーを含んでいる場合、クラス・ローディングの問題が発生します。
+
+## Maven bundle plugin
+
+*bundle-plugin*は、Mavenで[Vespaコンテナー](/ja/applications/components)向けのコンポーネントをビルドおよびパッケージングするために使用します。実践的な例については、[multiple-bundlesサンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/examples/multiple-bundles)を参照してください。
+
+最小限のMaven *pom.xml*構成は次のとおりです:
+
+```xml highlight={8, 18, 27, 43}
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.yahoo.example</groupId>
+    <artifactId>basic-application</artifactId>
+    <packaging>container-plugin</packaging> {/* Use Vespa packaging */}
+    <version>1.0.1</version>
+
+    <properties>
+{/* Find latest version at search.maven.org/search?q=g:com.yahoo.vespa */}
+        <vespa.version>{{site.variables.vespa_version}}</vespa.version>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin> {/* Build the bundles */}
+                <groupId>com.yahoo.vespa</groupId>
+                <artifactId>bundle-plugin</artifactId>
+                <version>${vespa.version}</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <failOnWarnings>true</failOnWarnings>
+                </configuration>
+            </plugin>
+            <plugin> {/* Zip the application package */}
+                <groupId>com.yahoo.vespa</groupId>
+                <artifactId>vespa-application-maven-plugin</artifactId>
+                <version>${vespa.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>packageApplication</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+    <dependencies>
+        <dependency> {/* Vespa dependencies */}
+            <groupId>com.yahoo.vespa</groupId>
+            <artifactId>container</artifactId>
+            <version>${vespa.version}</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+</project>
+```
+
+デプロイ可能な[アプリケーション・パッケージ](/ja/basics/applications)を作成するには、次を実行します:
+
+```bash
+$ mvn install package
+```
+
+bundle pluginは、Mavenの*generate-resources*ステップを呼び出して構成クラスの生成を自動化します。詳細は[configuring-components.html](/ja/applications/configuring-components)を参照してください
+
+### 自分のMavenサブモジュールを含める
+
+Vespaコンポーネント・バンドル内の依存関係として、自分のMavenサブモジュールを含めることができます。これにより、プロジェクト内の異なるコンポーネント間でコードや機能を共有できます。
+
+サブモジュールを依存関係として含めるには、スコープ*compile*でバンドルのpom.xmlに追加します:
+
+```xml
+<dependency>
+    <groupId>your.project.groupId</groupId>
+    <artifactId>your-submodule-artifactId</artifactId>
+    <scope>compile</scope>
+</dependency>
+```
+
+`your.project.groupId`をプロジェクトの実際のgroupIdに、`your-submodule-artifactId`をサブモジュールのartifactIdに置き換えてください。
+
+### サードパーティー・ライブラリーを含める
+
+外部の依存関係は、依存関係として指定することでバンドルに含めます:
+
+```xml
+<dependency>
+    <groupId>org.apache.httpcomponents.client5</groupId>
+    <artifactId>httpclient5</artifactId>
+    <version>5.0.3</version>
+    <scope>compile</scope>
+</dependency>
+```
+
+これにより、ライブラリー内のすべてのパッケージが使用可能になります。
+
+外部の依存関係がOSGiバンドルとしてパッケージングされている場合は、スコープを*provided*に設定することでそのままデプロイできます:
+
+```xml  highlight={5}
+<dependency>
+    <groupId>org.apache.httpcomponents.client5</groupId>
+    <artifactId>httpclient5-osgi</artifactId>
+    <version>5.0-beta2</version>
+    <scope>provided</scope>
+</dependency>
+```
+
+その後、そのjarを自分のバンドルとともにアプリケーション・パッケージの*components*フォルダーに追加します。この場合、ライブラリーの作者がエクスポートしたパッケージのみが、バンドルから使用可能になります(以下のセクションを参照)。
+
+### バンドルからのパッケージのエクスポート、インポート、内包
+
+OSGiには情報隠蔽の機能があります。デフォルトでは、バンドル内で使用されるすべてのクラスは外部からは見えません。また、バンドルはデフォルトでは、JavaおよびコンテナーとVespaのAPIに含まれる(すべての)パッケージのみが見えます。バンドルがそれ以外のパッケージを必要とする場合は、次の3つの方法のいずれかで対応する必要があります:
+
+- コンテナーがエクスポートしている追加パッケージがあり、バンドルはそれらを明示的に*インポート*できます
+- さらに、デプロイされた任意のバンドルは独自にパッケージをエクスポートでき、それを別のバンドルがインポートできます
+- 最後に、バンドルは独自のJARライブラリーを内包できます
+
+パッケージにアノテーションを付けることで、バンドルからパッケージをエクスポートできます。たとえば、*com.mydomain.mypackage*をエクスポートするには、パッケージのディレクトリに次の内容で*package-info.java*を作成します:
+
+```java
+@ExportPackage(version = @Version(major=1, minor=0, micro=0))
+package com.mydomain.mypackage;
+import com.yahoo.osgi.annotation.ExportPackage;
+import com.yahoo.osgi.annotation.Version;
+```
+
+Mavenプラグインは、コンテナーが取り込めるように、ビルドされたプラグインJARのマニフェストにこの情報を配置します。
+
+これは、サーチャーを含まず、他のサーチャーが使用するライブラリーのみを含むバンドルにも使用できることに注意してください。つまり、いくつかのライブラリーをエクスポートするためだけに存在し、サーチャーが一切インスタンス化されないバンドルもあり得ます。
+
+バンドルは、(他のバンドルまたはコンテナーによってエクスポートされた)パッケージを*インポート*できます。Mavenプラグインは、コンパイル時に参照するバンドル(すなわちスコープprovidedのMaven依存関係)から使用されているパッケージを自動的にインポートします。
+
+前述のとおり、エクスポートされる各パッケージにはバージョンが関連付けられています。同様に、パッケージのインポートにはバージョン範囲が関連付けられています。バージョン範囲は、どのエクスポート済みパッケージを使用できるかを決定します。Mavenプラグインが使用する範囲は、現在のバージョン(すなわちコンパイル時に利用可能なパッケージのバージョン)から、次のメジャー・バージョン(それ自体は含まない)までです。
+
+OSGiマニフェストとバンドル・パッケージング(Javaライブラリーやネイティブ・コードの内包方法など)の詳細については、[OSGiホームページ](https://osgi.org)のOSGi仕様を参照してください。
+
+詳細は[トラブルシューティング](#troubleshooting)を参照してください。
+
+### Bundle Pluginの警告
+
+bundle pluginは、実行時に問題を引き起こす可能性のある次のよくある問題に対して警告を出します:
+
+[WARNING] This project uses packages that are not part of Vespa's public api @PublicApiアノテーションが付けられたJavaパッケージ内のVespa型のみをアプリケーション・コードで使用すべきです。それ以外の型は、Vespaのリリース間で安定していることが保証されていません。 [WARNING] This project does not have 'container' as provided dependency すべてのアプリケーション・バンドルは、生成される「Import-Package」OSGiヘッダーにVespaランタイムが提供するJavaパッケージが含まれるようにするため、com.yahoo.vespa:containerアーティファクトをprovidedスコープの依存関係として持つ必要があります。 [WARNING] Artifacts provided from Vespa runtime are included in compile scope これはバンドルを不必要に大きくし、これらのアーティファクトがバンドルに埋め込まれるため、実行時に問題を引き起こす可能性があります。mvn dependency:treeを実行して推移的依存関係の発生源を特定し、必要なexclusionをpom.xmlに追加してください。特定のバージョンが必要な場合など、アーティファクトを含めなければならない場合は、構成パラメーターallowEmbeddedArtifactsで例外を追加できます。 [WARNING] This project defines packages that are also defined in provided scoped dependencies バンドル間でJavaパッケージが重複していると、OSGiフレームワークはどちらか一方のバンドルからしかクラスを解決できないため、通常、実行時に問題が発生します。
+
+### Bundle-Pluginの構成
+
+bundle pluginは、生成されるバンドルを特定のニーズに合わせて調整するように構成できます。
+
+```xml 
+<build>
+    <plugins>
+        <plugin>
+            <groupId>com.yahoo.vespa</groupId>
+            <artifactId>bundle-plugin</artifactId>
+            <version>${vespa.version}</version>
+            <extensions>true</extensions>
+            <configuration>
+                <failOnWarnings>true/false</failOnWarnings>
+                <allowEmbeddedArtifacts>…</allowEmbeddedArtifacts>
+                <attachBundleArtifact>true/false</attachBundleArtifact>
+                <bundleClassifierName>…</bundleClassifierName>
+                <discApplicationClass>…</discApplicationClass>
+                <discPreInstallBundle>…</discPreInstallBundle>
+                <bundleVersion>…</bundleVersion>
+                <bundleSymbolicName>…</bundleSymbolicName>
+                <bundleActivator>…</bundleActivator>
+                <configGenVersion>…</configGenVersion>
+                <configModels>…</configModels>
+            </configuration>
+        </plugin>
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>要素</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>failOnWarnings</td>
+      <td>trueの場合、<a href="https://javadoc.io/doc/com.yahoo.vespa/annotations/latest/com/yahoo/api/annotations/PublicApi.html" aria-label="@PublicApi">@PublicApi</a>アノテーションが付いていないVespa型の使用などに対する警告が出たときに、Mavenビルドが失敗します。将来のVespaリリースでもプロジェクトが正常にコンパイルされるようにするため、常に&#42;true&#42;に設定すべきです。デフォルトは&#42;false&#42;です</td>
+    </tr>
+    <tr>
+      <td>allowEmbeddedArtifacts</td>
+      <td>バンドルへの埋め込みを許可するMavenアーティファクトのカンマ区切りリスト。形式は&#42;groupId:artifactId&#42;です</td>
+    </tr>
+    <tr>
+      <td>attachBundleArtifact</td>
+      <td>バンドルjarアーティファクトをビルドにアタッチするかどうか。デフォルトのjarとともにバンドルjarをインストールおよびデプロイしたい場合に使用します。デフォルトは&#42;false&#42;です</td>
+    </tr>
+    <tr>
+      <td>bundleClassifierName</td>
+      <td>&#42;attachBundleArtifact&#42;がtrueの場合、これがバンドルjarアーティファクトのclassifierとして使用されます。デフォルトは&#42;bundle&#42;です</td>
+    </tr>
+    <tr>
+      <td>discApplicationClass</td>
+      <td>JDiscが起動するApplicationの完全修飾クラス名</td>
+    </tr>
+    <tr>
+      <td>discPreInstallBundle</td>
+      <td>jDISCが事前インストールする必要のあるバンドルの名前</td>
+    </tr>
+    <tr>
+      <td>bundleVersion</td>
+      <td>このバンドルのバージョン。デフォルトはMavenプロジェクトのバージョンです</td>
+    </tr>
+    <tr>
+      <td>bundleSymbolicName</td>
+      <td>このバンドルのシンボリック名。デフォルトはMavenのアーティファクトIDです</td>
+    </tr>
+    <tr>
+      <td>bundleActivator</td>
+      <td>バンドル・アクティベーターの完全修飾クラス名</td>
+    </tr>
+    <tr>
+      <td>configGenVersion</td>
+      <td>構成クラスの生成に使用される&#42;com.yahoo.vespa.configlib.config-class-plugin&#42;のバージョン</td>
+    </tr>
+    <tr>
+      <td>configModels</td>
+      <td>構成モデルのリスト</td>
+    </tr>
+  </tbody>
+</table>
+
+### Bundle Pluginのトラブルシューティング
+
+パッケージ*p*は、次のすべてが成り立つ場合にインポートされます:
+
+<Steps>
+  <Step>
+  バンドル内で*p*のクラスを(リフレクションではなく)直接使用している
+  </Step>
+
+  <Step>
+  バンドル内に*p*に属するクラスが存在しない
+  </Step>
+
+  <Step>
+  *p*をエクスポートするバンドルが存在し、そのバンドルに対してコンパイルしている
+
+  デバッグするには、次を実行し
+
+  ```bash
+  $ mvn -X package
+  ```
+
+  Defined packages(=バンドル内のパッケージ)、Exported packages of dependencies(依存関係がエクスポートするパッケージ)、Referenced packages(=使用されているパッケージ)を確認します。パッケージは、Exported packagesとReferenced packagesに含まれ、かつDefined packagesに含まれない場合にインポートされます。
+  </Step>
+
+</Steps>
+
+## トラブルシューティング
+
+このセクションでは、バンドルを扱う際に最もよく発生するエラーのトラブルシューティング方法を説明します:
+
+- [バンドルのリロード](#bundle-reload)
+- [Could not create component](#could-not-create-component)
+- [Class not found](#class-not-found)
+- [コンテナーの起動が遅い](#slow-container-start)
+- [Unresolved constraint](#unresolved-constraint)
+- [同一クラスの複数の実装](#multiple-implementations-of-the-same-class)
+
+### バンドルのリロード
+
+再構成の間にアンインストールされるバンドルは、次のようにログに記録されます:
+
+```java
+INFO    : qrserver         Container.com.yahoo.container.core.config.ApplicationBundleLoader
+Bundles to schedule for uninstall: [com.yahoo.vespatest.ExtraHitSearcher [67]]
+```
+
+該当するバンドルがない場合は、空のセットが表示されます:
+
+```java
+INFO    : qrserver         Container.com.yahoo.container.core.config.ApplicationBundleLoader
+Bundles to schedule for uninstall: []
+```
+
+### Could not create component
+
+コンテナーは、バンドルをロードできない場合、起動に失敗します。[multiple-bundles](https://github.com/vespa-engine/sample-apps/tree/master/examples/multiple-bundles)サンプルアプリで誤ったバンドル名を使用した例:
+
+```xml
+<services version="1.0">
+    <container id="fibonacci" version="1.0">
+        -        <component id="com.mydomain.lib.FibonacciProducer" bundle="multiple-bundles-lib" />
+        +        <component id="com.mydomain.lib.FibonacciProducer" bundle="multiple-bundles-typo" />
+```
+
+*multiple-bundles*で実際にデプロイされているものを確認します:
+
+```bash
+$ ls -1 target/*.jar
+target/multiple-bundles-1.0.0-deploy.jar
+target/multiple-bundles-1.0.0-without-dependencies.jar
+target/multiple-bundles-lib-1.0.1-deploy.jar
+```
+
+ログのエラー:
+
+```java expandable
+[2020-01-23 14:28:01.367] WARNING : qrserver         Container.com.yahoo.container.di.Container
+	Failed to set up new component graph. Retaining previous component generation.
+	exception=
+java.lang.IllegalArgumentException: Could not create a component with id 'com.mydomain.lib.FibonacciProducer'.
+Tried to load class directly, since no bundle was found for spec: multiple-bundles-typo.
+If a bundle with the same name is installed, there is a either a version mismatch or the installed bundle's version contains a qualifier string.
+	at com.yahoo.osgi.OsgiImpl.resolveFromClassPath(OsgiImpl.java:74)
+	at com.yahoo.osgi.OsgiImpl.resolveClass(OsgiImpl.java:65)
+	at com.yahoo.container.di.Container.addNodes(Container.java:228)
+	at com.yahoo.container.di.Container.createComponentsGraph(Container.java:217)
+	at com.yahoo.container.di.Container.getConfigAndCreateGraph(Container.java:160)
+	at com.yahoo.container.di.Container.getNewComponentGraph(Container.java:84)
+	at com.yahoo.container.core.config.HandlersConfigurerDi.getNewComponentGraph(HandlersConfigurerDi.java:145)
+	at com.yahoo.container.jdisc.ConfiguredApplication.lambda$startReconfigurerThread$1(ConfiguredApplication.java:275)
+	at java.base/java.lang.Thread.run(Thread.java:834)
+
+[2020-01-23 14:28:01.367] ERROR   : qrserver         Container.com.yahoo.container.jdisc.ConfiguredApplication
+	Reconfiguration failed, your application package must be fixed, unless this is a JNI reload issue: Could not create a component with id 'com.mydomain.lib.FibonacciProducer'. Tried to load class directly, since no bundle was found for spec: multiple-bundles-typo. If a bundle with the same name is installed, there is a either a version mismatch or the installed bundle's version contains a qualifier string.
+	exception=
+	java.lang.IllegalArgumentException: Could not create a component with id 'com.mydomain.lib.FibonacciProducer'. Tried to load class directly, since no bundle was found for spec: multiple-bundles-typo. If a bundle with the same name is installed, there is a either a version mismatch or the installed bundle's version contains a qualifier string.
+	at com.yahoo.osgi.OsgiImpl.resolveFromClassPath(OsgiImpl.java:74)
+	at com.yahoo.osgi.OsgiImpl.resolveClass(OsgiImpl.java:65)
+	at com.yahoo.container.di.Container.addNodes(Container.java:228)
+	at com.yahoo.container.di.Container.createComponentsGraph(Container.java:217)
+	at com.yahoo.container.di.Container.getConfigAndCreateGraph(Container.java:160)
+	at com.yahoo.container.di.Container.getNewComponentGraph(Container.java:84)
+	at com.yahoo.container.core.config.HandlersConfigurerDi.getNewComponentGraph(HandlersConfigurerDi.java:145)
+	at com.yahoo.container.jdisc.ConfiguredApplication.lambda$startReconfigurerThread$1(ConfiguredApplication.java:275)
+	at java.base/java.lang.Thread.run(Thread.java:834)
+```
+
+*services.xml*に記載されたとおりの正しい名前で、jarファイル(すなわちバンドル)が実際にデプロイされていることを確認してください。
+
+### Could not load class
+
+services.xmlにコンポーネントを追加したものの、宣言されたバンドル内でそのクラスが見つからない場合、コンテナーは起動に失敗します。例:
+
+```xml
+<component id="com.example.MissingClass" bundle="my-bundle" />
+```
+
+ログには次のようなエラーが含まれます:
+
+```java
+java.lang.IllegalArgumentException: Could not load class 'com.example.MissingClass' from bundle my-bundle
+```
+
+このエラーが表示された場合は、指定したバンドル内にそのクラスが実際に存在することを確認してください。また、`id`(または`class`)タグが、Javaパッケージやバンドル名などではなく、コンポーネントのクラスを参照していることも確認してください。
+
+### Class not found
+
+ユーザー・バンドル内で参照されるすべてのクラスは、バンドルに埋め込まれているか、バンドル・マニフェストの`Import-Package`ステートメントによって別のバンドルからインポートされている必要があります。このルールに違反した場合、OSGiバンドルを扱う際に最もよく見られる例外の1つが発生します:
+
+```java
+...
+exception=
+java.lang.NoClassDefFoundError: com/acme/utils/Helper
+...
+java.lang.ClassNotFoundException: com.acme.utils.Helper not found by my_bundle [29]
+```
+
+[bundle-plugin](#maven-bundle-plugin)がImport-Packageステートメントをバンドルのマニフェストに自動的に追加するには、そのパッケージが、*pom.xml*で「provided」スコープの依存関係として宣言されている別のバンドルからエクスポートされている必要があります。見つからないクラスを含む依存関係が自分の管理下にある場合は、それがOSGiバンドルとしてパッケージングされていることを確認し、そのバンドルから[パッケージをエクスポート](#exporting-importing-and-including-packages-from-bundles)してください。そうでない場合、問題を解決する最も簡単な方法は、その依存関係のスコープを「provided」ではなく「compile」に設定して、自分のバンドルに埋め込むことです。
+
+上記の方法で解決しない場合、問題のクラスがリフレクションによってロードされている可能性が高いです(例:`Class.forName("com.acme.utils.Helper")`)。これは、プラガブルなフレームワーク向けのライブラリーを扱う際によくあることで、これについては別途[トラブルシューティングのドキュメント](/ja/applications/pluggable-frameworks)があります。
+
+### コンテナーの起動が遅い
+
+vespaログでは、コンテナーの起動は次のように表示されます:
+
+```java
+[2021-01-07 10:13:35.325] INFO    : container        Container.com.yahoo.container.core.config.ApplicationBundleLoader
+Installed bundles: {[0]org.apache.felix.framework:6.0.3, [1]container-disc:7.335.22 ...
+...
+[2021-01-07 10:26:57.291] INFO    : container        Container.com.yahoo.container.jdisc.ConfiguredApplication
+Switching to the latest deployed set of configurations and components. Application config generation: 1
+```
+
+コンテナーは最後のログ行の時点で準備完了になります。起動時間が長いことに注目してください。起動時にコンテナーが何をしているかの詳細を得るには、ComponentGraphのデバッグログを調べます。コンテナーのサービス名(ここでは「container」)を確認し、デバッグ・ロギングを設定してコンテナーを再起動します:
+
+```bash
+$ vespa-sentinel-cmd list
+vespa-sentinel-cmd 'sentinel.ls' OK.
+container state=RUNNING mode=AUTO pid=246585 exitstatus=0 id="default/container.0"
+
+$ vespa-logctl container:com.yahoo.container.di.componentgraph.core debug=on
+
+$ vespa-stop-services && vespa-start-services
+
+# Find DEBUG log messages for component creation, like:
+
+[2021-01-07 10:13:37.006] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentGraph
+Trying the fallback injector to create component of class com.yahoo.container.jdisc.messagebus.SessionCache to inject
+into component 'chain.mychain in MbusServer' of type 'com.yahoo.container.jdisc.messagebus.MbusServerProvider'.
+[2021-01-07 10:14:14.082] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentNode
+Constructing 'com.yahoo.search.query.profile.compiled.CompiledQueryProfileRegistry'
+[2021-01-07 10:26:54.669] DEBUG   : container        Container.com.yahoo.container.di.componentgraph.core.ComponentNode
+Finished constructing 'com.yahoo.search.query.profile.compiled.CompiledQueryProfileRegistry'
+```
+
+この例では、クエリー・プロファイルのコンパイルに長い時間がかかっています。
+
+### Unresolved constraint
+
+バンドルに、実行時に利用できないパッケージへのImport-Packageがある場合、OSGiフレームワークはunresolved constraintエラーを報告します。ログに現れる症状は次のとおりです:
+
+```java
+org.osgi.framework.BundleException: Unresolved constraint in bundle my_bundle [29]:
+Unable to resolve 29.0:
+missing requirement [29.0] osgi.wiring.package; (osgi.wiring.package=com.acme.utils)
+at org.apache.felix.framework.Felix.resolveBundleRevision(Felix.java:3974)
+```
+
+これは、見つからないクラスが、バンドルの*pom.xml*から直接または推移的に参照されている「provided」の依存関係の中に存在することを意味します。この依存関係を実行時に利用可能にするには、次の2つの選択肢があります:
+
+- 最も簡単なのは、依存関係を(「provided」ではなく)「compile」スコープに設定して、自分のバンドルに埋め込むことです。2つの依存関係が同じライブラリーの異なる2つのバージョンを必要とする場合を除き、ほとんどのケースでうまく機能します。
+- 見つからないjarファイルを、自分のバンドルとともにアプリケーション・パッケージの`components/`フォルダーに追加します。maven-dependency-pluginには、これを支援する「copy-dependencies」というゴールがあります。
+
+見つからないjarが推移的依存関係である場合、Mavenを使ってプロジェクトの依存関係グラフを可視化できます:
+
+```bash
+$ mvn dependency:tree
+```
+
+### 同一クラスの複数の実装
+
+2つのバンドルが公開APIを介して相互作用する場合、両方のバンドルが、関与するすべてのクラスを同じ`Class`オブジェクトに解決することが極めて重要です。そうでない場合、次のようなエラーメッセージが表示されます:
+
+```java
+java.lang.LinkageError: loader constraint violation: when resolving field
+"DATETIME" the class loader (instance of
+org/apache/felix/framework/BundleWiringImpl$BundleClassLoaderJava5) of the referring
+class, javax/xml/datatype/DatatypeConstants, and the class loader (instance of
+<bootloader>) for the field's resolved type, pe/DatatypeConstants, have different Class
+objects for that type
+```
+
+または:
+
+```java
+java.lang.LinkageError: loader constraint violation: loader (instance of <bootloader>)
+previously initiated loading for a different type with name "javax/xml/namespace/QName"
+```
+
+または(頻度は低いですが):
+
+```java
+java.lang.ClassCastException: com.acme.utils.Helper cannot be cast to  com.acme.utils.Helper
+```
+
+これらのエラーメッセージはすべて、1つ以上のクラスの複数の実装が実行時に使用されていることを示しています。考えられる根本原因は次のとおりです:
+
+- 相互作用する2つのユーザー・バンドルが、同じJavaパッケージを埋め込んでいる。
+- ユーザー・バンドルが、JDiscバンドルのいずれかからエクスポートされているJavaパッケージを埋め込んでいる。
+
+通常、「重複した」パッケージは、ライブラリーの依存関係からユーザー・バンドルに推移的に取り込まれます。
+
+#### 複数実装の例
+
+上記のエラーメッセージにあった、重複する*javax.xml.namespace.QName*クラスを解決する例を見てみましょう。
+
+JDK内のすべての「javax.xml」パッケージは、JDiscコア・バンドルによってエクスポートされています。つまり、これらはユーザー・バンドルに埋め込むのではなく、インポートすべきです。したがって、バンドル内に「javax.xml」で始まるパッケージのクラスが存在しないことを確認してください。どのライブラリーがそのパッケージを取り込んでいるかを調べます:
+
+<Steps>
+  <Step>
+  埋め込まれたjarを含めて、コンポーネントのjar全体を展開します。この作業には[rjar](https://github.com/pojosontheweb/rjar/)などのツールが使えます。
+  </Step>
+
+  <Step>
+  jarを展開したフォルダーで「javax.xml」のクラスを検索します:
+
+    ```bash highlight={4}
+    $ find . | grep "javax/xml/.*\.class"
+
+    ...
+    ./my_bundle-deploy.jar/dependencies/stax-api-1.0.1.jar/javax/xml/namespace/QName.class
+    ...
+    ```
+
+  </Step>
+
+  <Step>
+  問題のクラスを取り込んだライブラリーを特定します。ここでは`stax-api-1.0.1`でした。通常、これらのライブラリーはpomの直接の依存関係として取り込まれるのではなく、使用している別のライブラリーを介して推移的に取り込まれます。アプリケーションのディレクトリからMavenのdependencyプラグインを使用して、直接の依存関係を見つけます:
+              
+    ```bash highlight={4}
+    $ mvn dependency:tree -Dverbose
+    [INFO] +- com.acme.utils:jersey-utils:1.0.0:compile
+    [INFO] |  +- com.sun.jersey:jersey-json:jar:1.13:compile
+    [INFO] |  |  +- org.codehaus.jettison:jettison:jar:1.1:compile
+    [INFO] |  |    \- stax:stax-api:jar:1.0.1:compile
+    ```
+
+  `stax:stax-api:1.0.1`が、直接の依存関係である`com.acme.utils:jersey-utils`から推移的に取り込まれていることがわかります。
+  </Step>
+
+  <Step>
+  `stax:stax-api`を除外するには、*pom.xml*で直接の依存関係`com.acme.utils:jersey-utils`に適切な`exclusion`を追加します:
+
+
+  ```xml highlight={5-10}
+    <dependency>
+        <groupId>com.acme.utils</groupId>
+        <artifactId>jersey-utils</artifactId>
+        <version>1.0.0</version>
+        <exclusions>
+            <exclusion>
+                <groupId>stax</groupId>
+                <artifactId>stax-api</artifactId>
+            </exclusion>
+        </exclusions>
+    </dependency>
+    ```   
+  </Step>
+
+</Steps>
+
+#### 複数実装の例:slf4j-api
+
+これは前の例と似ていますが、ロギング・ライブラリーは、チームが遭遇する問題としておそらく最も一般的なものです。ここでは、症状を確認し、dependency:treeを使用して、exclusionを追加します。症状:
+
+```java
+java.lang.RuntimeException: An exception occurred while
+constructing 'com.acme.utils.Helper in acme-utils'
+Caused by: java.lang.LinkageError: loader constraint violation: when resolving method
+"org.slf4j.impl.StaticLoggerBinder.getLoggerFactory()Lorg/slf4j/ILoggerFactory;"
+the class loader (instance of org/apache/felix/framework/BundleWiringImpl$BundleClassLoaderJava5) of the
+current class, org/slf4j/LoggerFactory, and the class loader (instance of
+sun/misc/Launcher$AppClassLoader) for the method's defining class,
+org/slf4j/impl/StaticLoggerBinder, have different Class objects for the type
+org/slf4j/ILoggerFactory used in the signature
+at
+org.slf4j.LoggerFactory.getILoggerFactory(LoggerFactory.java:299)
+at
+org.slf4j.LoggerFactory.getLogger(LoggerFactory.java:269)
+```
+
+前の例で*mvn dependency:tree*を実行すると、次のようになります:
+
+```txt
+[INFO] +- com.yahoo.vespa:container-dev:jar:5.28.29:provided
+[INFO] |  +- com.yahoo.vespa:jdisc_core:jar:5.28.29:provided
+[INFO] |  |  +- (org.slf4j:slf4j-api:jar:1.7.5:compile - scope updated from provided; omitted for duplicate)
+...
+[INFO] +- com.acme.utils:smartlib:jar:1.0.0:compile
+[INFO] |  +- org.slf4j:slf4j-api:jar:1.6.6:compile
+```
+
+slf4j-apiが、本来そうあるべきcontainer-devからのprovidedではなくなっていることがわかります。これを修正するには、原因となっている依存関係にexclusionを追加します:
+
+```xml
+<dependency>
+    <groupId>com.acme.utils</groupId>
+    <artifactId>smartlib</artifactId>
+    <version>1.0.0</version>
+    <scope>compile</scope>
+    <exclusions>
+        <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </exclusion>
+```
+
+しかし、これでもまだ動作しません。理由は次のとおりです:
+
+```txt
+$ jar -tf mailsearch-docprocs-deploy.jar  | grep slf
+
+dependencies/slf4j-api-1.7.5.jar
+```
+
+まだ何かがslf4jを取り込んでいます... 他の候補:
+
+```txt
+[INFO] \- com.yahoo.vespa:application:jar:5.28.29:test
+...
+[INFO]    +- com.yahoo.vespa:zkfacade:jar:5.28.29:test
+[INFO]    |  +- org.apache.curator:curator-recipes:jar:2.4.1:test
+[INFO]    |  |  +- org.apache.curator:curator-framework:jar:2.4.1:test
+[INFO]    |  |  |  +- org.apache.curator:curator-client:jar:2.4.1:test
+[INFO]    |  |  |  |  +- (org.slf4j:slf4j-api:jar:1.6.4:test - omitted for conflict with 1.7.5)
+...
+[INFO]    |  +- (org.slf4j:slf4j-jdk14:jar:1.7.5:test - omitted for duplicate)
+```
+
+applicationに対して適切なexcludeを追加し、mvn dependency:treeを使用して、container-dev向けのものを除くすべての参照がなくなったことを確認しました。それでもまだ次のものが見つかります:
+
+```txt
+$ jar -tf mailsearch-docprocs-deploy.jar  | grep slf
+dependencies/slf4j-api-1.7.5.jar
+```
+
+この依存関係を明示的に管理することで動作させることができます。POMのトップレベルに次を追加します:
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.5</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```

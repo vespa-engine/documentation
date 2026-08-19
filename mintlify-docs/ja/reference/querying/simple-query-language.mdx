@@ -1,0 +1,148 @@
+---
+title: "シンプルクエリー言語リファレンス"
+---
+
+_シンプルクエリー言語_ を使うと、アプリケーションのエンドユーザーはトークンの羅列よりも複雑なクエリーを発行できます。これはヒューリスティックで非構造化の言語であり、与えられたどのような入力に対しても、おそらく有用な結果を返そうとします。[userQuery](/ja/reference/querying/grouping-language#userquery) 演算子を使うことで、構造化された [YQL](/ja/reference/querying/grouping-language) と組み合わせられます。
+
+### シンプルクエリー構文
+
+```bash expandable
+Query ::= Expr ( SPACE Expr )*
+Expr ::= Term | Prefix? '(' SimpleTerm+ ')'
+Term ::= Prefix? Field? CoreTerm Weight?
+SimpleTerm ::= Field? CoreTerm Weight?
+Prefix ::= '+' | '-'
+Field ::= ID ':' /* A valid field name or alias */
+Weight ::= '!'+ | '!' NUM /* NUM is a percentage. */
+CoreTerm ::= WORD | Phrase | NumTerm | PrefixTerm | SubstringTerm | SuffixTerm | SameElement
+Phrase ::= '"' WORD+ '"'
+NumTerm ::= NUM | '<' NUM | '>' NUM | '[' NUM? ';' NUM? ';' HITLIMIT? ']'
+                                                   /* NUM is any numeric type including floating point */
+                                                   /* HITLIMIT is a optional count of many hits you want as minimum from this range */
+PrefixTerm ::= WORD '*'
+SubstringTerm ::= '*' WORD '*'
+SuffixTerm ::= '*' WORD
+SameElement ::= '{' Field CoreTerm ( SPACE Field CoreTerm )* '}'
+```
+
+### プレフィックス検索
+
+プレフィックスマッチングは attribute でのみ利用できます。プレフィックス検索語(例: 'car\*')は、指定したフィールドに対するパターンマッチのように動作します。指定したプレフィックスで始まるフィールド値を持つドキュメントがマッチして返されます('-' 構文を使った場合は返されません)。プレフィックス検索語は、結果セット内のドキュメントのランキングを追加・変更しません。
+
+### 語の重み
+
+重みは、1 つ以上の ! 文字、または ! に続く整数です。整数は小数係数 100 の固定小数点スケーリング数、つまりパーセンテージと見なせます。! 文字を繰り返す場合、! が 1 つ増えるごとに重みが(デフォルト値 100 から)50 ずつ増加します。重み式はフレーズにも適用できます。
+
+語の重みは、クエリー内の語の相対的な重要度を変更するために使用します。語のスコアはランク計算全体の一部にすぎませんが、最も重要な語に重みを加えることで、それらの寄与を大きくできます。ランク計算の詳細については、[ランキングガイド](/ja/basics/ranking)を参照してください。
+
+### 数値項
+
+`[x;y]` は、端点 _x_ と _y_ を含む、_x_ から _y_ までの任意の数値にマッチします。`>number` は `[number+1;]` と同じで、`<number` は `[;number-1]` と同じであることに注意してください。
+
+数値項を使ったいくつかの例:
+
+```bash
+perl size:<100
+```
+このクエリーは、単語 â€œperlâ€ を含み、サイズが 100Kb 未満のすべてのドキュメントを取得します。
+```bash
+chess kasparov -karpov date:[19990101;19991231]
+```
+
+このクエリーは、1999 年に最終更新された、_chess_ と _kasparov_ を含み _karpov_ を含まないすべてのドキュメントを取得します。
+
+#### 高度な範囲検索
+
+単純な範囲に対して最良のドキュメントを素早く取得したい場合、上限付き範囲検索 (capped range search) を使って効率的に行えます。効率的にするには、範囲検索に使用する attribute に [fast-search](/ja/reference/schemas/schemas#attribute) を使用する必要があります。
+
+これが高速なのは、要求されたドキュメント数を満たすのに十分な数の語だけを辞書からスキャンするためです。正の数を指定すると範囲の左端から右へ向かって処理します。負の数を指定すると右端から左へ向かって処理します。
+
+```bash
+date:[0;21000101;10]
+```
+西暦元年以降の最初の少なくとも 10 件のドキュメントを返します。
+```bash
+date:[0;21000101;-10]
+```
+
+西暦元年以降の最後の少なくとも 10 件のドキュメントを返します。
+
+### シンプルクエリー言語におけるグルーピング
+
+サポートされる括弧のレベルは 1 段だけです。式の中で追加の括弧を使用しても無視されます。また、括弧内の語には + や - のプレフィックスを付けるべきではないことに注意してください。
+
+括弧の前に + を付けた場合(式はデフォルトで + であるため `all` タイプでは省略可能)、その検索は、含まれる語の少なくとも 1 つがドキュメントに存在することを要求します。これにより、同じ意図を表す代替の語を用意しつつ、その概念がドキュメントでカバーされていることを要求する方法が事実上得られます。
+
+括弧の前に - を付けた場合、その検索は、すべての語を含むドキュメントを除外しますが、式内の一部の語だけを使用するドキュメントは許可します。この構文の良い用途を見つけるのはやや難しいですが、例えば、2 つの異なる製品を比較しているドキュメントを除外しつつ、どちらか一方のみを扱うドキュメントは許可する、といった使い方ができます。
+
+## URL 内の検索
+
+[uri](/ja/reference/schemas/schemas#uri) 型のフィールドを作成することで、インデックスに URL フィールドを作成できます - クエリーの組み立て方はこちらを参照してください。インデクサーは、無効な URL に対してログに ERROR を報告します。注意点:
+
+- ただし、完全な URL にマッチするドキュメントの検索は、文字列フィールドなどにおける完全一致のようには動作せず、部分文字列マッチングに近い動作をします。`myurlfield:http://www.mydomain.com/` の検索は、_myurlfield_ が _http://www.mydomain.com/_、_http://www.mydomain.com/test_、_http://redirect.com/?goto=http://www.mydomain.com/_ のいずれに設定されたドキュメントにもマッチします
+- ホスト名検索には、マッチする URL を限定するアンカリング機構があります。デフォルトでは、クエリーは末尾でアンカーされます。つまり `mydomain.com` の検索は `www.mydomain.com` にはマッチしますが、`mydomain.com.au` にはマッチしません。先頭に ^(キャレット)を追加すると先頭でのアンカリングが有効になり、クエリーは完全一致のみを返します。末尾に `*` を追加すると末尾のアンカリングが無効になります。クエリー `^mydomain.com*` は `mydomain.com.au` にはマッチしますが、`www.mydomain.com` にはマッチしません。 
+
+## フィールドパス構文
+
+ストリーミング検索は、構造体やマップを検索する際に、[ドキュメントセレクション言語](/ja/reference/writing/document-selector-language)の[フィールドパス](/ja/reference/schemas/document-field-path)構文をサポートします。マップ型に特有なのは、`mymap{"foo"} ` 構文を使って検索対象のマップエントリーのサブセットを選択できる機能です。
+
+マップデータ型のユースケースについては、[フィールドパス](/ja/reference/schemas/document-field-path)のドキュメントを参照してください。
+
+結果の出力では、マップは Document XML と同じ方法で表現されます:
+
+```xml
+<field name="mymap">
+    <item><key>foo</key><value>bar</value></item>
+    <item><key>fuz</key><value>baz</value></item>
+</field>
+```
+
+## クエリーからの構文文字の除去
+
+ユーザーの検索語からクエリー構文で使用される文字を除去する方が堅牢な場合があります。例として、括弧を含む URL が挙げられます。こうした場合の安全な置換文字として、カンマ(","、ASCII 0x2C)を使用できます。
+
+```yaml
+(x url:http://site.com/a)b) y
+```
+
+この例の URL `http://site.com/a)b` は、次のように引用できます:
+
+```yaml
+(x url:http://site.com/a,b) y
+```
+
+## 例
+
+_シンプル_ クエリー言語の構文は、任意の入力文字列を受け入れ、そこから最大限の意味を引き出します。基本的なクエリーは、スペース(%20 としてエンコード)で区切られた単語で構成されます。さらに、
+
+- フレーズは引用符で囲むことで検索できます。例: `"match exactly this"`
+- フレーズと単語の前に - を付けると、ドキュメントがこれを含んでは_ならない_ことを意味します 
+- フレーズと単語の前に + を付けると、ドキュメントがこれを含まなければ_ならない_ことを意味します。現在はサブタイプ `any` でのみ使用されます
+- 単語やフレーズのグループは括弧を使ってグループ化できます。例: `-(do not match if all of these words matches)`
+- 各単語やフレーズの前には、`indexname:word` のようにインデックス名または attribute 名とコロンを付けて、そのインデックス内でマッチさせられます。インデックス名を省略すると、_default_ という名前のインデックスが検索されます。 
+
+_ノイズ_(インデックスにも attribute にも存在せず、クエリー言語上の意味も持たない文字)はすべて無視され、すべてのクエリー文字列が有効です。例外は、意味のある解釈ができないクエリーです。例として `-a` があり、これは _a_ を含ま_ない_すべてのドキュメントを返すと期待されるかもしれません。しかし Vespa は、エラーメッセージ _Null query_ を返します。以下の例はすべて _all_ タイプです。
+
+タイトルに _microsoft_ を含み _bug_ を含まない、語 _word_ を持つすべてのドキュメントを取得:
+
+```bash
+word title:microsoft -title:bug
+```
+フレーズ「_to be or not to be_」を含むすべてのドキュメントを検索し、タイトルに _shakespeare_ を含むものは除外:
+```bash
+"to be or not to be" -title:shakespeare
+```
+2009 年のクリスマスに最終更新された、タイトルに _Christmas_ という単語を含むすべてのドキュメントを取得:
+```bash
+title:Christmas date:20091225
+```
+米国の外交政策に関するドキュメントを取得し、対立する両大統領候補の双方にマッチするものは除外:
+```bash
+"us foreign politics" -(clinton trump)
+```
+
+米国の外交政策に関するドキュメントを取得し、対立する大統領候補の少なくとも一方にマッチするもののみを含める:
+
+```bash
+"us foreign politics" (clinton trump)
+```

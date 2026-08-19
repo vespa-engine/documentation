@@ -1,0 +1,220 @@
+---
+title: "LightGBM モデルによるランキング"
+sidebarTitle: "LightGBM モデルの使用"
+---
+
+[LightGBM](https://github.com/microsoft/LightGBM) は、[XGBoost](/ja/ranking/xgboost) に似た勾配ブースティングフレームワークです。その他の[利点](https://github.com/microsoft/LightGBM/blob/master/docs/Experiments.rst#comparison-experiment)に加えて、XGBoost に対する LightGBM の際立った特徴の 1 つは、カテゴリカル・フィーチャーを直接サポートしていることです。[LightGBM](https://github.com/microsoft/LightGBM) でトレーニングされたモデルがあれば、Vespa はそのモデルをインポートして直接使用できます。
+
+## LightGBM からのモデルのエクスポート
+
+Vespa は LightGBM の [`dump_model`](https://lightgbm.readthedocs.io/en/latest/pythonapi/lightgbm.Booster.html#lightgbm.Booster.dump_model) のインポートをサポートしています。これは、ツリーモデルに加えて、フィーチャー名、目的関数、カテゴリカル・フィーチャーの値などの有用なデータを JSON ファイルにダンプします。Vespa での使用に適したモデルをトレーニングして保存する例は次のとおりです。
+
+```python expandable
+import json
+import lightgbm as lgb
+import numpy as np
+import pandas as pd
+
+# Create random training set
+features = pd.DataFrame({
+            "feature_1": np.random.random(100),
+            "feature_2": np.random.random(100),
+        })
+targets = ((features["feature_1"] + features["feature_2"]) > 1.0) * 1.0
+training_set = lgb.Dataset(features, targets)
+
+# Train the model
+params = {
+    'objective': 'binary',
+    'metric': 'binary_logloss',
+    'num_leaves': 3,
+}
+model = lgb.train(params, training_set, num_boost_round=5)
+
+# Save the model
+with open("lightgbm_model.json", "w") as f:
+    json.dump(model.dump_model(), f, indent=2)
+```
+
+この特定のモデルは実際に役立つことは何もしていませんが、出力ファイル `lightgbm_model.json` はそのまま Vespa にインポートできます。
+
+ランキング損失を用いた learning to rank によってランキング関数をトレーニングする方法の完全な例については、この [notebook](https://github.com/vespa-engine/sample-apps/blob/master/commerce-product-ranking/notebooks/Train-lightgbm.ipynb) も参照してください。
+
+## LightGBM モデルのインポート
+
+LightGBM モデルを Vespa にインポートするには、`models` という名前のディレクトリ、または `models` 配下のサブディレクトリに、モデルファイルをアプリケーション・パッケージに追加します。たとえば、上記のモデル `lightgbm_model.json` の場合、アプリケーション・パッケージに追加すると、次のようなディレクトリ構造になります:
+
+```bash
+├── models
+│   └── lightgbm_model.json
+├── schemas
+│   └── main.sd
+└── services.xml
+```
+
+アプリケーション・パッケージは複数のモデルを持つことができる点に注意してください。モデルを `models` ディレクトリに置くと、ランキングと[ステートレスなモデル評価](/ja/ranking/stateless-model-evaluation)の両方で利用可能になります。
+
+## LightGBM モデルによるランキング
+
+Vespa には `lightgbm` という[ランキングフィーチャー](/ja/reference/ranking/rank-features)があります。このランキングフィーチャーは、ランキング式で使用するモデルを、`models` ディレクトリからの相対パスで指定します。次の例を考えてみましょう:
+
+```js
+schema test {
+    rank-profile classify inherits default {
+        first-phase {
+            expression: lightgbm("lightgbm_model.json")
+        }
+    }
+}
+```
+
+ここでは、モデル `lightgbm_model.json`(`models` ディレクトリの直下)を、rank-profile `classify` を使用するクエリーにマッチするすべてのドキュメントに適用するよう指定しています。考慮すべき重要な点の 1 つは、モデル内のフィーチャーを、Vespa がランキングで使用できるフィーチャーにどのようにマッピングするかです。
+
+上記の例からダンプされた JSON ファイルを見てみましょう:
+
+```json
+{
+  "name": "tree",
+  "version": "v3",
+  "num_class": 1,
+  "num_tree_per_iteration": 1,
+  "label_index": 0,
+  "max_feature_idx": 1,
+  "average_output": false,
+  "objective": "binary sigmoid:1",
+  "feature_names": [
+    "feature_1",
+    "feature_2"
+  ],
+  "monotone_constraints": [],
+  "tree_info": [
+    ....
+  ],
+  "pandas_categorical": []
+}
+```
+
+ここで、`feature_names` セクションはトレーニングセットで使用されたフィーチャー名で構成されています。このモデルが Vespa で評価されるとき、Vespa はこれらのフィーチャー名が有効な[ランクフィーチャー](/ja/reference/ranking/rank-features)であることを期待します。例としては、ドキュメントから取得すべき値の場合は `attribute(field_name)`、クエリーから取得すべき値の場合は `query(name)`、あるいは `fieldMatch(name)` のようなより複雑なランクフィーチャーから取得する場合もあります。また、LightGBM のフィーチャー名で[関数](/ja/ranking/ranking-expressions-features#function-snippets)(これは有効なランクフィーチャーです)を定義してマッピングを行うこともできます。例:
+
+```js
+schema test {
+    document test {
+        field doc_attrib type double {
+            indexing: summary | attribute
+        }
+    }
+    rank-profile classify inherits default {
+        function feature_1() {
+            expression: attribute(doc_attrib)
+        }
+        function feature_2() {
+            expression: query(query_value)
+        }
+        first-phase {
+            expression: nativeRank
+        }
+        second-phase {
+            expression: lightgbm("lightgbm_model.json")
+        }
+    }
+}
+```
+
+ここでは、Vespa がモデルを評価するとき、`feature_1` の値を `doc_attrib` というドキュメントのアトリビュートから取得し、`feature_2` の値をクエリーとともに渡されたクエリー値から取得します。
+
+また、LightGBM モデルのトレーニング時に `attribute(doc_attrib)` をそのままフィーチャー名として使用することもできます。これにより、Vespa からランクフィーチャーをダンプして、モデルを直接トレーニングできます。
+
+ここでは、first-phase のランキング式によって上位にランクされたドキュメントに対して、モデル `lightgbm_model.json` を適用するよう指定しています。クエリーリクエストでは、[ranking.profile](/ja/reference/api/query#ranking.profile) として `classify` を指定する必要があります。モデルに渡されるデータポイント / ドキュメントの数を制御する方法については、[段階的ランキング](/ja/ranking/phased-ranking)も参照してください。
+
+一般に、実行時の計算量は次の要素によって決まります:
+
+- [スレッドごと](/ja/performance/sizing-search)に評価されるドキュメント数 / ノード数とクエリーフィルター
+- フィーチャー計算の複雑さ。たとえば `fieldMatch` フィーチャーは `nativeFieldMatch/nativeRank` よりも 100 倍高コストです。
+- ツリーの数とツリーごとの最大深さ
+
+サービングのレイテンシーは、[クエリーリクエストごとに複数のスレッドを使用する](/ja/performance/practical-search-performance-guide#multithreaded-search-and-ranking)ことで下げることができます。
+
+### 高速フォレスト評価
+
+大規模なフォレストの場合、代替の GBDT 評価器によって評価コストをさらに削減できます。有効にするには、ランクプロファイルで `vespa.eval.use_fast_forest` [rank-property](/ja/reference/ranking/rank-feature-configuration) を `true` に設定します:
+
+```js
+rank-profile classify inherits default {
+    rank-properties {
+        vespa.eval.use_fast_forest: true
+    }
+    second-phase {
+        expression: lightgbm("lightgbm_model.json")
+    }
+}
+```
+
+これはランクプロファイルの設定であり、クエリーパラメーターではありません。モデルのコンパイル時に適用されるため、クエリーごとに切り替えることはできません。A/B テストを行うには、このプロパティのみを追加した 2 つ目のランクプロファイルを作成してください。
+
+<Note>
+高速フォレスト評価は、モデル内のすべての分岐が数値(`<` またはその反転形)であり、かつどのツリーもリーフ数が 2,048 を超えない場合にのみ適用されます。LightGBM のネイティブな[カテゴリカル分岐](#using-categorical-features)を使用するモデルは対象外であり、ルート式がツリーの合計を別の関数でラップしているモデルも対象外です。たとえば `binary` 目的関数の場合、Vespa は自動的に `sigmoid(...)` でラップします。これらのいずれかのケースでは、この設定は効果がなく、Vespa は警告なくデフォルトの評価器にフォールバックします。
+</Note>
+
+速度向上は、ツリーの数よりもツリーごとのリーフ数に大きく依存します。ツリーごとのリーフ数が最大 64 のモデルが最も恩恵を受けます。
+
+## 目的関数
+
+以前に XGBoost を Vespa で使用したことがあれば、バイナリ分類器を使用する場合に `xgboost` フィーチャーをたとえば `sigmoid` 関数でラップする必要があることに気付いたかもしれません。LightGBM ではその必要はありません。その情報は、上記の JSON 出力の `objective` セクションに見られるように、モデルのダンプに含まれて渡されるためです。
+
+現在、Vespa は以下の目的関数でトレーニングされたモデルのインポートをサポートしています:
+
+- `binary`
+- `regression`
+- `lambdarank`
+- `rank_xendcg`
+- `rank_xendcg`
+
+LightGBM と目的関数の詳細については、[`objective`](https://lightgbm.readthedocs.io/en/latest/Parameters.html#objective) を参照してください。
+
+## カテゴリカル・フィーチャーの使用
+
+LightGBM には、カテゴリカル・フィーチャーで直接トレーニングするオプションがあります。例:
+
+```js
+features = pd.DataFrame({
+            "numerical":   np.random.random(5),
+            "categorical": pd.Series(np.random.permutation(["a", "b", "c", "d", "e"])), dtype="category"),
+           })
+```
+
+ここでは、`categorical` フィーチャーが Pandas の dtype `category` でマークされています。これにより、LightGBM は、上記の JSON の例の `pandas_categorical` セクションにカテゴリカル値を出力するようになります。これによって、Vespa は使用すべき適切なカテゴリカル値を抽出できます。これが重要なのは、カテゴリカル変数を使用する他の方法では、カテゴリー値が "1"、"2"、… "n" になってしまい、この場合にモデル評価で "a" を送信すると、おそらく誤った結果になるためです。カテゴリカル変数が適切に処理されるようにするには、Pandas のテーブルに基づいてトレーニングデータを構築し、カテゴリカル列に `category` dtype を使用してください。
+
+Vespa ではカテゴリカル・フィーチャーは文字列であるため、上記のフィーチャーをたとえばドキュメントのフィールドにマッピングすると次のようになります:
+
+```js
+schema test {
+    document test {
+        field numeric_attrib type double {
+            indexing: summary | attribute
+        }
+        field string_attrib type string {
+            indexing: summary | attribute
+        }
+    }
+    rank-profile classify inherits default {
+        function numerical() {
+            expression: attribute(numeric_attrib)
+        }
+        function categorical() {
+            expression: attribute(string_attrib)
+        }
+        first-phase {
+            expression: lightgbm("lightgbm_model.json")
+        }
+    }
+}
+```
+
+ここでは、すべてのドキュメントに対してこのモデルを評価する際に、ドキュメントの文字列値がフィーチャー値として使用されます。
+
+## Vespa の推論スコアと LightGBM の predict スコアのデバッグ
+
+- LightGBM モデルを JSON 表現にダンプすると、モデル情報の一部が失われます(たとえば `base_score` や、early stopping でトレーニングした場合の最適なツリー数など)。
+- トレーニングでは、オフライントレーニングのフィーチャーがオンラインで Vespa が計算したフィーチャーと一致するように、`match-features` または `summary-features` を使用して Vespa からフィーチャーを収集すべきです。フィーチャーのダンプは、[recall](/ja/reference/api/query#recall) パラメーターを使用して特定のクエリーとドキュメントのペアを詳しく調べることで、差異のデバッグにも役立ちます。
+- また、トレーニング用に Vespa のフィーチャーを読み取る際には、可能な限り高い精度を使用することも重要です。Vespa は `double` 精度でフィーチャーを出力するためです。トレーニングルーチンがフィーチャーを `float` やその他のよりコンパクトな浮動小数点表現に丸めると、フィーチャーの分岐判定が Vespa と XGboost で異なる可能性があります。
+- 複数のノードがモデルを使用する分散環境では、`nativeRank`、`nativFieldMatch`、`bm25`、`fieldMatch` などのテキストマッチングフィーチャーは、どのノードがヒットを生成したかによって異なる場合があります。その理由は、これらのフィーチャーがすべて [term(n).significance](/ja/reference/ranking/rank-features#query-features) を使用しており、これはローカルにインデックスされたコーパスで計算されるためです。`term(n).significance` フィーチャーは *Inverse Document Frequency (IDF)* に関連しています。各ノードはローカルのコーパスから significance の値を推定するため、グローバルな正確性のためには、`term(n).significance` はコンテナー内のサーチャーで設定すべきです。
