@@ -1,0 +1,298 @@
+---
+title: "設定サーバー"
+---
+
+Vespa の設定サーバー(config server)は、アプリケーション・パッケージをデプロイするエンドポイントをホストし、生成された設定をすべてのサービスに配信します。詳細は[概要](/ja/learn/overview)と[アプリケーション・パッケージ](/ja/basics/applications)を参照してください。つまり、config server なしで Vespa を設定することはできず、サービスも config server なしでは動作しません。
+
+[Vespa の起動シーケンス](/ja/operations/self-managed/config-sentinel)を理解しておくと役立ちます。複数 config server 構成の実践的な例については、サンプルアプリケーションの [multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) と [multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) を参照してください。
+
+Vespa の設定は、1 つ以上の設定サーバー(config server)を使ってセットアップされます。config server は、設定システムの分散データストレージとして [Apache ZooKeeper](https://zookeeper.apache.org/) を使用します。さらに、各ノードは設定データをキャッシュする config proxy を実行します。概要は[サービスの起動](/ja/operations/self-managed/config-sentinel)を参照してください。
+
+## ステータスと設定ジェネレーション
+
+稼働中の config server のヘルスは次のように確認できます(localhost をホスト名に置き換えてください):
+
+```bash
+$ curl http://localhost:19071/state/v1/health
+```
+
+config server 自体もサービスであり、ファイルベースの設定で動作する点に注意してください。デプロイされるアプリケーション・パッケージが config server を変更することはありません。config server はこの設定を他のすべての Vespa ノードに配信します。したがって、これは常に設定ジェネレーション 0 になります:
+
+```bash
+$ curl http://localhost:19071/state/v1/config
+```
+
+詳細は [start-configserver](https://github.com/vespa-engine/vespa/blob/master/configserver/src/main/sh/start-configserver) を参照してください。
+
+## 冗長性
+
+config server は [VESPA\_CONFIGSERVERS](/ja/operations/self-managed/files-processes-and-ports#environment-variables)、[services.xml](/ja/reference/applications/services/services)、[hosts.xml](/ja/reference/applications/hosts) で定義します:
+
+
+```bash
+$ VESPA_CONFIGSERVERS=myserver0.mydomain.com,myserver1.mydomain.com,myserver2.mydomain.com
+```
+
+```xml
+<services>
+    <admin version="2.0">
+        <configservers>
+            <configserver hostalias="admin0" />
+            <configserver hostalias="admin1" />
+            <configserver hostalias="admin2" />
+        </configservers>
+    </admin>
+</services>
+```
+```xml
+<hosts>
+    <host name="myserver0.mydomain.com">
+        <alias>admin0</alias>
+    </host>
+    <host name="myserver1.mydomain.com">
+        <alias>admin1</alias>
+    </host>
+    <host name="myserver2.mydomain.com">
+        <alias>admin2</alias>
+    </host>
+</hosts>
+```
+
+[VESPA\_CONFIGSERVERS](/ja/operations/self-managed/files-processes-and-ports#environment-variables) はすべてのノードで設定する必要があります。これは、*myhost1.mydomain.com,myhost2.mydomain.com,myhost3.mydomain.com* のように、すべての config server のホスト名をカンマまたは空白で区切ったリストです。
+
+config server が複数ある場合、[config proxy](/ja/operations/self-managed/config-proxy) は(config server 間の負荷分散のために)ランダムに config server を選択します。config proxy は耐障害性を備えており、使用中の config server が利用できなくなったり、受け取った設定にエラーがあったりした場合は、(複数台あれば)別の config server に切り替えます。
+
+システムが *n* 台の障害に耐えるためには、[ZooKeeper](#zookeeper) の設計上 *(2\*n)+1* 台のノードが必要です。したがって、有用なのは奇数台のノードのみであり、耐障害性のある設定システムには最低 3 ノードが必要です。
+
+config server が 1 台だけの場合でも、そのサーバーがダウンしてもアプリケーションは動作します(ただしアプリケーション変更のデプロイはできません)。*config proxy* はすべてのノードで実行され設定をキャッシュしているため、そのノード上のサービスへの設定の配信は継続されます。ただし、config server が利用できない状態でノードを再起動すると、config proxy の再起動時にキャッシュが破棄されるため、そのノード上のサービスは起動できなくなります。
+
+*services.xml* の詳細については、[admin モデルリファレンス](/ja/reference/applications/services/admin#configservers)を参照してください。
+
+## 起動シーケンス
+
+Vespa アプリケーションインスタンスをブートストラップする大まかな手順は次のとおりです:
+
+- config server を起動する
+- 設定をデプロイする
+- Vespa ノードを起動する
+
+[multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) はマルチノードの Vespa アプリケーションインスタンスを起動する方法の優れたガイドです。まずこちらを試してください。config server 起動の詳細な手順:
+
+<Steps>
+<Step>
+すべてのノードで [VESPA\_CONFIGSERVERS](/ja/operations/self-managed/files-processes-and-ports#environment-variables) を設定します。完全修飾ホスト名を使用し、config server を含むすべてのノードで同じ値を設定してください。
+</Step>
+<Step>
+*services/hosts.xml* で設定されたノード上で config server を起動します。[/state/v1/health](/ja/reference/api/state-v1#state-v1-health)(デフォルトはポート 19071)を確認して、起動が成功したことを確かめてください:
+
+```bash
+$ curl http://localhost:19071/state/v1/health
+```
+
+```json
+{
+    "time" : 1651147368066,
+    "status" : {
+        "code" : "up"
+    },
+    "metrics" : {
+        "snapshot" : {
+            "from" : 1.651147308063E9,
+            "to" : 1.651147367996E9
+        }
+    }
+}
+```
+
+ヘルス API から応答がない場合、次の 2 つのいずれかが起きている可能性があります:
+	- config server プロセスが起動しなかった - `vespa-logfmt` でログを確認するか、*`$VESPA_HOME/logs/vespa/vespa.log`*(通常は */opt/vespa/logs/vespa/vespa.log*)を確認してください。
+	- config server プロセスは起動したが、[ZooKeeper クォーラム](#zookeeper)を待っている:
+    
+    ```bash
+    $ vespa-logfmt -S configserver
+    ```
+
+    ```bash
+    configserver     Container.com.yahoo.vespa.zookeeper.ZooKeeperRunner	Starting ZooKeeper server with /opt/vespa/var/zookeeper/conf/zookeeper.cfg. Trying to establish ZooKeeper quorum (members: [node0.vespanet, node1.vespanet, node2.vespanet], attempt 1)
+    configserver     Container.com.yahoo.container.handler.threadpool.ContainerThreadpoolImpl	Threadpool 'default-pool': min=12, max=600, queue=0
+    configserver     Container.com.yahoo.vespa.config.server.tenant.TenantRepository	Adding tenant 'default', created 2022-04-28T13:02:24.182Z. Bootstrapping in PT0.175576S
+    configserver     Container.com.yahoo.vespa.config.server.rpc.RpcServer	Rpc server will listen on port 19070
+    configserver     Container.com.yahoo.container.jdisc.state.StateMonitor	Changing health status code from 'initializing' to 'up'
+    configserver     Container.com.yahoo.jdisc.http.server.jetty.Janitor	Creating janitor executor with 2 threads
+    configserver     Container.com.yahoo.jdisc.http.server.jetty.JettyHttpServer	Threadpool size: min=22, max=22
+    configserver     Container.org.eclipse.jetty.server.Server	jetty-9.4.46.v20220331; built: 2022-03-31T16:38:08.030Z; git: bc17a0369a11ecf40bb92c839b9ef0a8ac50ea18; jvm 11.0.14.1+1-
+    configserver     Container.org.eclipse.jetty.server.handler.ContextHandler	Started o.e.j.s.ServletContextHandler@341c0dfc{19071,/,null,AVAILABLE}
+    configserver     Container.org.eclipse.jetty.server.AbstractConnector	Started configserver@3cd6d147{HTTP/1.1, (http/1.1, h2c)}{0.0.0.0:19071}
+    configserver     Container.org.eclipse.jetty.server.Server	Started @21955ms
+    configserver     Container.com.yahoo.container.jdisc.ConfiguredApplication	Switching to the latest deployed set of configurations and components. Application config generation: 0
+    ```
+
+クォーラムに到達して 2 番目のハイライトされたログ行が出力されるまで、処理は待機し続けます。クォーラムが成立しない根本原因には次のようなものがあります:
+	- config server 間の接続性がない。ZooKeeper は `(members: [node0.vespanet, node1.vespanet, node2.vespanet], attempt 1)` のようにメンバーをログに記録します。config server を実行しているノード同士がポート 2181 で相互に到達できることを確認してください。
+	- 接続性がないのはネットワーク設定の誤りの可能性があります。[multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) は docker ネットワークを使用しています。ホスト名にアンダースコアが含まれていないことを確認してください。
+</Step>
+<Step>
+すべての config server が *state/v1/health* で `up` を返したら、アプリケーション・パッケージをデプロイできます。つまり、デプロイが失敗した場合は、まず config server のヘルスを確認するのが常に良い方法です。config server が正常に動作しているのにデプロイが失敗する場合は、アプリケーション・パッケージの問題である可能性が高いため、[アプリケーション・パッケージ](/ja/basics/applications)を参照してください。
+</Step>
+<Step>
+デプロイが成功すると、*prepare* と *activate* のステップで次のログが記録されます:
+
+```bash
+Container.com.yahoo.vespa.config.server.ApplicationRepository	Session 2 prepared successfully.
+Container.com.yahoo.vespa.config.server.deploy.Deployment	Session 2 activated successfully using no host provisioner. Config generation 2. File references: [file '9cfc8dc57f415c72']
+Container.com.yahoo.vespa.config.server.session.SessionRepository	Session activated: 2
+```
+</Step>
+<Step>
+Vespa ノードを起動します。技術的にはいつ起動しても構いません。トラブルシューティングの際は、他のノードを起動する前に、config server が正常に起動しデプロイが成功したことを確認しておくと簡単です。[Vespa の起動シーケンス](/ja/operations/self-managed/config-sentinel)と [Vespa の起動 / 停止 / 再起動](/ja/operations/self-managed/admin-procedures#vespa-start-stop-restart)を参照してください。
+</Step>
+</Steps>
+
+デバッグの際は、必ずすべての config server のログを確認してください。
+
+## スケールアップ
+
+耐障害性を高める場合やノードを交換する場合は、config server ノードを追加します。続行する前に [ZooKeeper の設定](#zookeeper-configuration)を読んでください。一度に複数の config server を追加することは*可能*ですが、ZooKeeper クォーラムを維持するために 1 台ずつ行うことを推奨します。
+
+ZooKeeper の多数決の仕組み上、config server は 1 台または 3 台にしてください。
+
+<Steps>
+<Step>
+新しい config server ノードに *vespa* をインストールします。
+</Step>
+<Step>
+すべてのノードで、config server ノードのホスト名を VESPA\_CONFIGSERVERS の末尾に追加し、その後すべての config server を順番に(再)起動して ZooKeeper の設定を更新します。末尾に追加することで、現行の config server ノードは現在の ZooKeeper インデックスを維持します。既存の config server を先に再起動してください。config server は起動時に、設定されているサーバーを vespa ログに記録します。
+</Step>
+<Step>
+新しい config server 群に合わせて *services.xml* と *hosts.xml* を更新し、*vespa prepare* と *vespa activate* を実行します。
+</Step>
+<Step>
+他のノードを 1 台ずつ再起動して、新しい config server を使い始めます。これにより、Vespa ノードは更新された config server 群を使用するようになります。
+</Step>
+</Steps>
+
+config server はアプリケーションデータを新しいノードに自動的に再分配します。
+
+## スケールダウン
+
+これはスケールアップの逆で、手順は同じです。*VESPA\_CONFIGSERVERS* の末尾から config server を削除します。ここでは、3 台から 1 台にする場合、2 ノードを一度に削除できます。
+
+## ノードの交換
+
+- 必ず一度に 1 ノードだけを交換してください。
+- config server が 1 台しかない場合は、まず新しいノードでスケールアップし、その後古いノードを削除してスケールダウンする必要があります。
+- 3 台以上ある場合は、ノードを追加する代わりに、VESPA\_CONFIGSERVERS 内の古いノードの 1 つを新しいノードに置き換えられます。それ以外は[スケールアップ](#scaling-up)と同じ手順です。交換したいノードごとに繰り返します。
+
+## ツール
+
+設定にアクセスするためのツール:
+
+<CardGroup>
+  <Card title="vespa-get-config" icon="download" href="/ja/reference/operations/self-managed/tools#vespa-get-config" horizontal />
+  <Card title="vespa-configproxy-cmd" icon="terminal" href="/ja/reference/operations/self-managed/tools#vespa-configproxy-cmd" horizontal />
+  <Card title="Config API" icon="gear" href="/ja/reference/api/config-v2" horizontal />
+</CardGroup>
+
+## ZooKeeper
+
+[ZooKeeper](https://zookeeper.apache.org/) は、複数の config server 間のデータ整合性を担います。config server の Java アプリケーションは、他のノードが使用する RPC フロントエンドを組み込んだ ZooKeeper サーバーを実行します。ZooKeeper は内部的に、ファイルシステムに似た、*サブノード*を持てる*ノード*にデータを格納します。
+
+[vespa prepare](/ja/reference/clients/vespa-cli#vespa-prepare) の時点で、アプリケーションのファイルはグローバル設定とともに ZooKeeper に保存されます。アプリケーションデータは */config/v2/tenants/default/sessions/\[sessionid\]/userapp* 以下に保存されます。[vespa activate](/ja/reference/clients/vespa-cli#vespa-activate) の時点で、セッション ID を */config/v2/tenants/default/applications/default:default:default* に書き込むことにより、最新のアプリケーションが*ライブ*でアクティベートされます。他のノードが設定を受け取るのはこの時点です。
+
+状態を確認するには *vespa-zkcli* を使用します。sessionid は実際のセッション ID に置き換えてください:
+
+```bash
+$ vespa-zkcli ls  /config/v2/tenants/default/sessions/sessionid/userapp
+$ vespa-zkcli get /config/v2/tenants/default/sessions/sessionid/userapp/services.xml
+```
+
+ZooKeeper サーバーのログは *`$VESPA_HOME/logs/vespa/zookeeper.configserver.0.log`(ファイルはシーケンス番号付きでローテーションされます)* に出力されます。
+
+### ZooKeeper の設定
+
+ZooKeeper クラスターのメンバーは、[VESPA\_CONFIGSERVERS](/ja/operations/self-managed/files-processes-and-ports#environment-variables) の内容に基づいて生成されます。*`$VESPA_HOME/var/zookeeper/conf/zookeeper.cfg`* は config server の(再)起動時に書き込まれます。したがって、`VESPA_CONFIGSERVERS` を変更したときは、すべての config server を再起動する必要があります。
+
+ノードの順序は *zookeeper.cfg* のインデックス作成に使用されるため、ノードの順序を変更しないでください。
+
+### ZooKeeper のリカバリー
+
+config server がハードウェア障害などでデータ破損に見舞われた場合は、次のリカバリー手順を使用します。このようなシナリオの一例は、*`$VESPA_HOME/logs/vespa/zookeeper.configserver.0.log`* に *java.io.IOException: Negative seek offset at java.io.RandomAccessFile.seek(Native Method)* と記録されている場合で、これはディスクフルの後に ZooKeeper がリカバリーできなかったことを示します。この手順の間、他のノードで Vespa を再起動する必要はありません:
+
+1. [vespa-stop-configserver](/ja/reference/operations/self-managed/tools#vespa-stop-configserver)
+2. [vespa-configserver-remove-state](/ja/reference/operations/self-managed/tools#vespa-configserver-remove-state)
+3. [vespa-start-configserver](/ja/reference/operations/self-managed/tools#vespa-start-configserver)
+4. [vespa](/ja/clients/vespa-cli#deployment) prepare `<application path>`
+5. [vespa](/ja/clients/vespa-cli#deployment) activate
+
+この手順は ZooKeeper の内部データスナップショットを完全に消去し、ゼロからデプロイします。
+
+なお、デフォルトでは、コンテント・クラスターの状態を管理する[クラスターコントローラー](/ja/content/content-nodes#cluster-controller)は同じ共有 ZooKeeper インスタンスを使用するため、状態を削除するとコンテント・クラスターの状態もリセットされます。手動で設定した状態(たとえばユーザー状態が *down* のノード)は失われます。cluster-controller をスタンドアロン ZooKeeper モードで実行することも可能です。[standalone-zookeeper](/ja/reference/applications/services/admin#cluster-controllers) を参照してください。
+
+### ZooKeeper のバリアタイムアウト
+
+config server の負荷が高い場合や、デプロイするアプリケーションが大きい場合、デプロイ中に他のサーバーと同期する際にサーバー内部でタイムアウトが発生することがあります。回避策として、[VESPA\_CONFIGSERVER\_ZOOKEEPER\_BARRIER\_TIMEOUT](/ja/operations/self-managed/files-processes-and-ports#environment-variables) を 600(秒)以上に設定してタイムアウトを増やし、config server を再起動してください。
+
+## 設定
+
+設定システムを実行していないノード(たとえば Document API 経由でフィードを行うノード)から設定にアクセスするには、環境変数 [VESPA\_CONFIG\_SOURCES](/ja/operations/self-managed/files-processes-and-ports#environment-variables) を使用します:
+
+```bash
+$ export VESPA_CONFIG_SOURCES="myadmin0.mydomain.com:19071,myadmin1.mydomain.com:19071"
+```
+
+あるいは、Java プログラムの場合は、システムプロパティ *configsources* を使用し、プログラムから設定するか、Java の *\-D* オプションでコマンドラインから設定します。値の構文は *VESPA\_CONFIG\_SOURCES* と同じです。
+
+### システム要件
+
+実行する JVM の最小ヒープサイズは 128 Mb、最大ヒープサイズは 2 GB です([設定](/ja/performance/container-tuning#config-server-and-config-proxy)で変更可能)。古い項目が定期的にパージされるトランザクションログを書き込むため、必要なディスク容量はわずかです。ディスク I/O の多いサーバーで実行するとパフォーマンスに悪影響があるため、推奨されない点に注意してください。
+
+### ポート
+
+config server の RPC ポートは、システム内のすべてのノードで [VESPA\_CONFIGSERVER\_RPC\_PORT](/ja/operations/self-managed/files-processes-and-ports#environment-variables) を設定することで変更できます。
+
+HTTP ポートを変更するには、*`$VESPA_HOME/conf/configserver-app/services.xml`* 内のポートを変更する必要があります:
+
+```xml
+<http>
+    <server port="19079" id="configserver" />
+</http>
+```
+
+ポートをデフォルトから変更した場合は、デプロイ時に *\-p* オプションを使用してください。
+
+## トラブルシューティング
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>問題</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;ヘルスチェック&#42;&#42;</td>
+      <td>config server が起動して稼働していることを、<a href="/ja/reference/api/state-v1#state-v1-health" aria-label="/state/v1/health">/state/v1/health</a> を使って確認します。<a href="#start-sequence" aria-label="起動シーケンス">起動シーケンス</a>を参照してください。サーバーが稼働していてブートストラップが完了していれば、ステータスコードは <code>{`up`}</code> になります。<br/><br/> あるいは、<a href="http://localhost:19071/status.html" aria-label="http://localhost:19071/status.html">http://localhost:19071/status.html</a> を使用すると、サーバーが稼働していてブートストラップが完了している場合にレスポンスコード 200 が返ります。<br/><br/> メトリクスは <a href="/ja/reference/api/state-v1#state-v1-metrics" aria-label="/state/v1/metrics">/state/v1/metrics</a> にあります。ホストとポート番号を調べるには <a href="/ja/reference/operations/self-managed/tools#vespa-model-inspect" aria-label="vespa-model-inspect">vespa-model-inspect</a> を使用します。ポートはデフォルトで 19071 です。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;整合性&#42;&#42;</td>
+      <td>config server が複数ある場合、サーバー間の整合性が極めて重要です。<a href="http://localhost:19071/status" aria-label="http://localhost:19071/status">http://localhost:19071/status</a> を使用して、config server の設定がすべてのサーバーで同一であることを確認できます。<br/><br/><a href="/ja/reference/operations/self-managed/tools#vespa-config-status" aria-label="vespa-config-status">vespa-config-status</a> を使用してノード上の設定を確認できます。<br/><br/> <a href="http://localhost:19071/application/v2/tenant/default/application/default" aria-label="http://localhost:19071/application/v2/tenant/default/application/default">http://localhost:19071/application/v2/tenant/default/application/default</a> はアクティブな設定ジェネレーションを表示します。これはすべてのサーバーで同一であり、<a href="/ja/clients/vespa-cli#deployment" aria-label="vespa deploy">vespa deploy</a> の実行結果のレスポンスとも同一であるべきです。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;不良ノード&#42;&#42;</td>
+      <td>複数の config server で運用していて、そのうちの 1 台がダウンしたりハードウェア障害が発生したりしても、クラスターは引き続き動作し、通常どおり設定を配信します(クライアントは正常なサーバーのいずれかに切り替わります)。不良サーバーを設定から削除する必要はありません。<br/><br/>  1 台がダウンしていると <a href="/ja/clients/vespa-cli#deployment" aria-label="vespa deploy">vespa deploy</a> がすべてのサーバーでデプロイを完了できないため、アプリケーションのデプロイに時間がかかるようになります。これが問題になる場合は、<a href="#zookeeper-barrier-timeout" aria-label="バリアタイムアウト">バリアタイムアウト</a>を下げてください(デフォルト値は 120 秒です)。<br/><br/>  また、<a href="/ja/reference/applications/services/admin#cluster-controller" aria-label="クラスターコントローラー">クラスターコントローラー</a>を明示的に設定していない場合、これらは config server ノード上で実行されるため、その動作に影響が出る可能性があります。これも、config server 構成から不良ノードを手動で削除しようとすべきでない理由の 1 つです。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;ファイル配布のスタック&#42;&#42;</td>
+      <td>設定システムは、<a href="/ja/reference/applications/deployment#file-distribution" aria-label="file-distribution">file-distribution</a> を使ってバイナリファイル(jar バンドルファイルなど)を配布します。スタックした場合は、<a href="/ja/reference/operations/self-managed/tools#vespa-status-filedistribution" aria-label="vespa-status-filedistribution">vespa-status-filedistribution</a> を使って詳細なステータスを確認してください。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;メモリ&#42;&#42;</td>
+      <td>config server を実行しているホスト / コンテナーのメモリが不足していると、起動やデプロイ / 設定の問題が発生します。<a href="/ja/operations/self-managed/docker-containers" aria-label="Docker コンテナー">Docker コンテナー</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;ZooKeeper&#42;&#42;</td>
+      <td>以下は、config server のディスクフル、またはクロックの同期ずれによって発生することがあります:<br/><br/>  <code>{`at com.yahoo.vespa.zookeeper.ZooKeeperRunner.startServer(ZooKeeperRunner.java:92)`}</code><br/> <code>{`Caused by: java.io.IOException: The accepted epoch, 10 is less than the current epoch, 48`}</code><br/><br/>  「currentEpoch を acceptedEpoch にコピーしたら問題が解決した」というユーザーからの報告があります。</td>
+    </tr>
+  </tbody>
+</table>

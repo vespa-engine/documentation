@@ -1,0 +1,280 @@
+---
+title: "アプリケーションとデータのクローン"
+---
+
+これは、データの有無にかかわらず、Vespa アプリケーションを異なる環境に複製する方法についてのガイドです。クローンのユースケースには以下が含まれます:
+
+- アプリケーションと(一部の)データのコピーをラップトップに取得して、オフラインで作業したり、デバッガーをアタッチしたりする。
+- ローカルの実験を `dev` 環境にデプロイして、簡単に協力・共有できるようにする。
+- Vespa の新しいメジャーバージョンをテストするために、アプリケーションと(一部の)データのコピーをセットアップする。
+- 非本番環境でバグレポートを再現する。
+- 現在の本番サービングに影響を与えずに CI/CD パイプラインを試すために、`prod` 環境にアプリケーションと(一部の)データのコピーをセットアップする。
+- `dev` 環境にアプリケーションとテストデータのコピーをセットアップして、新しいチームメンバーをオンボーディングする。
+- 負荷テストのために `dev` 環境にクローンする。
+
+このガイドでは *アプリケーション* を使用します。*インスタンス* を使用することもできますが、Vespa Cloud 上では Vespa のメジャーバージョンをまたいで動作しません - 詳細は[テナント、アプリケーション、インスタンス](/ja/learn/tenant-apps-instances)を参照してください。
+
+Vespa Cloud には `dev` と `prod` という異なる環境があり、それぞれ特性が異なります - [詳細](/ja/operations/environments)。短期間の実験/開発/ベンチマークには `dev` にクローンし、[CI/CD パイプライン](/ja/operations/automated-deployments)を使用したサービングアプリケーションには `prod` を使用してください。
+
+いくつかの手順は類似しているため、すべてに目を通すことをお勧めします。簡潔さのため、詳細は最初の登場時にのみ記載されています。例は [album-recommendation](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation) サンプルアプリケーションに基づいています。
+
+<Note>
+**注:** 
+
+完了後、Vespa Cloud のリソースは簡単に削除できます。例えば、*https://console.vespa-cloud.com/tenant/mytenant/application/myapp/prod/deploy* または *https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default* で削除リンクを見つけられます。`dev` 環境のインスタンスは自動的に期限切れになるため([詳細](/ja/operations/environments))、アプリケーションのクローンは Vespa を扱う安全な方法です。詳細は[アプリケーションの削除](/ja/operations/deleting-applications)を参照してください。
+</Note>
+
+## クローン - セルフホストから Vespa Cloud へ
+
+**ソースのセットアップ:**
+
+```bash
+$ docker run --detach --name vespa1 --hostname vespa-container1 \
+  --publish 8080:8080 --publish 19071:19071 \
+  vespaengine/vespa
+
+$ vespa deploy -t http://localhost:19071
+```
+
+**ターゲットのセットアップ:**
+
+Vespa Cloud コンソールで[テナントを作成](/ja/basics/deploy-an-application)します。このガイドでは "mytenant" を使用します。
+
+**ソースのアプリケーション・パッケージをエクスポート:**
+
+これはアプリケーション・パッケージを取得し、コンテナーからローカルファイルシステムにコピーします:
+
+```bash
+$ vespa fetch -t http://localhost:19071 && \
+  unzip application.zip -x application.zip
+```
+
+**ターゲットのアプリケーション・パッケージをデプロイ**
+
+手順は、dev と prod のどちらの[環境](/ja/operations/environments)にデプロイするかで少し異なります。`mvn -U clean package` の手順は、カスタムコードを持つアプリケーションでのみ必要です。アプリケーション名を設定し、データプレーンの認証情報を作成します:
+
+```bash
+$ vespa config set target cloud && \
+  vespa config set application mytenant.myapp
+
+$ vespa auth login
+
+$ vespa auth cert -f
+
+$ mvn -U clean package
+```
+
+<Note>
+**注:** 
+
+新しいアプリにデプロイする場合、多くの場合、新しいデータプレーンの証明書/キーのペアを生成したくなるでしょう。そのためには `vespa auth cert -f` を使用します。証明書/キーのペアを再利用する場合は、`-f` を省略し、後続のデプロイ手順で `Error: open /Users/me/.vespa/mytenant.myapp.default/data-plane-public-cert.pem: no such file or directory` のようなエラーを避けるために、ペアを *.vespa* に配置してください。
+</Note>
+
+次にアプリケーションをデプロイします。ユースケースに応じて、`dev` または `prod` にデプロイします:
+
+- `dev`:
+
+    ```bash
+    $ vespa deploy
+    ```
+	次のような出力が期待されます:
+
+    ```bash
+    Uploading application package ... done
+
+    Success: Triggered deployment of . with run ID 1
+
+    Use vespa status for deployment status, or follow this deployment at
+    https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default/job/dev-aws-us-east-1c/run/1
+    ```
+- `prod` 環境へのデプロイには [deployment.xml](/ja/reference/applications/deployment) が必要です - デプロイ先の[ゾーン](/ja/operations/zones)を選択します:
+
+    ```bash
+    $ cat <<EOF > deployment.xml
+    <deployment version="1.0">
+        <prod>
+            <region>aws-us-east-1c</region>
+        </prod>
+    </deployment>
+    EOF
+    ```
+
+	`prod` へのデプロイには、[services.xml](/ja/reference/applications/services/services) 内の `resources` 指定も必要です - [vespa-documentation-search](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/application/services.xml) を例として使用し、`container` クラスターと `content` クラスターの `nodes` 要素を追加/置換してください。迷った場合は、まず小さな構成を追加して、後で変更してください:
+
+    ```bash
+    <nodes count="2">
+        <resources vcpu="2" memory="8Gb" disk="10Gb" />
+    </nodes>
+    ```
+	アプリケーション・パッケージをデプロイします:
+
+    ```bash
+    $ vespa prod deploy
+    ```
+
+	次のような出力が期待されます:
+    
+    `Hint: See` [`production deployment`](/ja/reference/applications/deployment)<br/>
+    `Success: Deployed` .<br/>
+    `See https://console.vespa-cloud.com/tenant/mytenant/application/myapp/prod/deployment for deployment progress`
+
+	`prod` ゾーンへの適切なデプロイには自動テストが必要です。詳細は[自動デプロイ](/ja/operations/automated-deployments)を参照してください
+
+**データコピー**
+
+ローカルのインスタンスからドキュメントをエクスポートし、Vespa Cloud のインスタンスにフィードします:
+
+```bash
+$ vespa visit -t http://localhost:8080 | vespa feed -
+```
+
+他のエンドポイントについては、必要に応じて `vespa feed` にパラメーターを追加してください。
+
+**ソースからアクセスログを取得:**
+
+```bash
+$ docker exec vespa1 cat /opt/vespa/logs/vespa/access/JsonAccessLog.default
+```
+
+## クローン - Vespa Cloud からセルフホストへ
+
+**Vespa Cloud からアプリケーションをダウンロード**
+
+エンドポイントを検証し、アプリケーション・パッケージを取得します:
+
+```bash
+$ vespa config get application
+application = mytenant.myapp.default
+
+$ vespa fetch
+Downloading application package... done
+Success: Application package written to application.zip
+```
+
+アプリケーション・パッケージは Vespa Cloud コンソールからもダウンロードできます:
+
+- dev: *https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default* に移動し、*Application* をクリックしてダウンロードします:
+	<Frame>![dev 環境からのアプリケーション・パッケージのダウンロード](/assets/img/app-download-dev.png)</Frame>
+- prod: *https://console.vespa-cloud.com/tenant/mytenant1/application/myapp/prod/deployment?tab=builds* に移動し、ダウンロードするアプリケーションのバージョンを選択します:
+	<Frame>![prod 環境からのアプリケーション・パッケージのダウンロード](/assets/img/app-download-prod.png)</Frame>
+
+**ターゲットのセットアップ:**
+
+先ほどダウンロードしたアプリケーション・パッケージの .zip ファイルの名前を確認してください。変更が必要な場合は、unzip して `vespa deploy -t http://localhost:19071 ` を使用して現在のディレクトリからデプロイします:
+
+```bash
+$ docker run --detach --name vespa1 --hostname vespa-container1 \
+  --publish 8080:8080 --publish 19071:19071 \
+  vespaengine/vespa
+
+$ vespa config set target local
+
+$ vespa deploy -t http://localhost:19071 mytenant.myapp.default.dev.aws-us-east-1c.zip
+```
+
+**データコピー**
+
+`vespa visit` のために config target を cloud に設定し、jsonl 出力を `vespa feed` にパイプしてローカルのインスタンスにフィードします:
+
+```bash
+$ vespa config set target cloud
+
+$ vespa visit | vespa feed - -t http://localhost:8080
+```
+
+**データコピー - 最小限**
+
+少数のドキュメントだけが必要なユースケースでは、少数のドキュメントのみを visit します:
+
+```bash
+$ vespa visit --chunk-count 10
+```
+
+**ソースからアクセスログを取得:**
+
+アクセスログの取得には Vespa Cloud コンソールを使用してください
+
+## クローン - Vespa Cloud から Vespa Cloud へ
+
+これは上記の手順の組み合わせです。dev または prod からアプリケーション・パッケージをダウンロードし、mytenant.myapp.default のようなソース名を控えておきます。その後、上記と同様に `vespa deploy` または `vespa prod deploy` を使用して dev または prod にデプロイします。
+
+`dev` から `prod` にクローンする場合は、[Vespa Cloud へのクローン](#クローン---セルフホストから-vespa-cloud-へ)と同様に、*deployment.xml* と *services.xml* の変更に注意してください。
+
+**データコピー**
+
+フィードのエンドポイント名/パスを設定します(例: mytenant.myapp-new.default):
+
+```bash
+$ vespa config set target cloud
+
+$ vespa visit | vespa feed - -t https://default.myapp-new.mytenant.aws-us-east-1c.dev.z.vespa-app.cloud
+```
+
+**データコピー 5%** `vespa visit` に –selection 引数を設定して、ドキュメントのサブセットを選択します。
+
+## クローン - セルフホストからセルフホストへ
+
+あるセルフホストのアプリケーションから別のアプリケーションへのコピーを作成します。セルフホストとは、ラップトップまたは[マルチノードシステム](/ja/operations/self-managed/multinode-systems)上で [Vespa](https://vespa.ai/) を実行することを意味します。
+
+この例では、ソースアプリをセットアップし、[アプリケーション・パッケージ](/ja/basics/applications)をデプロイします - 例として [album-recommendation](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation) を使用します。その後、アプリケーション・パッケージをソースからエクスポートし、新しいターゲットアプリにデプロイします。手順:
+
+**ソースのセットアップ:**
+
+```bash
+$ vespa config set target local
+
+$ docker run --detach --name vespa1 --hostname vespa-container1 \
+  --publish 8080:8080 --publish 19071:19071 \
+  vespaengine/vespa
+
+$ vespa deploy -t http://localhost:19071
+```
+
+**ターゲットのセットアップ:**
+
+```bash
+$ docker run --detach --name vespa2 --hostname vespa-container2 \
+  --publish 8081:8080 --publish 19072:19071 \
+  vespaengine/vespa
+```
+
+**ソースのアプリケーション・パッケージをエクスポート**
+
+ファイルをエクスポートします:
+
+```bash
+$ vespa fetch -t http://localhost:19071
+```
+
+**アプリケーション・パッケージをターゲットにデプロイ**
+
+デプロイの前に、必要に応じてアプリケーション・パッケージのファイルに変更を加えることができます。ターゲットにデプロイします:
+
+```bash
+$ vespa deploy -t http://localhost:19072 application.zip
+```
+
+**ソースからターゲットへのデータコピー**
+
+これはソースのデータを直接 `vespa feed` にパイプします - 別の方法として、データを一時的にファイルに保存し、それらを個別にフィードすることもできます:
+
+```bash
+$ vespa visit -t http://localhost:8080 | vespa feed - -t http://localhost:8081
+```
+
+**データコピー 5%**
+
+これは、[selection](/ja/reference/writing/document-selector-language) を使用してドキュメントのサブセットを指定する方法の例です - ここでは「ランダム」な 5% の選択です:
+
+```bash
+$ vespa visit -t http://localhost:8080 --selection 'id.hash().abs() % 20 = 0' | \
+  vespa feed - -t http://localhost:8081
+```
+
+**ソースからアクセスログを取得**
+
+ソースアプリケーションから現在のクエリーアクセスログを取得します(そこには他のファイルもある場合があります):
+
+```bash
+$ docker exec vespa1 cat /opt/vespa/logs/vespa/access/JsonAccessLog.default
+```

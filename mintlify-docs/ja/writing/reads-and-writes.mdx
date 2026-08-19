@@ -1,0 +1,103 @@
+---
+title: "読み取りと書き込み"
+description: "このガイドでは、Vespa における[ドキュメント](/ja/schemas/documents)へのアクセスに関する側面を説明します。ドキュメントはコンテント・クラスターに保存されます。書き込み(PUT、UPDATE、DELETE)と読み取り(GET)はコンテナー・クラスターを経由します。より詳細なフローはこの記事の最後にあります。"
+---
+
+<Frame>![Vespa の概要](/assets/img/vespa-overview.svg)</Frame>
+
+ハイライト:
+
+- Vespa のインデックス構造は、高レートのフィールド更新のために構築されています。書き込みパフォーマンスについては[フィードのサイジングガイド](/ja/performance/sizing-feeding)、特に部分更新については[部分更新](/ja/writing/partial-updates)を参照してください。
+- Vespa は非正規化データのための[親子関係](/ja/schemas/parent-child)をサポートしています。これは、1 回の書き込みですべての子ドキュメントが更新されるため、アプリケーションデータを更新するコードを簡素化するのに使用できます。
+- アプリケーションはカスタムのフィード[ドキュメント・プロセッサー](/ja/applications/document-processors)や複数のコンテナー・クラスターを追加できます — 詳細は[インデックス作成](/ja/writing/indexing)を参照してください。
+- Vespa の書き込みは、安定したクラスターでは*一貫性*がありますが、競合が発生した場合、Vespa は一貫性よりも可用性を優先します。[エラスティシティ](/ja/content/elasticity#consistency)のドキュメントと [Vespa の一貫性モデル](/ja/content/consistency)を参照してください。可能な場合は、特定のドキュメントの更新には同じクライアントインスタンスを使用することを推奨します — データの一貫性のためだけでなく、[パフォーマンス](/ja/performance/sizing-feeding#concurrent-mutations)のためでもあります(*concurrent mutations* を参照)。書き込み操作の[順序付け](/ja/content/content-nodes#ordering)について詳しく読んでください。パフォーマンスのためには、同じドキュメントへのフィールド更新を[1 つの更新操作](/ja/performance/sizing-feeding#client-roundtrips)にまとめてください。
+- アプリケーションは[ドキュメントを自動的に期限切れにする](/ja/schemas/documents#document-expiry)ことができます。この機能は、すでに期限切れになっているドキュメントへの PUT もブロックします — [インデックス作成](/ja/writing/document-routing#document-selection)と[ドキュメント・セレクション](/ja/reference/applications/services/content#documents)を参照してください。これはタイムスタンプ付きのテストデータをフィードする際によくある問題で、書き込みが警告なく破棄されます。
+
+[トラブルシューティング](/ja/operations/self-managed/admin-procedures#troubleshooting)も参照してください。
+
+## 操作
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>操作</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Get&#42;&#42;</td>
+      <td>ID を指定してドキュメントを取得します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Put&#42;&#42;</td>
+      <td>ID を指定してドキュメントを書き込みます — 同じドキュメント ID を持つドキュメントが存在する場合、そのドキュメントは上書きされます。<br/><br/>Put は test-and-set ユースケースのための<a href="/ja/writing/document-v1-api-guide#conditional-writes" aria-label="conditions">条件</a>を持つことができます。条件は <a href="/ja/writing/document-v1-api-guide#create-if-nonexistent" aria-label="create if nonexistent">create if nonexistent</a> と組み合わせることができ、その場合、ドキュメントがまだ存在しないときは条件が無視されます。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Remove&#42;&#42;</td>
+      <td>ID を指定してドキュメントを削除します。削除対象のドキュメントが見つからない場合、それは失敗とはみなされません。<a href="/ja/operations/self-managed/admin-procedures#data-retention-vs-size" aria-label="data-retention">データ保持</a>について詳しく読んでください。<a href="/ja/writing/batch-delete" aria-label="batch deletes">バッチ削除</a>も参照してください。<br/><br/> Remove は test-and-set ユースケースのための<a href="/ja/writing/document-v1-api-guide#conditional-writes" aria-label="conditions">条件</a>を持つことができます。<br/><br/> 削除されたドキュメントはトゥームストーンとして書き込まれ、後でガベージコレクションされます — <a href="/ja/reference/applications/services/content#removed-db-prune-age" aria-label="removed-db / prune / age">removed-db / prune / age</a> を参照してください。Vespa は削除されたドキュメントのデータを保持することも返すこともありません。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Update&#42;&#42;</td>
+      <td>ID を指定してドキュメントの 1 つ以上のフィールドを更新するため、<a href="/ja/writing/partial-updates" aria-label="partial updates">部分更新</a>とも呼ばれます — <a href="/ja/writing/document-v1-api-guide#put" aria-label="document v1 API">document v1 API</a> を使用して <a href="/ja/reference/schemas/document-json-format#update" aria-label="updates in the JSON Document format">JSON ドキュメント形式での更新</a>を実行できます。<br/><br/>ドキュメントのセット — すべて、または<a href="/ja/reference/writing/document-selector-language" aria-label="selection">セレクション</a> — を <a href="/ja/reference/api/document-v1#update-where" aria-label="update where">update where</a> を使用して更新できます — <a href="/ja/writing/document-v1-api-guide#batch-update-example" aria-label="example">例</a>を参照してください。<br/><br/>更新対象のドキュメントが見つからない場合、それは失敗とはみなされません — 対処方法については<a href="/ja/reference/api/document-v1#http-response-headers" aria-label="response headers">レスポンスヘッダー</a>を参照してください。<br/><br/>Update は <a href="/ja/writing/document-v1-api-guide#create-if-nonexistent" aria-label="create if nonexistent">create if nonexistent</a>(upsert)をサポートしています。<br/><br/>Update は test-and-set ユースケースのための<a href="/ja/writing/document-v1-api-guide#conditional-writes" aria-label="conditions">条件</a>を持つことができます。<br/><br/>すべてのデータ構造(<a href="/ja/content/attributes" aria-label="attribute">アトリビュート</a>、<a href="/ja/content/proton#index" aria-label="index">インデックス</a>、<a href="/ja/querying/document-summaries" aria-label="summary">サマリー</a>)が更新可能です。&#42;assign&#42; と &#42;remove&#42; のみが冪等であることに注意してください — メッセージの再送により、更新が複数回適用される可能性があります。より強い一貫性が必要な場合は &#42;条件付き書き込み&#42; を使用してください。<br/><br/>&#42;&#42;すべてのフィールド型&#42;&#42; <br/><br/>• <a href="/ja/reference/schemas/document-json-format#assign" aria-label="assign">assign</a>(フィールドのクリアにも使用できます)<br/><br/> &#42;&#42;数値フィールド型&#42;&#42; <br/><br/> • <a href="/ja/reference/schemas/document-json-format#arithmetic" aria-label="increment">increment</a>。<a href="/ja/reference/schemas/schemas#weightedset" aria-label="auto-generate weightedset keys">weightedset キーの自動生成</a>も参照してください<br/><br/> • <a href="/ja/reference/schemas/document-json-format#arithmetic" aria-label="decrement">decrement</a>、<br/><br/> • <a href="/ja/reference/schemas/document-json-format#arithmetic" aria-label="multiply">multiply</a>、<br/><br/>• <a href="/ja/reference/schemas/document-json-format#arithmetic" aria-label="divide">divide</a>。<br/><br/> &#42;&#42;複合型&#42;&#42;<br/><br/> • <a href="/ja/reference/schemas/document-json-format#add" aria-label="add">add</a> &#42;array&#42; と &#42;weighted set&#42; 用。&#42;map&#42; への追加については <a href="/ja/reference/schemas/document-json-format#assign" aria-label="assign">assign</a> セクションを参照してください、<br/><br/>• <a href="/ja/reference/schemas/document-json-format#composite-remove" aria-label="remove">remove</a>、<br/><br/> • <a href="/ja/reference/schemas/document-json-format#match" aria-label="match">match</a> コレクションから要素を選択し、マッチした要素に指定された操作を適用します、<br/><br/> • <a href="/ja/reference/schemas/document-json-format#fieldpath" aria-label="accessing elements within a composite field using fieldpaths">fieldpath を使用した複合フィールド内の要素へのアクセス</a><br/><br/> &#42;&#42;テンソル型&#42;&#42; <br/><br/>• <a href="/ja/reference/schemas/document-json-format#tensor-modify" aria-label="modify">modify</a> テンソル内の個々のセルを変更します - セル値の置換、加算、乗算が可能です、<br/><br/> • <a href="/ja/reference/schemas/document-json-format#tensor-add" aria-label="add">add</a> mapped または mixed テンソルにセルを追加します、<br/><br/>• <a href="/ja/reference/schemas/document-json-format#tensor-remove" aria-label="remove">remove</a> mapped または mixed テンソルからセルを削除します</td>
+    </tr>
+  </tbody>
+</table>
+
+## API とユーティリティ
+
+[JSON ドキュメント形式](/ja/reference/schemas/document-json-format)も参照してください:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>API / ユーティリティ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="/ja/clients/vespa-cli" aria-label="Vespa CLI">Vespa CLI</a></td>
+      <td><code>{`get`}</code>、<code>{`put`}</code>、<code>{`remove`}</code>、<code>{`update`}</code>、<code>{`feed`}</code>、<code>{`visit`}</code> のためのコマンドラインツール。</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/reference/api/document-v1" aria-label="/document/v1/">/document/v1/</a></td>
+      <td><code>{`get`}</code>、<code>{`put`}</code>、<code>{`remove`}</code>、<code>{`update`}</code>、<code>{`visit`}</code> のための API。</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/writing/document-api-guide" aria-label="Java Document API">Java Document API</a></td>
+      <td>Vespa の内部通信レイヤーを使用して、Vespa のドキュメントへの直接の読み書きアクセスを提供します。<a href="/ja/applications/searchers" aria-label="searchers">サーチャー</a>や<a href="/ja/applications/document-processors" aria-label="document processors">ドキュメント・プロセッサー</a>などの Vespa 内の Java コンポーネントからドキュメントにアクセスする場合に使用します。<a href="https://github.com/vespa-engine/vespa/blob/master/document/src/main/java/com/yahoo/document/Document.java" aria-label="Document">Document</a> クラスを参照してください。</td>
+    </tr>
+    <tr>
+      <td><a href="https://vespa-engine.github.io/pyvespa/reads-writes" aria-label="pyvespa">pyvespa</a></td>
+      <td>Vespa へのドキュメントの読み書きのための Python クライアントライブラリ。フィード、クエリー、visit のための便利なメソッドを提供します。大規模なバッチフィード操作では、Vespa CLI や vespa-feed-client よりもパフォーマンスは低くなります。</td>
+    </tr>
+  </tbody>
+</table>
+
+高度なツール / デバッグツール:
+
+- [vespa-feed-client](/ja/clients/vespa-feed-client): [/document/v1/](/ja/reference/api/document-v1) を使用してドキュメント操作をフィードするための Java ライブラリおよびコマンドラインクライアント。
+- [vespa-feeder](/ja/reference/operations/self-managed/tools#vespa-feeder) は [Message Bus](/ja/writing/document-routing) 経由でフィードするためのユーティリティです。
+- [vespa-get](/ja/reference/operations/self-managed/tools#vespa-get) は [Message Bus](/ja/writing/document-routing) 経由で単一のドキュメントを取得します。
+- [vespa-visit](/ja/reference/operations/self-managed/tools#vespa-visit) は [Message Bus](/ja/writing/document-routing) 経由で複数のドキュメントを取得します。
+
+## フィードフロー
+
+[Vespa CLI](/ja/clients/vespa-cli)、[vespa-feed-client](/ja/clients/vespa-feed-client)、[pyvespa python クライアント](https://vespa-engine.github.io/pyvespa/reads-writes)、または [/document/v1/ API](/ja/reference/api/document-v1) を使用してドキュメントの読み書きを行います:
+
+<Frame>![フィードクライアントによるフィード](/assets/img/elastic-feed-container.svg)</Frame>
+
+あるいは、[vespa-feeder](/ja/reference/operations/self-managed/tools#vespa-feeder) を使用してファイルをフィードするか、[Java Document API](/ja/writing/document-api-guide) を使用します。
+
+<Frame>![vespafeeder によるフィード](/assets/img/elastic-feed-vespafeeder.svg)</Frame>
+
+[インデックス作成](/ja/writing/document-routing#routing-for-indexing)および / または[ドキュメント処理](/ja/applications/document-processors)は、ドキュメントが保存される前にドキュメントを操作するプロセッサーのチェーンです。ドキュメント・プロセッサーはユーザー定義が可能です。インデックス検索を使用する場合、チェーンの最終ステップでドキュメントのインデックス作成の準備が行われます。
+
+[Document API](/ja/writing/document-api-guide) はリクエストをコンテントノード上のディストリビューターに転送します。詳細については、[コンテントノード](/ja/content/content-nodes)と[検索コア](/ja/content/proton)を参照してください。
+
+## さらに読む
+
+- [Visiting](/ja/writing/visiting)
+- [/document/v1/ API ガイド](/ja/writing/document-v1-api-guide)
+- [/document/v1/ API リファレンス](/ja/reference/api/document-v1)

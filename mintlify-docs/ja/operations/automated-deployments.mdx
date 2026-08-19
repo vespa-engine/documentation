@@ -1,0 +1,492 @@
+---
+title: "自動デプロイメント"
+---
+
+<Frame>
+  ![自動デプロイメントの図](/assets/img/automated-deployments-overview.png)
+</Frame>
+
+視覚要素の詳細については、[パイプライングラフ](#pipeline-graph)を参照してください。
+
+Vespa Cloud は以下を提供します:
+
+- プロダクションゾーンへ安全にデプロイするための [CD テストフレームワーク](#cd-tests)。
+- オーケストレーションとテストステップを備えた[マルチゾーンデプロイメント](#deployment-orchestration)。
+
+このガイドでは、オーケストレーションされたデプロイメントの詳細を説明します。まず[プロダクションデプロイメント](/ja/reference/applications/deployment)を読んで試し、基礎的な理解を得てください。テストの作成には[開発者ガイド](/ja/applications/developer-guide)が役立ちます。自動化には [GitHub Actions の例](#automating-with-github-actions)を使用してください。
+
+## CD テスト
+
+プロダクションゾーンへのデプロイの前に、[システムテスト](#system-tests)と[ステージングテスト](#staging-tests)が実行されます。テストは専用の[縮小された](/ja/operations/environments)環境で実行されます。これらのテストはオプションです。詳細は以下の各セクションを参照してください。実行中のテストのステータスとログは、[Vespa Cloud Console](https://console.vespa-cloud.com/) の _Deployment_ ビューで確認できます:
+
+<Frame>
+  ![最小構成のデプロイメントパイプライン](/assets/img/deployment-with-system-test.png)
+</Frame>
+
+これらのテストは、[Vespa Cloud のアップグレード](#vespa-cloud-upgrades)時にも実行されます。
+
+デプロイ可能なサンプルアプリケーションは [CI-CD](https://github.com/vespa-cloud/examples/tree/main/CI-CD) にあります。
+
+### システムテスト
+
+システムテストが実行されると、アプリケーションは[テスト環境](/ja/operations/environments#test)にデプロイされます。その後、テストデプロイメントのエンドポイントに対してシステムテストスイートが実行されます。テスト実行の開始時点では、テストデプロイメントは空です。アプリケーション・パッケージと Vespa プラットフォームのバージョンは、プロダクションにデプロイされるものと同じです。
+
+テストスイートには少なくとも 1 つの[システムテスト](/ja/applications/testing#system-tests)が含まれます。アプリケーションはシステムテストなしでプロダクションゾーンにデプロイすることもできます。その場合、このステップではアプリケーションが正常に起動することのみがテストされます。テストなしの例については、[プロダクションデプロイメント](/ja/reference/applications/deployment)を参照してください。
+
+プロダクションゾーンが複数のクラウドプロバイダー(例えば AWS と GCP の両方)にまたがる場合、システムテストは各クラウドプロバイダーごとに、そのプロバイダーのテストノードを使用して個別に実行されます。これにより、プロダクションへのデプロイの前に、アプリケーションが各プロバイダーのインフラストラクチャ上で正しく起動し動作することが保証されます。
+
+詳細は[システムテスト](/ja/applications/testing#system-tests)を参照してください。
+
+### ステージングテスト
+
+ステージングテストは、新しいアプリケーション・パッケージのデプロイメントの移行、すなわちアプリケーション・パッケージ `App<sub>old</sub>` から `App<sub>new</sub>` への移行を検証します。テストスイートには、少なくとも 1 つの[ステージングセットアップ](/ja/applications/testing#staging-tests)と[ステージングテスト](/ja/applications/testing#staging-tests)が含まれます。
+
+<Steps>
+  <Step>
+    すべてのプロダクションゾーンのデプロイメントに対して、現在のバージョンがポーリングされます。すでに複数のバージョンがデプロイされている可能性がある(すなわち複数の `App<sub>old</sub>` が存在する)ため、ステージングテストが連続して複数回実行されることがあります。
+  </Step>
+  <Step>
+    リビジョン `App<sub>old</sub>` のアプリケーションが[ステージング環境](/ja/operations/environments#staging)にデプロイされます。
+  </Step>
+  <Step>
+    ステージングセットアップのテストコードが実行され、通常はクラスターをプロダクションクラスターにある程度近い状態にします。
+  </Step>
+  <Step>
+    その後、テストデプロイメントがアプリケーションリビジョン `App<sub>new</sub>` にアップグレードされます。
+  </Step>
+  <Step>
+    最後に、ステージングテストのコードが実行され、アップグレード後もデプロイメントが期待どおりに動作することを検証します。
+  </Step>
+</Steps>
+
+アプリケーションはステージングテストなしでプロダクションゾーンにデプロイすることもできます。その場合、このステップでは変更の前後でアプリケーションが正常に起動することのみがテストされます。テストなしの例については、[プロダクションデプロイメント](/ja/reference/applications/deployment)を参照してください。
+
+システムテストと同様に、プロダクションゾーンが複数のプロバイダーにまたがる場合、ステージングテストは各クラウドプロバイダーごとに個別に実行されます。
+
+詳細は[ステージングテスト](/ja/applications/testing#staging-tests)を参照してください。
+
+### テストの無効化
+
+テストなしでデプロイするには、アプリケーション・パッケージからテストファイルを削除します。テストは _deployment.xml_ の内容に関係なく常に実行されます。
+
+一時的にテストなしでデプロイするには、`deploy` を実行して「Abort」ボタンを押します(上の図を参照。Console でテストステップにカーソルを合わせます)。これによりテストステップがスキップされ、オーケストレーションは次のステップに進みます。
+
+### テストのみの実行
+
+その後どのノードにもデプロイせずにシステムテストを実行するには、新しいテストインスタンスを追加します。_deployment.xml_ で、`dev` や `prod` 要素を持たないインスタンスを次のように追加します:
+
+```xml
+<deployment version="1.0">
+    <instance id="test-only">
+        <test />
+    </instance>
+    ...
+</deployment>
+```
+
+なお、このデプロイメントはテスト専用であり、テスト後にリソースへのデプロイは行われないため、コンソール上には空のインスタンスが残ります。
+
+テスト用のパイプラインを起動するには必ず `vespa prod deploy` を実行し、このテストには別のアプリケーションを使用してください。
+
+## デプロイメントのオーケストレーション
+
+_デプロイメントのオーケストレーション_ は柔軟です。プロダクションゾーンへのデプロイメント間の依存関係、プロダクション検証テスト、および設定された遅延を、並列および直列のステップブロックとして順序付けることで構成できます:
+
+<Frame>
+  ![複雑な自動デプロイメントの図](/assets/img/automated-deployments-complex.png)
+</Frame>
+
+### パイプライングラフ
+
+デプロイメントパイプラインは、[Vespa Cloud Console](https://console.vespa-cloud.com/) でグラフとして可視化されます。各ノードはパイプライン内のステップを表し、エッジはステップ間の依存関係を示します。任意のノードにカーソルを合わせると、詳細と利用可能なアクションが表示されます。
+
+#### ノードの形状
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>形状</th>
+      <th>ステップの種類</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-mark vespa-pipeline-mark--square-outline"
+          aria-hidden="true"
+        />
+      </td>
+      <td>インスタンス</td>
+      <td>
+        アプリケーションのインスタンス。カーソルを合わせると、ターゲットバージョン、cancel/deploy/pin のコントロール、およびブロックウィンドウが表示されます。
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-mark vespa-pipeline-mark--circle"
+          aria-hidden="true"
+        />
+      </td>
+      <td>テスト</td>
+      <td>
+        システムテスト、ステージングテスト、またはプロダクションテスト。カーソルを合わせると、実行ステータス、バージョン、および abort/restart のアクションが表示されます。
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-mark vespa-pipeline-mark--square"
+          aria-hidden="true"
+        />
+      </td>
+      <td>プロダクションデプロイメント</td>
+      <td>
+        プロダクションゾーンへのデプロイメント。カーソルを合わせると、実行ステータス、バージョン、および abort/restart/defer のアクションが表示されます。
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-mark vespa-pipeline-mark--clock"
+          aria-hidden="true"
+        />
+      </td>
+      <td>遅延</td>
+      <td>ステップ間に設定された遅延。</td>
+    </tr>
+  </tbody>
+</table>
+
+#### 視覚的インジケーター
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>インジケーター</th>
+      <th>意味</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-mark vespa-pipeline-mark--square"
+          aria-hidden="true"
+        />
+      </td>
+      <td>完了</td>
+      <td>
+        このステップは現在のバージョンで正常に完了しています。色はデプロイされたバージョンに対応します。
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-mark vespa-pipeline-mark--square vespa-pipeline-mark--running"
+          aria-hidden="true"
+        />
+      </td>
+      <td>実行中</td>
+      <td>
+        デプロイメントまたはテストが現在進行中です。ソースバージョンとターゲットバージョンの色の間のアニメーション付きグラデーションとして表示されます。
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-mark vespa-pipeline-mark--square vespa-pipeline-mark--failed"
+          aria-hidden="true"
+        />
+      </td>
+      <td>失敗</td>
+      <td>このステップの直近の実行が失敗しました。</td>
+    </tr>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-mark vespa-pipeline-mark--square vespa-pipeline-mark--unknown"
+          aria-hidden="true"
+        />
+      </td>
+      <td>不明/初期状態</td>
+      <td>このステップにはまだバージョンがデプロイされていません。</td>
+    </tr>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-mark vespa-pipeline-mark--pending"
+          aria-hidden="true"
+        />
+      </td>
+      <td>保留中の変更</td>
+      <td>
+        より新しいバージョンがキューに入っており、このステップへのデプロイを待機しています。
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-mark vespa-pipeline-mark--paused"
+          aria-hidden="true"
+        />
+      </td>
+      <td>一時停止/延期</td>
+      <td>このステップへのデプロイメントは一時的に延期されています。</td>
+    </tr>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-bars vespa-pipeline-bars--vertical"
+          aria-hidden="true"
+        >
+          <span />
+          <span />
+          <span />
+        </span>
+      </td>
+      <td>アプリケーションのブロック</td>
+      <td>
+        アプリケーションの変更が<a href="#block-windows" aria-label="block window">ブロックウィンドウ</a>によってブロックされています。縦方向のバーとして表示されます。
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <span
+          className="vespa-pipeline-bars vespa-pipeline-bars--horizontal"
+          aria-hidden="true"
+        >
+          <span />
+          <span />
+          <span />
+        </span>
+      </td>
+      <td>プラットフォームのブロック</td>
+      <td>
+        プラットフォームのアップグレードが<a href="#block-windows" aria-label="block window">ブロックウィンドウ</a>によってブロックされています。横方向のバーとして表示されます。
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+パイプラインを通じてデプロイされる各バージョンには、それぞれ異なる色が割り当てられます。これにより、どのゾーンが同じバージョンにあるか、ロールアウトがどこまで進行しているかが一目でわかります。ノード上の画鋲アイコンは、そのバージョンが[ピン留め](#pinning-versions)されていることを示します。
+
+より高いレベルでは、インスタンス同士も同じ方法で相互に依存させることができます。これにより、プロダクション検証テストの成功によって信頼性が高まるにつれて、変更を段階的により大きなプロダクションノードのサブセットへロールアウトしていくデプロイメントプロセスを簡単に構成できます。詳細は [deployment.xml](/ja/reference/applications/deployment) を参照してください。
+
+デプロイメントはデフォルトでは順次実行されますが、[並列実行](/ja/reference/applications/deployment)するように構成することもできます。各ゾーン内では、アプリケーションに対する読み取りおよび書き込みトラフィックを中断することなく変更が適用されるよう、Vespa Cloud がデプロイメントをオーケストレーションします。ゾーン内のプロダクションデプロイメントは、新しい構成がすべてのノードでアクティブになった時点で完了します。
+
+ほとんどの変更は即座に反映されるため、これは迅速なプロセスです。プラットフォームのアップグレード時など、ノードの再起動が必要な場合は、デプロイメントの一環として自動的かつ安全に実行されます。この場合、デプロイメントの完了には時間がかかります。
+
+システムテストおよびステージングテストが存在する場合、アプリケーション・パッケージがプロダクションゾーンにデプロイされる前に、必ずそれらが正常に実行されなければなりません。
+
+### バージョンの進行
+
+デプロイメントパイプラインは、プロダクションゾーンに対して一度に 1 つのリビジョンをデプロイします。あるリビジョンのデプロイ中は、次のリビジョンがプロダクションへのロールアウトを開始する前に、宣言された _すべての_ プロダクションゾーンへのデプロイメントが完了していなければなりません。より新しいリビジョンのシステムテストおよびステージングテストは並行して実行されることがありますが、プロダクションへのデプロイメントは直列化されます。
+
+例えば、ビルド 90 が 2 つのプロダクションゾーンのうち 2 番目のゾーンにデプロイされている場合、ビルド 91 がすでにシステムテストとステージングテストに合格していても、ビルド 90 がすべてのゾーンで完了するまで、ビルド 91 は最初のゾーンへのデプロイを開始しません。
+
+#### バージョンの差し替え
+
+現在デプロイ中のリビジョンをオーバーライドして、より新しいビルドを強制的にパイプラインに通すには、パイプライングラフのインスタンスノードにカーソルを合わせ、_TARGET VERSIONS_ のコントロールを使用します。リビジョンのドロップダウンから目的のビルド番号を選択し、**deploy** をクリックします。これによりインスタンスのデプロイメントターゲットが更新されます。古いリビジョンで実行中のプロダクションジョブは中止され、パイプラインは最初のプロダクションゾーンから新しいリビジョンのデプロイを開始します。
+
+<Frame>
+  ![ビルドセレクターと deploy ボタンを備えたインスタンスのホバーカードの図](/assets/img/automated-deployment-supersede.png)
+</Frame>
+
+新しいリビジョンを選択せずに、現在デプロイ中のリビジョンをキャンセルするには、**cancel** をクリックします。これにより、パイプラインが次のリビジョンを自動的に選択します。
+
+#### バージョンのピン留め
+
+ピン留めは、パイプラインを特定のプラットフォームバージョンまたはアプリケーションリビジョンに固定し、自動アップグレードを防ぎます。これは、ダウングレードを強制する場合、インシデント中に正常動作が確認されているリビジョンを維持する場合、またはシステムが新しいプラットフォームバージョンを取り込むのを防ぐ場合に便利です。
+
+バージョンをピン留めするには、パイプライングラフのインスタンスノードにカーソルを合わせます。_TARGET VERSIONS_ の下で、ドロップダウンから目的のバージョンを選択し、**pin** をクリックします。理由の入力は必須です。説明を入力して **submit pin** をクリックします。プラットフォームとリビジョンは個別にピン留めできます。
+
+<Frame>
+  ![ピン留めダイアログを表示しているインスタンスのホバーカードの図](/assets/img/automated-deployment-pin.png)
+</Frame>
+
+ピン留めされている間は、ピン留めされた対象について、より新しいプラットフォームバージョンやリビジョンはデプロイされません。誤操作による変更を防ぐため、ドロップダウンと deploy ボタンは無効化されます。ピン留めを解除するには、インスタンスノードにカーソルを合わせて **unpin** をクリックします。これにより、より新しいバージョンが再びパイプラインを進めるようになります。
+
+例えば、以前のリビジョンにロールバックするには:
+
+<Steps>
+  <Step>リビジョンのドロップダウンから古いビルド番号を選択します。</Step>
+  <Step>
+    **pin** をクリックし、理由を入力します(例:「rollback due to regression in build 91」)。
+  </Step>
+  <Step>
+    パイプラインが、ピン留めされたビルドをすべてのプロダクションゾーンにデプロイします。
+  </Step>
+  <Step>
+    問題が解決したら、**unpin** をクリックして通常のデプロイメントを再開します。
+  </Step>
+</Steps>
+
+#### 失敗後のクールダウン
+
+プロダクションデプロイメントが繰り返し失敗すると、ジョブが自動的に再試行される前に、指数関数的なクールダウンが適用されます。クールダウン期間は、最初の失敗から最後に完了した実行までの時間に応じて長くなります。これにより、失敗し続けるデプロイメントをシステムが延々と再試行することを防ぎます。
+
+クールダウンは、ターゲットバージョンが失敗した実行のものと一致する場合にのみ適用されます。ターゲットが変わると(例えば、新しいリビジョンがデプロイメントターゲットとして設定されると)、クールダウンはリセットされ、新しいリビジョンを直ちにデプロイできます。
+
+失敗したデプロイメントを手動で再トリガーしてクールダウンをバイパスするには、パイプライングラフの失敗したゾーンノードにカーソルを合わせ、**restart** をクリックします。
+
+<Frame>
+  ![失敗ステータスと restart ボタンを表示しているゾーンのホバーカードの図](/assets/img/automated-deployment-restart.png)
+</Frame>
+
+#### ゾーンへのデプロイメントの一時停止
+
+特定のプロダクションゾーンへのデプロイメントを一時的に保留するには、パイプライングラフのゾーンノードにカーソルを合わせ、**defer** をクリックします。これによりデプロイメントは 72 時間延期されます。延期期間が終了する前にスケジューリングを再開するには、**enable** をクリックします。
+
+### ソースコードリポジトリとの統合
+
+新しい _サブミッション_ ごとに増加していくビルド番号が割り当てられ、これを使用して、新しいパッケージのインスタンスとそのゾーンへのロールアウトを追跡できます。サブミッションの際には、統合を容易にするためにソースコードリポジトリへの参照を追加してください。これにより変更の追跡が容易になります:
+
+<Frame>
+  ![ビルド番号とソースコードリポジトリの参照](/assets/img/CI-integration.png)
+</Frame>
+
+プルリクエストにソース差分へのリンクを追加します。例として [GitHub Action](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/.github/workflows/deploy-vespa-documentation-search.yaml) を参照してください:
+
+```bash
+$ vespa prod deploy \
+  --source-url "$(git config --get remote.origin.url | sed 's+git@\(.*\):\(.*\)\.git+https://\1/\2+')/commit/$(git rev-parse HEAD)"
+```
+
+### ブロックウィンドウ
+
+ブロックウィンドウを使用すると、1 週間のうち特定の時間帯におけるデプロイメントをブロックできます。例えば、ピーク時間帯や休暇中の変更のロールアウトを避けることができます。インスタンス(ここでは「default」)にカーソルを合わせるとブロック状態を確認できます。[block-change](/ja/reference/applications/deployment#block-change) を参照してください:
+
+<Frame>![アプリケーションのブロックウィンドウ](/assets/img/block-window.png)</Frame>
+
+### バリデーションオーバーライド
+
+一部の構成変更は、破壊的である可能性があったり、アプリケーションの動作を変更したりします。例としては、フィールドの削除や言語処理の変更などがあります。これらの変更はデフォルトでは許可されておらず、deploy コマンドは失敗します。オーバーライドして強制的にデプロイするには、[バリデーションオーバーライド](/ja/reference/applications/validation-overrides)を使用します:
+
+```xml
+<validation-overrides>
+    <allow until="2026-05-27"
+           comment="Use fewer dimensions">tensor-type-change</allow>
+</validation-overrides>
+```
+
+### プロダクションテスト
+
+プロダクションテストはオプションであり、[deployment.xml](/ja/reference/applications/deployment) で設定します。プロダクションテストはパイプライン内でデプロイメントゾーンの後に配置され、ゲートとして機能します。テストが失敗するとロールアウトは停止し、後続のゾーンには新しいバージョンがデプロイされません。これは、最初のゾーンがカナリアとして機能するマルチゾーンデプロイメントで便利です。プロダクションテストは、パイプライン内の直前のプロダクションリージョンのエンドポイントに対して実行されます。
+
+<Frame>
+  ![テスト対象のバージョンまたはビルドを表示しているプロダクションテストのホバーカードの図](/assets/img/automated-deployment-production-test.png)
+</Frame>
+
+### コンポーネントのデプロイ
+
+Vespa はメジャーバージョン内で[後方互換性](/ja/learn/releases#versions)を維持しており、メジャーバージョンが変わることはめったにありません。つまり、古いバージョンの Vespa API に対してコンパイルされた[コンポーネント](/ja/applications/components)は、同じメジャーバージョン上で常に実行できます。ただし、アプリケーション・パッケージがより新しい API バージョンに対してコンパイルされ、その後プロダクションのより古いランタイムバージョンにデプロイされた場合は、失敗する可能性があります。解決方法については [vespa:compileVersion](/ja/reference/applications/deployment#production-deployment-with-components) を参照してください。
+
+## GitHub Actions による自動化
+
+GitHub Actions を使用してプロダクションアプリケーションを自動デプロイします。例:
+
+- [deploy-vector-search.yaml](https://github.com/vespa-cloud/vector-search/blob/main/.github/workflows/deploy-vector-search.yaml) は、アプリケーションをプロダクション環境にデプロイします。最初に参考にするのに適した例です!
+- [deploy.yaml](https://github.com/vespa-cloud/examples/blob/main/.github/workflows/deploy.yaml) は、基本的な HTTP テスト付きでアプリケーションをデプロイします。
+- [deploy-vespa-documentation-search.yaml](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/.github/workflows/deploy-vespa-documentation-search.yaml) は、Java テスト付きでアプリケーションをデプロイします。
+
+自動化スクリプトは、デプロイに API キーを使用します:
+
+```bash
+$ vespa auth api-key
+```
+
+これはキーを作成するか、次のように出力します:
+
+```bash
+Error: refusing to overwrite /Users/me/.vespa/mytenant.api-key.pem
+Hint: Use -f to overwrite it
+
+This is your public key:
+-----BEGIN PUBLIC KEY-----
+ABCDEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEB2UFsh8ZjoWNtkrDhyuMyaZQe1ze
+qLB9qquTKUDQTuM2LOr2dawUs02nfSc3UTfC08Lgr/dvnTnHpc0/fY+3Aw==
+-----END PUBLIC KEY-----
+
+Its fingerprint is:
+12:34:56:78:65:30:77:90:30:ab:83:ee:a9:67:68:2c
+
+To use this key in Vespa Cloud click 'Add custom key' at
+https://console.vespa-cloud.com/tenant/mytenant/account/keys
+and paste the entire public key including the BEGIN and END lines.
+```
+
+つまり、キーがすでに存在する場合は上書きされないため、安全に実行できます。Vespa Cloud Console を使用して、デプロイキーを必ずテナントに追加してください。
+
+デプロイキーが追加されれば、デプロイの準備はすべて完了です。
+
+コンソールで新しいアプリケーションキーをアップロードまたは作成し、上記の GitHub Actions の例のようにリポジトリのシークレットとして保存できます。
+
+[Travis CI](https://travis-ci.com) のような一部のサービスは、Settings の環境変数に複数行の値を受け付けません。回避策は、次のコマンドの出力を
+
+```bash
+$ openssl base64 -A -a < mykey.pem && echo
+```
+
+Travis の Settings で、例えば `VESPA_MYAPP_API_KEY` という変数に設定することです。`VESPA_MYAPP_API_KEY` は Travis 環境でエクスポートされます。出力例:
+
+```bash
+Setting environment variables from repository settings
+$ export VESPA_MYAPP_API_KEY=[secure]
+```
+
+その後、Vespa Cloud にデプロイする前にキーの値を再生成します:
+
+```bash
+$ MY_API_KEY=`echo $VESPA_MYAPP_API_KEY | openssl base64 -A -a -d`
+```
+
+そして、deploy コマンドで `${MY_API_KEY}` を使用します。
+
+## Vespa Cloud のアップグレード
+
+Vespa のアップグレードは、[CD テスト](#cd-tests)における新しいアプリケーションリビジョンの場合と同じパターンに従い、Vespa Cloud Console でそのバージョン番号によって追跡できます。
+
+システムテストは、新しいアプリケーション・パッケージをデプロイする場合と同じ方法で実行されます。
+
+ステージングテストは、アプリケーション・パッケージ `App<sub>old</sub>` から `App<sub>new</sub>` へのアップグレード、および Vespa プラットフォームバージョン `V<sub>old</sub>` から `V<sub>new</sub>` へのアップグレードを検証します。この場合、ステージングテストは次のステップで構成されます:
+
+<Steps>
+  <Step>
+    すべてのプロダクションゾーンのデプロイメントに対して、現在の `V<sub>old</sub>` / `App<sub>old</sub>` バージョンがポーリングされます。すでに複数のバージョンがデプロイされている可能性がある(すなわち複数の `V<sub>old</sub>` / `App<sub>old</sub>` が存在する)ため、ステージングテストが連続して複数回実行されることがあります。
+  </Step>
+  <Step>
+    リビジョン `App<sub>old</sub>` のアプリケーションが、プラットフォームバージョン `V<sub>old</sub>` で[ステージング環境](/ja/operations/environments#staging)のゾーンにデプロイされます。
+  </Step>
+  <Step>
+    *ステージングセットアップ* のテストコードが実行され、通常はクラスターをプロダクションクラスターにある程度近い状態にします。
+  </Step>
+  <Step>
+    その後、テストデプロイメントがアプリケーションリビジョン `App<sub>new</sub>` およびプラットフォームバージョン `V<sub>new</sub>` にアップグレードされます。
+  </Step>
+  <Step>
+    最後に、*ステージングテスト* のテストコードが実行され、アップグレード後もデプロイメントが期待どおりに動作することを検証します。
+  </Step>
+</Steps>
+
+なお、テストが検証の対象とするアップグレードシナリオに応じて、ステージングテスト中にアプリケーションリビジョンとプラットフォームの一方または両方がアップグレードされます。
+
+### プラットフォームとリビジョンの同時変更
+
+プラットフォームのアップグレードとリビジョンの変更の両方が保留中の場合、[deployment.xml](/ja/reference/applications/deployment) の `rollout` 設定によって、プロダクションゾーンにおける両者の相互作用が制御されます:
+
+- `simultaneous`(デフォルト): リビジョンの変更は、プラットフォームのアップグレードとは独立してデプロイされます。リビジョンは、進行中のプラットフォームアップグレードに追いつき、追い越すことができます。
+- `leading`: リビジョンがプラットフォームアップグレードに追いつくと、2 つの変更は融合して一緒にロールアウトされます。
+- `separate`: アップグレードが失敗している場合を除き、リビジョンはプラットフォームアップグレードの完了を待ちます。
+
+デフォルトの `simultaneous` 戦略では、新しいリビジョンが進行中のプラットフォームアップグレードによって保留されることはありません。
+
+## 次のステップ
+
+- [フィーチャースイッチとバケットテスト](/ja/applications/testing#feature-switches-and-bucket-tests)について詳しく読む。
+- 継続的デプロイメントの課題の 1 つとして、複数のサービスにまたがる統合テストがあります。別のサービスが、自身の統合テストのためにこの Vespa アプリケーションに依存している場合などです。そのような統合テストには、別の[アプリケーションインスタンス](/ja/reference/applications/deployment#instance)を使用してください。
+- デプロイメントバッジを設定する。コンソールのデプロイメントビューから利用できます。例: ![vespa-team.vespacloud-docsearch.default の概要](https://api-ctl.vespa-cloud.com/badge/v1/vespa-team/vespacloud-docsearch/default)
+- [グローバルクエリーエンドポイント](/ja/reference/applications/deployment#endpoints-global)を設定する。

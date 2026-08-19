@@ -1,0 +1,133 @@
+---
+title: ランキング
+---
+
+Vespa における*ランキング*とは、クエリー実行中にマッチしたドキュメントに対して行われる計算のことです。これらは、スキーマの*ランクプロファイル*内の[ランキング関数](/ja/ranking/ranking-expressions-features)として指定されます。
+
+`first-phase` という名前の特別な関数は、マッチしたドキュメントの初期*ランク*を決定し、上位 k 件をクエリーへの応答として選択できるようにします:
+
+```js
+rank-profile my-rank-profile {
+  first-phase {
+    expression: 0.7 * bm25(text) + 0.3 * attribute(popularity)
+  }
+}
+```
+
+## ランキング関数とフィーチャー
+
+ランキング関数は、[テンソル演算](/ja/ranking/tensor-user-guide#ranking-with-tensors)や[機械学習モデル](#machine-learned-model-inference)を含め、ランクフィーチャーを組み合わせた任意の数学的関数にすることができます。
+
+これらの関数が使用できるランクフィーチャーには 3 つのカテゴリがあります:
+
+- **ドキュメント・フィーチャー**、`attribute(fieldName)` を使用: indexing ステートメントに `attribute` を持つ任意のドキュメント・フィールド。
+- **クエリー・フィーチャー**（入力とも呼ばれます）、`query(name)` を使用: クエリーとともに入力として送信される任意の値。これらがテンソル（スカラーではなく）の場合、ランクプロファイルで入力として宣言する必要があります。
+- **マッチ・フィーチャー**: クエリーとドキュメントがどの程度マッチしているかを表す組み込みフィーチャー。例: bm25 や closeness。
+
+[ランクフィーチャーの全リスト](/ja/reference/ranking/rank-features)を参照してください。
+
+テンソルであるクエリー・フィーチャー（入力）は、ランクプロファイルで宣言する必要があります:
+
+```js
+rank-profile my-rank-profile {
+  inputs {
+    query(user_context) tensor<float>(x[3])
+  }
+  first-phase {
+    expression: bm25(text) + sum(query(user_context) * attribute(document_context))
+  }
+}
+```
+
+ベクトル検索におけるクエリーベクトルの型も、この方法で宣言します。
+
+## ランクプロファイル
+
+スキーマは、さまざまなユースケースや実験などに対応する計算とランキングを指定する、任意の数のランクプロファイルを持つことができます。クエリーは、リクエストの [ranking.profile](/ja/reference/api/query#ranking.profile) パラメーターまたは[クエリープロファイル](/ja/querying/query-profiles)を使用して 1 つを選択します。リクエストでプロファイルが指定されていない場合は、`default` という名前のものが使用され、それがスキーマで指定されていない場合は、[nativeRank](/ja/ranking/nativerank) フィーチャーでランキングするデフォルトのものが使用されます。もう 1 つの組み込みランクプロファイル `unranked` も常に利用可能です。順序が重要でない場合や[明示的なフィールドソート](/ja/reference/querying/sorting-language)を使用する場合など、ランキングを必要としないクエリーでこれを指定すると、サービング性能が向上します。
+
+非常に長いスキーマファイルを避けるために、ランクプロファイルは、アプリケーション・パッケージ内の `schemas/[schema-name]/[profile-name].profile` という名前の独立したファイルで指定することもできます。ランクプロファイルのすべての内容に関するドキュメントは、[スキーマリファレンス](/ja/reference/schemas/schemas#rank-profile)を参照してください。
+
+ランクプロファイルは、重複を避けるために他のプロファイルを継承できます。例: `rank-profile myProfile inherits default, another`。
+
+## フェーズドランキング
+
+マッチング中にすべてのマッチしたドキュメントに適用される初期ランキングを指定する first-phase に加えて、ランクプロファイルは、最終結果を返す前に上位 k 件のドキュメントを*リランク*するために適用される関数も指定できます。これは、最も有望な候補ドキュメントにより多くの計算を振り向けるのに役立ちます:
+
+```js
+schema myapp {
+
+    rank-profile my-rank-profile {
+
+        first-phase {
+            expression {
+                attribute(quality) * freshness(timestamp) + bm25(title)
+            }
+        }
+
+        second-phase {
+            expression: xgboost(my_xgboost_reranker)
+            total-rerank-count: 1000 # Over all nodes
+        }
+
+        global-phase {
+          expression: sum(onnx(my_large_onnx_model))
+          rerank-count: 20
+        }
+
+    }
+
+}
+```
+
+`second-phase` 式は、ローカルデータを使用してコンテント・ノード上でローカルに実行されます。これは数千件の候補に対して効率的です。`global-phase` 式は、マージ後のグローバル結果セットに対してコンテナー・ノードで実行され、非常に高コストで高品質な最終リランキングに最適です。詳細は[フェーズドランキング](/ja/ranking/phased-ranking)を参照してください。
+
+## ランキング関数
+
+ランクプロファイルは、他のランキング式で使用したり、（引数を取らない場合は）結果とともに返したりできる任意の数の関数を定義できます。
+
+```js expandable
+schema myapp {
+
+    rank-profile my-rank-profile {
+
+        function clickProbability() {
+            expression: xgboost('myClickModel')
+        }
+
+        function textRanking(field) {
+            expression: 0.7 * bm25(field) + 0.3 * nativeProximity(field)
+        }
+
+        first-phase {
+            expression {
+                0.1 * clickProbability()
+                0.2 * closeness(embeddingsField) +
+                0.3 * textRanking(titleField) +
+                0.4 * textRanking(bodyField)
+            }
+        }
+
+        summary-features {
+            clickProbability() # Returned with every matched document
+        }
+
+    }
+
+}
+```
+
+詳細は[ランキング式と関数](/ja/ranking/ranking-expressions-features)を参照してください。
+
+## レイヤードランキング
+
+*ドキュメント*のランキングに加えて、ランクプロファイルはドキュメント内の配列要素のランク付けと選択も行えます。これは、RAG アプリケーションでドキュメント内の個々のチャンクを選択するために最もよく使用されます。[チャンクの操作](/ja/rag/working-with-chunks#layered-ranking-selecting-chunks-to-return)を参照してください。
+
+## 機械学習モデルの推論
+
+最高の品質は、トレーニングセットから機械学習を使用して関連性関数を学習することで達成されます。Vespa では、分散ランキング（first-phase および second-phase）で、次の形式の機械学習モデルを使用できます:
+
+- [ONNX](/ja/ranking/onnx)。Tensorflow、PyTorch、scikit-learn などの ML フレームワークからモデルをインポートできます。
+- [XGBoost](/ja/ranking/xgboost)
+- [LightGBM](/ja/ranking/lightgbm)
+
+これらはランクフィーチャーとして公開されるため、他のランクフィーチャーとまったく同じようにランキング式で使用できます。

@@ -1,0 +1,38 @@
+---
+title: "Availability zones"
+---
+
+A traditional zone in Vespa Cloud is tied to a single availability zone (AZ). Deploying to such a single-AZ zone results in the application running in that AZ.
+
+Vespa Cloud also has zones like `prod.aws-us-east-1` that support multiple availability zones, aka *multi-AZ* zones. You can see how many and exactly which availability zones a zone supports in [zones](/en/operations/zones). To deploy to a multi-AZ zone, you *must* specify a list of availability zones, using the `<availability-zone>` elements in the `<region>` element, see [deployment.xml](/en/reference/applications/deployment#availability-zone).
+
+<Frame caption="Single-AZ zone">
+![Single-AZ zone with container and content cluster](/assets/img/az-single-cluster.svg)
+</Frame>
+
+<Frame caption="Multi-AZ zone">
+![Multi-AZ zone with clusters spread across two availability zones](/assets/img/az-multi-cluster.svg)
+</Frame>
+
+It is an error to deploy to a multi-AZ zone and not specifying at least one AZ. If you specify exactly one AZ, it is identical to deploying to a traditional zone tied to that AZ.
+
+Specifying more than one AZ means your application instance will spread evenly across those AZ. This means the number of nodes in each cluster must be a multiple of the number of AZs. For content clusters, the number of groups must also be a multiple of the number of AZs.
+
+For example, let's say an application instance has been configured in deployment.xml with 2 availability zones `use1-az1` and `use1-az2`, and a content cluster in services.xml specifies 4 groups and a total of 12 nodes. Each group contains 3 nodes. This means 2 groups will be placed in `use1-az1`, and 2 groups will be placed in `use1-az2`.
+
+<Frame caption="Single-AZ zone">
+![Content cluster with 4 groups in a single AZ](/assets/img/az-single-content.svg)
+</Frame>
+
+<Frame caption="Multi-AZ zone">
+![Content cluster with 4 groups spread across two AZs](/assets/img/az-multi-content.svg)
+</Frame>
+
+## Benefits to multi-AZ applications
+
+Deploying a single application instance to multiple availability zones, instead of deploying multiple application instances to each of those availability zones, has several benefits:
+
+1. A single load balancer spanning backends across AZs is more reliable than a DNS-based global endpoint wrapping the zonal endpoints.
+2. Document embedding is cheaper, as it needs to be done once instead of once per AZ.
+3. Feeding to a single endpoint is simpler and more robust than feeding to one endpoint for each AZ. For instance, if an entire AZ goes down, then feeding to a multi-AZ application instance still works. And once the AZ comes back online, the nodes in that AZ will automatically have their documents updated from the nodes in the other AZs.
+4. Deploying two instances of the same application to two AZs in the same region, with `redundancy=1`, is prone to data loss. Instead, one application instance can be deployed to those two AZs.

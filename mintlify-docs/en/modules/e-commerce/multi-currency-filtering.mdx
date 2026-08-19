@@ -208,13 +208,42 @@ Feed products with their seller currency and per-market prices. Always include a
 
 Use the following query parameters to filter products by price range in a specific market and currency:
 
-| Parameter | Description | Example |
-| :--- | :--- | :--- |
-| `ecommerce.multicurrency.market` | Target market code | `NO`, `US`, `EU`, `NO-49`, `27` |
-| `ecommerce.multicurrency.currency` | Target currency code | `NOK`, `USD`, `EUR` |
-| `ecommerce.multicurrency.price-min` | Minimum price in target currency | `1000` |
-| `ecommerce.multicurrency.price-max` | Maximum price in target currency | `1500` |
-| `ecommerce.multicurrency.enrich` | Optional: expose forex rates as query tensor for ranking. Defaults to false | `true` or `false` |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th>Description</th>
+      <th>Example</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`ecommerce.multicurrency.market`}</code></td>
+      <td>Target market code</td>
+      <td><code>{`NO`}</code>, <code>{`US`}</code>, <code>{`EU`}</code>, <code>{`NO-49`}</code>, <code>{`27`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`ecommerce.multicurrency.currency`}</code></td>
+      <td>Target currency code</td>
+      <td><code>{`NOK`}</code>, <code>{`USD`}</code>, <code>{`EUR`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`ecommerce.multicurrency.price-min`}</code></td>
+      <td>Minimum price in target currency</td>
+      <td><code>{`1000`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`ecommerce.multicurrency.price-max`}</code></td>
+      <td>Maximum price in target currency</td>
+      <td><code>{`1500`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`ecommerce.multicurrency.enrich`}</code></td>
+      <td>Optional: expose forex rates as query tensor for ranking. Defaults to false</td>
+      <td><code>{`true`}</code> or <code>{`false`}</code></td>
+    </tr>
+  </tbody>
+</table>
 
 #### Example Query
 
@@ -296,12 +325,37 @@ The `ForexRateRetriever` component automatically refreshes forex rates every 10 
 
 The forex service tracks its operational status with the following health states:
 
-| State | Description | Query Behavior |
-| :--- | :--- | :--- |
-| `READY` | Forex rates loaded and service is operational | Queries with multi-currency filtering work normally |
-| `UNINITIALIZED` | No forex document has been loaded yet | Queries return error: "forex rate service not initialized" |
-| `OUTAGE` | Refresh failed but stale data exists (cache stays ready for re-use once the retriever succeeds again) | Queries return error: "forex rate service temporarily unavailable (last refresh failed)" |
-| `INVALID_FOREX_DOCUMENTS` | Multiple forex documents detected (expected exactly one) | Queries return error: "ensure exactly one forex document exists" |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>State</th>
+      <th>Description</th>
+      <th>Query Behavior</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`READY`}</code></td>
+      <td>Forex rates loaded and service is operational</td>
+      <td>Queries with multi-currency filtering work normally</td>
+    </tr>
+    <tr>
+      <td><code>{`UNINITIALIZED`}</code></td>
+      <td>No forex document has been loaded yet</td>
+      <td>Queries return error: "forex rate service not initialized"</td>
+    </tr>
+    <tr>
+      <td><code>{`OUTAGE`}</code></td>
+      <td>Refresh failed but stale data exists (cache stays ready for re-use once the retriever succeeds again)</td>
+      <td>Queries return error: "forex rate service temporarily unavailable (last refresh failed)"</td>
+    </tr>
+    <tr>
+      <td><code>{`INVALID_FOREX_DOCUMENTS`}</code></td>
+      <td>Multiple forex documents detected (expected exactly one)</td>
+      <td>Queries return error: "ensure exactly one forex document exists"</td>
+    </tr>
+  </tbody>
+</table>
 
 #### Error Handling
 
@@ -416,10 +470,30 @@ rank-profile price_ranking {
 
 There are two distinct types of query parameters used together, and they must not be confused:
 
-| Type | Prefix | Format | Purpose |
-| :--- | :--- | :--- | :--- |
-| Filter parameters | `ecommerce.multicurrency.*` | Plain string or number | Tells the searcher which market, currency, and price range to filter on. Consumed server-side ” never reach the rank profile. |
-| Ranking inputs | `ranking.features.query(...)` | One-hot tensor | Passed directly to the rank profile to drive scoring expressions. The searcher does not read or modify these. |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Prefix</th>
+      <th>Format</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Filter parameters</td>
+      <td><code>{`ecommerce.multicurrency.*`}</code></td>
+      <td>Plain string or number</td>
+      <td>Tells the searcher which market, currency, and price range to filter on. Consumed server-side ” never reach the rank profile.</td>
+    </tr>
+    <tr>
+      <td>Ranking inputs</td>
+      <td><code>{`ranking.features.query(...)`}</code></td>
+      <td>One-hot tensor</td>
+      <td>Passed directly to the rank profile to drive scoring expressions. The searcher does not read or modify these.</td>
+    </tr>
+  </tbody>
+</table>
 
 <Info>
  **Note:** The only exception is `enrich=true`, which causes the searcher to inject `query(forexRates)` from its in-memory cache ” because the client cannot know the current rates. `buyer_currency` and `buyer_market` are already known to the client so they are passed directly as ranking inputs, not via the searcher.
@@ -464,14 +538,54 @@ Key functions:
 
 This section describes the [configuration parameters](/en/applications/configuring-components) used by the multi-currency components. All parameters are part of the `ecommerce-schema-wiring` config (`ai.vespa.ecommerce.common.ecommerce-schema-wiring`).
 
-| Parameter | Description | Type | Default |
-| :--- | :--- | :--- | :--- |
-| `productFields.sellerCurrency` | Field name for the product's seller currency. | `string` | `seller_currency` |
-| `productFields.perMarketPriceArrayStruct` | Array field name containing per-market prices. | `string` | `per_market_price` |
-| `productFields.marketStructField` | Struct field name for market code. | `string` | `market` |
-| `productFields.priceStructField` | Struct field name for price value. | `string` | `price` |
-| `defaults.market` | Default market identifier used as fallback when no market-specific price exists. | `string` | `DEFAULT` |
-| `rankProfileInputs.forexRates` | Query tensor name for forex rates in ranking. Used when `enrich=true` to inject the forex tensor into the query. | `string` | `forexRates` |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`productFields.sellerCurrency`}</code></td>
+      <td>Field name for the product's seller currency.</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`seller_currency`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`productFields.perMarketPriceArrayStruct`}</code></td>
+      <td>Array field name containing per-market prices.</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`per_market_price`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`productFields.marketStructField`}</code></td>
+      <td>Struct field name for market code.</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`market`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`productFields.priceStructField`}</code></td>
+      <td>Struct field name for price value.</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`price`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`defaults.market`}</code></td>
+      <td>Default market identifier used as fallback when no market-specific price exists.</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`DEFAULT`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`rankProfileInputs.forexRates`}</code></td>
+      <td>Query tensor name for forex rates in ranking. Used when <code>{`enrich=true`}</code> to inject the forex tensor into the query.</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`forexRates`}</code></td>
+    </tr>
+  </tbody>
+</table>
 
 ## Requirements
 

@@ -1,0 +1,282 @@
+---
+title: "ページ・テンプレート"
+---
+
+1 つのリクエストに対して複数の種類のデータを取得する場合、アプリケーションはユーザーに返すデータをどのようにレイアウトするかを決めなければなりません。*ページ・テンプレート*を使うと、そのようなページ・レイアウトを XML 設定ファイルとして定義できます。1 つのユースケースに対応するレイアウトごとに 1 ファイルです。
+
+レイアウトは*構造的*なものです。幅や高さ、色などは指定せず、ページを構成するさまざまなボックス状のコンポーネントと、それらの順序や入れ子を定義します。また、完全なアプリケーションには、テンプレートによってレイアウトされた結果から完成したページをレンダリングできる*フロントエンド*が含まれていることが前提となります。
+
+ページ・レイアウトには、テンプレートの代替バージョンを指定する*選択肢(choice)*を含めることができます。テンプレート内の選択肢は、実行時に*リゾルバー*コンポーネントによって決定されます。最適化を行うリゾルバーがあれば、システムは個々のクエリーと結果に応じて正しい選択を行うように学習できます。最適化リゾルバーはプラットフォームには同梱されておらず、コンポーネントとして追加する必要があります。
+
+このドキュメントでは、はじめ方を説明し、[ページ・テンプレート言語](#introduction)と[選択リゾルバーの追加方法](#using-choice-resolvers)を解説します。ページ・テンプレートで許可されるすべての内容の完全なリファレンスは、[ページ・テンプレート・リファレンス](../reference/querying/page-templates)にあります。
+
+## はじめに
+
+ページ・テンプレートは、[アプリケーション・パッケージ](../basics/applications)の `search/page-templates/` ディレクトリに配置する XML ファイルです。ページ・テンプレートを使い始めるには:
+
+-   [下記](#introduction)に示すようなテンプレート XML ファイルを `[app-package]/page-templates/` に作成します
+-   サーチャー [com.yahoo.search.pagetemplates.PageTemplateSearcher](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/pagetemplates/PageTemplateSearcher) を *services.xml* のデフォルトの[サーチ・チェーン](../reference/applications/services/search)に追加します。
+-   アプリケーション・パッケージを[デプロイ](../basics/applications#deploying-applications)します。
+-   次のクエリーパラメーターを追加します: `page.id=[ページ id のカンマ区切りリスト]` と `presentation.format=[page](../reference/querying/page-result-format)`。
+
+返される結果は、各クエリーに対して選択されたページ・テンプレートで定義されたとおりになります。
+
+ページ・テンプレートで使用するソース名は、[フェデレーション](/ja/querying/federation)のセットアップで定義されたもの、および/またはアプリケーションで定義された内部検索クラスターのものと同じです。
+
+レンダリングされたページを生成するには、使用中のページ・テンプレートが作成する結果を理解するプレゼンテーション層(フロントエンド)をセットアップまたは作成する必要があります。それはこのドキュメントの範囲外です。
+
+## ページ・テンプレート入門
+
+ページ・テンプレートは、トップレベルに `<page>` タグを含む XML ファイルです。page 要素には `id` 属性が必要で、ファイル名は id と同じで、その後に *.xml* が続きます。id が *default* の場合、クエリーでテンプレートが指定されていないときは常にこのテンプレートが使用されます。テンプレートはバージョン管理することもできます。[コンポーネントのバージョニング](../reference/applications/components#component-versioning)を参照してください。
+
+ページ・テンプレートは、最終的なレイアウトにおける画面領域に対応する、入れ子になった*セクション*で構成されます。トップレベルのセクションはページ自体によって定義され、さらなるセクションは明示的な `<section>` タグで定義できます。各セクションはレイアウトを設定でき、フロントエンドのレンダラーがその内容のレイアウトに使用します。`column` と `row` はすべてのレンダラーでサポートされている必要があり、レンダラーによっては追加のレイアウトを指定できる場合があります。各セクションでは、そのセクションに配置するデータのソースも指定できます。レンダラーは、1 つのセクション内で異なるソースからの複数のデータ項目をレンダリングできなければなりません。
+
+たとえば、このテンプレートは、それぞれ 1 つのソースを含む、同じ大きさの 4 つの領域で構成されるページを作成します:
+
+```xml
+<page id="fourSquare" layout="column">
+    <section layout="row">
+        <section source="news"/>
+        <section source="web"/>
+    </section>
+    <section layout="row">
+        <section source="image"/>
+        <section source="video"/>
+    </section>
+</page>
+```
+
+このテンプレートを使用するには、*[application-package]/page-templates/fourSquare.xml* として保存します。
+
+このテンプレートを拡張して、「news」セクションにブログも表示できるようにしたいとします。これは次のように実現できます:
+
+```xml
+<page id="fourSquare" layout="column">
+    <section layout="row">
+        <section source="news blog"/>
+        <section source="web"/>
+    </section>
+    <section layout="row">
+        <section source="image"/>
+        <section source="video"/>
+    </section>
+</page>
+```
+
+各ソースのデータ項目には、フロントエンドで実装されたレンダリングがあります。テンプレートで何も指定されていない場合は、これらのレンダラーが使用されます。別のレンダリングを使用したい場合は、`renderer` タグで指定できます。セクション自体のレンダリングについても同様です。ここでは、ブログのデータ項目(ヒット)と、*news/blog* セクション全体に対して、異なるレンダラーを指定しています。
+
+```xml
+<page id="fourSquare" layout="column">
+    <section layout="row">
+        <section source="news">
+            <renderer name="blueSection">
+            <source name="blog">
+                <renderer name="newBlogHitStyle"/>
+            </source>
+        <section/>
+        <section source="web"/>
+    </section>
+    <section layout="row">
+        <section source="image"/>
+        <section source="video"/>
+    </section>
+</page>
+```
+
+renderer サブ要素を追加するために、blog ソースを属性ではなくタグで指定している点に注意してください。この 2 つの形式は等価であり、属性による指定は単なる省略記法です。
+
+ソースとレンダラーには任意のキー・値パラメーターを与えることができます。詳細は[リファレンス](../reference/querying/page-templates)を参照してください。
+
+しかし、news と blog の両方ではなく、どちらか一方を選びたい場合はどうすればよいでしょうか。これは choice を使って実現できます:
+
+```xml
+<page id="fourSquare" layout="column">
+    <section layout="row"> <section;>
+    <renderer name="blueSection">
+            <choice>
+                <source name="news"/>
+                <source name="blog">
+                    <renderer name="newBlogHitStyle"/>
+                </source>
+            </choice>
+        <section/>
+        <section source="web"/>
+    </section>
+    <section layout="row">
+        <section source="image"/>
+        <section source="video"/>
+    </section>
+</page>
+```
+
+choice はテンプレート内のどこにでも挿入できます。たとえば、1 行目と 2 行目の両方ではなく、どちらか一方を表示するように選択できます:
+
+```xml
+<page id="fourSquare" layout="column">
+    <choice>
+        <section layout="row">
+            <section;>
+                <renderer name="blueSection">
+                <choice>
+                    <source name="news"/>
+                    <source name="blog">
+                        <renderer name="newBlogHitStyle"/>
+                    </source>
+                </choice>
+            <section/>
+            <section source="web"/>
+        </section>
+        <section layout="row">
+            <section source="image"/>
+            <section source="video"/>
+        </section>
+    </choice>
+</page>
+```
+
+複数のセクション(またはソース)からなる 2 つのグループのどちらかを選びたい場合は、各グループを `alternative` タグで囲むことで実現できます。要素の集合をプレースホルダーの集合に割り当てるという一般的な特殊ケースでは、choice に代替のリストの代わりに `map` タグを含めることができます。詳細は[リファレンス](../reference/querying/page-templates)を参照してください。
+
+## 選択リゾルバーの使用
+
+choice を含むテンプレートを使用する場合、各クエリーと結果に応じてそれらの選択を解決するコンポーネントが必要です。システムにはデモおよびテスト目的のリゾルバーがいくつか含まれていますが、本格的な最適化リゾルバーはアプリケーションの一部としてデプロイする必要があります。このセクションでは、実行時に使用するリゾルバーの作成、デプロイ、選択の方法を説明します。
+
+### リゾルバーの作成
+
+リゾルバーは [com.yahoo.search.pagetemplates.engine.Resolver](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/pagetemplates/engine/Resolver) のサブクラスです。この API は、使用中のページ・テンプレート(choice を含む)と Query/Result のペアを受け取り、Resolution を返すメソッドを定義します。ページ・テンプレートを使用するすべてのクエリーに対して、実行時に 1 回呼び出されます。
+
+また、各選択を独立して行うリゾルバーを簡単に書けるようにするヘルパーメソッドもいくつかあります。以下は、このヘルパーメソッドを使用して、すべての選択をランダムに行うリゾルバーの例です:
+
+```java expandable
+package com.yahoo.search.pagetemplates.engine.resolvers;
+
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.search.pagetemplates.engine.*;
+import com.yahoo.search.pagetemplates.model.*;
+
+import java.util.*;
+
+/** A resolver which makes all choices by random. */
+public class RandomResolver extends Resolver {
+
+    private Random random=new Random(System.currentTimeMillis()); // Use of this is multithread safe
+
+    /** Chooses the last alternative of any choice */
+    @Override
+    public void resolve(Choice choice, Query query, Result result, Resolution resolution) {
+        resolution.addChoiceResolution(choice,random.nextInt(choice.alternatives().size()));
+    }
+
+    /** Chooses a mapping which is always by the literal order given in the source template */
+    @Override
+    public void resolve(MapChoice choice,Query query,Result result,Resolution resolution) {
+        Map<String, List<PageElement>> mapping=new HashMap<String, List<PageElement>>();
+        // Draw a random element from the value list on each iteration and assign it to a placeholder
+        List<String> placeholderIds=choice.placeholderIds();
+        List<List<PageElement>> valueList=new ArrayList<List<PageElement>>(choice.values());
+        for (String placeholderId : placeholderIds)
+            mapping.put(placeholderId,valueList.remove(random.nextInt(valueList.size())));
+        resolution.addMapChoiceResolution(choice,mapping);
+    }
+
+}
+```
+
+### リゾルバーのデプロイ
+
+リゾルバーはデプロイのために [OSGI バンドル](https://en.wikipedia.org/wiki/Osgi#Bundles)としてパッケージ化する必要があります。[コンテナー・コンポーネント](../applications/components)を参照してください。
+
+パッケージ化したコンポーネントは、[アプリケーション・パッケージ](../basics/applications)の `components/` ディレクトリに追加します。
+
+ページ・テンプレート・サーチャーには、利用可能にすべきリゾルバーのリストを設定する必要があります。これは、ページ・テンプレート・サーチャーの設定を *components* 設定で拡張することで行います:
+
+```xml
+<searcher id="com.yahoo.search.pagetemplates.PageTemplateSearcher" bundle="the name in <artifactId> in your pom.xml" >
+    <config name="container.components">
+        <component index="0">
+            <id>default</id>
+            <classId>com.yahoo.my.Resolver1</classId>
+            <bundle>myBundleSymbolicName</bundle>
+        </component>
+
+        <component index="1">
+            <id>mySecondResolver</id>
+            <classId>com.yahoo.my.Resolver2</classId>
+            <bundle>myBundleSymbolicName</bundle>
+        </component>
+    </config>
+</searcher>
+```
+
+これで、アプリケーションを通常どおり[デプロイ](../basics/applications#deploying-applications)します。
+
+### リゾルバーの選択
+
+使用するリゾルバーは、クエリープロパティ `page.resolver` にリゾルバーコンポーネントの id(およびオプションでバージョン)を設定することで決まります。リクエスト内、クエリープロファイル内、またはプログラムから設定できます。
+
+テスト目的に適した 2 つのテンプレートが常に利用可能です: 各選択をランダムに行う `native.random` と、各選択の最後の代替を選ぶ `native.deterministic` です。
+
+`page.resolver` パラメーターが設定されていない場合、id が `default` のリゾルバーが使用されます。デフォルトのリゾルバーがデプロイされていない場合は、ランダムリゾルバーが使用されます。
+
+## 例
+
+このセクションには、ページ・テンプレートの完全な例をいくつか示します。
+
+ブレンド型の検索結果ページ:
+
+```xml
+<page id="slottingSerp" layout="mainAndRight">
+    <section layout="column" region="main" source="*"/>
+    <section layout="column" region="right" source="ads"/>
+</page>
+```
+
+よりリッチな検索結果ページ:
+
+```xml
+<page id="richSerp" layout="mainAndRight">
+    <section layout="row" placement="main">
+        <section layout="column" description="left main pane">
+            <section layout="row" max="5" description="Bar of images, from one of two possible sources">
+                <choice>
+                    <source name="images"/>
+                    <source name="flickr"/>
+                </choice>
+            </section>
+        <section max="1" source="local map video ticker weather"
+                    description="A single relevant graphically rich element"/>
+        <section max="10" source="web news"
+                    description="Various kinds of traditional search results"/>
+        </section>
+            <section layout="column" order="[source]" source="answers blogs twitter"
+                        description="right main pane, ugc stuff, grouped by source"/>
+        </section>
+    <section layout="column" source="ads" region="right"/>
+</page>
+```
+
+複数のソースモジュールをページ上の場所にマッピングする例:
+
+```xml
+<page id="MapSourcesToSections" layout="column" description="4 sources are assigned to a section each">
+
+    <section layout="row" description="row 1">
+        <section id="box1"><placeholder id="box1source"/></section>
+        <section id="box2"><placeholder id="box2source"/></section>
+    </section>
+    <section layout="row" description="row 2">
+        <section id="box3"><placeholder id="box3source"/></section>
+        <section id="box4"><placeholder id="box4source"/></section>
+    </section>
+
+    <choice method="myMethod">
+        <map to="box1source box2source box3source box4source">
+            <source name="source1"/>
+            <source name="source2"/>
+            <source name="source3"/>
+            <source name="source4"/>
+        </map>
+    </choice>
+
+</page>
+```

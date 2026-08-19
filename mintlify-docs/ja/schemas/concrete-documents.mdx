@@ -1,0 +1,151 @@
+---
+title: "具象ドキュメント"
+---
+
+[ドキュメント処理](/ja/applications/document-processors)では、`Document` のフィールドへのアクセスに `setFieldValue()` と `getFieldValue()` を使用します。ドキュメント・インスタンス内の各フィールドのデータは、フィールド値（field value）でラップされています。ドキュメントが構造体（struct）を使用している場合も、同じ方法で扱われます。例:
+
+
+```java
+book.setFieldValue("title", new StringFieldValue("Moby Dick"));
+```
+
+代わりに、コード生成を使用して、*具象ドキュメント・タイプ*、つまり正確なドキュメント・タイプ（例えばファイル `book.sd` で定義されたもの）を表す `Document` のサブクラスを取得することもできます。生成するには、`pom.xml` の build、plugins セクションに含めます:
+
+```xml
+<plugin>
+    <groupId>com.yahoo.vespa</groupId>
+    <artifactId>vespa-documentgen-plugin</artifactId>
+    <!-- Find latest version at search.maven.org/search?q=g:com.yahoo.vespa%20a:vespa-documentgen-plugin -->
+    <version>8.689.26</version>
+    <configuration>
+        <schemasDirectory>etc/schemas</schemasDirectory>
+    </configuration>
+    <executions>
+        <execution>
+            <id>document-gen</id>
+            <goals>
+                <goal>document-gen</goal>
+            </goals>
+        </execution>
+    </executions>
+</plugin>
+```
+
+`schemasDirectory` には[スキーマ](/ja/reference/schemas/schemas)が含まれます。生成されたクラスは `target/generated-sources` に配置されます。ドキュメント・タイプ `book` は Java クラス `Book` として表現され、データアクセス用のネイティブメソッドを持つため、上記のコード例は次のようになります:
+
+```java
+book.setTitle("Moby Dick");
+```
+
+<table>
+<tr className='border-b border-gray-200'>
+  <th className='text-left'>構成</th>
+  <th className='text-left'>説明</th>
+</tr>
+<tr>
+  <td>**Java パッケージ**</td>
+  <td>
+    生成される型の Java パッケージを指定します:
+
+```xml
+<configuration>
+    <packageName>com.yahoo.mypackage</packageName>
+</configuration>
+```
+  </td>
+</tr>
+<tr>
+  <td>**ユーザー提供のアノテーション型**</td>
+  <td>
+    特定のアノテーション型の Java 実装を提供して、*アノテーションの振る舞い*を実現します（追加のインターフェースの実装が 1 つのシナリオとして考えられます）:
+
+```xml
+<configuration>
+    <schemasDirectory>etc/schemas</schemasDirectory>
+    <provided>
+        <annotation>
+            <type>NodeImpl</type>
+            <clazz>com.yahoo.vespa.document.NodeImpl</clazz>
+        </annotation>
+        <annotation>
+            <type>DocumentImpl</type>
+            <clazz>com.yahoo.vespa.document.DocumentImpl</clazz>
+        </annotation>
+    </provided>
+</configuration>
+```
+
+この場合、プラグインは `NodeImpl` と `DocumentImpl` の型を生成しませんが、`ConcreteDocumentFactory` はそれらをサポートするため、これに依存するコードは動作します。
+  </td>
+</tr>
+<tr>
+  <td>**抽象アノテーション型**</td>
+  <td>
+    生成されるアノテーション型を抽象にします:
+
+```xml
+<configuration>
+    <abztract>
+        <annotation>
+            <type>myabstractannotationtype</type>
+        </annotation>
+    </abztract>
+</configuration>
+```
+  </td>
+</tr>
+</table>
+
+## 継承
+
+入力のドキュメント・タイプが単一継承を使用している場合、生成される Java 型もそれに従って継承します。ただし、ドキュメント・タイプが複数の型を継承している場合（例: `document myDoc inherits base1, base2`）、Java は単一継承であるため、`myDoc` の Java 型は単に `Document` を継承します。例については[スキーマの継承](/ja/schemas/inheritance-in-schemas)を参照してください。
+
+## フィード
+
+具象型は、ステートフルなクラスターへのデータのフィードに使用される docproc でよく使用されます。フィードとシリアライズの際に Vespa に正しい型を使用させるには、[services.xml](/ja/reference/applications/services/services) の `<container>` に次を含めます:
+
+```xml highlight={2-4}
+<container id="default" version="1.0">
+    <document type="book"
+              bundle="the name in <artifactId> in your pom.xml"
+              class="com.yahoo.mypackage.Book"/>
+```
+
+Vespa は、型 `Book` と、バンドル内の他のすべての具象ドキュメント型、アノテーション型、構造体型を、コンテナー内の docproc から利用できるようにします。指定するバンドルは `Bundle-SymbolicName` でなければなりません。また、docproc チェーンを通じてフィードする際にも、指定された Java 型が使用されます。クラスが指定されたバンドル内に存在しない場合、コンテナーは `ConcreteDocumentFactory` をコンポーネントとしてロードできない旨のエラーメッセージを出力し、起動しません。バンドルから具象ドキュメント型を `Export-Package` する必要はありません。それを行う `package-info.java` が生成されます。
+
+## ファクトリーとコピーコンストラクター
+
+実際の型に加えて、Maven プラグインは、存在する実際の具象型に関する情報を保持するクラス `ConcreteDocumentFactory` も生成します。これは、ドキュメント・タイプを指定してオブジェクトを初期化するために使用できます:
+
+```java
+Book b = (Book) ConcreteDocumentFactory.getDocument("book", new DocumentId("id:book:book::0"));
+```
+
+これは、例えばデシリアライズ中にドキュメントが作成されるときに行えます。具象型には、同じ型の汎用 `Document` オブジェクトを受け取れるコピーコンストラクターもあります。内容はディープコピーされます:
+
+```java
+Document bookGeneric;
+// …
+Book book = new Book(bookGeneric, bookGeneric.getId());
+```
+
+`Document` のすべてのアクセサーおよびミューテーターメソッドは、具象型でも期待どおりに動作します。具象型はデータの保存に `FieldValue` を使用しないため、`getFieldValue()` は*毎回*アドホックな `FieldValue` を*生成*することに注意してください。`setFieldValue()` は、データをその型のネイティブな Java フィールドに格納します。
+
+## ドキュメント処理
+
+ドキュメント・プロセッサーでは、受信したドキュメントのベースにアクセスする前に、具象ドキュメント・タイプにキャストします。 
+
+例:
+
+```java
+public class ConcreteDocDocProc extends DocumentProcessor {
+    public Progress process(Processing processing) {
+        DocumentPut put = (DocumentPut) processing.getDocumentOperations().get(0);
+        Book b = (Book) (put.getDocument());
+        b.setTitle("The Title");
+        return Progress.DONE;
+    }
+}
+```
+
+具象ドキュメント・タイプは、ドキュメントの更新や削除ではサポートされていません。

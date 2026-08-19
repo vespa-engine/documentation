@@ -1,0 +1,313 @@
+---
+title: "Vespaにおける言語処理（Linguistics）"
+sidebarTitle: "言語処理の概要"
+---
+
+Vespaは、インデックス作成および検索の際に、クエリーとドキュメント内のテキストを処理するために_linguistics_モジュールを使用します。言語処理の目標は、_適合率（precision）_（マッチしたドキュメントの関連性）をあまり損なうことなく、_再現率（recall）_（マッチするドキュメントの数）を高めることです。これは、次のような操作で構成されます:
+
+- テキストを、単語や句読点などの既知のタイプのチャンクにトークン化する。
+- アクセントを正規化する。
+- 単語の基本形を見つける（ステミングまたはレンマ化）。
+
+言語処理は、ドキュメントの書き込み時とクエリー時に実行されます:
+
+<Frame>
+ ![概要: Vespaにおける言語処理](/assets/img/vespa-overview-linguistics.svg)
+</Frame>
+
+この処理は、`index`インデックス作成モードの[string](/ja/reference/schemas/schemas#string)フィールドに対して実行されます。概要:
+
+1. ドキュメントの書き込み時、`indexing: index`が指定されたstringフィールドはデフォルトで処理されます。この処理はフィールドの言語によって設定されます。ドキュメント/フィールドには言語を明示的に設定でき、設定されていない場合は[検出](/ja/linguistics/linguistics#field-language-detection)されます。 
+2. フィールドの内容が処理され（トークン化、正規化、ステミングなど）、結果として得られたタームがインデックスに追加されます。 
+<Info>
+ **注:** フィールドの言語はコンテント・ノードには永続化されず、処理されたターム自体のみが永続化されます
+</Info>
+3. クエリーも同様の方法で処理されます。通常はフィールドの内容と同じ[linguisticsプロファイル](/ja/reference/schemas/schemas#linguistics)を通じて処理され、同じテキストからは同じタームが生成されます。クエリー文字列の言語は、[model.locale](/ja/reference/api/query#model.locale)または`language`のような[アノテーション](/ja/reference/querying/yql#annotations)で指定されない限り、[検出](/ja/linguistics/linguistics#query-language-detection)されます。 
+<Info>
+ **注:** これは非常によくあるクエリーの問題です - 短い文字列から言語を正確に検出するのは困難です。
+</Info>
+4. 処理されたクエリーはコンテント・ノード上で評価されますが、ドキュメントとクエリーの両方が同じタームを生成する場合にのみ期待どおりに動作します。 
+
+これらの操作は、[スキーマ](/ja/basics/schemas)でフィールドごとにオン/オフを切り替えられます。クエリー・タームごとに変換を有効/無効にする方法については、[implicitTransforms](/ja/reference/querying/yql#implicittransforms)を参照してください。
+
+## Linguisticsの実装
+
+Vespaには、すぐに使える2つのlinguisticsバリアントが付属しています: [OpenNLP](/ja/linguistics/linguistics-opennlp)と[Lucene](/ja/linguistics/lucene-linguistics)です。それぞれの設定方法の詳細については、各ページを確認してください。
+
+カスタムの[Linguistics](/ja/linguistics/linguistics-custom)コンポーネントを実装することもできます。
+
+デフォルトのlinguisticsバリアントは[OpenNLP](/ja/linguistics/linguistics-opennlp)ですが、このページの残りの部分では、すべての実装に共通する言語処理などの一般的なオプションについて説明します。
+
+<Note>
+ **注:** Linguisticsの実装は、位置情報を含め、テキストがどのようにトークン化されるかのみを制御します。これらのトークンは、基盤となるインデックスに同じ方法で格納されます。たとえば、Lucene linguisticsを使用しても、VespaはLuceneのセグメントファイルにおける位置などの情報は格納しません。ストレージはOpenNLPの場合と同じで、生成されるトークンだけが異なる可能性があります。
+</Note>
+
+## 言語の扱い
+
+Vespaはドキュメントの言語を_知りません_ - これは次のことを意味します:
+
+1. インデックス作成プロセッサーは、基盤となるlinguisticsライブラリを呼び出す際にどの言語を使用するかを、フィールドごとに指示されます
+2. クエリー・プロセッサーは、どの言語を使用するかをクエリーごとに指示されます
+
+ドキュメントまたはクエリーで言語が明示的に設定されていない場合、Vespaは利用可能なテキスト（ドキュメント・フィールドの全内容、または`query=`パラメーター値全体）に対して、設定された言語検出器（デフォルトでは[OpenNLP言語検出](/ja/linguistics/linguistics-opennlp#language-detection)）を実行します。
+
+クエリーとまったく同じ単語を含むドキュメントであっても、ドキュメント・フィールドの言語がクエリーとは異なって検出された場合、リコールできない可能性があります。クエリーで[language](/ja/reference/api/query#model.language)が明示的に宣言されていない限り、これは起こり得ます。
+
+### 言語を指定したインデックス作成
+
+Vespaが実行するインデックス作成プロセスは、スキーマ内の各フィールドのindexingスクリプトを、宣言された順序で逐次実行するものです。スクリプトは任意の時点で、[set\_language](/ja/reference/writing/indexing-language#set_language)を使用して、後続のフィールドのindexing文で使用される言語を設定できます。例:
+
+```yaml
+schema doc {
+    document doc {
+        field language type string {
+            indexing: set_language
+        }
+        field title type string {
+            indexing: index
+        }
+    }
+}
+```
+
+フィールドのトークン化が実行される時点で言語が設定されていない場合、言語は[言語検出](/ja/linguistics/linguistics#field-language-detection)によって決定されます。
+
+すべてのドキュメントが同じ言語の場合、次のようにスキーマに言語をハードコードできます:
+
+```yaml
+schema doc {
+
+    field language type string {
+        indexing: "en" | set_language
+    }
+
+    document doc {
+    ...
+```
+
+同じドキュメントに複数の言語のフィールドが含まれる場合、set\_languageを複数回呼び出すことができます。例:
+
+```yaml
+schema doc {
+    document doc {
+        field language_title1 type string {
+            indexing: set_language
+        }
+        field title1 type string {
+            indexing: index
+        }
+        field language_title2 type string {
+            indexing: set_language
+        }
+        field title2 type string {
+            indexing: index
+        }
+    }
+}
+```
+
+あるいは、フィールドごとに固定する場合は、各フィールドで複数のindexing文を使用します:
+
+```yaml
+schema doc {
+    document doc {
+        field my_english_field type string {
+            indexing {
+                "en" | set_language;
+                index;
+            }
+        }
+        field my_spanish_field type string {
+            indexing {
+                "es" | set_language;
+                index;
+            }
+        }
+    }
+}
+```
+
+### フィールドの言語検出
+
+ドキュメントのインデックス作成時に、フィールドの言語が不明な場合（つまり`set_language`で設定されていない場合）、そのフィールドの内容に対して言語検出が実行されます。つまり、言語検出はドキュメントごとではなく、フィールドごとに行われます。
+
+検出の信頼度については[クエリーの言語検出](/ja/linguistics/linguistics#query-language-detection)を参照してください。テキストの少ないフィールドはデフォルトで英語になります。
+
+### 言語を指定したクエリー
+
+インデックスされたstringフィールドの内容は言語非依存です。したがって、そのフィールドの内容にマッチさせるためには、クエリー・タームに互換性のあるトークン化（たとえば同じ言語のステミング）を適用する必要があります。
+
+クエリー・パーサーは、どのフィールドがインデックスされた文字列であるかを伝える設定を購読しており、そのようなフィールドを対象とするすべてのクエリー・タームは適切なトークン化を通されます。[language](/ja/reference/api/query#model.language)クエリー・パラメーターが、これらの呼び出しの言語状態を制御します。
+
+インデックスには任意の数の言語のタームが同時に含まれ得るため、ある言語のステミングされたバリアントが別の言語のステミングされたバリアントにマッチする可能性があります。これを回避するには、ドキュメントの言語を別の属性（attribute）に格納し、クエリー時にその属性に対するフィルターを適用します。
+
+デフォルトでは、インデックスの内容の生成にどの言語が使用されたかを捉える知識はどこにもありません。languageパラメーターは、トークン化されたインデックスにヒットするクエリー・タームの変換にのみ影響します。
+
+### クエリーの言語検出
+
+[language](/ja/reference/api/query#model.language)パラメーターが使用されていない場合、またはクエリー・タームが[アノテーション](/ja/reference/querying/yql#annotations)されている場合、クエリー文字列を処理するために言語検出器が呼び出されます。
+
+クエリーは通常短いため、検出の信頼度は低くなります。例:
+
+```bash
+$ vespa query "select * from music where default contains text(@text)" \
+  tracelevel=3 text='Eine kleine Nachtmusik' | grep 'Stemming with language'
+    "message": "Stemming with language=ENGLISH"
+
+$ vespa query "select * from music where default contains text(@text)" \
+  tracelevel=3 text='Eine kleine Nachtmusik schnell' | grep 'Stemming with language'
+    "message": "Stemming with language=GERMAN"
+```
+
+詳細は[#24265](https://github.com/vespa-engine/vespa/issues/24265)を参照してください - 要するに、現在の0.02という信頼度カットオフでは、タームが3個以下のクエリーはデフォルトで英語になります。
+
+### 複数言語
+
+Vespaは、同じスキーマ内に複数の言語のドキュメントを持つことをサポートしていますが、言語横断検索（たとえば、英語で検索してドイツ語で書かれた関連ドキュメントを取得する）は、そのままではサポートしていません。これは、クエリーの言語はクエリー文字列の言語によって決定され、1つの変換しか行えないためです。
+
+この制限を克服するためのアプローチには次のものがあります:
+
+1. 多言語コーパスでトレーニングされ、複数の言語のドキュメントを取得するのに使用できる、多言語テキスト埋め込みモデルを使用したセマンティック検索を使用する（[ブログ記事](https://blog.vespa.ai/simplify-search-with-multilingual-embeddings/)を参照）。 
+2. 該当する各言語でクエリーをステミングおよびトークン化し、[weakAnd](/ja/reference/querying/yql#weakand) / [or](/ja/reference/querying/yql#or)を使用してクエリーツリーを構築し、ステム・バリアントごとに[equiv](/ja/reference/querying/yql#equiv)を使用する。これは、[#12154](https://github.com/vespa-engine/vespa/issues/12154)で言及されているように、カスタム[Searcher](/ja/applications/searchers)で行うのが最も簡単です。 
+
+例:
+
+**language=fr:** machine learning =\> machin learn
+
+**language=en:** machine learning =\> machine learn
+
+このテクニックは#12154ですでに言及されているため、ここでは_weakAnd_を例として使用します:
+
+```sql
+select * from sources * where rank( 
+    default contains "machine", 
+    default contains "learning",
+    weakAnd(
+      default contains equiv("machin", "machine"), 
+      default contains "learn"
+    )
+)
+```
+
+これで、_weakAnd_を使用してすべての可能なステム/基本形で検索を行い、[rank](/ja/reference/querying/yql#rank)演算子を使用して元のクエリー形式を渡すことで、ランキングがリテラルマッチ（元の形式）をより高くランク付けできるようにします。_equiv_の利点は、複数のターム・バリアントが同じ位置を共有できることで、このアプローチによって近接ランキングが壊れないことです。
+
+## Linguisticsプロファイル
+
+Linguisticsプロファイルは、スキーマ内のフィールドに対する言語処理を設定するために使用されます。通常は[Lucene linguistics実装](/ja/linguistics/lucene-linguistics)と共に使用されますが、たとえば[カスタムlinguistics実装](/ja/linguistics/linguistics-custom)でも使用できます。
+
+### 対称的な処理
+
+たとえば、次のような定義:
+
+```yaml 
+field title type string {
+  indexing: summary | index
+  linguistics {
+      profile: whitespaceLowercase
+  }
+}
+```
+
+これは`whitespaceLowercase`という名前のプロファイルを探します。このプロファイルは`services.xml`で次のように定義できます:
+
+```xml
+<item key="profile=whitespaceLowercase;language=en">
+    <tokenizer>
+      <name>whitespace</name>
+    </tokenizer>
+    <tokenFilters>
+      <item>
+        <name>lowercase</name>
+      </item>
+    </tokenFilters>
+  </item>
+```
+
+そこにある`language=en`に注目してください。これはオプションです: 設定されていない場合、プロファイルはすべての言語に使用されます。ただし、同じプロファイルで言語ごとに異なる定義を持つこともできます（たとえば、異なるステミング）。
+
+### クエリー文字列に対する異なる処理
+
+一部のユースケースでは、クエリー文字列をドキュメントの内容とは異なる方法で処理したい場合があります。シノニム（同義語）が良い例です。クエリー時に`dog`を`dog,puppy`に展開すれば、いずれにせよドキュメント内のどちらのタームにもマッチするため、書き込み時に展開する必要はありません。
+
+これを行うには、クエリー文字列用に別のプロファイルを定義します。例:
+
+```xml
+<item key="profile=whitespaceLowercaseSynonyms;language=en">
+    <tokenizer>
+      <name>whitespace</name>
+    </tokenizer>
+    <tokenFilters>
+      <item>
+        <name>lowercase</name>
+      </item>
+      <item>
+        <name>synonymGraph</name>
+        <conf>
+          <!--
+            Synonyms file should contain something like:
+            dog,puppy
+          -->
+          <item key="synonyms">en/synonyms.txt</item>
+        </conf>
+      </item>
+    </tokenFilters>
+  </item>
+```
+
+次に、スキーマで`profile`を`profile.index`と`profile.search`に展開します:
+
+```yaml
+field title type string {
+    indexing: summary | index
+    linguistics {
+        profile {
+            index: whitespaceLowercase
+            search: whitespaceLowercaseSynonyms
+        }
+    }
+}
+```
+
+これで、`where synonyms_test contains 'dog'`は`puppy`を含むドキュメントにマッチするようになります。
+
+### クエリー文字列に対するプロファイルのオーバーライド
+
+クエリー時に、[grammar.profile](/ja/reference/querying/yql#grammar)を通じて、クエリー文字列の処理に特定のプロファイルを使用するようVespaに指示できます。これは[userInput()](/ja/reference/querying/yql#userinput)および[text()](/ja/reference/querying/yql#text)演算子で機能します。たとえば、クエリー文字列に`whitespaceLowercase`プロファイルを使用するには:
+
+```sql
+where title contains ({grammar.profile: 'whitespaceLowercase'}text('dog'))
+```
+`userInput()`を使用した同等の式:
+```sql
+where {defaultIndex:'title', grammar.profile: 'whitespaceLowercase', grammar: 'linguistics'}userInput('dog')
+```
+
+<Note>
+ **注:** grammar.profileと共に（上記の例のように）grammar=linguisticsを使用して、プロファイルですでに定義されている以外の追加の処理（たとえばトークン化）が行われないようにするべきです。
+</Note>
+
+## 言語処理のトラブルシューティング
+
+ドキュメントが期待どおりにマッチしない場合、より多くの情報を得る方法が2つあります。まず、[ドキュメント・サマリー](/ja/querying/document-summaries)で[tokens](/ja/reference/schemas/schemas#tokens)を使用することで、フィールドのトークン化されたテキストを取得できます。たとえば、`title`フィールドの元のテキストとトークンを取得するには:
+
+```yaml
+document-summary debug-text-tokens {
+    summary title {}
+    summary title_tokens {
+        source: title
+        tokens
+    }
+    from-disk
+}
+```
+
+次に、クエリー時には、[トレースレベル](/ja/reference/api/query#trace.level)を上げることで、クエリー文字列のトークンも取得できます:
+
+```json
+{
+  "yql": "select * from sources * where title contains \"dog\"",
+  "presentation.summary": "debug-text-tokens",
+  "model.locale": "en",
+  "trace.level": 2
+}
+```

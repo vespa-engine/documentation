@@ -1,0 +1,289 @@
+---
+title: "SPANN 10億規模ベクトル検索"
+---
+
+
+近似最近傍探索のためのSPANN (Space Partitioned ANN) アプローチは、
+[SPANN: Highly-efficient Billion-scale Approximate Nearest Neighbor Search](https://arxiv.org/abs/2111.08566) で説明されています。
+SPANNは、近似最近傍探索のためにグラフと転置インデックスの手法をハイブリッドに組み合わせて使用します。
+
+このサンプル・アプリケーションを実行する前に、SPANNがVespaを使ってどのように実装されているかの詳細について
+[Billion-scale vector search using hybrid HNSW-IF](https://blog.vespa.ai/vespa-hybrid-billion-scale-vector-search/) を読むことをお勧めします。
+抜粋:
+
+> SPANN searches for the k closest centroid vectors of the query vector in the in-memory ANN search data structure.
+> Then, it reads the k associated posting lists for the retrieved centroids
+> and computes the distance between the query vector and the vector data read from the posting list:
+
+<Frame>
+![](https://blog.vespa.ai/assets/2022-06-07-vespa-spann-billion-scale-vector-search/spann-posting-lists.excalidraw.png)
+</Frame>
+
+このサンプル・アプリケーションは、Vespaを使ってSPANNを表現する方法を示します。
+
+セットアップ:
+
+<Steps>
+<Step>
+**Vespa Cloudで[テナント](/ja/learn/tenant-apps-instances)を作成します:**
+
+	[console.vespa-cloud.com](https://console.vespa-cloud.com/) にアクセスし、テナントを作成します(すでに持っている場合は不要です)。
+</Step>
+<Step>
+**[Homebrew](https://brew.sh/) を使って [Vespa CLI](/ja/clients/vespa-cli) をインストールします:**
+```bash
+$ brew install vespa-cli
+```
+	Windowsをお使いの場合やHomebrewがない場合は、[Vespa CLIのページ](/ja/clients/vespa-cli)を参照して直接ダウンロードしてください。
+</Step>
+<Step>
+**Vespaクライアントを設定します:**
+```bash
+$ vespa config set target cloud
+$ vespa config set application vespa-team.autotest
+```
+	"vespa-team" の代わりにステップ1のテナント名を使用してください。このガイドの他のステップでも同様に置き換えてください。
+</Step>
+<Step>
+**Vespa Cloudのコントロール・プレーンへのアクセス権を取得します:**
+```bash
+$ vespa auth login
+```
+	コマンドの指示に従って認証します。
+</Step>
+<Step>
+**サンプル[アプリケーション](/ja/basics/applications)をクローンします:**
+```bash
+$ vespa clone billion-scale-vector-search myapp && cd myapp
+```
+	クローンできる他のサンプル・アプリについては [sample-apps](https://github.com/vespa-engine/sample-apps) を参照してください。
+</Step>
+<Step>
+**アプリケーションに[データ・プレーン・アクセス](/ja/security/guide#data-plane)用の証明書を追加します:**
+```bash
+$ vespa auth cert app
+```
+	ここで書き込まれる `.pem` ファイルのパスを控えておくとよいでしょう。
+</Step>
+</Steps>
+
+## ベクトルデータのダウンロード
+このサンプル・アプリは、[big-ann-benchmarks.com](https://big-ann-benchmarks.com/) のMicrosoft SPACEVベクトル・データセットを使用します。
+100Mスライス・サンプルの最初の1,000万ベクトルを使用します。
+このサンプル・ファイルは約1GB(1,000万ベクトル)です:
+
+```bash
+$ curl -L -o spacev10m_base.i8bin \
+  https://data.vespa-cloud.com/sample-apps-data/spacev10m_base.i8bin
+```
+
+
+依存関係をインストールし、100Mサンプルの最初の1,000万ベクトルからフィード・ファイルを作成します:
+
+```bash
+$ pip3 install numpy requests tqdm
+```
+
+
+```bash
+$ python3 app/src/main/python/create-vespa-feed.py spacev10m_base.i8bin
+```
+
+出力:
+* `graph-vectors.jsonl`
+* `if-vectors.jsonl`
+
+
+## Vespaアプリのビルドとデプロイ
+アプリケーションをビルドします:
+
+```bash
+$ mvn clean package -U -f app
+```
+
+
+アプリケーションをデプロイします:
+
+```bash
+$ vespa deploy --wait 900 ./app
+```
+
+
+アプリケーションのエンドポイントが利用可能になるまで待ちます:
+
+```bash
+$ vespa status --wait 300
+```
+
+
+[基本機能](https://github.com/vespa-engine/sample-apps/blob/master/billion-scale-vector-search/app/src/test/application/tests/system-test/feed-and-search-test.json)をテストします:
+
+```bash
+$ vespa test app/src/test/application/tests/system-test/feed-and-search-test.json
+```
+
+詳細は [CDテスト](/ja/operations/automated-deployments#cd-tests)を参照してください。
+
+## データのフィード
+_graph_ ベクトルは _if_ ベクトルより先にフィードする必要があります:
+
+```bash
+$ vespa feed graph-vectors.jsonl
+```
+
+
+```bash
+$ vespa feed if-vectors.jsonl
+```
+
+
+この時点で
+<a href="https://console.vespa-cloud.com/link/application/autotest/dev/instance/default?default.dev.aws-us-east-1c=metrics" data-proofer-ignore>Vespa Cloud Dashboard</a>
+を開いて進捗を追跡するとよいでしょう。
+
+フィード速度を管理するには、[&lt;resources&gt;](https://github.com/vespa-engine/sample-apps/blob/master/billion-scale-vector-search/app/src/main/application/services.xml)
+の設定を参照してください。CPUは多いほど良い結果になります。例:
+```
+<resources vcpu="8" memory="16Gb" disk="50Gb"/>
+```
+適切な組み合わせを見つけるには、[インスタンス・タイプのリファレンス](/ja/performance/instance-types/aws-instance-types)を使用してください。
+2 VCPUデプロイメントと8 VCPUデプロイメントの実行時間の比較:
+
+<Frame>
+![duration 2vcpu](/en/examples/assets/billion-vector-2vcpu.png)
+</Frame>
+<br />
+<Frame>
+![duration 8vcpu](/en/examples/assets/billion-vector-8vcpu.png)
+</Frame>
+
+このガイドのフィード・フェーズとクエリー・フェーズ(下記)を観察してください:
+
+<Frame>
+![feed and queries](/en/examples/assets/billion-vector-feed-queries.png)
+</Frame>
+
+## リコール評価
+クエリー・ベクトルと、最初の1,000万ベクトルに対するグラウンド・トゥルースをダウンロードします:
+
+```bash
+$ curl -L -o query.i8bin \
+  https://github.com/microsoft/SPTAG/raw/main/datasets/SPACEV1B/query.bin
+$ curl -L -o spacev10m_gt100.i8bin \
+  https://data.vespa-cloud.com/sample-apps-data/spacev10m_gt100.i8bin
+```
+
+上記の `vespa auth cert` のステップで作成された認証情報のパスを確認します。例:
+
+```txt
+/Users/username/.vespa/tenant_name.autotest.default/data-plane-public-cert.pem
+```
+
+以下のコマンド内の2つのファイル名を置き換えてください。
+([ローカル・テスト](#local-test-with-oci-image)を実行する場合、これは不要です)
+
+最初の1,000クエリーを実行し、recall@10を評価します。クラスター数が多いほどリコールは高くなります:
+
+```bash
+$ ENDPOINT=$(vespa status --format=plain)
+$ python3 app/src/main/python/recall.py \
+  --endpoint ${ENDPOINT}/search/ \
+  --query_file query.i8bin \
+  --query_gt_file spacev10m_gt100.i8bin \
+  --certificate $PWD/../.vespa/vespa-team.autotest.default/data-plane-public-cert.pem \
+  --key         $PWD/../.vespa/vespa-team.autotest.default/data-plane-private-key.pem
+```
+
+
+このスクリプトの詳細については
+[ブログ記事](https://blog.vespa.ai/vespa-hybrid-billion-scale-vector-search/#hnsw-if-accuracy)を参照してください。
+
+
+```bash
+$ vespa destroy --force
+```
+
+
+
+## OCIイメージを使ったローカル・テスト
+
+
+<Note>
+**前提条件:**
+
+- x86\_64またはarm64上のLinux、macOS、またはWindows 10 Proで、[Podman Desktop](https://podman.io/) または [Docker Desktop](https://www.docker.com/products/docker-desktop/) がインストールされ、エンジンが実行されていること。
+	- あるいは、Podmanデーモンを起動します:
+  
+    ```bash
+    $ podman machine init --memory 6000
+    $ podman machine start
+    ```
+	- システム制限やその他の設定については [Dockerコンテナー](/ja/operations/self-managed/docker-containers.html)を参照してください。
+- Haswell (2013) より古いCPUについては、[CPUサポート](/ja/operations/self-managed/cpu-support)を参照してください。
+- メモリー: Docker/Podman専用に最低4 GBのRAM。[メモリーの推奨事項](/ja/operations/self-managed/node-setup#memory-settings)。
+- ディスク: `NO_SPACE` を避けてください - vespaengine/vespaコンテナー・イメージとデータ用の余裕分にはディスク容量が必要です。[詳細はこちら](/ja/writing/feed-block)。
+- [Vespa CLI](/ja/clients/vespa-cli) をインストールするための [Homebrew](https://brew.sh/)。または [Githubリリース](https://github.com/vespa-engine/vespa/releases)からVespa CLIをダウンロードします。
+- [Java 17](https://openjdk.org/projects/jdk/17/)。
+- アプリケーションのビルドには [Apache Maven](https://maven.apache.org/install.html) を使用します。
+</Note>
+
+
+
+メモリー制限を確認します:
+
+```bash
+$ docker info | grep "Total Memory"
+```
+または
+ 
+```bash
+$ podman info | grep "memTotal"
+```
+
+
+[Vespa CLI](../clients/vespa-cli.html) をインストールします:
+
+```bash
+$ brew install vespa-cli
+```
+
+
+ローカル・デプロイメントの場合:
+
+```bash
+$ vespa config set target local
+```
+
+
+このサンプル・アプリケーションをダウンロードします:
+
+```bash
+$ vespa clone billion-scale-vector-search myapp && cd myapp
+```
+
+
+Vespaイメージをプルして起動します:
+
+```bash
+$ docker pull vespaengine/vespa
+$ docker run --detach --name vespa --hostname vespa-container \
+  --publish 127.0.0.1:8080:8080 --publish 127.0.0.1:19071:19071 \
+  vespaengine/vespa
+```
+
+
+コンフィグレーション・サービス(デプロイAPI)の準備ができていることを確認します:
+
+```bash
+$ vespa status deploy --wait 300
+```
+
+
+この時点で、[ベクトルデータのダウンロード](#download-vector-data)からガイドを続けられます。
+
+### クリーンアップ
+完了したら、コンテナーを削除します:
+
+```bash
+$ docker rm -f vespa
+```

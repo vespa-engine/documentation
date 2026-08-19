@@ -1,0 +1,112 @@
+---
+title: "コンテナー"
+description: "これは Container サービスの運用ガイドです。"
+---
+
+<Frame>
+![Vespa の概要](/assets/img/vespa-overview.svg)
+</Frame>
+
+「コンテナー」は Vespa において複数の意味を持つ概念であることに注意してください - このガイドでは、青色で示されたサービス・インスタンスのノードを指します。
+
+[コンテナーのメトリクス](/ja/operations/metrics#container-metrics)を参照してください。
+
+## エンドポイント
+
+Container サービスは、クエリーとフィードのエンドポイントをホストします - 例:
+
+- [album-recommendation](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/app/services.xml) は、クエリーとフィードの\_両方\_を同じコンテナー・クラスター(すなわちサービス)に設定します:
+	```xml
+	<container id="default" version="1.0">
+	    <document-api />
+	    <search />
+	    <nodes>
+	        <node hostalias="node1" />
+	    </nodes>
+	</container>
+	```
+- [multinode-HA](https://github.com/vespa-engine/sample-apps/blob/master/examples/operations/multinode-HA/services.xml) は、クエリーとフィードを別々のコンテナー・クラスター(すなわちサービス)に設定します:
+	```xml
+	<container id="feed" version="1.0">
+	    <document-api />
+	    <document-processing />
+	    <nodes>
+	        <node hostalias="node4" />
+	        <node hostalias="node5" />
+	    </nodes>
+	</container>
+	<container id="query" version="1.0">
+	    <search />
+	    <nodes>
+	        <node hostalias="node6" />
+	        <node hostalias="node7" />
+	    </nodes>
+	</container>
+	```
+
+2 番目の例では `<document-api>` と `<search>` が別々のクラスターに配置されており、そのためエンドポイントが異なることに注目してください。
+
+<Warning>
+**重要:** 
+
+クエリー・エラーをトラブルシューティングする際に最初に確認すべきことは、エンドポイントが正しいこと、つまりクエリー・リクエストが正しいノードに到達していることです。クエリーは、コンテナー・クラスター内のいずれかのノードの[アクセス・ログ](/ja/operations/access-logging)に書き込まれます
+</Warning>
+
+## JConsole を使用した Vespa Java サービスの検査
+
+JConsole を使用して、実行中の各 Java Vespa サービスの状態を確認します。JConsole は Java 開発キットに同梱されています。JConsole を起動します:
+
+```bash
+$ jconsole <host>:<port>
+```
+
+ここで、ホストとポートによって、どのサービスにアタッチするかが決まります。セキュリティー上の理由から、JConsole ツールは外部マシンから Vespa サービスに直接アタッチできません。
+
+### Vespa インスタンスへの接続
+
+別のホストで実行中の Vespa サービスに JConsole をアタッチするには、JConsole ホストから Vespa サービス・ホストへのトンネルを作成します。これはたとえば、次のように 2 本の SSH トンネルをセットアップすることで実現できます:
+
+```bash
+$ ssh -N -L<port1>:localhost:<port1> <service-host> &
+$ ssh -N -L<port2>:localhost:<port2> <service-host> &
+```
+
+ここで、port1 と port2 はサービスの種類によって決まります(下記参照)。その後、次のようにして JConsole をサービスにアタッチできます:
+
+```bash
+$ jconsole localhost:<port1>
+```
+
+ポート番号:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>サービス</th>
+      <th>ポート 1</th>
+      <th>ポート 2</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>QRS</td>
+      <td>19015</td>
+      <td>19016</td>
+    </tr>
+    <tr>
+      <td>Docproc</td>
+      <td>19123</td>
+      <td>19124</td>
+    </tr>
+  </tbody>
+</table>
+
+最新のポート情報は次を実行して確認できます:
+
+`$` [`vespa-model-inspect`](/ja/reference/operations/self-managed/tools#vespa-model-inspect) `service <servicename>`
+
+出力される RMIREGISTRY と JMX の行が、それぞれ port1 と port2 を示します。
+
+### スレッド状態の確認
+
+各コンテナーの状態は、JConsole の Threads タブを押し、スレッド一覧から目的のスレッドを選択することで確認できます。注目すべきスレッドには、*search*、*connector*、*closer*、*transport*、*acceptor* があります(後の 4 つはバックエンド通信に使用されます)。

@@ -1,0 +1,585 @@
+---
+title: "Vespa サービングのチューニング"
+sidebarTitle: "機能チューニング"
+---
+
+このドキュメントでは、高いクエリーサービング性能を実現するためにアプリケーションの特定の機能をチューニングする方法を説明します。主にコンテント・クラスターの検索機能に焦点を当てています。コンテナー・クラスターのチューニングについては[コンテナーのチューニング](/ja/performance/container-tuning)を参照してください。[検索サイジングガイド](/ja/performance/sizing-search)は、アプリケーションデプロイメントの*スケーリング*について扱っています。
+
+## Attribute と index の使い分け
+
+[attribute](/ja/content/attributes) のドキュメントには、[indexing](/ja/reference/schemas/schemas#indexing) ステートメントで [attribute](/ja/reference/schemas/schemas#attribute) を使用すべき場合がまとめられています。attribute から index へ、およびその逆へ変更する[手順](/ja/reference/schemas/schemas#modifying-schemas)も参照してください。
+
+```js
+field timestamp type long {
+    indexing: summary | attribute
+}
+```
+
+文字列型フィールドに index と attribute の両方が設定されている場合、Vespa はデフォルトのマッチ `text` を使用してインデックスに対して検索およびマッチングを行います。すべての数値型フィールドとテンソルフィールドは、Vespa では attribute(インメモリ)フィールドです。
+
+## attribute フィールドに fast-search を使用すべき場合
+
+デフォルトでは、Vespa は *attribute* フィールドに対してポスティングリストのインデックス構造を構築しません。以下のように attribute 定義に *fast-search* を追加すると、インメモリの B-tree ポスティングリスト構造が追加され、一部のケース(すべてではありません。次の段落を参照)で検索が高速になります:
+
+```js
+field timestamp type long {
+    indexing:  summary | attribute
+    attribute: fast-search
+    rank:      filter
+}
+```
+
+Vespa が複数のクエリー項目を含むクエリーを実行するとき、クエリー実行プランを構築します。一時的な結果セットができるだけ小さくなるようにプランを最適化しようとします。このため、制約の強いクエリーツリー項目(マッチするドキュメントが少ないもの)が早い段階で評価されます。クエリー実行プランは、インデックスと B-tree の辞書を使用してクエリーツリーの各部分のヒット数見積もりを参照します。これらの辞書は、特定のタームが出現するドキュメント数を記録しています。
+
+しかし、[fast-search](/ja/content/attributes#fast-search) のない attribute フィールドにはヒット数の見積もりがないため、見積もりはドキュメント総数(すべてにマッチ)となり、クエリーツリー項目はクエリー評価の最後に移動されます。`fast-search` のない attribute フィールドを検索するクエリータームが 1 つだけのクエリーは、全ドキュメントの線形スキャンとなり、高コストになります:
+
+```text
+select * from sources * where range(timestamp, 0, 100)
+```
+
+しかし、このクエリータームが、より少ないドキュメントにマッチする別のタームと *and* で結合されている場合、そのタームがコストを決定するため、fast-search は不要になります。例:
+
+```text
+select * from sources * where range(timestamp, 0, 100) and uuid contains "123e4567-e89b-12d3-a456-426655440000"
+```
+
+attribute フィールドに fast-search を使用すべき場合の一般的な経験則は次のとおりです:
+
+- attribute フィールドが他のクエリータームなしで検索される場合は *fast-search* を使用する
+- attribute フィールドが総ヒット数を効率的に制限できる場合は *fast-search* を使用する
+
+attribute の fast-search 設定の変更は、再フィードを必要としない[ライブ変更](/ja/reference/schemas/schemas#modifying-schemas)であるため、有無による性能テストは低コストで行えます。*fast-search* の追加または削除には再起動が必要です。
+
+なお、ターム・ベースの[ランキング](/ja/basics/ranking)で使用されない *fast-search* 付きの *attribute* フィールドは、最適な性能のために *rank: filter* を使用すべきです。リファレンスの [rank: filter](/ja/reference/schemas/schemas#rank) を参照してください。
+
+[sorting.degrading](/ja/reference/api/query#sorting.degrading) を使用した、*fast-search 付きの単一値数値 attribute* でのソートの最適化も参照してください。
+
+## 字句検索のクエリー性能チューニング
+
+字句検索(またはキーワードベース検索)は、インデックスされたドキュメントに出現するとおりにクエリータームをマッチさせる手法です。単語の意味ではなく字句表現に依存し、[ハイブリッド検索](/ja/learn/tutorials/hybrid-search)で使用される 2 つの検索手法のうちの 1 つです。Vespa における字句検索は、文字列(テキスト)の [index](/ja/basics/schemas#document-fields) フィールドをクエリーすることで行われ、通常は [weakAnd](/ja/ranking/wand#weakand) クエリーオペレーターと [BM25](/ja/ranking/bm25) ランキングを使用します。
+
+以下のスキーマは、例として Wikipedia の記事を表現できる、*title* フィールドと *content* フィールドを持つシンプルな記事ドキュメントを表しています。ユーザーのクエリーが *title* フィールドと *content* フィールドの両方に対してマッチされるように、*default* フィールドセットが指定されています。*default* ランクプロファイルでは、BM25 ランキングが両フィールドのスコアを組み合わせます。さらに、*optimized* ランクプロファイルには、クエリー性能を向上させるためのチューニングパラメーターが指定されています:
+
+```js expandable
+schema article {
+    document article {
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field content type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+    }
+
+    fieldset default {
+        fields: title, content
+    }
+
+    rank-profile default {
+        first-phase {
+            expression: bm25(title) + bm25(content)
+        }
+    }
+
+    rank-profile optimized inherits default {
+        filter-threshold: 0.05
+        weakand {
+            stopword-limit: 0.6
+            adjust-target: 0.01
+        }
+    }
+}
+```
+
+以下は、*weakAnd* クエリーオペレーターと *optimized* ランクプロファイルを使用した、記事コレクションに対する質問応答クエリーの例です。質問応答クエリーは完全な文で書かれることが多く、その結果、多くのドキュメントに出現し、ランキングにおける重要度が低いストップワードを多く含む傾向があります。例えば、"the"、"in"、"are" のようなタームは、通常 60% 以上のドキュメントに出現します:
+
+```json
+{
+  "yql": "select * from article where userQuery()",
+  "ranking.profile": "optimized",
+  "query": "what are the three highest mountains in the world"
+}
+```
+
+このようなクエリーの評価コストは、主にマッチしたドキュメント数に対して線形です。*AND* オペレーターは最も効率的ですが、十分なマッチを返さず、制約が強すぎることがよくあります。*OR* オペレーターは制約が緩いものの、マッチが多くなりすぎるという問題があり、非常に高コストです。*weakAnd* オペレーターのコストはこの 2 つの中間に位置します。
+
+### ポスティングリスト
+
+マッチするドキュメントを見つけるために、クエリーオペレーターは各クエリータームに関連付けられた*ポスティングリスト*を使用します。ポスティングリストは転置インデックスの一部で、ドキュメントコレクション内でのタームの全出現箇所を含みます。タームを含むドキュメントのドキュメント ID と、それらのドキュメント内でのタームの位置(ランキング目的で使用)などの追加情報で構成されます。一般的なターム(ストップワードなど)の場合、ポスティングリストは非常に大きくなり、評価およびランキングでの使用が高コストになる可能性があります。それらを反復処理するには CPU 処理が必要で、MMAP でディスクからメモリにその一部をロードするには I/O 処理が必要です。後者は、ディスクインデックスのすべてのポスティングリストが物理メモリに収まらず、システムがそれらの一部をメモリに絶えずスワップイン/スワップアウトしなければならない場合に特に問題となり、高い I/O 待ち時間につながります。
+
+クエリー性能を向上させるために、*optimized* ランクプロファイルで使用されているように、以下のチューニングパラメーターが利用できます。これらは性能と品質のトレードオフを行うために使用されます。
+
+- **一般的なタームによりコンパクトなポスティングリストを使用する**: [filter-threshold](/ja/reference/schemas/schemas#filter-threshold) を 0.05 に設定すると、ドキュメントの 5% を超えて出現すると見積もられるすべてのタームが、完全なポスティングリストの代わりに[コンパクトなポスティングリスト(ビットベクター)](/ja/content/proton#index)で処理されます。これにより、BM25 ランキングに提供される情報が少なくなる(ブール値のシグナルのみが利用可能)代わりに、マッチングが高速になります。
+- **大きなポスティングリストの使用を完全に回避する**: [stopword-limit](/ja/reference/schemas/schemas#weakand-stopword-limit) を 0.6 に設定すると、ドキュメントの 60% を超えて出現すると見積もられるすべてのタームがストップワードと見なされ、クエリーおよびランキングから完全に除外されます。
+- ***weakAnd* が生成するヒット数を減らす**: [adjust-target](/ja/reference/schemas/schemas#weakand-adjust-target) を設定すると、ドキュメント中に非常に頻繁に出現するタームにのみマッチするドキュメントはヒットと見なされなくなります。これにより、これらのドキュメントに対する *first-phase* ランキングの計算も不要になり、*first-phase* ランキングがより複雑で高コストな場合に有益です。
+
+### 性能
+
+
+*optimized* ランクプロファイルで使用されているチューニングパラメーターは、テストにおいて性能と品質の良好なトレードオフを提供することが示されています。性能分析には [SQuAD](https://nlp.stanford.edu/pubs/rajpurkar2016squad.pdf)(Stanford Question Answering Dataset)クエリーを用いた Wikipedia データセットを使用し、品質への影響の分析には BEIR データセットの [trec-covid](https://ir.nist.gov/trec-covid/)、[MS MARCO](https://microsoft.github.io/msmarco/)、[nfcorpus](https://huggingface.co/datasets/BeIR/nfcorpus) を使用しました。
+
+例えば、*optimized* ランクプロファイルのチューニングパラメーターを使用することで、Wikipedia データセットでは測定可能な品質低下なしにクエリー性能が 3 倍になりました。詳細はブログ記事 [Tripling the query performance of lexical search](https://blog.vespa.ai/tripling-the-query-performance-of-lexical-search/) を参照してください。性能と品質の適切なトレードオフを見つけるために、実際のデータセットでテストを実施すべきであることに注意してください。
+
+## ハイブリッド TAAT / DAAT クエリー評価
+
+Vespa は転置インデックス上での**ハイブリッド**クエリー評価をサポートしており、*TAAT* と *DAAT* の評価を組み合わせることで、両方のクエリー評価手法の長所を活かします。ハイブリッドはデフォルトでは有効になっておらず、実行時のクエリーパラメーターによってトリガーされます。
+
+- **TAAT:** *Term At A Time* は、クエリータームごとに 1 つずつドキュメントをスコアリングします。クエリータームごとにポスティングイテレーター全体を読み取ることができ、ドキュメントのスコアが累積されます。ポスティングデータがポスティングリストイテレーターをランダムにシークすることなくシーケンシャルに読み取られるため、CPU キャッシュに優しい方式です。欠点は、*TAAT* ではターム・ベースのランキング関数がタームスコアの線形和に制限されることです。この欠点が、ほとんどの検索エンジンが *DAAT* を使用する理由の 1 つです。
+- **DAAT:** *Document At A Time* は、ドキュメントを 1 件ずつ完全にスコアリングします。これはタームのポスティングリストで複数回のシークを必要とし、CPU キャッシュには不利ですが、非線形のランキング関数を使用できます。
+
+一般的に、Vespa は上記の理由により、*TAAT*(term-at-a-time)ではなく *DAAT*(document-at-a-time)のクエリー評価を行います。
+
+ランキング(スコア計算)とマッチング(ドキュメントがクエリーロジックにマッチするか)は、最初にマッチを見つけて後のフェーズでランキングスコアを計算するというような、完全に分離された 2 つのフェーズではありません。*DAAT* を使用する場合、マッチングと *first-phase* のスコア計算はインターリーブされます。
+
+*first-phase* のランキングスコアは、ヒットがクエリー制約を満たした時点で割り当てられます。その時点で、タームイテレーターはそのドキュメント ID に位置しており、タームのポスティングリストから追加データをアンパックできます。例えば、[nativeRank](/ja/ranking/nativerank) ランキングフィーチャーで使用されるターム近接スコアリングでは、ドキュメント内のタームの位置のアンパックも必要になります。
+
+ハイブリッドクエリー評価では、ターム・ベースのランキングに使用されない、クエリーツリー全体のサブブランチに対して *TAAT* が使用されます。
+
+*TAAT* の使用は、クエリーツリーが大きく複雑で、クエリーツリーの一部のみがターム・ベースのランキングに使用される場合に、クエリーマッチングを大幅に(最大 30-50%)高速化できます。*DAAT* を必要とするクエリーツリーのブランチの例は、[bm25 や nativeRank](/ja/reference/ranking/rank-features) のようなテキストランキングフィーチャーを使用するものです。*TAAT* を扱えるランキングフィーチャーのリストは長いですが、[attribute またはテンソル](/ja/ranking/tensor-user-guide)のフィーチャーのみを使用する場合は、ツリー全体を *TAAT* で評価できます。
+
+例えば、エンドユーザーからのユーザーテキストクエリーがあるクエリーでは、*userQuery()* の YQL 構文を使用し、それをアプリケーションレベルの制約と組み合わせることができます。クエリー内のアプリケーションレベルのフィルター制約は、*TAAT* の使用による恩恵を受けられます。以下のドキュメントスキーマがあるとします:
+
+```js expandable
+search news {
+    document news {
+        field title type string {}
+        field body type string{}
+        field popularity type float {}
+        field market type string {
+            rank:filter
+            indexing: attribute
+            attribute: fast-search
+        }
+        field language type string {
+            rank:filter
+            indexing: attribute
+            attribute: fast-search
+        }
+    }
+    fieldset default {
+        fields: title,body
+    }
+    rank-profile text-and-popularity {
+        first-phase {
+            expression: attribute(popularity) + log10(bm25(title)) + log10(bm25(body))
+        }
+    }
+}
+```
+
+この場合、ランクプロファイルは 2 つのランキングフィーチャー、すなわち popularity attribute と userQuery() の [bm25](/ja/ranking/bm25) スコアのみを使用します。これらは title と body を含むデフォルトのフィールドセットで使用されます。*market* も *language* もランキング式では使用されていないことに注目してください。
+
+このクエリー例では、language 制約と market 制約があり、language と market の両方が OR を使用して有効な値の長いリストでクエリーされています。つまり、ドキュメントは market 制約のいずれかと language 制約のいずれかにマッチすべきということです:
+
+```json
+{
+    "hits": 10,
+    "ranking.profile": "text-and-popularity",
+    "yql": "select * from sources * where userQuery() and
+      (language contains \"en\" or language contains \"br\") and
+      (market contains \"us\" or market contains \"eu\" or market contains \"apac\" or market contains \"..\" )",
+    "query": "cat video",
+    "ranking.matching.termwiselimit": 0.1
+}
+```
+
+クエリーツリー内の language 制約と market 制約はランキングスコアに使用されないため、クエリーツリーのその部分は *TAAT* を使用して評価できます。大きなセットフィルターで最も効率的に検索する方法については、[マルチルックアップ・セットフィルタリング](#multi-lookup-set-filtering)も参照してください。サブツリーの結果はビットベクターとして *DAAT* クエリー評価に渡され、全体の評価を大幅に高速化できる可能性があります。
+
+ハイブリッド *TAAT* を有効にするには、リクエストパラメーターとして `ranking.matching.termwiselimit=0.1` を渡します。この制限値を変更することで、性能への影響を評価できます。制限値を 0 に設定すると termwise 評価が強制され、性能を損なう可能性があります。
+
+上記のパラメーターを追加することで、ハイブリッド評価の使用が検索性能を向上させるかどうかを評価できます。制限値は、クエリーツリー全体のヒット割合の見積もりと比較されます。ヒット割合の見積もりが制限値より高い場合、termwise 評価がクエリーのサブブランチの評価に使用されます。
+
+## uuid のインデックス
+
+[string](/ja/reference/schemas/schemas#string) 型フィールドを `index` で設定する場合、デフォルトの[マッチ](/ja/reference/schemas/schemas#match)モードは `text` です。これは、Vespa がコンテンツを[トークナイズ](/ja/linguistics/linguistics-opennlp#tokenization)し、トークンをインデックスすることを意味します。
+
+[Universally unique identifier](https://en.wikipedia.org/wiki/Universally_unique_identifier)(UUID)の文字列表現は、32 桁の 16 進数(基数 16)をハイフンで区切られた 5 つのグループに分けたもので、8-4-4-4-12 の形式、合計 36 文字(32 の英数字と 4 つのハイフン)です。
+
+例: 上記のドキュメント定義で `123e4567-e89b-12d3-a456-426655440000` をインデックスすると、Vespa はこれを 5 つのトークン `[123e4567,e89b,12d3,a456,426655440000]` にトークナイズします。それぞれが独立してマッチされる可能性があり、誤ったマッチにつながる恐れがあります。
+
+これを避けるには、モードを [match: word](/ja/reference/schemas/schemas#word) に変更し、uuid 全体を *1 つ*のトークン/単語として扱います:
+
+```js
+field uuid type string {
+    indexing: summary | index
+    match:    word
+    rank:     filter
+}
+```
+
+さらに、`uuid` を [rank: filter](/ja/reference/schemas/schemas#rank) フィールドとして設定します。これにより、検索およびランキング時にこのフィールドが可能な限り効率的に表現されます。`rank:filter` の挙動は、[カスタム Searcher](/ja/applications/searchers) の `com.yahoo.prelude.query.Item.setRanked()` によって、クエリー時にクエリー項目ごとにトリガーすることもできます。
+
+## 親子関係と検索性能
+
+親ドキュメントタイプからインポートされた attribute フィールド(`fast-search` 付き)を検索する場合、追加の間接参照が発生しますが、インポートされたフィールドが `rank:filter` で定義され、[visibility-delay](/ja/reference/applications/services/content#visibility-delay) が 0 より大きく設定されていれば、これを大幅に削減できます。[rank:filter](/ja/reference/schemas/schemas#rank) の設定はポスティングリストの粒度に影響し、`visibility-delay` は子ドキュメントと親ドキュメント間の間接参照のキャッシュを有効にします。
+
+## ランキングと ML モデル推論
+
+Vespa は、クエリーがノード/検索スレッドごとに取得するヒット数、つまり first-phase ランキング関数によって評価される必要があるヒット数に応じて[スケール](/ja/performance/sizing-search)します。詳細は[段階的ランキング](/ja/ranking/phased-ranking)を参照してください。段階的ランキングにより、first phase よりも second phase のランキングステップでより多くのリソースを使用できます。first phase は十分な再現率(上位 k 件に関連ドキュメントを取得すること)の確保に集中し、second phase は精度をチューニングすべきです。
+
+[テキスト検索](/ja/ranking/nativerank)アプリケーションでは、[WAND](/ja/ranking/wand) クエリーオペレーターの使用を検討してください。WAND は、内部スコアリング関数を使用して、効率的に(サブリニアで)上位 k 件のドキュメントを見つけることができます。
+
+## マルチルックアップ - セットフィルタリング
+
+実世界の検索ユースケースの多くは、セットフィルターによる絞り込みやフィルタリングを中心に構築されています。ドキュメント内のフィールドの内容がクエリーのセット内のいずれかの値にマッチする場合、そのドキュメントを取得すべきです。例えば、ユーザーのセットに対するデータ検索:
+
+```sql
+select * from sources * where user_id = 1 or user_id = 2 or user_id = 3 or user_id = 3 or user_id = 4 or user_id 5 ...
+```
+
+同一フィールドに対する OR フィルターには、代わりに [in クエリーオペレーター](/ja/reference/querying/yql#in)の使用を強く推奨します。セットフィルタリングにおいて、単純な OR よりもはるかに優れた性能を発揮します:
+
+```sql
+select * from sources * where user_id in (1, 2, 3, 4, 5)
+```
+
+<Note>
+**注:** 
+
+大きなセットはクエリーの YQL パースを遅くする可能性があります。セットをコンパクトかつ性能面で効率的に送信する方法については、[パラメーター置換](/ja/reference/querying/yql#parameter-substitution)を参照してください。
+</Note>
+
+上記のように他のより強いクエリータームなしで使用される attribute フィールドには、`fast-search` と `rank: filter` を設定すべきです。フィールドの一意な値の数が多い場合は、`btree` の代わりに `hash` 辞書を使用する方が高速です。`btree` は、`fast-search` 付きの attribute フィールドの辞書のデフォルトのデータ構造です:
+
+```sql
+field user_id type long {
+    indexing:   summary | attribute
+    attribute:  fast-search
+    dictionary: hash
+    rank:       filter
+}
+```
+
+`string` フィールドの場合、`hash` 辞書を使用するには [match](/ja/reference/schemas/schemas#match) 設定も含める必要があります:
+
+```sql
+field user_id_str type string {
+    indexing:   summary | attribute
+    attribute:  fast-search
+    match:      cased	
+    rank:       filter
+    dictionary { 
+        hash
+        cased
+    }
+}
+```
+
+辞書に 1000 万の一意な user\_id があり、クエリーごとに 1000 ユーザーを検索する場合、*btree* 辞書では 1000 回のルックアップ × log(10M) になるのに対し、*hash* ベースでは 1000 回のルックアップ × O(1) になります。それでも、*btree* 辞書は [match](/ja/reference/schemas/schemas#match) 設定の面でより高い柔軟性を提供します。
+
+`in` クエリーによるセットフィルタリングのアプローチは、ハイブリッド *TAAT* 評価と組み合わせて使用することで、さらに性能を向上させることができます。[ハイブリッド TAAT/DAAT](#hybrid-taat-daat) のセクションを参照してください。
+
+[dictionary スキーマリファレンス](/ja/reference/schemas/schemas#dictionary)も参照してください。
+
+<Note>
+**注:** 
+
+ほとんどのユースケースでは、辞書の走査に費やされる時間は、クエリー評価(マッチングとランキング)に費やされる時間と比較して無視できる程度です。クエリーの選択性が非常に高い場合、例えば Vespa をランキングサポート付きのキーバリュー・ルックアップストアとして使用する場合は、辞書の走査時間が大きくなることがあります。
+</Note>
+
+## ドキュメントサマリー - ヒット
+
+コンテントノードの少ないコンテント・クラスターに対して、クエリーが多数(数千件)のヒットを要求する場合、[サマリーキャッシュ](/ja/performance/caches-in-vespa)を増やすことでレイテンシーとコストを削減できる可能性があります。
+
+[明示的なドキュメントサマリー](/ja/querying/document-summaries)を使用すると、ドキュメントサマリーで参照されるフィールドが**すべて** `attribute` で定義されている場合、Vespa はメモリのみでのサマリー取得をサポートできます。専用のインメモリサマリーは、(潜在的な)ディスク読み込みとサマリーチャンクの解凍を回避します。Vespa のドキュメントサマリーは、圧縮された[チャンク](/ja/reference/applications/services/content#summary-store-logstore-chunk)を使用して保存されます。[ヒット取得に関する実践的な検索性能ガイド](/ja/performance/practical-search-performance-guide#hits-and-summaries)も参照してください。
+
+## ブール値、数値、テキストの attribute
+
+attribute フィールドタイプを使用する場合、性能を考慮した経験則は次のとおりです:
+1. フィールドがブール値(最大 2 値)の場合は boolean を使用する
+2. 値のセットがある場合は文字列 attribute を使用する - 一意な文字列のみが保存される
+3. 範囲検索には数値 attribute を使用する
+4. データが本当に数値である場合は数値 attribute を使用する。数値を文字列の数値で置き換えない
+
+
+詳細は [attributes](/ja/content/attributes) を参照してください。
+
+## テンソルランキング
+
+大きなテンソルではランキングのワークロードが大きくなる可能性があります。各クエリーの潜在的なメモリコストと計算コストの両方を理解することが重要です。
+
+### メモリ
+
+`tensor<double>(x[1000])` のように、それぞれ 8 バイトの値を 1000 個持つ 2 つのテンソルのドット積を考えます。1 つのクエリーテンソルと 1 つのドキュメントテンソルがある場合、ドット積は `sum(query(tensor1) * attribute(tensor2))` です。理論上のメモリ帯域幅の上限が 68 GB/秒である Haswell CPU アーキテクチャーを想定すると、68 GB/秒 / 8 KB = 900 万ランキング評価/秒となります。つまり、100 万件のインデックスでは、メモリバウンドになるまで毎秒 9 クエリーということです。
+
+より小さな[セル値タイプ](#cell-value-types)の使用については以下を参照し、[量子化](https://blog.vespa.ai/from-research-to-production-scaling-a-state-of-the-art-machine-learning-system/#model-quantization)についてもお読みください。
+
+### 計算
+
+少なくとも 1 つのマップ次元を持つテンソルタイプ(スパースまたは混合テンソル)を使用する場合、[attribute: fast-rank](/ja/reference/schemas/schemas#attribute) を使用して、より多くのメモリを使用する代わりに、ランキング式評価向けにテンソル attribute を最適化できます。ベンチマークで `fast-rank` による大幅なレイテンシー改善が示される場合、これは良いトレードオフです。
+
+テンソルを使用するランキング関数を最適化する際は、一時オブジェクトを避けるようにしてください。[Tensor Playground](https://docs.vespa.ai/playground/) を使用して式が何にマップされるかを評価し、実行詳細を使用して詳細なステップを一覧表示してください。以下に例があります。
+
+### 多段階ランキング
+
+メモリと計算リソースの両方を節約するには、[多段階ランキング](/ja/ranking/phased-ranking)を使用します。要するに、コストの低いランキング評価で最も有望な候補を見つけ、その後、上位 k 件の候補に対して高精度な評価を行います。
+
+ブログ記事シリーズ [Building Billion-Scale Vector Search](https://blog.vespa.ai/building-billion-scale-vector-search/) は良い読み物です。
+
+### セル値タイプ
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>タイプ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>double</td>
+      <td>デフォルトのテンソルセルタイプは 64 ビット浮動小数点の <code>{`double`}</code> 形式です。高いメモリ使用量とやや遅い計算という代償を払って、最高の精度を提供します。より小さな値タイプを使用すると、精度と引き換えに性能が向上します。アプリケーションをスケールする前に、以下のいずれかのセルタイプへの変更を検討してください。</td>
+    </tr>
+    <tr>
+      <td>float</td>
+      <td>32 ビット浮動小数点形式の <code>{`float`}</code> は、プロダクション向けにスケールする際、通常すべてのテンソルで使用すべきです。TensorFlow のような一部のフレームワークは 32 ビット float を好むことに注意してください。1000 次元のベクトル <code>{`tensor<float>(x[1000])`}</code> は、テンソル値ごとに約 4K のメモリを使用します。</td>
+    </tr>
+    <tr>
+      <td>bfloat16</td>
+      <td>このタイプは通常の 32 ビット float と同じ範囲を持ちますが、精度は 8 ビットのみで、「非可逆圧縮された float」と考えることができます。<a href="https://en.wikipedia.org/wiki/Bfloat16_floating-point_format" aria-label="Wikipedia">Wikipedia</a> を参照してください。メモリ(またはメモリ帯域幅)が懸念される場合は、最も容量を消費するテンソルを <code>{`bfloat16`}</code> セルタイプに変更してください。このタイプを使用する前に、データの慎重な分析が必要です。<br/><br/> 計算を行う際、<code>{`bfloat16`}</code> は 32 ビット float であるかのように振る舞いますが、サイズが小さい分、潜在的な計算オーバーヘッドが伴います。ほとんどの場合、実際の計算が行われる前に <code>{`bfloat16`}</code> を 32 ビット float に変換する必要があり、余分な変換ステップが追加されます。<br/><br/> 場合によっては、<code>{`bfloat16`}</code> セルを持つテンソルは、セルが同じタイプの場合にのみハードウェアアクセラレーションされる一部の組み込み最適化(行列乗算など)をバイパスしてしまうことがあります。これを避けるには、<a href="/ja/reference/ranking/ranking-expressions#cell_cast" aria-label="cell_cast">cell_cast</a> テンソル演算を使用して、より高コストな演算を行う前にセルが正しいタイプであることを確認してください。</td>
+    </tr>
+    <tr>
+      <td>int8</td>
+      <td>機械学習を使用してデータ量子化を伴うモデルを生成する場合、-128 から +127 までの範囲のみの符号付き整数である <code>{`int8`}</code> セル値タイプを対象にできます。これも Vespa のテンソルフレームワークでは「範囲が限定された非可逆圧縮の float」のように扱われ、計算が行われる際には 32 ビット float であるかのような結果を返します。このタイプはブール値(0 または 1)を表現する場合にも適しています。<br/><br/><Note>  &#42;&#42;注:&#42;&#42;<br/><br/> <code>{`int8`}</code> セルの入力が直接表現できない場合、結果のセル値は未定義になるため、<code>{`[-128,127]`}</code> の範囲の数値のみを入力するように注意してください。 </Note><br/><br/> <a href="/ja/reference/schemas/schemas#distance-metric" aria-label="hamming distance">ハミング距離</a>による Nearest-Neighbor 検索のためにバイナリデータを表現する <code>{`int8`}</code> の使用も可能です。使用例は <a href="https://blog.vespa.ai/billion-scale-knn/" aria-label="billion-scale-knn">billion-scale-knn</a> を参照してください。&gt;</td>
+    </tr>
+  </tbody>
+</table>
+
+### 内積/外積
+
+以下は、内積/外積と実行詳細の入門です:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>tensor a</th>
+      <th>tensor b</th>
+      <th>積</th>
+      <th>合計</th>
+      <th>コメント</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>tensor(x[3]):[1.0, 2.0, 3.0]</td>
+      <td>tensor(x[3]):[4.0, 5.0, 6.0]</td>
+      <td>tensor(x[3]):[4.0, 10.0, 18.0]</td>
+      <td>32</td>
+      <td><a href="https://docs.vespa.ai/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEMSybIiFIAXA2gZywAnABQAPRAGYAugEo4iAIzEwAJmXTIrCAF9W20hmrlcDIgbaU0WugwBGLGpg5Qe-IWMmz5AFmUBWZQA2KU1HXQx9ViNME04zawp8aPJ6TlhzR3YGRgAqe2tw1EjDBNjCBwsk6whIVKhoAFdaAGMKzOdIPgaAW2Fc2xlQmkKdFCkQbSA" aria-label="Playground example">Playground の例</a>。次元名とサイズが両方のテンソルで同じです。これはスカラー結果を返す内積です。</td>
+    </tr>
+    <tr>
+      <td>tensor(x[3]):[1.0, 2.0, 3.0]</td>
+      <td>tensor(y[3]):[4.0, 5.0, 6.0]</td>
+      <td>tensor(x[3],y[3]):[   [4.0, 5.0, 6.0],   [8.0, 10.0, 12.0],   [12.0, 15.0, 18.0] ]</td>
+      <td>90</td>
+      <td><a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEMSybIiFIAXA2gZywAnABQAPRAGYAugEo4iAIzEwAJmXTIrCAF9W20hmrlcDIgbaU0WugwBGLGpg5Qe-IWMmz5AFmUBWZQA2KU1HXQx9ViNME04zawp8aPJ6TlhzR3YGRgAqe2tw1EjDBNjCBwsk6whIVKhoAFdaAGMKzOdIPgaAW2Fc2xlQmkKdFCkQbSA" aria-label="Playground example">Playground の例</a>。次元サイズは両方のテンソルで同じですが、次元名が異なります -&gt; これは外積で、結果は 2 次元テンソルです。</td>
+    </tr>
+    <tr>
+      <td>tensor(x[3]):[1.0, 2.0, 3.0]</td>
+      <td>tensor(x[2]):[4.0, 5.0]</td>
+      <td>undefined</td>
+      <td></td>
+      <td><a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEMSybIiFIAXA2gZywAnABQAPRAGYAugEo4iAIzEwAJmXTIrCAF9W20hmrlcDIgbaU0WugwBGLGpg5Qe-IWMQrZ8gCzKArFKajroY+qxGmCacZtYU+JHk9Jyw5o7sDIwAVPbWoajhhnHRhA4WCdYQkMlQ0ACutADGZenOkHx1ALbC2bYywTT5OihSINpAA" aria-label="Playground example">Playground の例</a>。同じ次元だが長さの異なる 2 つのテンソル -&gt; 未定義。</td>
+    </tr>
+    <tr>
+      <td>tensor(x[3]):[1.0, 2.0, 3.0]</td>
+      <td>tensor(y[2]):[4.0, 5.0]</td>
+      <td>tensor(x[3],y[2]):[   [4.0, 5.0],   [8.0, 10.0],   [12.0, 15.0] ]</td>
+      <td>54</td>
+      <td><a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEMSybIiFIAXA2gZywAnABQAPRAGYAugEo4iAIzEwAJmXTIrCAF9W20hmrlcDIgbaU0WugwBGLGpg5Qe-IcICeiFbPkAWZQBWKU1HXQx9ViNME04zawp8aPJ6TlhzR3YGRgAqe2tw1EjDBNjCBwsk6whIVKhoAFdaAGMKzOdIPgaAW2Fc2xlQmkKdFCkQbSA" aria-label="Playground example">Playground の例</a>。名前と次元が異なる 2 つのテンソル -&gt; これは外積で、結果は 2 次元テンソルです。</td>
+    </tr>
+  </tbody>
+</table>
+
+内積 - 一時オブジェクトなしの `DenseDotProductFunction` に最適化されていることに注目してください:
+
+```json
+[ {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::DenseDotProductFunction",
+    "symbol": "vespalib::eval::(anonymous namespace)::my_cblas_double_dot_product_op(vespalib::eval::InterpretedFunction::State&, unsigned long)"
+  } ]
+```
+
+外積は、テンソル乗算(`DenseSimpleExpandFunction`)にパースされ、その後に `Reduce` 演算が続きます:
+
+```json
+[ {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::DenseSimpleExpandFunction",
+    "symbol": "void vespalib::eval::(anonymous namespace)::my_simple_expand_op<double, double, double, vespalib::eval::operation::InlineOp2<vespalib::eval::operation::Mul>, true>(vespalib::eval::InterpretedFunction::State&, unsigned long)"
+  },
+  {
+    "class": "vespalib::eval::tensor_function::Reduce",
+    "symbol": "void vespalib::eval::instruction::(anonymous namespace)::my_full_reduce_op<double, vespalib::eval::aggr::Sum<double> >(vespalib::eval::InterpretedFunction::State&, unsigned long)"
+  } ]
+```
+
+内積はマップテンソルでも実行できることに注意してください([Playground の例](https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEMSybIiFIAXA2gZywAnABQAPYAF8AlHGCiAjHHnEwogExw1K0QGY4OiZFYQJrCaQzVyuBkQttKaY3QYAjFjUwcoPfkLGSMnKKACwAdAAM2hoArJHaegBskYbOphjmrFaYNpx2zhT42eT0nACWtLQEgjiCWAAmAK4AxlwenoQMjABU7mlmKAC6IBJAA)):
+
+```json
+[ {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::SparseFullOverlapJoinFunction",
+    "symbol": "void vespalib::eval::(anonymous namespace)::my_sparse_full_overlap_join_op<double, vespalib::eval::operation::InlineOp2<vespalib::eval::operation::Mul>, true>(vespalib::eval::InterpretedFunction::State&, unsigned long)"
+  } ]
+```
+
+### マップドルックアップ
+
+`sum(model_id * models, m_id)`
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>テンソル名</th>
+      <th>テンソルタイプ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>model_id</td>
+      <td><code>{`tensor(m_id{})`}</code></td>
+    </tr>
+    <tr>
+      <td>models</td>
+      <td><code>{`tensor(m_id{}, x[3])`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+マップ次元を使用してインデックス付きテンソルを選択することは、[マップドルックアップ](/ja/ranking/tensor-examples#using-a-tensor-as-a-lookup-structure)と見なせます。これはスライスの作成に似ていますが、単一の `MappedLookup` に最適化されます。[Tensor Playground](https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gFssATAgGwH0BLFksmpCIJIAFwK0AzlgBOACkY8WwAL4BKOMEYAmOAEYAdAAYVkARBUCVpDNXK4GRG4MppzdBszbtJ-GpmEocSlZBSVVYgAPRABmAF0NLT04RAAWY2IwAFYMsAA2YzjMnRSAdlyADlyATkLTd0sMawE7TAcRJ3cKfFbyehFJAFdGBVYOJTAAKjAvDklipTU-f0IGIZHZrl4pmbGfBd4lhqtnCF6odtXTzFdziEh+qEl2bgBjTpXVkVHvSUnNxZaJRwHT1fyNVDNWxdS5CZbkW7ue6PJgAQxwOAILE47CwWAA1oMcJwZFjBu94YJApBSSxyQQfnN-nslMR1sRFIczOCrCg4iAVEA) の例を参照してください。
+
+```json
+[ {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::MappedLookup",
+    "symbol": "void vespalib::eval::(anonymous namespace)::my_mapped_lookup_op<double>(vespalib::eval::InterpretedFunction::State&, unsigned long)"
+  } ]
+```
+
+### 3 方向ドット積 - マップド
+
+`sum(query(model_id) * model_weights * model_features)`
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>テンソル名</th>
+      <th>テンソルタイプ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>query(model_id)</td>
+      <td><code>{`tensor(model{})`}</code></td>
+    </tr>
+    <tr>
+      <td>model_weights</td>
+      <td><code>{`tensor(model{}, feature{})`}</code></td>
+    </tr>
+    <tr>
+      <td>model_features</td>
+      <td><code>{`tensor(feature{})`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+3 方向マップド(スパース)ドット積: [Tensor Playground](https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEcBXAgJwE8AKAWywBMCAGwD6AS34BKEmRqQiCSABcCtAM5Y2AHmhCsAQyUA+XgOHAAvpLjAeABjgBGC5FkQLsi6QzVyuBkTecpRobnQMfIKiAO4EYgDmABZKajI0mApQKuqaOnqGJpHmXmDQBIbMbASW1sBgADq0tmZCcPbEpeVKlQRw0HYWTsSNzVFtdh1lFVV9znAATMNNRa08jpNdPX0DcADMS6PCbeud073QcwAsYC5hHhhesr6Y-oqBYRT4z+T0iisiU26VVSQXS8gY2Q02l0BmMXEBPRqNn6cAArJNHHAAGy3dL3VCPHwfV6ENLBL5hCCQX5QFjsbj-CSSMAAKjA-1iCWSalZ7JaAM2wLJYMyTFYnFMUXEUl5HLiSRSsv5CKFd08oNCYJJ4I1VJC33CijUzB4XDpEsZMrZcq5iutysFBDU0l1GQYxtN5oZ-KZSqlnIVPPtUpVTukaoeKAAuiALEA)
+
+```json
+[ {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::Sparse112DotProduct",
+    "symbol": "void vespalib::eval::(anonymous namespace)::my_sparse_112_dot_product_op<float>(vespalib::eval::InterpretedFunction::State&, unsigned long)"
+  } ]
+```
+
+### 3 方向ドット積 - 混合
+
+`sum(query(model_id) * model_weights * model_features)`
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>テンソル名</th>
+      <th>テンソルタイプ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>query(model_id)</td>
+      <td><code>{`tensor(model{})`}</code></td>
+    </tr>
+    <tr>
+      <td>model_weights</td>
+      <td><code>{`tensor(model{}, feature[2])`}</code></td>
+    </tr>
+    <tr>
+      <td>model_features</td>
+      <td><code>{`tensor(feature[2])`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+3 方向マップド(混合)ドット積: [Tensor Playground](https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gEcBXAgJwE8AKAWywBMCAGwD6AS34BKEmRqQiCSABcCtAM5Y2AHmhCsAQyUA+XgOHAAvpLjAeABjgBGC5FkQLsi6QzVyuBkTecpRobnQMfIKiAO4EYgDmABZKajI0mApQKuqaOnqGJpHmXmDQBIbMbASIAEwAutbAYAA6tLZmQnD2xKXlSpUEcHYWTsSt7VFddj1lFVVOIzVjbUWdPI4zfQNDIwDMyxPCXRu9c4POcAAsYC5hHhhesr6Y-oqBYRT4z+T0iqsis36VVSQXS8gY2Q02l0BmMXEBA1qDTgiAArMQAGx1Vzpe6oR4+D6vQhpYJfMIQSC-KAsdjcf4SSRgABUYH+sQSyTULLZHQBW2BpLBmSYrE4pii4ikPPZcSSKRlfIRgrunlBoTBxPB6spIW+4UUamYPC4tPFDOlrNlnIVVqVAoIamkOoyDCNJrN9L5jMVko58u5dslysd0lVDxQdRAFiAA)
+
+```json
+[ {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::tensor_function::Inject",
+    "symbol": "<inject_param>"
+  },
+  {
+    "class": "vespalib::eval::Mixed112DotProduct",
+    "symbol": "void vespalib::eval::(anonymous namespace)::my_mixed_112_dot_product_op<float>(vespalib::eval::InterpretedFunction::State&, unsigned long)"
+  } ]
+```

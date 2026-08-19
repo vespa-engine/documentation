@@ -1,0 +1,177 @@
+---
+title: "WAND: 高速化されたOR検索"
+description: "このドキュメントでは、OR検索に類似した検索を高速化するためのWeak Andアルゴリズムの使い方について説明します。"
+---
+
+WANDアルゴリズムの詳細は、Andrei Z. Broderらによる [Efficient Query Evaluation using a Two-Level Retrieval Process (PDF)](https://www.researchgate.net/profile/David-Carmel-3/publication/221613425_Efficient_query_evaluation_using_a_two-level_retrieval_process/links/02bfe50e6854500153000000/Efficient-query-evaluation-using-a-two-level-retrieval-process.pdf) に記載されています:
+
+> We have determined that our algorithm significantly reduces the total number of full evaluations by more than 90%, almost without any loss in precision or recall. At the heart of our approach there is an efficient implementation of a new Boolean construct called WAND or Weak AND that might be of independent interest
+
+Vespaには、WAND動的プルーニングアルゴリズムの2つの異なる実装があります。どちらの実装も、クエリー内のいずれかのタームにマッチするすべてのドキュメントを網羅的にスコアリングすることなく、スコアが最も高い上位k件のドキュメントを取得しようとします。
+
+[MS Marco Passage Ranking](https://github.com/microsoft/MSMARCO-Passage-Ranking) のクエリーセットにあるクエリー例 ***is cdg airport in main paris*?** を考えてみましょう。このクエリーを880万件のパッセージ・ドキュメントに対してORで実行すると、*8,841,823* 件のドキュメントのうち *7,926,256* 件を取得して順位付けすることになります。これは言い換えると、コーパス全体の89%を[ランキング](/ja/ranking/ranking-intro)していることになります。すべてのドキュメントを総当たりで評価する(100%)のに近い状態です。
+
+代わりにブーリアン検索ロジックをANDに変更すると、取得できるのはわずか2件のドキュメントとなり、関連するドキュメントを取得できません。
+
+WANDアルゴリズムは、ORを使って候補ドキュメントの探索を開始しつつ、順位付けされるドキュメントの数を制限することでこの問題に対処しようとします。これにより、総当たりのORと同じ、またはほぼ同じ上位k件の結果を返しながら、レイテンシーとリソース使用量(コスト)の両方を節約できます。この例では、*K* すなわち *totalTargetHits* を1000にしてWANDを使用すると、完全に順位付けされるのは196,900件のドキュメントだけです。これは、*7,926,256* 件のドキュメントを取得して順位付けする網羅的なOR検索に比べて大幅な改善であり、それと同時に網羅的なOR検索と同じ結果を取得できます。
+
+では、何が問題なのでしょうか?なぜWANDアルゴリズムを常に使わないのでしょうか?問題は、内部のwandスコアリング関数が各クエリータームのランキング寄与の線形和にしかなり得ないことと、([ランキング式](/ja/ranking/ranking-expressions-features)によって)スコア計算をオーバーライドできないことです。VespaにおけるどちらのWAND実装でも、内部スコアリング関数は、rank profileの `first-phase` ランキング式によって制御されるランキング式のようにはオーバーライドできません。ユーザーが制御できるのは、クエリーおよびドキュメント内のターム(または一般にフィーチャー)の重みだけです。重みは調整可能であり、Vespaの両方のWAND実装は、最大内積(inner dot product)が最も高い上位k件のドキュメントを計算しようとします。WANDは、すべての候補に対して総当たりで網羅的に計算することなく、疎ベクトル空間における最大内積検索を実行するものと見なせます。
+
+Vespaには、WANDアルゴリズムを実装した2つのクエリー演算子、`weakAnd` と `wand` があります。この2つのクエリー演算子には異なる特性があります:
+
+- `weakAnd` は、単一値のインデックス付き文字列フィールド(または複数のインデックス付き文字列フィールドを組み合わせたfieldset)向けに設計されています。`weakAnd` は言語処理(トークナイゼーションとステミング)と統合されています。内部スコアリングではターム単位の逆文書頻度(inverted document frequency)とクエリータームの重みを使用しますが、スコアリングにドキュメント内のターム頻度は使用しません。fieldsetを検索する場合、文書頻度はすべてのメンバー・フィールドにわたって集約されるため、*"the"* のような一般的なタームがクエリーからプルーニングされることがあります — [このFAQエントリー](/ja/learn/faq#why-can-common-words-like-the-hurt-recall-and-collapse-significance-across-a-fieldset)を参照してください。
+- `wand` クエリー演算子は、トークナイゼーション、ステミング、正規化のような言語処理とは統合されておらず、ユーザー(あなた)がクエリーのフィーチャーとその重み、およびドキュメントのフィーチャーとその重みを指定する必要があります。フィーチャーは文字列である必要はなく、文字列から数値型へマッピングすることを推奨します。たとえば、事前学習済み言語モデル [BERT](https://en.wikipedia.org/wiki/BERT_\(language_model\)) は約3万トークンの固定語彙を使用し、テキスト・スニペットはトークンIDの集合にトークナイズされます。そこで、ドキュメントをBERTトークンIDのバッグとして(たとえば weightedset`<int>` データ型を使って)表現できます。各トークンIDには、ドキュメント処理中に計算された重み(たとえば [DeepCT や HDCT](https://github.com/AdeDZY/DeepCT) の重み付けを使用)が割り当てられます。テキストのマッチングとは関係がなくても、最大内積検索を効率的に実行したい他の高次元疎ベクトル空間についても、同様のアプローチが存在します。
+
+WANDアルゴリズムを使って検索を高速化できるかどうか迷う場合は、クエリーセットを使って評価できます。総当たりのORで網羅的にクエリーを実行し、近似的なWANDを使用したときに返される上位k件の結果と比較します。Recall@Kで測定した上位kが高ければ、WANDを使用することで計算リソースを節約(かつレイテンシーを低減)できる可能性があります。
+
+以降のセクションでは、この2つのWAND実装について詳しく説明します。
+
+## weakAnd
+
+[weakAndクエリー演算子](/ja/reference/querying/yql#weakand)は、複数のフィールドを検索するタームと、OR/ANDを使った論理結合を受け付けます。インデックス付き文字列フィールドおよびfieldset(単一値または多値)に対する検索向けに設計されており、トークナイゼーションやステミングのような言語処理と完全に統合されています。
+
+[YQL](/ja/querying/query-language) または [Searcherプラグイン](/ja/applications/searchers)経由でweakAndを使用する場合は、クエリーに関与するコンテント・ノードごとに、この演算子が生成すべきヒット数の最小目標値を指定します。
+
+`totalTargetHits` のチューニング効果は直感的ではないかもしれません。weakAndで可能な限り最良のヒットを得るには、目標値をユーザーに返すヒット数よりいくらか高く設定します。10倍に設定すれば十分すぎるほどです。
+
+目標値を増やす理由は、weakAndが内部でランキング関数(内積)を使用しており、weakAndスコアラーによって評価されたヒットが `first-phase` ランキング式によっても評価されるためです。
+
+古典的なベクトル・ランキングに類似したものであれば、weakAndの内積スコアリングとよく相関するはずです。たとえば `nativeFieldMatch` や `bm25` のランキング・フィーチャーです。
+
+weakAndは、どのヒットがfirst phaseランキングに使われたかを特定するフィードバックに依存して、良いヒットと見なす閾値を引き上げていくため、特別な [unranked rank profile](/ja/reference/schemas/schemas#rank-profile)(ランキングを完全に無効化する)を使用すると、weakAndクエリーが実際のrank profileを使用する場合よりも遅くなることがあります。
+
+YQLで表現したクエリー例:
+
+```sql
+select * from passages where (
+    default contains "is" OR default contains "cdg" OR 
+    default contains "airport" OR default contains "in" OR default contains "main" OR 
+    default contains "paris" 
+)
+```
+
+あるいは、YQLとユーザークエリー言語の組み合わせを使用します
+
+```json
+{
+    "yql": "select * from passages where userQuery()",
+    "query": "is cdg airport in main paris?",
+    "type": "any"
+}
+```
+
+ここで、type *any* はORを意味します。
+
+weakAndクエリー演算子を使用すると、クエリーは次のようになります:
+
+```sql
+select * from passages where (
+    {totalTargetHits: 200}
+        weakAnd(
+            default contains "is", default contains "cdg", default contains "airport",
+            default contains "in", default contains "main", default contains "paris"
+    )
+)
+```
+
+[目標ヒット数(top k)](/ja/reference/querying/yql#targethits)を200に指定しています(デフォルトは100)。コンテントが複数のノードに分散されている場合、この数はコンテント・ノードごとに使用されます。
+
+### weakAndの内部スコアリング
+
+weakAndクエリー演算子は、内積スコアを計算する際に次のランキング・フィーチャーを使用します:
+
+- [term(n).significance](/ja/reference/ranking/rank-features#term(n).significance)
+- [term(n).weight](/ja/reference/ranking/rank-features#term(n).weight)
+
+タームがドキュメント内に出現する回数は内部スコアリングには使用されないことに注意してください。
+
+タームのsignificanceとweightのどちらのフィーチャーも、[アノテーション](/ja/reference/querying/yql#annotations)を使ってクエリー内でオーバーライドできます。タームのsignificanceがクエリーでオーバーライドされない場合、significanceは [Inverse Document Frequency](https://en.wikipedia.org/wiki/Tf%E2%80%93idf) を大まかに踏襲した数式を使って、インデックスされたコーパスから計算されます。
+
+すでにトップヒットのヒープ(サイズはtargetHits)に入っているどのヒットとも競合し得ないドキュメントはスキップされます。一方で、weakAndの実装は、上位k件のヒットだけでなく、評価されたヒットをfirst phaseランキング関数に公開します。検索ごとに複数スレッドを使うように設定されている場合、各スレッドは上位k件のスコアリング・ヒープを保持しつつ、スコアの閾値を相互に伝達します。
+
+上に挙げたパフォーマンス上の理由から、多くの場合、ORの代わりにweakAndを使用する方が望ましいです。この動作を有効にするには、クエリー・プロパティ [weakAnd.replace](/ja/reference/api/query#weakand.replace) をtrueに設定します。
+
+## wand
+
+[wandクエリー演算子](/ja/reference/querying/yql#wand)は、単一の [weightedsetフィールド](/ja/reference/schemas/schemas#weightedset)に対して動作します。フィールドは文字列または数値(int/long)のどちらでもかまいません - 重みは常にintです。
+
+文字列のweighted setは `match:word` または `match:exact` で設定する必要があります - [matchのドキュメント](/ja/reference/schemas/schemas#match)を参照してください。wandクエリー演算子を使用する場合、文字列フィーチャーに対する言語処理は行われません。
+
+以下は、BERTトークナイザーを使ってテキストを前処理し、テキストをBERTトークンIDにマッピングして、一意のトークンIDごとに重みを割り当てるパッセージ・ドキュメント型の例です。
+
+```js
+document passage {
+    field text type string { 
+        indexing: summary | index
+    }
+    field deep_ct_tokens type weightedset<int> {
+        indexing: summary |attribute
+        attribute:fast-search
+    }
+}
+```
+
+BERTトークナイザーでテキストを処理・トークナイズし、トークンIDごとに重みを設定できます:
+
+```json
+{
+    "put": "id:msmarco:passage::8433854",
+    "fields": {
+        "text": "Charles de Gaulle airport (CDG) is the main international airport for Paris",
+        "deep_ct_tokens": {
+            "2248": 12,
+            "1996": 5,
+            "3729": 9,
+            "2003": 8,
+            "2798": 1,
+            "2139": 1,
+            "1006": 3,
+            "1007": 1,
+            "2290": 5,
+            "28724": 6,
+            "3000": 3,
+            "2005": 5,
+            "2364": 1,
+            "3199": 15
+        }
+    }
+}
+```
+
+wandクエリー演算子を使うと、クエリー側の重みとドキュメント側の重みの両方を完全に制御でき、疎なクエリー・ベクトルと疎なドキュメント・ベクトルの内積によって順位付けされた上位k件の最良ヒットを見つけることが保証されます。
+
+Vespaの [rankクエリー演算子](/ja/reference/querying/yql#rank)を使うとクエリー・ツリーを構築できます。フィーチャーのバッグをwandで効率的な検索に使いつつ、通常の字句的なクエリータームによって、設定可能なfirst phase/second-phaseランキングのためのbm25のようなマッチング・ランキング・フィーチャーを生成できます。
+
+以下の例では、`rank` 演算子を使って、wand演算子が実行する内積検索によって取得された上位k件のドキュメントに対して、通常のテキスト・マッチング・フィーチャーも生成しています。userQuery()はリコールには影響しませんが、first-phaseまたはsecond-phaseランキングのための「通常の」ランキング・フィーチャーを生成します。同様に、クエリー時にも同じ種類のテキストからフィーチャーへのマッピングを使用できます(この例では、すべてのクエリータームの重みは1です):
+
+```json
+{
+    "yql":"select * from passages where rank(
+        ({totalTargetHits: 25}
+            wand(deep_ct_tokens, @tokens)),
+            userQuery())",
+    "tokens": "{2003: 1, 3729: 1, 2290: 1, 3199: 1, 1999: 1, 2364: 1, 3000: 1}",
+    "query": "is cdg airport in main paris?",
+    "type": "any",
+    "ranking.profile": "deep_bm25"
+}
+```
+
+
+rank profile *deep\_bm25* は次のように定義します:
+
+```js
+rank-profile deep {
+    first-phase {
+        expression: rawScore(deep_ct_tokens) + bm25(text)
+    }
+    summary-features {
+        bm25(text)
+        rawScore(deep_ct_tokens)
+    }
+}
+```
+
+[rawScore](/ja/reference/ranking/rank-features#rawScore(field)) ランキング・フィーチャーは、wandクエリー演算子によって計算された内積です。内積スコアが最も高い(ノードあたり)25件のドキュメントには、bm25(text)スコアもあり、これを内積スコアと組み合わせます。bm25は、wandによって返された上位k件のヒットに対して**のみ**計算されることに注意してください。
+
+この例では、内積スコアは41、テキストのbm25は35.003です。

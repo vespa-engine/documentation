@@ -1,0 +1,116 @@
+---
+title: "Vespa のビルド / インストール"
+sidebarTitle: "ビルドとインストール"
+---
+
+Vespa で開発するには、[ガイド](https://github.com/vespa-engine/vespa#building)に従って、Docker を使用して AlmaLinux 8 上に開発環境をセットアップします。
+
+Java >= 17 と Maven >= 3.6.3 を使用して Vespa の Java アーティファクトをビルドします。ビルドが完了すると、Vespa の Java アーティファクトはすぐに使用可能になり、[bundle プラグイン](/ja/applications/bundles#maven-bundle-plugin)を使用して Vespa アプリケーションをビルドできます。
+
+```bash
+$ export MAVEN_OPTS="-Xms128m -Xmx1024m"
+$ ./bootstrap.sh java && mvn install
+```
+
+[vespa.ai リリース](/ja/learn/releases)を参照してください。
+
+## コンテナーイメージ
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>イメージ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="https://hub.docker.com/r/vespaengine/vespa" aria-label="docker.io/vespaengine/vespa">docker.io/vespaengine/vespa</a>   <a href="https://github.com/orgs/vespa-engine/packages/container/package/vespa" aria-label="ghcr.io/vespa-engine/vespa">ghcr.io/vespa-engine/vespa</a></td>
+      <td>Vespa を実行するためのコンテナーイメージ。</td>
+    </tr>
+    <tr>
+      <td><a href="https://hub.docker.com/r/vespaengine/vespa-build-almalinux-8" aria-label="docker.io/vespaengine/vespa-build-almalinux-8">docker.io/vespaengine/vespa-build-almalinux-8</a></td>
+      <td>AlmaLinux 8 上で Vespa をビルドするためのコンテナーイメージ。</td>
+    </tr>
+    <tr>
+      <td><a href="https://hub.docker.com/r/vespaengine/vespa-dev-almalinux-8" aria-label="docker.io/vespaengine/vespa-dev-almalinux-8">docker.io/vespaengine/vespa-dev-almalinux-8</a></td>
+      <td>AlmaLinux 8 上での Vespa 開発用のコンテナーイメージ。インクリメンタル・ビルドとシステムテストに使用されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+## RPM
+
+依存関係グラフ:
+
+<Frame>
+![RPM の概要](/assets/img/rpms.svg)
+</Frame>
+
+AlmaLinux 8 への Vespa のインストール:
+
+```bash
+$ dnf config-manager \
+  --add-repo https://raw.githubusercontent.com/vespa-engine/vespa/master/dist/vespa-engine.repo
+$ dnf config-manager --enable powertools
+$ dnf install -y epel-release
+$ dnf install -y vespa
+```
+
+パッケージ・リポジトリのホスティングは、フルホスト型でクラウドネイティブ、かつユニバーサルなパッケージ管理ソリューションである [Cloudsmith](https://cloudsmith.com) のご厚意により提供されています: 
+[![OSS hosting by Cloudsmith](https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&style=flat-square)](https://cloudsmith.com)
+
+<Warning>
+**重要:** 
+
+リポジトリにおけるリリース済み RPM の保持は、最新 50 リリースに限定されていることに注意してください。これより古い特定バージョンのインストールには、（上記の）Docker イメージを使用してください。リリースされた rpm パッケージに関する問題は後続のリリースで修正されます。[問題を報告](https://vespa.ai/support/)してください。トラブルシューティングには[インストール例](/ja/operations/self-managed/multinode-systems#aws-ec2-singlenode)を使用してください。
+</Warning>
+
+[vespa.spec](https://github.com/vespa-engine/vespa/blob/master/dist/vespa.spec) を参照してください。特定の Vespa バージョン X.Y.Z の RPM をビルドするには:
+
+```bash
+$ git clone https://github.com/vespa-engine/vespa
+$ cd vespa
+$ git checkout vX.Y.Z
+$ docker run --rm -ti -v $(pwd):/wd:Z -w /wd  \
+         docker.io/vespaengine/vespa-build-almalinux-8:latest \
+         make -f .copr/Makefile rpms outdir=/wd
+$ ls *.rpm | grep -v debug
+vespa-8.691.19-1.el8.src.rpm
+vespa-8.691.19-1.el8.x86_64.rpm
+vespa-ann-benchmark-8.691.19-1.el8.x86_64.rpm
+vespa-base-8.691.19-1.el8.x86_64.rpm
+vespa-base-libs-8.691.19-1.el8.x86_64.rpm
+vespa-clients-8.691.19-1.el8.x86_64.rpm
+vespa-config-model-fat-8.691.19-1.el8.x86_64.rpm
+vespa-jars-8.691.19-1.el8.x86_64.rpm
+vespa-libs-8.691.19.el8.x86_64.rpm
+vespa-malloc-8.691.19-1.el8.x86_64.rpm
+vespa-node-admin-8.691.19-1.el8.x86_64.rpm
+vespa-tools-8.691.19-1.el8.x86_64.rpm
+```
+
+ほとんどのユーティリティは vespa-x.y.z\*.rpm にあります。その他の RPM:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>RPM</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;vespa-tools&#42;&#42;</td>
+      <td>クエリーまたはドキュメント操作のために Vespa エンドポイントにアクセスするツール: <br/><br/>• <a href="/ja/reference/operations/self-managed/tools#vespa-destination" aria-label="vespa-destination">vespa-destination</a><br/> • <a href="/ja/reference/operations/tools#vespa-fbench" aria-label="vespa-fbench">vespa-fbench</a><br/> • <a href="/ja/reference/operations/self-managed/tools#vespa-feeder" aria-label="vespa-feeder">vespa-feeder</a> <br/>• <a href="/ja/reference/operations/self-managed/tools#vespa-get" aria-label="vespa-get">vespa-get</a><br/>• <a href="/ja/reference/operations/tools#vespa-query-profile-dump-tool" aria-label="vespa-query-profile-dump-tool">vespa-query-profile-dump-tool</a><br/>• <a href="/ja/reference/operations/self-managed/tools#vespa-stat" aria-label="vespa-stat">vespa-stat</a><br/>• <a href="/ja/reference/operations/self-managed/tools#vespa-summary-benchmark" aria-label="vespa-summary-benchmark">vespa-summary-benchmark</a><br/>• <a href="/ja/reference/operations/self-managed/tools#vespa-visit" aria-label="vespa-visit">vespa-visit</a><br/> • <a href="/ja/reference/operations/self-managed/tools#vespa-visit-target" aria-label="vespa-visit-target">vespa-visit-target</a></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;vespa-malloc&#42;&#42;</td>
+      <td>Vespa には独自のメモリアロケーター &#42;vespa-malloc&#42; があります。&#42;/opt/vespa/etc/vespamalloc.conf&#42; を参照してください</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;vespa-clients&#42;&#42;</td>
+      <td>&#42;vespa-feed-client.jar&#42; - <a href="/ja/clients/vespa-feed-client" aria-label="vespa-feed-client">vespa-feed-client</a> を参照してください</td>
+    </tr>
+  </tbody>
+</table>

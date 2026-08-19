@@ -1,0 +1,1598 @@
+---
+title: "RAG ブループリント"
+description: "多くのユーザーが、大規模な RAG アプリケーションを支えるために Vespa を利用しています。"
+---
+
+このブループリントは、こうしたユーザーを支援する中で私たちが学んできた多くのベストプラクティスを例示することを目的としています。
+
+RAG のチュートリアルは数多く存在しますが、このブループリントは次の特徴を持つカスタマイズ可能なテンプレートを提供します:
+
+- データサイズやクエリー負荷に合わせて[(オート)スケール](/ja/operations/autoscaling)できる。
+- 高速で、[本番運用レベル](/ja/operations/production-deployment)の品質である。
+- 最先端の品質を備えた RAG アプリケーションを構築できる。
+
+このチュートリアルでは、評価駆動の考え方で _高品質な_ RAG アプリケーションを開発する方法を示すとともに、皆さん自身のユースケースにおいて情報に基づいた選択を行うために何度でも立ち返ることのできるリソースとなることを目指しています。
+
+次のステップに沿って進めていきます:
+
+1.  [ユースケース](#our-use-case)
+2.  [データモデリング](#data-modeling)
+3.  [Vespa アプリケーションの構成](#structuring-your-vespa-application)
+4.  [マッチフェーズ(リトリーバル)の設定](#configuring-match-phase-retrieval)
+5.  [第 1 フェーズランキング](#first-phase-ranking)
+6.  [第 2 フェーズランキング](#second-phase-ranking)
+7.  [(オプション)グローバルフェーズランキング](#optional-global-phase-ranking)
+
+付随するコードはすべて、[サンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint)リポジトリにあります。
+
+各ステップでは、ブループリントにおける選択と設計の背後にある理由に加え、皆さん自身のアプリケーションをカスタマイズするためのポイントも紹介します。
+
+以下は、このサンプルアプリケーションのインデックス作成(ドキュメント側)、リトリーバル、ランキングを示した図です。詳細は後続のセクションで説明します。
+
+<Note>
+**注:**
+
+図中の要素はクリック可能で、このチュートリアルまたは Vespa ドキュメントの該当セクションに移動できます。
+</Note>
+
+<Frame>
+![RAG ブループリントの概要](/assets/img/tutorials/rag-blueprint-overview.svg)
+</Frame>
+
+[クリックすると図をフルサイズで開きます](/assets/img/tutorials/rag-blueprint-overview.svg)
+
+<Note>
+**注:**
+
+これは **「5 分で RAG をデプロイ」** のようなチュートリアルではありません(とはいえ、[サンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint)の README に従えば、技術的にはそれも _可能_ です)。ここでの狙いは、皆さん自身のユースケースに適用するための知見とツールを提供することにあります。そのため、時間をかけてサンプルアプリのコードを確認し、説明されている手順を実際に実行してみることをお勧めします。
+</Note>
+
+<Warning>
+**前提条件:**
+
+- x86\_64 または arm64 上の Linux、macOS、または Windows 10 Pro。[Podman Desktop](https://podman.io/) もしくは [Docker Desktop](https://www.docker.com/products/docker-desktop/) がインストールされ、エンジンが起動していること。
+	- あるいは、Podman デーモンを起動します:
+        ```bash
+        $ podman machine init --memory 6000
+        $ podman machine start
+        ```
+    - システム制限やその他の設定については [Docker コンテナー](/ja/operations/self-managed/docker-containers)を参照してください。
+- Haswell(2013 年)より古い CPU については、[CPU サポート](/ja/operations/self-managed/cpu-support)を参照してください。
+- メモリ: Docker/Podman 専用に最低 4 GB の RAM。[メモリに関する推奨事項](/ja/operations/self-managed/node-setup#memory-settings)。
+- ディスク: `NO_SPACE` を避けてください。vespaengine/vespa コンテナーイメージとデータ用の余裕分のディスク容量が必要です。[詳細はこちら](/ja/writing/feed-block)。
+- [Vespa CLI](/ja/clients/vespa-cli) をインストールするための [Homebrew](https://brew.sh/)。または [Github releases](https://github.com/vespa-engine/vespa/releases) から Vespa CLI をダウンロードしてください。
+- Python の依存関係管理のための [uv](https://docs.astral.sh/uv/)
+</Warning>
+
+
+## ユースケース
+
+このサンプルのユースケースはドキュメント検索アプリケーションです。会社のドキュメント、ノート、学習資料、トレーニングログを含むドキュメントコレクションから、回答やインサイトを素早く得たいユーザーを想定しています。ブループリントをより現実的なものにするため、公開データセットで一般的に見られるよりも構造化されたフィールドを多く持つデータセットが必要でした。そこで、大規模言語モデル(LLM)を使ってカスタムデータセットを生成しました。
+
+これはドキュメント数がわずか 100 件のトイ・サンプルですが、必要な概念を説明するには十分だと考えています。また、このブループリントは、最小限の変更で望みどおりにスケールできる出発点を提供しますので、安心してご利用いただけます。
+
+以下は、データセットに含まれるサンプルドキュメントです:
+
+```json
+{
+  "put": "id:doc:doc::78",
+  "fields": {
+    "created_timestamp": 1717750000,
+    "modified_timestamp": 1717750000,
+    "text": "# Feature Brainstorm: SynapseFlow Model Monitoring Dashboard v1\n\n**Goal:** Provide users with basic insights into their deployed model's performance and health.\n\n**Key Metrics to Display:**\n- **Inference Latency:** Avg, p95, p99 (Histogram).\n- **Request Rate / Throughput:** Requests per second/minute.\n- **Error Rate:** Percentage of 5xx errors.\n- **CPU/Memory Usage:** Per deployment/instance.\n- **GPU Usage / Temp (if applicable).**\n\n**Visualizations:**\n- Time series graphs for all key metrics.\n- Ability to select time range (last hour, day, week).\n- Filter by deployment ID.\n\n**Data Sources:**\n- Prometheus metrics from model server (see `code_review_pr123_metrics.md`).\n- Kubernetes metrics (via Kube State Metrics or cAdvisor).\n\n**Future Ideas (v2+):**\n- Data drift detection.\n- Concept drift detection.\n- Alerting on anomalies or threshold breaches.\n- Custom metric ingestion.\n\n## <MORE_TEXT:HERE> (UI mock-up sketches, specific Prometheus queries)",
+    "favorite": true,
+    "last_opened_timestamp": 1717750000,
+    "open_count": 3,
+    "title": "feature_brainstorm_monitoring_dashboard.md",
+    "id": "78"
+  }
+}
+```
+
+RAG アプリケーションの品質を評価するためには、関連ドキュメントがアノテーションされた、代表的なクエリーのセットも必要です。重要なのは、想定するユースケースを十分にカバーする代表的なクエリーのセットを用意することです。多いほど良いですが、_何らかの_ 評価があることは、何もないよりも常に優れています。
+
+クエリーと関連ドキュメントのラベルの作成には `gemini-2.5-pro` を使用しました。LLM-as-a-judge の活用について詳しくは、[ブログ記事](https://blog.vespa.ai/improving-retrieval-with-llm-as-a-judge/)をご覧ください。
+
+良い回答を得るために複数のドキュメントを必要とするクエリーと、1 つのドキュメントだけで足りるクエリーの両方を生成することにしました。これらのクエリーがユースケースを代表するものであれば、候補ドキュメントのリトリーバルとランキングに使える(初期の)ランキング式を作成するための優れた出発点になることを示します。ただし、この式は改善が可能であり(そして改善すべきであり)、たとえばユーザーインタラクションデータの収集、人手によるラベリング、あるいは初期のランキング式に基づいて LLM に関連性フィードバックを生成させることなどが考えられます。
+
+
+## データモデリング
+
+以下は、このサンプルアプリケーションで使用するスキーマです。
+
+```txt expandable
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+schema doc {
+
+    document doc {
+
+        field id type string {
+            indexing: summary | attribute
+        }
+
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+
+        field text type string {
+            
+        }
+
+        field created_timestamp type long {
+            indexing: attribute | summary
+        }
+        field modified_timestamp type long {
+            indexing: attribute | summary
+        }
+        
+        field last_opened_timestamp type long {
+            indexing: attribute | summary
+        }
+        field open_count type int {
+            indexing: attribute | summary
+        }
+        field favorite type bool {
+            indexing: attribute | summary
+        }
+
+    }
+
+    field title_embedding type tensor<int8>(x[96]) {
+        indexing: input title | embed | pack_bits | attribute | index
+        attribute {
+            distance-metric: hamming
+        }
+    }
+
+    field chunks type array<string> {
+        indexing: input text | chunk fixed-length 1024 | summary | index
+        index: enable-bm25
+    }
+
+    field chunk_embeddings type tensor<int8>(chunk{}, x[96]) {
+        indexing: input text | chunk fixed-length 1024 | embed | pack_bits | attribute | index
+        attribute {
+            distance-metric: hamming
+        }
+    }
+
+    fieldset default {
+        fields: title, chunks
+    }
+
+    document-summary no-chunks {
+        summary id {}
+        summary title {}
+        summary created_timestamp {}
+        summary modified_timestamp {}
+        summary last_opened_timestamp {}
+        summary open_count {}
+        summary favorite {}
+        summary chunks {}
+    }
+
+    document-summary top_3_chunks {
+        from-disk
+        summary chunks_top3 {
+            source: chunks
+            select-elements-by: top_3_chunk_sim_scores #this needs to be added a summary-feature to the rank-profile
+        }
+    }
+}
+```
+
+スキーマにおける選択の説明とその理由については、このまま読み進めてください。
+
+
+### 検索可能な単位の選択
+
+RAG アプリケーションを構築する際、最初の重要な決定は「検索可能な単位(searchable unit)」の選択です。これは、システムが検索対象とし、LLM へのコンテキストとして返す情報の基本ブロックです。たとえば、数百万件のドキュメントがあり、その中には数百ページに及ぶものもある場合、検索可能な単位は何にすべきでしょうか?
+
+検索可能な単位を選ぶ際は、次の点を考慮してください:
+
+- **細かすぎる場合(例: 個々の文や非常に小さな段落):**
+- 多数の小さな単位にわたってコンテキストとメタデータの重複が発生します。
+- LLM が適切な選択を行ったり関連性の高い応答を生成したりするのに十分なコンテキストを持たない単位になる可能性があります。
+- 多数の小さなドキュメント単位を管理するオーバーヘッドが増加します。
+- **粗すぎる場合(例: 非常に長い章や大きなドキュメント全体):**
+- 処理される単位のサイズに起因するパフォーマンス問題が発生する可能性があります。
+- 一部の大きなドキュメントが多くのクエリーに関連しているように見えてしまい、精度が低下する可能性があります。
+- ドキュメント全体を埋め込む場合、コンテキストが大きすぎるとリトリーバルの品質が低下します。
+
+私たちは、やや大きめの単位を使う側に倒すことをお勧めします。
+
+- LLM はますます大きなコンテキストを扱えるようになっています。
+- Vespa では、最も関連性の高い部分だけを返すことで、データの重複やパフォーマンスの問題を回避しながら、より大きな単位をインデックスできます。
+
+Vespa では現在、ドキュメントの中で最も関連性の高い上位 k 個のチャンクだけを返し、ドキュメントレベルとチャンクレベルの両方のフィーチャーをランキングに含めて組み合わせることが可能です。
+
+
+### チャンクの選択
+
+検索可能な単位としてドキュメントを選んだと仮定します。その場合、ドキュメントには長さが大きく異なるテキストインデックスフィールドが含まれることがあります。たとえば Web ページのコーパスを考えてみてください。平均は推奨サイズに十分収まっていても、非常に長いものが存在するかもしれません。詳細は[リトリーバルサイズのスケーリング](/ja/performance/sizing-search#scaling-retrieval-size)を参照してください。
+
+フィードパイプラインで長すぎるドキュメントに対するガードを実装することをお勧めしますが、それでも、RAG のために上位 k 件のドキュメントのすべてのチャンクを LLM に返したくはないでしょう。
+
+Vespa には、この問題に対するソリューションがあります。これを可能にする新機能の概要については、[レイヤードランキングに関するブログ記事](https://blog.vespa.ai/introducing-layered-ranking-for-rag-applications/)をご覧ください。
+
+以下では、ドキュメントと個々のチャンクの両方をスコアリングし、そのスコアを使って、上位 k 件にランキングされたドキュメントに属するすべてのチャンクを返す代わりに、サマリーで返すべき最良のチャンクを選択する方法を示します。
+
+ランキング関数の中でチャンクごとに closeness を計算します。チャンクごとのテキストシグナルには `elementwise(bm25(chunks), i, double)` を使用します。[ランクフィーチャーのリファレンス](/ja/reference/ranking/rank-features#elementwise-bm25)を参照してください。elementwise ランク関数とコンテントノード上でのフィルタリングが利用可能になりました。
+
+これにより、大きなドキュメントを検索可能な単位として選びながらも、多くの人が直面する潜在的な欠点に次のように対処できます:
+
+- (大きめの)ドキュメントを検索可能な単位として選ぶ。
+- インデックス作成時にテキストフィールドを自動的にチャンク化する。
+- 各チャンクを埋め込む(Vespa のマルチベクトルサポートにより可能)。
+- チャンクレベルのフィーチャー(例: bm25 や埋め込み類似度)とドキュメントレベルのフィーチャーを計算し、自由に組み合わせる。
+- 実際に返すチャンクを、LLM にとって本当に関連性の高いコンテキストであるものに限定する。
+
+これにより、最も関連性の高い部分だけを返すことで、データの重複やパフォーマンスの問題を回避しながら、より大きな単位をインデックスできます。
+
+Vespa は、[インデックス言語](/ja/writing/indexing)における自動[チャンク化](/ja/reference/writing/indexing-language#converters)もサポートしています。
+
+以下はスキーマの該当部分です。検索可能な単位をテキストフィールドを持つドキュメントとして定義し、それを 1024 文字の小さなパートに自動的にチャンク化し、各チャンクを個別に埋め込んでインデックスします:
+
+```txt
+field chunks type array<string> {
+    indexing: input text | chunk fixed-length 1024 | summary | index
+    index: enable-bm25
+}
+
+field chunk_embeddings type tensor<int8>(chunk{}, x[96]) {
+    indexing: input text | chunk fixed-length 1024 | embed | pack_bits | attribute | index
+    attribute {
+        distance-metric: hamming
+    }
+}
+```
+
+Vespa では、サマリーフィーチャーによって返すチャンクを指定できます。詳細は[ドキュメント](/ja/reference/schemas/schemas#select-elements-by)を参照してください。このブループリントでは、ランキングフェーズで計算されるチャンク埋め込みの類似度スコアに基づいて上位 3 チャンクを返します。このフィーチャーは、rank-profile で定義された任意のチャンクレベルのサマリーフィーチャーにできる点に注意してください。
+
+サマリーフィーチャーは、rank-profile の中で次のように計算されます:
+
+```txt expandable
+# This function unpacks the bits of each dimension of the mapped chunk_embeddings attribute tensor
+function chunk_emb_vecs() {
+    expression: unpack_bits(attribute(chunk_embeddings))
+}
+
+# This function calculates the dot product between the query embedding vector and the chunk embeddings (both are now float) over the x dimension
+function chunk_dot_prod() {
+    expression: reduce(query(float_embedding) * chunk_emb_vecs(), sum, x)
+}
+
+# This function calculates the L2 normalized length of an input tensor
+function vector_norms(t) {
+    expression: sqrt(sum(pow(t, 2), x))
+}
+
+# Here we calculate cosine similarity by dividing the dot product by the product of the L2 normalized query embedding and document embeddings
+function chunk_sim_scores() {
+    expression: chunk_dot_prod() / (vector_norms(chunk_emb_vecs()) * vector_norms(query(float_embedding)))
+}
+
+function top_3_chunk_text_scores() {
+    expression: top(3, chunk_text_scores())
+}
+
+function top_3_chunk_sim_scores() {
+        expression: top(3, chunk_sim_scores())
+    }
+
+summary-features {
+        top_3_chunk_sim_scores
+    }
+```
+
+<Note>
+**注:**
+
+このランキング式はやや複雑に見えるかもしれません。これは、各チャンクを独立して埋め込み、埋め込みをバイナリ化された形式で保存し、その後 float 表現に基づいて類似度を計算するためにアンパックするという方式を選んだためです。同じ精度の埋め込み同士の単一次元の密ベクトル類似度であれば、[closeness](/ja/reference/ranking/rank-features#closeness(name)) という便利な関数を使って大幅に簡略化できます。
+</Note>
+
+ここではクエリー埋め込みの float 表現を使いたいため、チャンクのバイナリ埋め込みも float に変換する必要があります。その後、コサイン類似度(ドット積を計算し、埋め込みのノルムで正規化)を使って、クエリー埋め込みとチャンク埋め込みの類似度スコアを計算できます。
+
+`top` 関数や、ランキング式で利用可能なその他の関数の詳細については、[ランキング式](/ja/reference/ranking/ranking-expressions#non-primitive-functions)を参照してください。
+
+これで、このサマリーフィーチャーをドキュメントサマリーで使用し、LLM のコンテキストとして使われるドキュメントの上位 3 チャンクを返すことができます。すべてのチャンクを返すドキュメントサマリーも定義できる点に注意してください。これはディープリサーチなど、別のユースケースで役立つ可能性があります。
+
+```txt
+document-summary top_3_chunks {
+      from-disk
+      summary chunks_top3 {
+          source: chunks
+          select-elements-by: top_3_chunk_sim_scores #this needs to be added a summary-feature to the rank-profile
+      }
+  }
+```
+
+
+### 複数のテキストフィールドを使い、複数の埋め込みを検討する
+
+異なるテキストコンテンツは、別々のインデックスとしてインデックスすることをお勧めします。これらは[フィールドセット](/ja/reference/schemas/schemas#fieldset)を使ってまとめて検索できます。
+
+このスキーマでは、以下のセクションがその例であり、`title` フィールドと `chunks` フィールドを別々のインデックス付きテキストフィールドとして定義しています。
+
+```txt
+...
+field title type title {
+    indexing: index | summary
+    index: enable-bm25
+}
+field chunks type array<string> {
+    indexing: input text | chunk fixed-length 1024 | summary | index
+    index: enable-bm25
+}
+```
+
+埋め込みフィールドを分けるべきかどうかは、追加の埋め込みフィールドから得られる品質向上が、増加するメモリ使用量に見合うかどうかによります。
+
+このブループリントでは、バイナリベクトルを埋め込むことでコストの最小化を狙っているため、`title_embedding` フィールドと `chunk_embeddings` フィールドの両方をインデックスすることにしました。
+
+```txt
+field title_embedding type tensor<int8>(title{}, x[96]) {
+    indexing: input text | embed | pack_bits | attribute | index
+    attribute {
+        distance-metric: hamming
+    }
+}
+field chunk_embeddings type tensor<int8>(chunk{}, x[96]) {
+    indexing: input text | chunk fixed-length 1024 | embed | pack_bits | attribute | index
+    attribute {
+        distance-metric: hamming
+    }
+}
+```
+
+複数の埋め込みフィールドをインデックスすることは、コストに見合わない場合もあります。皆さんのアプリケーションにとってコストと品質のトレードオフが妥当かどうかを評価してください。
+
+ドキュメントの異なるベクトル空間表現(例: 画像)がある場合は、テキストベースの埋め込みを補完するシグナルを提供する可能性が高いため、別々にインデックスする価値があるでしょう。
+
+
+### 構造化フィールドによるメタデータとシグナルのモデリング
+
+メタデータとシグナルは、スキーマ内の構造化フィールドとしてモデリングすることをお勧めします。以下に、一般的な推奨事項と、このブループリントのスキーマでの実装を示します。
+
+**メタデータ** — データに関する知識:
+
+- 著者、公開日時、ソース、リンク、カテゴリー、価格、…
+- 用途: フィルター、ランキング、グルーピング/集約
+- 強力なフィルターとなるメタデータのみをインデックスする
+
+このブループリントのスキーマでは、これらの概念を示すために次のメタデータフィールドを含めています:
+
+- `id` - ドキュメント識別子
+- `title` - 表示およびテキストマッチング用のドキュメント名/ファイル名
+- `created_timestamp`、`modified_timestamp` - 新しさによるフィルタリングとランキングのための時間メタデータ
+
+**シグナル** — データに関する観測:
+
+- 人気度、品質、スパム確率、click_probability、…
+- 用途: ランキング
+- 多くの場合、部分更新によって個別に更新される
+- 複数のチームがそれぞれ独立して自分たちのシグナルを追加できる
+
+このブループリントのスキーマでは、これらのシグナルのいくつかを含めています:
+
+- `last_opened_timestamp` - パーソナライゼーションのためのユーザーエンゲージメントシグナル
+- `open_count` - ドキュメントの重要度を示す人気度シグナル
+- `favorite` - 明示的なユーザー選好シグナル。関連コンテンツのブーストに使用可能
+
+これらのフィールドは `attribute | summary` として設定されており、検索結果として返されると同時に、効率的なフィルタリング、ソート、グルーピング操作が可能です。タイムスタンプフィールドは、時間によるフィルタリング(例:「最近のドキュメント」)や新しさに基づくランキングを可能にし、`open_count` や `favorite` のような利用シグナルは、頻繁にアクセスされるドキュメントや明示的に重要とマークされたドキュメントをブーストできます。
+
+カーディナリティの低いメタデータには[親子関係](/ja/schemas/parent-child)の利用を検討してください。大規模な RAG アプリケーションのスキーマの多くは、少なくとも 100 個の構造化フィールドを含んでいます。
+
+## OpenAI クライアントによる LLM 生成
+
+Vespa は、LLM 生成のためにローカル LLM と任意の OpenAI 互換 API の両方をサポートしています。詳細は [Vespa における LLM](/ja/rag/llms-in-vespa) を参照してください。
+
+API キーの提供方法としては、Vespa Cloud の[シークレットストア](/ja/security/secret-store)の利用を推奨します。
+
+これを有効にするには、[Vespa Cloud コンソール](/)で(まだ持っていない場合は)ボールトとシークレットを作成する必要があります。ボールトの名前が `sample-apps` で、`openai-api-key` という名前のシークレットが含まれている場合、そのシークレットを使用する OpenAI クライアントをセットアップするには、`services.xml` で次の設定を使用します:
+
+```xml
+  <secrets>
+      <openai-api-key vault="sample-apps" name="openai-dev" />
+  </secrets>
+  <!-- Setup the client to OpenAI -->
+  <component id="openai" class="ai.vespa.llm.clients.OpenAI">
+      <config name="ai.vespa.llm.clients.llm-client">
+          <apiKeySecretRef>openai-api-key</apiKeySecretRef>
+      </config>
+  </component>
+```
+
+あるいは、ローカルデプロイメントの場合は、クエリーに `X-LLM-API-KEY` ヘッダーを設定することで、生成に OpenAI クライアントを使用できます。
+
+OpenAI クライアントを使った生成をテストするには、`openai` サーチチェーンを実行するクエリーを `format=sse` で送信します。(検索ヒットと LLM が生成したトークンの両方を含むストリーミング JSON レスポンスには `format=json` を使用します。)
+
+```bash
+$ vespa query \
+    --timeout 60 \
+    --header="X-LLM-API-KEY:<your-api-key>" \
+    yql='select *
+    from doc
+    where default contains text(@query) or
+    ({label:"title_label", targetHits:100}nearestNeighbor(title_embedding, embedding)) or
+    ({label:"chunks_label", targetHits:100}nearestNeighbor(chunk_embeddings, embedding))' \
+    query="Summarize the key architectural decisions documented for SynapseFlow's v0.2 release." \
+    searchChain=openai \
+    format=sse \
+    hits=5
+```
+
+
+## Vespa アプリケーションの構成
+
+このセクションでは、Vespa アプリケーション・パッケージの構成に関する推奨事項を紹介します。アプリケーション・パッケージの構造の詳細については、[アプリケーション・パッケージのドキュメント](/ja/basics/applications)も参照してください。これは必須ではなく、最初はクエリープロファイルやランクプロファイルなしで始める方がシンプルかもしれません。しかし、アプリケーションをスケールアウトさせていくにつれて、よく構造化されたアプリケーション・パッケージを持つことが有益になります。
+
+このアプリケーション・パッケージでは、次の構成を考えます:
+
+```txt expandable
+app
+├── models
+│   └── lightgbm_model.json
+├── schemas
+│   └── doc
+│   │   ├-- base-features.profile
+│   │   ├── collect-second-phase.profile
+│   │   ├── collect-training-data.profile
+│   │   ├── learned-linear.profile
+│   │   ├── match-only.profile
+│   │   └── second-with-gbdt.profile
+│   └── doc.sd
+├── search
+│   └── query-profiles
+│       ├── deepresearch-with-gbdt.xml
+│       ├── deepresearch.xml
+│       ├── hybrid-with-gbdt.xml
+│       ├── hybrid.xml
+│       ├── rag-with-gbdt.xml
+│       └── rag.xml
+├── security
+│   └── clients.pem
+└── services.xml
+```
+
+[クエリープロファイル](/ja/reference/querying/query-profiles)と[ランクプロファイル](/ja/basics/ranking#rank-profiles)を、それぞれ専用のディレクトリに分離していることがわかります。
+
+
+### クエリープロファイルでクエリーを管理する
+
+クエリープロファイルを使うと、クエリーパラメータの集まりを 1 つのファイルで管理できます。クライアントはクエリープロファイルを選ぶだけで、あとはプロファイルがすべてを設定します。これにより、クライアントに手を入れることなく、ユースケースごとの動作を変更できます。
+
+サンプルアプリケーションのクエリープロファイルのうち、3 つを詳しく見てみましょう。
+
+1. `hybrid`
+2. `rag`
+3. `deepresearch`
+
+
+### **_hybrid_** クエリープロファイル
+
+このクエリープロファイルは、限られた数のヒットをユーザーに提示する従来型の検索でクライアントが使用するものです。他のクエリープロファイルはこれを継承します(一部のフィールドをオーバーライドすることはあります)。
+
+```xml
+<query-profile id="hybrid">
+    <field name="schema">doc</field>
+    <field name="ranking.features.query(embedding)">embed(@query)</field>
+    <field name="ranking.features.query(float_embedding)">embed(@query)</field>
+    <field name="yql">
+        select *
+        from %{schema}
+        where default contains text(@query) or
+        ({label:"title_label", targetHits:100}nearestNeighbor(title_embedding, embedding)) or
+        ({label:"chunks_label", targetHits:100}nearestNeighbor(chunk_embeddings, embedding))
+    </field>
+    <field name="hits">10</field>
+    <field name="ranking.profile">learned-linear</field>
+    <field name="presentation.summary">top_3_chunks</field>
+</query-profile>
+```
+
+
+### **_rag_** クエリープロファイル
+
+これは、取得したコンテキストに基づいて応答を生成するために `openai` searchChain を追加するクエリープロファイルです。ここでは、このユースケースに固有のいくつかの設定を行います。
+
+```xml
+<query-profile id="rag" inherits="hybrid">
+  <field name="hits">50</field>
+  <field name="searchChain">openai</field>
+  <field name="presentation.format">sse</field>
+</query-profile>
+```
+
+
+### **_deepresearch_** クエリープロファイル
+
+ここでも `hybrid` クエリープロファイルを継承しますが、レイテンシーよりも再現率を優先するために、`targetHits` の値を 10 000(元は 100)にオーバーライドします。また、返されるヒット数を増やし、タイムアウトを 5 秒に延長します。
+
+```xml
+<query-profile id="deepresearch" inherits="hybrid">
+  <field name="yql">
+    select *
+    from %{schema}
+    where default contains text(@query) or
+    ({label:"title_label", targetHits:10000}nearestNeighbor(title_embedding, embedding)) or
+    ({label:"chunks_label", targetHits:10000}nearestNeighbor(chunk_embeddings, embedding))
+  </field>
+  <field name="hits">100</field>
+  <field name="timeout">5s</field>
+</query-profile>
+```
+
+このプロファイルでは LLM 生成を省略し、この API 呼び出しをツールとして利用する責任と、回答するのに十分な関連コンテキストが取得できたかどうかを判断する責任を、クライアント側の LLM エージェントに任せます。なお、ここで設定した `targetHits` パラメータは、データセットが一定の規模に達するまではあまり意味を持ちません。
+
+ランクプロファイルを増やしていく際には、既存のクエリープロファイルを継承し、`ranking.profile` フィールドだけをオーバーライドして別のランクプロファイルを使うこともできます。`rag-with-gbdt` と `deepresearch-with-gbdt` のクエリープロファイルではまさにこれを行っており、`learned-linear` ランクプロファイルの代わりに `second-with-gbdt` ランクプロファイルを使用します。
+
+```xml
+<query-profile id="rag-with-gbdt" inherits="hybrid-with-gbdt">
+  <field name="hits">50</field>
+  <field name="searchChain">openai</field>
+  <field name="presentation.format">sse</field>
+</query-profile>
+```
+
+
+### ランクプロファイルを分離する
+
+優れた RAG アプリケーションを構築するには、多くのランキングモデルが必要になると考えておきましょう。そうすることで、代替案のバケットテストを継続的に行えるほか、各フェーズ向けのデータ収集や本番で使うランクプロファイルなど、さまざまなユースケースに対応できます。
+
+共通の関数やセットアップは親ランクプロファイルに分離し、`.profile` ファイルを使用してください。
+
+
+## Vespa におけるフェーズドランキング
+
+先に進む前に、Vespa の[フェーズドランキング](/ja/ranking/phased-ranking)のアプローチをおさらいしておくと役立つでしょう。
+
+以下は、この RAG ブループリントにおけるリトリーバルとランキングの考え方を示した概略図です。このチュートリアルは小さなトイ・データセットを使って開発しているため、アプリケーションは単一の docker コンテナーを使って 1 台のマシンにデプロイでき、コンテナーノードとコンテントノードがそれぞれ 1 つだけ動作します。これは実世界のほとんどの RAG アプリケーションには当てはまらないため、アプリケーションをスケールさせる際には、この点を念頭に置くことが極めて重要です。
+
+<Frame>
+![フェーズドランキングの概要](/assets/img/phased-ranking-rag.png)
+</Frame>
+
+ステートレスなコンテナーノードは、増加するクエリー負荷に対応するために[独立してスケール](/ja/performance/sizing-search)できます。
+
+
+## マッチフェーズ(リトリーバル)の設定
+
+このセクションでは、Vespa における RAG アプリケーションのリトリーバルフェーズについて、重要な考慮事項を説明します。
+
+リトリーバルフェーズの目標は、候補ドキュメントを効率的に取得し、ランキングに過剰な数のドキュメントを渡すことなく、再現率を最大化することです。
+
+
+### リトリーバル戦略の選択: ベクトル、テキスト、それともハイブリッド?
+
+スキーマからわかるように、ドキュメントの各チャンクに対して、テキスト表現とベクトル表現の両方を作成してインデックスしています。これにより、再現(リコール)とランキングの両方で、テキストベースのフィーチャーとセマンティックなフィーチャーの両方を利用できます。
+
+テキスト表現とベクトル表現は互いをよく補完し合います:
+
+- **テキストのみ** → 意味的に類似したコンテンツの再現を取りこぼす
+- **ベクトルのみ** → 埋め込みモデルがうまく理解できない特定のコンテンツの再現を取りこぼす
+
+私たちの推奨は、デフォルトでハイブリッドリトリーバルを使うことです:
+
+```sql
+select *
+        from doc
+        where default contains text(@query) or
+        ({label:"title_label", targetHits:1000}nearestNeighbor(title_embedding, embedding)) or
+        ({label:"chunks_label", targetHits:1000}nearestNeighbor(chunk_embeddings, embedding))
+```
+
+一般的なドメインの場合、または特定のデータに合わせて埋め込みモデルをファインチューニングした場合は、ベクトルのみのアプローチを検討してもよいでしょう:
+
+```sql
+select *
+        from doc
+        where rank({targetHits:10000}nearestNeighbor(embeddings_field, query_embedding), default contains text(@query))
+```
+
+[rank](/ja/reference/querying/yql#rank) オペレーターでは、最初の引数だけがドキュメントがマッチするかどうかの判定に使われ、すべての引数はランクフィーチャーの計算に使われる点に注意してください。つまり、マッチングはベクトルのみで行いながら、ランキングには `bm25` や `nativeRank` のようなテキストベースのフィーチャーを使うことができます。この方法を採る場合は、`nearestNeighbor` オペレーターの `targetHits` の数を増やすのが理にかなっています。
+
+このサンプルアプリケーションでは、(`OR` で組み合わせた)3 つの異なるリトリーバルオペレーターを追加します。テキストマッチングには `weakAnd` を 1 つ、ベクトルマッチングにはタイトル用とチャンク用の 2 つの `nearestNeighbor` オペレーターです。これにより、テキスト類似度とベクトル類似度の両方に基づいて関連ドキュメントを取得しつつ、ドキュメントの中で最も関連性の高いチャンクを返すこともできます。
+
+```sql
+select *
+        from doc
+        where default contains text(@query) or
+        ({targetHits:100}nearestNeighbor(title_embedding, embedding)) or
+        ({targetHits:100}nearestNeighbor(chunk_embeddings, embedding))
+```
+
+
+### 埋め込みモデル(と戦略)の選択
+
+埋め込みモデルの選択は、推論時間(インデックス作成時とクエリー時の両方)、メモリ使用量(埋め込み次元数)、品質の間のトレードオフになります。優れたオープンソースモデルが数多く公開されているため、[MTEB リーダーボード](https://huggingface.co/spaces/mteb/leaderboard)を確認し、`Retrieval` 列で性能を見極めつつ、モデルのメモリ使用量、ベクトル次元数、コンテキスト長も考慮することをお勧めします。
+
+Vespa ですぐに使える提供モデルの一覧は[モデルハブ](/ja/rag/model-hub)を参照してください。(ONNX としてエクスポートされた)他のモデルを Vespa で使う方法の詳細は、[Huggingface Embedder](/ja/rag/embedding#huggingface-embedder) も参照してください。
+
+Vespa は、密ベクトル表現に加えて、スパース埋め込み(トークン重み)とマルチベクトル(ColBERT スタイル)の埋め込みもサポートしています。両方をサポートする bge-m3 モデルを Vespa で使う[サンプルノートブック](https://vespa-engine.github.io/pyvespa//examples/mother-of-all-embedding-models-cloud#bge-m3-the-mother-of-all-embedding-models)をご覧ください。
+
+Vespa は [Matryoshka 埋め込み](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/)もサポートしています。これは、リトリーバルフェーズでは埋め込み次元のサブセットを使って推論コストを削減し、後段のランキングフェーズではより多くの次元を使って精度を高める、優れた方法になり得ます。
+
+ドメイン特化のアプリケーションや、あまり普及していない言語向けには、自分のデータでモデルをファインチューニングすることを検討するとよいでしょう。
+
+
+### 再現率のためにバイナリベクトルを検討する
+
+もう 1 つ決めるべきことは、埋め込みに使用する精度です。Vespa におけるバイナリ化の入門については、[バイナリ化のドキュメント](/ja/rag/binarizing-vectors)を参照してください。
+
+ほとんどの場合、バイナリベクトル(Vespa では `int8` 表現にパックされます)は、特にマッチフェーズでの再現において魅力的なトレードオフを提供します。これが皆さんのアプリケーションに当てはまるかどうかは、次の要素を考慮して判断してください:
+
+- メモリ上のベクトルコストを 5 ~ 30 倍削減
+- クエリーとインデックス作成のコストを 30 倍削減
+- 品質の低下は多くの場合わずか数パーセントポイント
+
+```txt
+field binary_chunk_embeddings type tensor<int8>(chunk{}, x) {
+  indexing: input text | chunk fixed-length 1024 | embed | pack_bits | attribute | index 
+  attribute { distance-metric: hamming }
+}
+```
+
+より高精度なベクトル類似度が必要な場合は、bfloat16 精度を使用し、大きなメモリコストを避けるためにこれらのベクトルをディスクにページングすることを検討してください。この場合、ランキングでこのフィールドにアクセスする際にもディスクからの読み込みが必要になるため、パフォーマンス問題を避けるには、このフィールドにアクセスするヒット数を制限する必要がある点に注意してください。
+
+```txt
+field chunk_embeddings type tensor<bfloat16>(chunk{}, x) {
+  indexing: input text | chunk fixed-length 1024 | embed | attribute 
+  attribute: paged
+}
+```
+
+たとえば、ページングされた埋め込みベクトルに対して first-phase で `closeness` を計算したい場合は、マッチするヒットが多くなりすぎないように、リトリーバルオペレーター(通常は `weakAnd` や `nearestNeighbor`、必要に応じてフィルターと組み合わせる)を設定することを検討してください。もう 1 つの選択肢は、マッチフェーズ制限を有効にすることです。[マッチフェーズのドキュメント](/ja/reference/schemas/schemas#match-phase)を参照してください。要するに、属性フィールドを指定してマッチ数を制限します。
+
+
+### ランキングには float-binary を検討する
+
+このブループリントでは、ドキュメントのバイナリベクトルをインデックスすることにしました。ただし、これはクエリー埋め込みの float 表現を使うことを妨げるものではありません。
+
+バイナリのドキュメントチャンク埋め込みを([`unpack_bits`](/ja/reference/ranking/ranking-expressions#unpack-bits) を使って)float 表現にアンパックすることで、ハミング距離(`binary-binary`)の代わりに `float-binary` のドット積を使い、クエリーとドキュメントの類似度をやや高い精度で計算できます。
+
+以下は、その方法を示したものです:
+
+```txt expandable
+rank-profile base-features {
+ 
+        inputs {
+            query(embedding) tensor<int8>(x[96])
+            query(float_embedding) tensor<float>(x[768])
+        }
+        
+        function chunk_emb_vecs() {
+            expression: unpack_bits(attribute(chunk_embeddings))
+        }
+
+        function chunk_dot_prod() {
+            expression: reduce(query(float_embedding) * chunk_emb_vecs(), sum, x)
+        }
+
+        function vector_norms(t) {
+            expression: sqrt(sum(pow(t, 2), x))
+        }
+        function chunk_sim_scores() {
+            expression: chunk_dot_prod() / (vector_norms(chunk_emb_vecs()) * vector_norms(query(float_embedding)))
+        }
+
+        function top_3_chunk_text_scores() {
+            expression: top(3, chunk_text_scores())
+        }
+
+        function top_3_chunk_sim_scores() {
+            expression: top(3, chunk_sim_scores())
+        }
+}
+```
+
+
+### 複雑な言語処理/再現の仕組みは精度向上のためだけに使う
+
+Vespa は[言語処理(リンギスティクス)](/ja/linguistics/linguistics)を幅広く制御できます。[マッチモード](/ja/reference/schemas/schemas#match)、ステミング、正規化を決めたり、派生トークンを制御したりできます。
+
+また、[weakAnd](/ja/reference/querying/yql#weakand) よりも特化したオペレーターを使って、近接した出現のみをマッチさせたり([near](/ja/reference/querying/yql#near)/ [onear](/ja/reference/querying/yql#near))、複数の代替表現をマッチさせたり([equiv](/ja/linguistics/query-rewriting#equiv))、項目に重みを付けたり、コネクティビティを設定したり、[クエリーリライト](/ja/linguistics/query-rewriting)のルールを適用したりすることも可能です。
+
+**これを再現率向上のために使わないでください — その代わりに埋め込みモデルを改善してください。**
+
+必要に応じて、精度を高めるために使うことを検討してください。
+
+
+### リトリーバルフェーズの再現率を評価する
+
+リトリーバルフェーズがうまく機能しているかどうかを知るには、再現率、総マッチ数、報告された所要時間を測定する必要があります。
+
+これには、pyvespa クライアントライブラリの [`VespaMatchEvaluator`](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaMatchEvaluator) が使えます。
+
+このサンプルアプリケーションでは、3 つの異なるリトリーバル戦略を比較する評価スクリプトを用意しました。これらを「リトリーバルアーム」と呼ぶことにします:
+
+1. **セマンティックのみ**: `nearestNeighbor` オペレーターによるベクトル類似度のみを使用します。
+2. **WeakAnd のみ**: `userQuery()` によるテキストベースのマッチングのみを使用します。
+3. **ハイブリッド**: OR ロジックで両方のアプローチを組み合わせます。
+
+<Note>
+**注:**
+
+これはあくまで一般的な提案であり、皆さんの固有のユースケースに合わせて、[フィルター句](/ja/reference/querying/yql#where)、[グルーピング](/ja/querying/grouping)、[プレディケート](/ja/schemas/predicate-fields)、[ジオサーチ](/ja/querying/geo-search)などを自由に組み込んで構いません。
+</Note>
+
+マッチフェーズの評価を高速に実行するため、first-phase ランキングを一切使用しないランキングプロファイルを使うことをお勧めします。
+
+この評価では、次のようなメトリクスが出力されます:
+
+- 再現率(マッチした関連ドキュメントの割合)
+- クエリーごとの総マッチ数
+- クエリーレイテンシーの統計
+- クエリーごとの詳細結果(`write_verbose=True` の場合)。再現率やパフォーマンスの面で「問題のある」クエリーを特定するのに役立ちます。
+
+これらは、それぞれをチューニングするための貴重なインプットになります。
+
+`eval/` ディレクトリから完全な評価スクリプトを実行すると、皆さんのデータセットにおける 3 つのリトリーバル戦略すべての詳細な比較を確認できます。
+
+
+#### セマンティッククエリーの評価
+
+```sql
+select * from doc where 
+({targetHits:100}nearestNeighbor(title_embedding, embedding)) or
+({targetHits:100}nearestNeighbor(chunk_embeddings, embedding))
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>メトリクス</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>マッチ再現率</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>クエリーあたりの平均再現率</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>関連ドキュメント総数</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>マッチした関連ドキュメント総数</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>クエリーあたりの平均マッチ数</td>
+      <td>100.0000</td>
+    </tr>
+    <tr>
+      <td>クエリー総数</td>
+      <td>20</td>
+    </tr>
+    <tr>
+      <td>検索時間 平均(秒)</td>
+      <td>0.0090</td>
+    </tr>
+    <tr>
+      <td>検索時間 Q50(秒)</td>
+      <td>0.0060</td>
+    </tr>
+    <tr>
+      <td>検索時間 Q90(秒)</td>
+      <td>0.0193</td>
+    </tr>
+    <tr>
+      <td>検索時間 Q95(秒)</td>
+      <td>0.0220</td>
+    </tr>
+  </tbody>
+</table>
+
+
+#### WeakAnd クエリーの評価
+
+`userQuery` は `weakAnd` の便利なラッパーにすぎません。[reference/query-language-reference.html](/ja/reference/querying/yql) を参照してください。`weakAnd` のデフォルトの `targetHits` は 100 ですが、[オーバーライド可能](/ja/reference/querying/yql#targethits)です。
+
+```sql
+select * from doc where userQuery()
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>メトリクス</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>マッチ再現率</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>クエリーあたりの平均再現率</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>関連ドキュメント総数</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>マッチした関連ドキュメント総数</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>クエリーあたりの平均マッチ数</td>
+      <td>88.7000</td>
+    </tr>
+    <tr>
+      <td>クエリー総数</td>
+      <td>20</td>
+    </tr>
+    <tr>
+      <td>検索時間 平均(秒)</td>
+      <td>0.0071</td>
+    </tr>
+    <tr>
+      <td>検索時間 Q50(秒)</td>
+      <td>0.0060</td>
+    </tr>
+    <tr>
+      <td>検索時間 Q90(秒)</td>
+      <td>0.0132</td>
+    </tr>
+    <tr>
+      <td>検索時間 Q95(秒)</td>
+      <td>0.0171</td>
+    </tr>
+  </tbody>
+</table>
+
+
+#### ハイブリッドクエリーの評価
+
+```sql
+select * from doc where 
+({targetHits:100}nearestNeighbor(title_embedding, embedding)) or
+({targetHits:100}nearestNeighbor(chunk_embeddings, embedding)) or
+userQuery()
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>メトリクス</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>マッチ再現率</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>クエリーあたりの平均再現率</td>
+      <td>1.0000</td>
+    </tr>
+    <tr>
+      <td>関連ドキュメント総数</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>マッチした関連ドキュメント総数</td>
+      <td>51</td>
+    </tr>
+    <tr>
+      <td>クエリーあたりの平均マッチ数</td>
+      <td>100.0000</td>
+    </tr>
+    <tr>
+      <td>クエリー総数</td>
+      <td>20</td>
+    </tr>
+    <tr>
+      <td>検索時間 平均(秒)</td>
+      <td>0.0076</td>
+    </tr>
+    <tr>
+      <td>検索時間 Q50(秒)</td>
+      <td>0.0055</td>
+    </tr>
+    <tr>
+      <td>検索時間 Q90(秒)</td>
+      <td>0.0150</td>
+    </tr>
+    <tr>
+      <td>検索時間 Q95(秒)</td>
+      <td>0.0201</td>
+    </tr>
+  </tbody>
+</table>
+
+
+### リトリーバルフェーズのチューニング
+
+すべてのクエリーがすべての関連ドキュメントにマッチしていることがわかります。これは、`nearestNeighbor` オペレーターで `targetHits:100` を使用しており、これが `weakAnd`(および `userQuery`)のデフォルトでもあるため、想定どおりです。`targetHits` を低く設定すると、再現率が低下することが確認できます。
+
+一般に、再現率を高めたい場合には次の選択肢があります:
+
+1. リトリーバルオペレーター(例: `nearestNeighbor`、`weakAnd`)の `targetHits` を増やす。
+2. 埋め込みモデルを改善する(より良いモデルを使う、または自分のデータでファインチューニングする)。
+3. HNSW パラメータのチューニングも検討できます。[HNSW のドキュメント](/ja/querying/approximate-nn-hnsw#using-vespas-approximate-nearest-neighbor-search)を参照してください。
+
+逆に、再現率のわずかなトレードオフと引き換えに、リトリーバル「アーム」の 1 つのレイテンシーを削減したい場合は、次の方法があります:
+
+1. `weakAnd` パラメータをチューニングする。クエリーの `weakAnd` 部分のパフォーマンスを 3 倍にできる可能性があります。[ブログ記事](https://blog.vespa.ai/tripling-the-query-performance-of-lexical-search/)を参照してください。
+
+以下は、経験的に得られた、ほとんどのユースケースでうまく機能するデフォルトパラメータです:
+
+```txt
+rank-profile optimized inherits baseline {
+    filter-threshold: 0.05
+    weakand {
+      stopword-limit: 0.6
+      adjust-target: 0.01
+    }
+  }
+```
+
+`weakAnd` パラメータの詳細については[リファレンス](/ja/reference/schemas/schemas#weakand)を参照してください。これらはクエリーパラメータとしても設定できます。
+
+1. すでに[述べたように](#consider-binary-vectors-for-recall)、埋め込みにバイナリベクトルを検討してください。
+2. より次元数の少ない埋め込みモデルを使うか、次元のサブセットだけを使うこと(例: [Matryoshka 埋め込み](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/)の利用)を検討してください。
+
+
+## 第 1 フェーズランキング
+
+first-phase ランキングでは、リトリーバルフェーズでマッチしたすべてのドキュメントに適用されるため、計算コストの低い関数を使用する必要があります。多くのアプリケーションでは、これは数百万件の候補ドキュメントに達することがあります。
+
+一般的な選択肢としては、テキスト類似度フィーチャー、ベクトルの closeness、メタデータなどのフィーチャーの(学習された)線形結合が挙げられます。ヒューリスティックに手書きした関数でも構いません。
+
+テキストフィーチャーには [nativeRank](/ja/reference/ranking/nativerank#nativeRank) または [bm25](/ja/ranking/bm25#ranking-function) を含めるべきです — [fieldMatch](/ja/reference/ranking/rank-features#field-match-features-normalized) は(コストが高すぎるため)使用しないでください。
+
+`bm25` と `nativeRank` のどちらを選ぶかを決める際の考慮事項:
+
+- **bm25**: 最も低コスト、強い有意性シグナル、近接性なし、非正規化。
+- **nativeRank**: 2 ~ 3 倍高コスト、有意性は打ち切りあり、近接性を含む、正規化済み。
+
+このブループリントでは first phase に `bm25` を使うことにしましたが、`nativeRank` を使う追加コストが品質向上に見合うかどうかを、評価・比較して判断してもよいでしょう。
+
+
+### 第 1 フェーズランキングのための訓練データの収集
+
+first-phase ランキングに使用するフィーチャーは正規化されていません(つまり、値の範囲がそれぞれ異なります)。そのため、単純に等しい重みを付けるだけでは、それが関連性の良い代理指標になるとは期待できません。
+
+以下では、各フィーチャーの最適な重み(係数)を見つける(学習する)方法を示します。これにより、次の形式のランキング式に組み合わせることができます:
+
+```python
+a * bm25(title) + b * bm25(chunks) + c * max_chunk_sim_scores() + d * max_chunk_text_scores() + e * avg_top_3_chunk_sim_scores() + f * avg_top_3_chunk_text_scores()
+```
+
+最初に必要なのは訓練データの収集です。これには pyvespa ライブラリの [VespaFeatureCollector](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaFeatureCollector) を使用します。
+
+含めるフィーチャーは次のとおりです:(以下、)
+
+```txt expandable
+rank-profile base-features {
+        inputs {
+            query(embedding) tensor<int8>(x[96])
+            query(float_embedding) tensor<float>(x[768])
+        }
+
+        rank chunks {
+            element-gap: 0 # Fixed length chunking should not cause any positional gap between elements
+        }
+        function chunk_text_scores() {
+            expression: elementwise(bm25(chunks),chunk,float)
+        }
+
+        function chunk_emb_vecs() {
+            expression: unpack_bits(attribute(chunk_embeddings))
+        }
+
+        function chunk_dot_prod() {
+            expression: reduce(query(float_embedding) * chunk_emb_vecs(), sum, x)
+        }
+
+        function vector_norms(t) {
+            expression: sqrt(sum(pow(t, 2), x))
+        }
+        function chunk_sim_scores() {
+            expression: chunk_dot_prod() / (vector_norms(chunk_emb_vecs()) * vector_norms(query(float_embedding)))
+        }
+
+        function top_3_chunk_text_scores() {
+            expression: top(3, chunk_text_scores())
+        }
+
+        function top_3_chunk_sim_scores() {
+            expression: top(3, chunk_sim_scores())
+        }
+
+        function avg_top_3_chunk_text_scores() {
+            expression: reduce(top_3_chunk_text_scores(), avg, chunk)
+        }
+        function avg_top_3_chunk_sim_scores() {
+            expression: reduce(top_3_chunk_sim_scores(), avg, chunk)
+        }
+        
+        function max_chunk_text_scores() {
+            expression: reduce(chunk_text_scores(), max, chunk)
+        }
+
+        function max_chunk_sim_scores() {
+            expression: reduce(chunk_sim_scores(), max, chunk)
+        }
+}
+
+rank-profile collect-training-data inherits base-features {
+        match-features {
+            bm25(title)
+            bm25(chunks)
+            max_chunk_sim_scores
+            max_chunk_text_scores
+            avg_top_3_chunk_sim_scores
+            avg_top_3_chunk_text_scores
+
+        }
+
+
+        first-phase {
+            expression {
+                # Not used in this profile
+                bm25(title) + 
+                bm25(chunks) +
+                max_chunk_sim_scores() +
+                max_chunk_text_scores()
+            }
+        }
+
+        second-phase {
+            expression: random
+        }
+    }
+```
+
+ご覧のとおり、`base-features` ランクプロファイルを継承する `collect-training-data` ランクプロファイルを定義しています。このランクプロファイルは、`match-features` セクションで定義したマッチフィーチャーを収集します。
+
+`second-phase` の `random` 式によってランダムなヒットを収集でき、これはデータ収集スクリプトに必要です。詳細は、スクリプトで使用されている [pyvespa クラス VespaFeatureCollector の docstring](https://vespa-engine.github.io/pyvespa/api/vespa/evaluation.html#vespa.evaluation.VespaFeatureCollector) を参照してください。
+
+ご覧のとおり、first-phase ランキングでは `bm25` とさまざまなベクトル類似度フィーチャー(ドキュメントレベルとチャンクレベルの両方)に依存しています。これらは比較的低コストで計算でき、first-phase ランキングに十分なランキングシグナルを提供してくれる可能性が高いものです。
+
+以下のコマンドを実行すると、収集されたフィーチャーを含む .csv ファイルが保存されます。これは、first-phase ランキング用のランキングモデルの訓練に使用できます。
+
+```bash
+$ python eval/collect_pyvespa.py --collect_matchfeatures
+```
+
+出力ファイルは次のようになります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>query_id</th>
+      <th>doc_id</th>
+      <th>relevance_label</th>
+      <th>relevance_score</th>
+      <th>match_avg_top_3_chunk_sim_scores</th>
+      <th>match_avg_top_3_chunk_text_scores</th>
+      <th>match_bm25(chunks)</th>
+      <th>match_bm25(title)</th>
+      <th>match_max_chunk_sim_scores</th>
+      <th>match_max_chunk_text_scores</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>alex_q_01</td>
+      <td>50</td>
+      <td>1</td>
+      <td>0.660597</td>
+      <td>0.248329</td>
+      <td>8.444725</td>
+      <td>7.717984</td>
+      <td>0.</td>
+      <td>0.268457</td>
+      <td>8.444725</td>
+    </tr>
+    <tr>
+      <td>alex_q_01</td>
+      <td>82</td>
+      <td>1</td>
+      <td>0.649638</td>
+      <td>0.225300</td>
+      <td>12.327676</td>
+      <td>18.611592</td>
+      <td>2.453409</td>
+      <td>0.258905</td>
+      <td>15.644889</td>
+    </tr>
+    <tr>
+      <td>alex_q_01</td>
+      <td>1</td>
+      <td>1</td>
+      <td>0.245849</td>
+      <td>0.358027</td>
+      <td>15.100841</td>
+      <td>23.010389</td>
+      <td>4.333828</td>
+      <td>0.391143</td>
+      <td>20.582403</td>
+    </tr>
+    <tr>
+      <td>alex_q_01</td>
+      <td>28</td>
+      <td>0</td>
+      <td>0.988250</td>
+      <td>0.278074</td>
+      <td>0.179929</td>
+      <td>0.197420</td>
+      <td>0.</td>
+      <td>0.278074</td>
+      <td>0.179929</td>
+    </tr>
+    <tr>
+      <td>alex_q_01</td>
+      <td>23</td>
+      <td>0</td>
+      <td>0.968268</td>
+      <td>0.203709</td>
+      <td>0.182603</td>
+      <td>0.196956</td>
+      <td>0.</td>
+      <td>0.203709</td>
+      <td>0.182603</td>
+    </tr>
+  </tbody>
+</table>
+
+この表の `relevance_score` は、`collect-training-data` ランクプロファイルの `second-phase` で使用したランダム式にすぎず、モデルの訓練前に除外される点に注意してください。
+
+
+### 第 1 フェーズランキングモデルの訓練
+
+思い出していただきたいのですが、first-phase のランキング式は評価コストが低いものでなければなりません。これは多くの場合、マッチフィーチャーのヒューリスティックな手書きの組み合わせか、マッチフィーチャーで訓練された線形モデルを意味します。
+
+ここでは、収集したマッチフィーチャーに基づいて関連性を予測するシンプルなロジスティック回帰モデルを訓練する方法を示します。完全な訓練スクリプトは [sample-apps リポジトリ](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/train_logistic_regression.py)にあります。
+
+注意しておくべき「落とし穴」:
+
+- クラスの不均衡を避けるため、クエリーごとに関連ドキュメントとランダムドキュメントを同数サンプリングします。
+- 訓練の前に、`query_id` 列と `doc_id` 列を必ず除外します。
+- モデルの訓練前にフィーチャーに標準化スケーリングを適用します。訓練後にモデル係数へ逆変換を適用することで、Vespa でそのまま使えるようにします。
+- モデル性能の評価には 5 分割の層化交差検証を使用し、各フォールドで関連ドキュメントとランダムドキュメントの数が均衡するようにします。
+- 過学習を避けるため、モデルを評価するための未見のテストクエリーのセットも必ず用意します。
+
+訓練[スクリプト](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/train_logistic_regression.py)を実行します
+
+```bash
+$ python eval/train_logistic_regression.py
+```
+
+次のような出力が期待されます:
+
+```txt expandable
+------------------------------------------------------------
+      Cross-Validation Results (5-Fold, Standardized)       
+------------------------------------------------------------
+Metric             | Mean               | Std Dev           
+------------------------------------------------------------
+Accuracy           | 0.9024             | 0.0294            
+Precision          | 0.9236             | 0.0384            
+Recall             | 0.8818             | 0.0984            
+F1-Score           | 0.8970             | 0.0415            
+Log Loss           | 0.2074             | 0.0353            
+ROC AUC            | 0.9749             | 0.0103            
+Avg Precision      | 0.9764             | 0.0117            
+------------------------------------------------------------
+Transformed Coefficients (for original unscaled features):
+--------------------------------------------------
+avg_top_3_chunk_sim_scores   : 13.383840
+avg_top_3_chunk_text_scores  : 0.203145
+bm25(chunks)                 : 0.159914
+bm25(title)                  : 0.191867
+max_chunk_sim_scores         : 10.067169
+max_chunk_text_scores        : 0.153392
+Intercept                    : -7.798639
+--------------------------------------------------
+```
+
+かなり良い結果に見えます。ただし、これほど小さなデータセットでは過学習しやすいものです。モデルがどの程度汎化するかを確認するため、未見のテストクエリーで評価してみましょう。
+
+まず、学習した係数を Vespa で使えるように、スキーマ内の新しいランクプロファイルに入力として追加する必要があります。
+
+```txt expandable
+rank-profile learned-linear inherits collect-training-data {
+        match-features: 
+        inputs {
+            query(embedding) tensor<int8>(x[96])
+            query(float_embedding) tensor<float>(x[768])
+            query(intercept) double
+            query(avg_top_3_chunk_sim_scores_param) double
+            query(avg_top_3_chunk_text_scores_param) double
+            query(bm25_chunks_param) double
+            query(bm25_title_param) double
+            query(max_chunk_sim_scores_param) double
+            query(max_chunk_text_scores_param) double
+        }
+        first-phase {
+            expression {
+                query(intercept) + 
+                query(avg_top_3_chunk_sim_scores_param) * avg_top_3_chunk_sim_scores() +
+                query(avg_top_3_chunk_text_scores_param) * avg_top_3_chunk_text_scores() +
+                query(bm25_title_param) * bm25(title) + 
+                query(bm25_chunks_param) * bm25(chunks) +
+                query(max_chunk_sim_scores_param) * max_chunk_sim_scores() +
+                query(max_chunk_text_scores_param) * max_chunk_text_scores()
+            }
+        }
+        summary-features {
+            top_3_chunk_sim_scores
+        }
+        
+    }
+```
+
+アプリケーションを再デプロイせずにパラメータを変更できるようにするため、係数の値をクエリーパラメータとして新しいクエリープロファイルにも追加します。
+
+```xml expandable
+<query-profile id="hybrid">
+    <field name="schema">doc</field>
+    <field name="ranking.features.query(embedding)">embed(@query)</field>
+    <field name="ranking.features.query(float_embedding)">embed(@query)</field>
+    <field name="ranking.features.query(intercept)">-7.798639</field>
+    <field name="ranking.features.query(avg_top_3_chunk_sim_scores_param)">13.383840</field>
+    <field name="ranking.features.query(avg_top_3_chunk_text_scores_param)">0.203145</field>
+    <field name="ranking.features.query(bm25_chunks_param)">0.159914</field>
+    <field name="ranking.features.query(bm25_title_param)">0.191867</field>
+    <field name="ranking.features.query(max_chunk_sim_scores_param)">10.067169</field>
+    <field name="ranking.features.query(max_chunk_text_scores_param)">0.153392</field>
+    <field name="yql">
+        select *
+        from %{schema}
+        where default contains text(@query) or
+        ({label:"title_label", targetHits:100}nearestNeighbor(title_embedding, embedding)) or
+        ({label:"chunks_label", targetHits:100}nearestNeighbor(chunk_embeddings, embedding))
+    </field>
+    <field name="hits">10</field>
+    <field name="ranking.profile">learned-linear</field>
+    <field name="presentation.summary">top_3_chunks</field>
+</query-profile>    
+```
+
+
+### 第 1 フェーズランキングの評価
+
+これで、first-phase のランキング関数を評価する準備が整いました。[pyvespa](https://vespa-engine.github.io/pyvespa/) ライブラリの [VespaEvaluator](https://vespa-engine.github.io/pyvespa/evaluating-vespa-application-cloud.html#vespaevaluator) を使用して、first-phase のランキング関数を評価できます。
+
+次のコマンドを実行して、[評価スクリプト](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/evaluate_ranking.py)を実行します
+
+```bash
+$ python eval/evaluate_ranking.py
+```
+
+未見のテストクエリーのセットに対して評価スクリプトを実行すると、次の出力が得られます:
+
+```json expandable
+{
+    "accuracy@1": 1.0,
+    "accuracy@3": 1.0,
+    "accuracy@5": 1.0,
+    "accuracy@10": 1.0,
+    "precision@10": 0.235,
+    "recall@10": 0.9405,
+    "precision@20": 0.13,
+    "recall@20": 0.9955,
+    "mrr@10": 1.0,
+    "ndcg@10": 0.8902,
+    "map@100": 0.8197,
+    "searchtime_avg": 0.017,
+    "searchtime_q50": 0.0165,
+    "searchtime_q90": 0.0251,
+    "searchtime_q95": 0.0267
+}
+```
+
+first phase のランキングで最も重視すべきは再現率です。候補ドキュメントが second-phase ランキングに含まれるよう十分に高くランキングされることを確認したいだけだからです。すべてのコンテントノードを合計して second-phase で再ランキングされるドキュメント数は、`total-rerank-count` パラメータで制御されます。
+
+結果はすでに非常に良好であることがわかります。これはもちろん、小規模で合成的なデータセットを使っているためです。実際には、メトリクスへの期待値を皆さんのデータセットとテストクエリーに合わせて調整すべきです。
+
+また、検索時間も非常に高速で、平均 22ms であることがわかります。second-phase ランキングのための余裕を残しておきたいので、これがレイテンシー予算内に十分収まっているかどうかを検討してください。
+
+
+## 第 2 フェーズランキング
+
+second-phase ランキングでは、first-phase ランキングの上位 k 件のドキュメント(`total-rerank-count` パラメータで決定)に対してのみ実行されるため、より高コストなランキング式を使う余裕があります。
+
+ここでは、マッチしたすべてのドキュメントに対して計算するにはコストが高すぎる、より洗練されたモデルやフィーチャーを使うことで、ランキング品質を大幅に向上させることができます。
+
+
+### 第 2 フェーズランキングのためのフィーチャーの収集
+
+second-phase ランキングでは、包括的なテキストフィーチャーのセットを含む、Vespa のデフォルトのランクフィーチャーセットを要求します。詳細は[ランクフィーチャーのドキュメント](/ja/reference/ranking/rank-features)を参照してください。
+
+first-phase ランキングのときと同じ[スクリプト](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/collect_pyvespa.py)に、ランクフィーチャーも収集するための追加パラメータを付けて実行することで、マッチフィーチャーとランクフィーチャーの両方を収集できます:
+
+```bash
+$ python eval/collect_pyvespa.py --collect_rankfeatures --collect_matchfeatures --collector_name rankfeatures-secondphase
+```
+
+これにより約 194 個のフィーチャーが収集され、より洗練されたランキングモデルを訓練するための豊富なフィーチャーセットが得られます。
+
+
+### 第 2 フェーズランキング用 GBDT モデルの訓練
+
+拡張されたフィーチャーセットを使って、ドキュメントの関連性を予測する勾配ブースティング決定木(GBDT)モデルを訓練できます。この目的には [LightGBM](/ja/ranking/lightgbm) を使用します。
+
+Vespa は [XGBoost](/ja/ranking/xgboost) と [ONNX](/ja/ranking/onnx) のモデルもサポートしています。
+
+モデルを訓練するには、次のコマンドを実行します([訓練スクリプトへのリンク](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/train_lightgbm.py)):
+
+```bash
+$ python eval/train_lightgbm.py --input_file eval/output/Vespa-training-data_match_rank_second_phase_20250623_135819.csv
+```
+
+訓練プロセスには、いくつかの重要な考慮事項が含まれています:
+
+- **交差検証**: モデル性能の評価と過学習の防止のため、5 分割の層化交差検証を使用します
+- **ハイパーパラメータチューニング**: 特に小規模なデータセットで重要な、過度に大きく深い木の成長を防ぐため、保守的なハイパーパラメータを設定します
+- **フィーチャー選択**: 交差検証中に重要度がゼロだったフィーチャーは、最終モデルから除外します
+- **早期打ち切り**: 検証スコアが 50 ラウンド改善しない場合、訓練を停止します
+
+訓練出力の例:
+
+```txt
+------------------------------------------------------------
+             Cross-Validation Results (5-Fold)             
+------------------------------------------------------------
+Metric             | Mean               | Std Dev           
+------------------------------------------------------------
+Accuracy           | 0.9214             | 0.0664            
+ROC AUC            | 0.9863             | 0.0197            
+------------------------------------------------------------
+Overall CV AUC: 0.9249 • ACC: 0.9216
+------------------------------------------------------------
+```
+
+
+### フィーチャー重要度の分析
+
+訓練されたモデルは、ランキング品質にとってどのフィーチャーが最も重要かを明らかにします。このサンプルアプリケーションでは、上位のフィーチャーは次のとおりです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>フィーチャー</th>
+      <th>重要度</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>nativeProximity</td>
+      <td>168.8498</td>
+    </tr>
+    <tr>
+      <td>firstPhase</td>
+      <td>151.7382</td>
+    </tr>
+    <tr>
+      <td>max_chunk_sim_scores</td>
+      <td>69.4377</td>
+    </tr>
+    <tr>
+      <td>avg_top_3_chunk_text_scores</td>
+      <td>56.5079</td>
+    </tr>
+    <tr>
+      <td>avg_top_3_chunk_sim_scores</td>
+      <td>31.8700</td>
+    </tr>
+    <tr>
+      <td>nativeRank</td>
+      <td>20.0716</td>
+    </tr>
+    <tr>
+      <td>nativeFieldMatch</td>
+      <td>15.9914</td>
+    </tr>
+    <tr>
+      <td>elementSimilarity(chunks)</td>
+      <td>9.7003</td>
+    </tr>
+  </tbody>
+</table>
+
+主な観察結果:
+
+- **テキスト近接性フィーチャー**([nativeProximity](/ja/reference/ranking/nativerank#nativeProximity))は、クエリーとドキュメントの関連性を理解するうえで非常に有用です
+- **first-phase スコア**(`firstPhase`)が重要であることは、first-phase ランキングが良い土台を提供していることの裏付けになります
+- **チャンクレベルのフィーチャー**(テキストとセマンティックの両方)は、ランキング品質に大きく貢献します
+- [nativeRank](/ja/reference/ranking/nativerank#nativeRank) や [bm25](/ja/ranking/bm25#ranking-function) のような**従来型のテキストフィーチャー**も引き続き重要です
+
+
+### GBDT モデルの Vespa への統合
+
+訓練された LightGBM モデルをエクスポートし、Vespa のアプリケーション・パッケージに追加します:
+
+```txt
+app/
+├── models/
+│   └── lightgbm_model.json
+```
+
+このモデルを使用する新しいランクプロファイルを作成します:
+
+```txt
+rank-profile second-with-gbdt inherits collect-training-data {
+    ...
+
+    second-phase {
+        expression: lightgbm("lightgbm_model.json")
+    }
+
+    ...
+}
+```
+
+そしてアプリケーションを再デプロイします:
+
+```bash
+$ vespa deploy
+```
+
+
+### 第 2 フェーズランキング性能の評価
+
+[evaluate_ranking.py](https://github.com/vespa-engine/sample-apps/blob/master/rag-blueprint/eval/evaluate_ranking.py) スクリプトを実行して、GBDT による second-phase ランキングを未見のテストクエリーで評価します:
+
+```bash
+$ python evaluate_ranking.py --second_phase
+```
+
+期待される結果は次のようなものです:
+
+```json expandable
+{
+  "accuracy@1": 0.9,
+  "accuracy@3": 1.0,
+  "accuracy@5": 1.0,
+  "accuracy@10": 1.0,
+  "precision@10": 0.235,
+  "recall@10": 0.9402,
+  "precision@20": 0.13,
+  "recall@20": 0.9955,
+  "mrr@10": 0.95,
+  "ndcg@10": 0.8782,
+  "map@100": 0.8091,
+  "searchtime_avg": 0.0204,
+  "searchtime_q50": 0.018,
+  "searchtime_q90": 0.0333,
+  "searchtime_q95": 0.0362
+}
+```
+
+より大きなデータセットであれば、first-phase ランキングを大幅に上回る改善が期待できるでしょう。今回は first-phase ランキングがすでに非常に良好なため、ここではその改善は確認できませんが、実世界のデータセットで実行できるように比較コードは残してあります。
+
+また、検索時間がわずかに増加している(平均 22ms から 35ms)ことも観察できます。これは GBDT モデルの複雑さが加わったことによるもので、想定どおりです。
+
+
+### GBDT ランキングを使ったクエリープロファイル
+
+改善されたランキングを活用する新しいクエリープロファイルを作成します:
+
+```xml
+<query-profile id="hybrid-with-gbdt" inherits="hybrid">
+    <field name="ranking.profile">second-with-gbdt</field>
+    <field name="hits">20</field>
+</query-profile>
+
+<query-profile id="rag-with-gbdt" inherits="hybrid-with-gbdt">
+    <field name="hits">50</field>
+    <field name="searchChain">openai</field>
+    <field name="presentation.format">sse</field>
+</query-profile>
+```
+
+改善されたランキングをテストします:
+
+```bash
+$ vespa query query="what are key points learned for finetuning llms?" queryProfile=hybrid-with-gbdt
+```
+
+LLM 生成を伴う RAG アプリケーションの場合:
+
+```bash
+$ vespa query \
+    --timeout 60 \
+    query="what are key points learned for finetuning llms?" \
+    queryProfile=rag-with-gbdt
+```
+
+
+### 第 2 フェーズランキングのベストプラクティス
+
+**モデルの複雑さに関する考慮事項:**
+
+- first-phase ではコストが高すぎる、より洗練されたモデル(GBDT、ニューラルネットワーク)を使用する
+- 削減された候補セット(通常 100 ~ 10,000 ドキュメント)を活用する
+- `nativeProximity` や `fieldMatch` のような高コストのテキストフィーチャーを含める
+
+**フィーチャーエンジニアリング:**
+
+- first-phase のスコアを、追加のテキストフィーチャーやセマンティックフィーチャーと組み合わせる
+- ドキュメント構造を捉えるため、チャンクレベルの集約(max、average、top-k)を使用する
+- メタデータシグナルを含める
+
+**訓練データの品質:**
+
+- first-phase ランキングを使って、より良い訓練データを生成する
+- 上位 k 件の結果に対して LLM に関連性判定を生成させることを検討する
+- 利用可能になったら、ユーザーインタラクションデータで反復的に改善する
+
+**パフォーマンスの監視:**
+
+- second-phase ランキングのレイテンシーへの影響を監視する
+- 品質とパフォーマンスのトレードオフに基づいて `total-rerank-count` を調整する
+- クエリータイプやユースケースごとに異なるモデルの使用を検討する
+
+second-phase ランキングは、高品質な RAG アプリケーションを構築するうえで重要なステップであり、妥当なクエリーレイテンシーを維持しながら、効果的な LLM コンテキストに必要な精度を提供します。
+
+
+## (オプション)グローバルフェーズランキング
+
+[global-phase](/ja/reference/schemas/schemas#globalphase-rank) ランキングを設定するオプションもあります。これは、second-phase ランキングの上位 k 件(`total-rerank-count` パラメータで設定)のドキュメントを再ランキングできます。
+
+global-phase の一般的な選択肢は、[クロスエンコーダー](/ja/ranking/cross-encoders)か、[LambdaMart](https://xgboost.readthedocs.io/en/latest/tutorials/learning_to_rank.html) のような目的関数で上位ドキュメントの分離をより適切に行うために訓練された別の GBDT モデルです。RAG アプリケーションでは、結果が主に人間によって消費される検索アプリケーションと比べて、これはそれほど重要ではないと考えています。LLM は結果の順序をあまり気にしないためです。
+
+
+## さらなる改善
+
+最後に、さらなる改善の機会をいくつか描いてみます。これまで見てきたように、私たちは少数のクエリーに対するバイナリの関連性ラベルだけから始め、関連ドキュメントとランダムドキュメントのセットに基づいてモデルを訓練しました。
+
+お気づきかもしれませんが、RAG の評価というと多くの人が思い浮かべる「生成(Generation)」ステップの評価については触れていません。これを行うためのツールはいくつかあり、たとえば [ragas](https://docs.ragas.io/en/stable/) や [ARES](https://github.com/stanford-futuredata/ARES) があります。このチュートリアルはこれだけでも消化するのに十分な量なので、その詳細については他の情報源に譲ります。
+
+当初はこれが有用でした。候補ドキュメントを取得するためのより良い方法がなかったからです。今では、そこそこ良い second-phase ランキングが手に入ったので、ラベルのなかったクエリーに対して、返された上位 k 件のヒットを LLM に関連性判定させることで、新しい関連性ラベルのセットを生成できる可能性があります。この訓練データセットは、上位ドキュメントの分離という点でさらに優れたものになるでしょう。
+
+
+## まとめ
+
+このチュートリアルでは、Vespa を使って完全な RAG アプリケーションを構築しました。バイナリベクトルとテキストマッチングによるリトリーバルフェーズ、比較的低コストなフィーチャーの線形結合による first-phase ランキングから、より高コストなフィーチャーと GBDT モデルを使ったより洗練された second-phase ランキングシステムまで、それぞれへの取り組み方について私たちの推奨事項を提供しました。
+
+このチュートリアルが、[sample-apps リポジトリ](https://github.com/vespa-engine/sample-apps/tree/master/rag-blueprint)で提供されているコードとともに、評価駆動のアプローチで皆さん自身の RAG アプリケーションを構築する際の有用なリファレンスとなることを願っています。
+
+このチュートリアルで示した原則を活用することで、どんなデータセットサイズにも、どんなクエリー負荷にもスケールできる高品質な RAG アプリケーションを構築できるようになります。
+
+
+## FAQ
+
+<AccordionGroup>
+<Accordion title="なぜランキングに ColBERT を使わないのですか?">
+私たちは ColBERT を高く評価しており、実際に優れた性能を示しています。Vespa は ColBERT スタイルのモデルをサポートしています。課題は、特に大規模なアプリケーションにおけるメモリストレージの追加コストです。使用する場合は、float と比較してメモリ使用量を 32 分の 1 に削減するために、ベクトルのバイナリ化を検討することをお勧めします。ランキング品質を向上させたい、そして追加コストを受け入れられるという場合は、ぜひ評価して試してみてください。Vespa での ColBERT の利用についてさらに学びたい方のためのリソースをいくつか紹介します:
+
+- [ColBERT embedder の発表](https://blog.vespa.ai/announcing-colbert-embedder-in-vespa/#what-is-colbert?)
+- [長いコンテキストの ColBERT](https://blog.vespa.ai/announcing-long-context-colbert-in-vespa/)
+- [長いコンテキストの ColBERT サンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/colbert-long/#vespa-sample-applications---long-context-colbert)
+- [ColBERT サンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/colbert)
+- [ColBERT embedder リファレンス](/ja/rag/embedding#colbert-embedder)
+- [ColBERT スタンドアロン python サンプルノートブック](https://vespa-engine.github.io/pyvespa/examples/colbert_standalone_Vespa-cloud.html)
+- [ColBERT スタンドアロン長コンテキストサンプルノートブック](https://vespa-engine.github.io/pyvespa/examples/colbert_standalone_long_context_Vespa-cloud.html)
+</Accordion>
+
+<Accordion title="Vespa ではどの埋め込みモデルが使えますか?">
+Vespa はさまざまな埋め込みモデルをサポートしています。Vespa Cloud で Vespa が提供するモデルの一覧は、[モデルハブ](/ja/rag/model-hub)を参照してください。embedder の使い方については[埋め込みリファレンス](/ja/rag/embedding#provided-embedders)も参照してください。プライベートモデル(Vespa Cloud シークレットストアの Bearer トークンによる認証で保護されたもの)も使用できます。
+</Accordion>
+
+<Accordion title="Vespa で LLM を使う必要はありますか?">
+いいえ、Vespa を検索エンジンとして自由に使っていただけます。大きな検索結果セットをネットワーク越しに何度も送信するのと比べてレイテンシーを削減するために、Vespa アプリケーション内から LLM を呼び出すオプションを提供しているほか、ローカル LLM をデプロイするオプションもあり、必要であれば自身のインフラストラクチャ上で実行することも可能です。[Vespa Cloud Enclave](/ja/operations/enclave/enclave) を参照してください
+</Accordion>
+
+<Accordion title="なぜドキュメント埋め込みにバイナリベクトルを使うのですか?">
+バイナリベクトルは、必要なメモリがはるかに少なく、距離計算も高速で、品質の低下はわずかです。詳細はブログ[記事](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/)を参照してください。
+</Accordion>
+
+<Accordion title="Vespa があらゆるデータ量とクエリー負荷にスケールできると言えるのはなぜですか?">
+Vespa は、アプリケーションのステートレスなコンテナーノードとコンテントノードの両方をスケールできます。詳細は[概要](../overview)と[エラスティシティ](/ja/content/elasticity)を参照してください。
+</Accordion>
+</AccordionGroup>

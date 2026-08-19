@@ -1,0 +1,935 @@
+---
+title: "Vespa 8 リリースノート"
+sidebarTitle: "Vespa 8"
+---
+
+このドキュメントは、Vespa のメジャー・バージョン 7 と 8 の間の変更点を一覧にしたものです。[Vespa のバージョン](/ja/learn/releases#versions)に記載されているとおり、Vespa の新機能はマイナー・バージョンで導入され、メジャー・バージョンは互換性を破壊するリリースを示すために使用されます。Vespa 8 は新しい機能を導入していないため、それに先行する Vespa 7 のバージョンと同等に安全で成熟しています。重大なセキュリティ修正の可能性を除き、Vespa 7 のリリースは今後行われません。
+
+## 概要
+
+Vespa 8 における互換性を破壊する変更は、次のカテゴリーに分類されます:
+
+- [デフォルト動作の変更](#changed-defaults)
+- [アプリケーション・パッケージの構造と設定](#application-package-changes) - *スキーマ* や *services.xml* などで非推奨となっていた設定や構成要素が削除されます。
+- [Java API](#java-api-changes) - 非推奨の API が削除されるか、Vespa の[パブリック API](https://javadoc.io/doc/com.yahoo.vespa/annotations/latest/com/yahoo/api/annotations/PublicApi.html) の対象から除外されます。
+- [コンテナー・ランタイム環境](#container-runtime) - Java のビルド環境およびランタイム環境に対する互換性のない変更。
+- [HTTP API の変更](#removed-http-api-parameters)
+- [削除されたコマンドライン・ツール](#removed-command-line-tools)
+- [削除または名前変更されたメトリクス](#removed-or-renamed-metrics)
+- [ドキュメント・セレクション言語の変更](#document-selection-exact-type-matching)
+- [セキュリティ関連の変更](#security)
+- [オペレーティング・システムのサポート](#operating-system)
+- 上記のいずれのカテゴリーにも含まれない[その他の変更](#other-changes)。
+
+アプリケーションが Vespa 8 と互換性があることを確認するために、アプリケーションの所有者は次のことを行う必要があります:
+
+- [デフォルトの変更](#changed-defaults)の一覧を確認し、Vespa 7 の動作を維持したい場合は必要なオプションを追加します。
+- Vespa 7 に対してコンパイルした際に非推奨警告が出ないことを確認します。
+- [アプリケーション・パッケージの変更](#application-package-changes)を確認し、Vespa 7 でデプロイした際にデプロイ警告が出ないことを確認します。
+- [HTTP API の変更](#removed-http-api-parameters)の一覧を確認し、アプリケーションのクライアントを更新します。
+- このドキュメントの残りのセクションを確認し、それに応じてアプリケーションとその環境を更新します。
+
+非推奨の Java API を使用するとコンパイル時に警告が出力され、アプリケーション・パッケージの非推奨項目およびコンテナー・ランタイム環境のほとんどの変更については *デプロイ警告* が出力されます。ホステッド Vespa または Vespa Cloud では、デプロイ警告はアプリケーションのコンソール・ビューに表示されます。ただし、その他の種類の変更については非推奨警告を出力する手段がないため、このドキュメントおよびその他の Vespa ドキュメントでのみ説明されています。
+
+以下のセクションでは、Vespa 7 から Vespa 8 へのすべての変更を詳しく説明します。
+
+## デフォルトの変更
+
+これらの変更はクライアントを壊す可能性があり、パフォーマンスとユーザー・エクスペリエンスの両方に影響を与えます。本番環境で稼働中でこれらのデフォルトに依存しているアプリケーションは、Vespa 8 にアップグレードする際に既存の動作を維持するための設定変更を行うべきです。これはアップグレード *前* に Vespa 7 上で行うことができます。[バケット・テスト](/ja/applications/testing#feature-switches-and-bucket-tests)の利用が役に立つ場合があります。
+
+次のデフォルトが変更されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>変更内容</th>
+      <th>Vespa 8 での変更を回避するために必要な設定</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>デフォルトの<a href="/ja/reference/querying/simple-query-language" aria-label="simple query language">シンプル・クエリー言語</a>(エンドユーザー向け)が <code>{`all`}</code> から <a href="/ja/ranking/wand#weakand" aria-label="weakAnd">weakAnd</a> に変更されました。<br/>  <Note>&#42;&#42;注:&#42;&#42;<br/><br/> これによりリコールが増加し、ドキュメント・コーパスが大きい場合はレイテンシーが大幅に増加する可能性があります。</Note></td>
+      <td>クエリーで <a href="/ja/reference/api/query#model.type" aria-label="model.type">model.type</a>=all を明示的に渡すか、該当する<a href="/ja/querying/query-profiles" aria-label="query profiles">クエリー・プロファイル</a>でこのパラメーターを設定します: <code>{`<field name="model.type">all</field>`}</code>。</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/reference/querying/yql#userinput" aria-label="YQL userInput">YQL userInput</a> のデフォルトの grammar が <code>{`all`}</code> から <a href="/ja/ranking/wand#weakand" aria-label="weakAnd">weakAnd</a> に変更されました。 <br/> <Note>&#42;&#42;注:&#42;&#42;<br/><br/> これによりリコールが増加し、ドキュメント・コーパスが大きい場合はレイテンシーが大幅に増加する可能性があります。</Note></td>
+      <td>YQL の <code>{`userInput`}</code> の前に <code>{`{grammar: "all"}`}</code> を付けます。</td>
+    </tr>
+    <tr>
+      <td>services.xml の<a href="/ja/reference/querying/default-result-format#geo-position-rendering" aria-label="legacy flag v7-geo-positions">レガシー・フラグ v7-geo-positions</a> の値が true から false に変更されます。<a href="/ja/reference/release-notes/vespa8-geo-migration-guide" aria-label="Vespa 8 geo migration guide">Vespa 8 geo 移行ガイド</a>を参照してください。</td>
+      <td>services.xml に次を追加します: <code>{`          <legacy> <v7-geo-positions>true</v7-geo-positions> </legacy>        `}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`map`}</code> 型のフィールドは、検索結果における <a href="/ja/reference/querying/default-result-format#inconsistent-map-rendering" aria-label="changes JSON rendering">JSON レンダリングが変更されます</a>。</td>
+      <td>クエリー・プロファイルで <code>{`renderer.json.jsonMaps`}</code> パラメーターのオーバーライドを追加します。</td>
+    </tr>
+    <tr>
+      <td><code>{`weightedset`}</code> 型のフィールドは、検索結果における <a href="/ja/reference/querying/default-result-format#inconsistent-weightedset-renderingg" aria-label="changes JSON rendering">JSON レンダリングが変更されます</a>。</td>
+      <td>クエリー・プロファイルで <code>{`renderer.json.jsonWsets`}</code> パラメーターのオーバーライドを追加します。</td>
+    </tr>
+    <tr>
+      <td>サマリー・フィーチャーとして使用される式は、<code>{`rankingExpression()`}</code> でラップされてレンダリングされなくなりました。</td>
+      <td><a href="/ja/reference/querying/default-result-format#summary-features-wrapped-in-rankingexpression" aria-label="this example">この例</a>に示すように、ランク・プロファイルで設定を指定します。</td>
+    </tr>
+    <tr>
+      <td><code>{`raw`}</code> 型のフィールドは、json フィード形式と同じように、サマリーで base64 エンコードされた文字列として表示されるようになりました。以前は、この動作にするにはスキーマ・ファイルに <code>{`raw-as-base64-in-summary`}</code> を追加する必要がありました。</td>
+      <td>"raw" 型のフィールドがあり、検索結果でそれらの古いサマリー動作を維持しなければならない場合は、スキーマ定義に   <code>{`raw-as-base64-in-summary : false`}</code>   の行を追加します。</td>
+    </tr>
+    <tr>
+      <td>レスポンスにおけるデフォルトのテンソル形式が 'long' から 'short' に変更されました: クエリー結果、ドキュメント API のレスポンス、およびステートレス・モデル評価におけるテンソルは、その型に適した短い形式(存在する場合)でレンダリングされます。詳細は<a href="/ja/reference/schemas/document-json-format#tensor" aria-label="here">こちら</a>に記載されています。</td>
+      <td>&#42;&#42;クエリー&#42;&#42;: クエリーで <a href="/ja/reference/api/query#presentation.format.tensors" aria-label="presentation.format.tensors">presentation.format.tensors</a>=long を渡すか、該当する<a href="/ja/querying/query-profiles" aria-label="query profiles">クエリー・プロファイル</a>でこのパラメーターを設定します。 <br/><br/> &#42;&#42;Document/v1&#42;&#42;: リクエストでパラメーター <code>{`format.tensors=long`}</code> を渡します。 <br/><br/> &#42;&#42;ステートレス・モデル評価&#42;&#42;: リクエストでパラメーター <code>{`format.tensors=long`}</code> を渡します。</td>
+    </tr>
+    <tr>
+      <td>ドキュメントの取得(get)またはビジット(visit)時のデフォルトのフィールドセットが、すべてのケースで <code>{`[document]`}</code> になりました。つまり、スキーマの "document" ブロックで宣言されたフィールドのみが取得されます(生成されたフィールドは含まれません)。これは、単一の既知のドキュメント・タイプのドキュメントを取得またはビジットする場合の <code>{`/document/v1`}</code> API では既にデフォルトでした。今回、ルート・レベルでのビジット、コマンドライン・ツール <code>{`vespa-visit`}</code> および <code>{`vespa-get`}</code>、そして java からプログラムで <code>{`documentapi`}</code> を使用してドキュメントを取得する場合にもデフォルトになりました。</td>
+      <td>ほとんどの場合、<code>{`[all]`}</code> フィールドセットと <code>{`[document]`}</code> フィールドセットに違いはないため、対応は不要です。古い動作が必要な場合は次のようにします:<br/><br/> • コマンドライン・ツールの場合、生成されたフィールドを含めるためにフィールドセットを <code>{`-l "[all]"`}</code> と指定します。<br/> • <code>{`/document/v1`}</code> の場合、<code>{`fieldSet`}</code> パラメーターの値として <code>{`[all]`}</code> を指定します。<br/>• java から <code>{`documentapi`}</code> を使用する場合、<code>{`VisitorParameters`}</code> の値を変更するには  <code>{`params.setFieldSet("[all]");`}</code> の行を追加し、<code>{`DocumentOperationParameters`}</code> の値を変更するには <code>{`params = params.withFieldSet("[all]");`}</code> を追加します。 <br/><br/>フィールドを生成するドキュメント・プロセッサーを実行していて、それらを返してほしい場合は、代わりに実際に出力として必要なフィールドだけを含むフィールドセットを宣言するほうが有用な場合があります。</td>
+    </tr>
+    <tr>
+      <td>Vespa は、グルーピング式で <code>{`max`}</code> が明示的に指定されていない場合、<a href="/ja/querying/grouping" aria-label="grouping query results">グルーピング・クエリー結果</a>のグループ数とヒット数を制限するようになりました。デフォルト値は <a href="/ja/reference/api/query#grouping.defaultmaxgroups" aria-label="grouping.defaultMaxGroups">grouping.defaultMaxGroups</a>/ <a href="/ja/reference/api/query#grouping.defaultmaxhits" aria-label="grouping.defaultMaxHits">grouping.defaultMaxHits</a> によって決定されます。無制限または大きな結果を返す可能性のあるグルーピング式を許可するには、パラメーター <a href="/ja/reference/api/query#grouping.globalmaxgroups" aria-label="grouping.globalMaxGroups">grouping.globalMaxGroups</a> をクエリー・プロファイルでオーバーライドする必要があります。</td>
+      <td>• <a href="/ja/reference/api/query#grouping.defaultmaxgroups" aria-label="grouping.defaultMaxGroups">grouping.defaultMaxGroups</a> が <code>{`-1`}</code> から <code>{`10`}</code> に変更されました。 <br/>• <a href="/ja/reference/api/query#grouping.defaultmaxhits" aria-label="grouping.defaultMaxHits">grouping.defaultMaxHits</a> が <code>{`-1`}</code> から <code>{`10`}</code> に変更されました。 <br/>• <a href="/ja/reference/api/query#grouping.globalmaxgroups" aria-label="grouping.globalMaxGroups">grouping.globalMaxGroups</a> が <code>{`-1`}</code> から <code>{`10000`}</code> に変更されました。 <br/>• <a href="/ja/reference/api/query#grouping.defaultprecisionfactor" aria-label="grouping.defaultPrecisionFactor">grouping.defaultPrecisionFactor</a> が <code>{`1.0`}</code> から <code>{`2.0`}</code> に変更されました。</td>
+    </tr>
+    <tr>
+      <td>Vespa の<a href="/ja/operations/access-logging" aria-label="access logs">アクセス・ログ</a>は <a href="https://github.com/facebook/zstd" aria-label="zstd">zstd</a> で圧縮されます。</td>
+      <td><code>{`services.xml`}</code> の <code>{`<container>`}</code> 配下に設定オーバーライドを追加します:  <br/><br/> <code>{`<config name="container.core.access-log">`}</code><br/> <code>{`<fileHandler>`}</code> <br/><code>{`<compressionFormat>GZIP<compressionFormat>`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+## アプリケーション・パッケージの変更
+
+### スキーマから削除された設定
+
+次の設定は[スキーマ](/ja/reference/schemas/schemas)から削除されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>代替手段</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>attribute: huge</td>
+      <td>なし。attribute に &#42;huge&#42; を設定しても効果はありません。コードはデフォルトでこれをサポートするように書き直されています。</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/reference/schemas/schemas#compression" aria-label="compression">compression</a></td>
+      <td>なし。圧縮は常に有効なため、ドキュメント圧縮の設定は不要です。</td>
+    </tr>
+    <tr>
+      <td>body(フィールド定義内)</td>
+      <td>なし。Vespa 7 より前から非推奨で、Vespa 7 では効果がありませんでした。</td>
+    </tr>
+    <tr>
+      <td>header(フィールド定義内)</td>
+      <td>なし。Vespa 7 より前から非推奨で、Vespa 7 では効果がありませんでした。</td>
+    </tr>
+    <tr>
+      <td>フィールド型 weightedset<code>{`<float>`}</code></td>
+      <td>浮動小数点型は本質的に不正確であるため、マップやセットのキーには適していません。このようなデータが必要な場合は、次のようなものの使用を検討してください:<br/><br/> <code>{`struct weightedfloat {`}</code><br/> <code>{`field value type float {}`}</code><br/>  <code>{`field weight type int {}`}</code><br/> <code>{`}`}</code> <br/> <code>{`field myfield type array<weightedfloat> {`}</code> <br/> <code>{`...`}</code></td>
+    </tr>
+    <tr>
+      <td>フィールド型 map<code>{`<float,anything>`}</code></td>
+      <td>マップのキーとしての "float" の使用はサポートされなくなりました。上記の <code>{`weightedset<float>`}</code> を参照してください。</td>
+    </tr>
+    <tr>
+      <td>フィールド型 weightedset<code>{`<double>`}</code></td>
+      <td>セットのキーとしての "double" の使用はサポートされなくなりました。上記の <code>{`weightedset<float>`}</code> を参照してください。</td>
+    </tr>
+    <tr>
+      <td>フィールド型 map<code>{`<double,anything>`}</code></td>
+      <td>マップのキーとしての "double" の使用はサポートされなくなりました。上記の <code>{`weightedset<float>`}</code> を参照してください。</td>
+    </tr>
+    <tr>
+      <td>フィールド型 weightedset<code>{`<uri>`}</code></td>
+      <td>セットのキーとしての複合型の使用はサポートされなくなりました。上記の <code>{`weightedset<float>`}</code> を参照してください。</td>
+    </tr>
+    <tr>
+      <td>フィールド型 map<code>{`<uri,anything>`}</code></td>
+      <td>マップのキーとしての複合型の使用はサポートされなくなりました。上記の <code>{`weightedset<float>`}</code> を参照してください。</td>
+    </tr>
+    <tr>
+      <td>"string[]" のような配列型の古い構文</td>
+      <td>代わりに <code>{`array<string>`}</code> と記述してください。</td>
+    </tr>
+    <tr>
+      <td>rank-profile 内のランク関数は異なる名前を持つ必要があります</td>
+      <td>同じ名前を持つ 2 つの関数のうち、後の関数のみが使用されていました。最初の関数を削除するか名前を変更してください。</td>
+    </tr>
+    <tr>
+      <td>矛盾するソート設定は拒否されるようになりました</td>
+      <td>矛盾する設定のうち最後のものだけを残してください。</td>
+    </tr>
+    <tr>
+      <td>summary-field は document-summary ブロック内で一度だけ追加できます</td>
+      <td>重複を削除してください。</td>
+    </tr>
+    <tr>
+      <td>スキーマとドキュメントは同じ名前を持つべきです</td>
+      <td>含まれるドキュメントと同じになるように、スキーマの名前を変更してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+### TensorFlow のインポート
+
+Vespa 8 では、[TensorFlow モデル](/ja/ranking/tensorflow)の直接インポートのサポートが削除されました。現在は [ONNX](https://onnx.ai/) が推奨される ML モデル形式であり、[ランキング](/ja/ranking/onnx)と[ステートレス・モデル評価](/ja/ranking/stateless-model-evaluation)の両方で動作します。ONNX には TensorFlow から ONNX へモデルを変換するツールが含まれていますが、Vespa はこれを提供しなくなります。
+
+### services.xml におけるセマンティクスの変更
+
+services.xml の次の要素と属性は、新しいセマンティクスを持ちます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`<nodes><redundancy>`}</code></td>
+      <td>設定された redundancy より少ないノード数(グループあたり)を設定するとエラーになるようになりました。以前はアプリケーション・レベルの警告が生成され、redundancy が暗黙的に引き下げられていました。ノード数は自動的に調整されるため、非 prod 環境では <code>{`<nodes>`}</code> のオーバーライドをすべて削除してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+### services.xml から削除された構成要素
+
+次の要素と属性は services.xml から削除されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>親要素</th>
+      <th>削除された構成要素</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`<admin>`}</code></td>
+      <td><code>{`<filedistribution>`}</code></td>
+      <td>アップロード/ダウンロード速度の設定はサポートされていません</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<configserver>`}</code></td>
+      <td>代わりに <a href="/ja/reference/applications/services/admin#configservers" aria-label="`configservers`"><code>{`configservers`}</code></a> 要素を使用してください</td>
+    </tr>
+    <tr>
+      <td><code>{`<config>`}</code></td>
+      <td>&#42;namespace&#42; 属性</td>
+      <td>namespace は &#42;name&#42; 属性に含める必要があります。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<myArray operation="append">`}</code> 構文</td>
+      <td>以前は設定配列に項目を追加するために使用されていました。代わりに <a href="/ja/reference/applications/config-files#configuring-arrays" aria-label="`item`"><code>{`item`}</code></a> を使用してください。</td>
+    </tr>
+    <tr>
+      <td><code>{`<container>`}</code></td>
+      <td>&#42;jetty&#42; 属性</td>
+      <td>削除されました。Vespa 7 では効果がありませんでした。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<nodes>`}</code> の jvm 属性</td>
+      <td>JVM 属性 &#42;jvmargs, allocated-memory, jvm-options, jvm-gc-options&#42; は名前が変更され、<a href="/ja/reference/applications/services/container#jvm" aria-label="`JVM`"><code>{`JVM`}</code></a> サブ要素に移動しました</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<client>`}</code></td>
+      <td>以前はクライアント・プロバイダーの設定に使用されていました。代わりに<a href="/ja/applications/request-handlers" aria-label="`request handler`"><code>{`リクエスト・ハンドラー`}</code></a>を使用してください。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<handler><clientBinding>`}</code></td>
+      <td>クライアント・バインディングはサポートされなくなりました。</td>
+    </tr>
+    <tr>
+      <td><code>{`<content>`}</code></td>
+      <td><code>{`<dispatch>`}</code></td>
+      <td>&#42;vespa-dispatch-bin&#42; の削除に伴い削除されました。<a href="#vespa-dispatch-bin-process-is-removed" aria-label="details.">詳細。</a></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<tuning><dispatch><min-group-coverage>`}</code></td>
+      <td>代わりに <a href="/ja/reference/applications/services/content#min-active-docs-coverage" aria-label="`min-active-docs-coverage`"><code>{`min-active-docs-coverage`}</code></a> を使用してください。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<tuning><dispatch><use-local-node>`}</code></td>
+      <td>無視されます。適切な場合はローカル・ノードが自動的に優先されます。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<engine><proton><tuning><searchnode><flushstrategy><native><transactionlog><maxentries>`}</code></td>
+      <td>代わりに <a href="/ja/reference/applications/services/content#flushstrategy-native-transactionlog-maxsize" aria-label="`maxsize`"><code>{`maxsize`}</code></a> を使用してください。Vespa 7 のドキュメント: フラッシュを実行する前の、ドキュメント・タイプごとの<a href="/ja/content/proton#transaction-log" aria-label="`transaction log`"><code>{`トランザクション・ログ`}</code></a>内エントリーの最大数。デフォルトは 1000000(100 万)。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<engine><proton><tuning><searchnode><summary><store><logstore><chunk><maxentries>`}</code></td>
+      <td>代わりに <a href="/ja/reference/applications/services/content#summary-store-logstore-chunk-maxsize" aria-label="`maxsize`"><code>{`maxsize`}</code></a> を使用してください。Vespa 7 のドキュメント: チャンク内のドキュメントの最大数。&#42;summary.log.chunk.maxentries&#42; を参照してください。</td>
+    </tr>
+    <tr>
+      <td><code>{`<services>`}</code>(ルート)</td>
+      <td><code>{`<jdisc>`}</code></td>
+      <td>代わりに <a href="/ja/reference/applications/services/container" aria-label="`container`"><code>{`container`}</code></a> を使用してください。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<service>`}</code></td>
+      <td>汎用サービスの実行はサポートされなくなりました。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td><code>{`<clients>`}</code></td>
+      <td>クライアント・ロード・タイプは非推奨であり、無視されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+### *application/* フォルダーのサポート廃止
+
+アプリケーション・パッケージのコンテンツ(*services.xml*、*schemas/* フォルダーなど)は、アプリケーション zip のルート・レベルに配置されることが想定されています。つまり、解凍したアプリケーション・パッケージには *./services.xml* などが存在するようにします。
+
+しかし、以前はアプリケーション・パッケージのコンテンツを *application* ディレクトリ内に配置することができました。このサポートは Vespa 8 で削除されました。
+
+### *searchdefinitions/* フォルダーは非推奨
+
+検索定義スキーマは、現在は *schemas/* フォルダーに配置する必要があります。古いフォルダーは Vespa 8 でも引き続き動作しますが、デプロイ時に非推奨警告が発生します。
+
+## Java API の変更
+
+### 削除された Java パッケージ
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>パッケージ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;com.yahoo.docproc.util&#42;</td>
+      <td>削除されました</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.jdisc.test&#42;</td>
+      <td><a href="https://javadoc.io/doc/com.yahoo.vespa/annotations/latest/com/yahoo/api/annotations/PublicApi.html" aria-label="public API">パブリック API</a> ではなくなりました</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.log.event&#42;</td>
+      <td><a href="https://javadoc.io/doc/com.yahoo.vespa/annotations/latest/com/yahoo/api/annotations/PublicApi.html" aria-label="public API">パブリック API</a> ではなくなりました</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.statistics&#42;</td>
+      <td>削除されました</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.vespa.curator&#42;</td>
+      <td><a href="https://javadoc.io/doc/com.yahoo.vespa/annotations/latest/com/yahoo/api/annotations/PublicApi.html" aria-label="public API">パブリック API</a> ではなくなりました</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.documentapi.messagebus.loadtypes&#42;</td>
+      <td>ロード・タイプはサポートされなくなりました。代わりに、&#42;LoadType&#42; または &#42;LoadTypeSet&#42; パラメーターを持たない対応するメソッド・オーバーロードを使用してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+### 削除された Java クラスとメソッド
+
+Vespa 7 で非推奨とマークされていたクラスとメソッドは削除されました。アプリケーションのビルド時に Vespa API に対する非推奨警告が出力される場合は、Vespa 8 に移行する前にこれらを修正する必要があります。以下のセクションには、特に注目すべき変更のみが含まれています。
+
+次のクラスはパブリック API ではなくなり、Vespa 内部パッケージに移動されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>パッケージ</th>
+      <th>クラス</th>
+      <th>移行のアドバイス</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;com.yahoo.config.subscription&#42;</td>
+      <td><a href="https://javadoc.io/doc/com.yahoo.vespa/config/latest/com/yahoo/config/subscription/ConfigGetter.html" aria-label="`ConfigGetter`"><code>{`ConfigGetter`}</code></a> を除くすべてのクラス</td>
+      <td>設定はコンポーネント・クラスのコンストラクターに<a href="/ja/applications/configuring-components#use-config-in-code" aria-label="`injected`"><code>{`注入`}</code></a>すべきです。</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.docproc&#42;</td>
+      <td>&#42;DocprocExecutor&#42;</td>
+      <td>ユニット・テストの場合は、<a href="https://github.com/vespa-engine/sample-apps/blob/master/examples/document-processing/src/test/java/ai/vespa/example/album/ProductTypeRefinerDocProcTest.java" aria-label="`document-processing`"><code>{`document-processing`}</code></a> サンプル・アプリの手順に従ってください。本番コードで &#42;DocumentTypeManager&#42; が必要な場合は、コンポーネント・クラスのコンストラクターに直接<a href="/ja/applications/dependency-injection" aria-label="`injected`"><code>{`注入`}</code></a>できます。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;DocprocService&#42;</td>
+      <td>ユニット・テストの場合は、<a href="https://github.com/vespa-engine/sample-apps/blob/master/examples/document-processing/src/test/java/ai/vespa/example/album/ProductTypeRefinerDocProcTest.java" aria-label="`document-processing`"><code>{`document-processing`}</code></a> サンプル・アプリの手順に従ってください。本番コードで &#42;DocumentTypeManager&#42; が必要な場合は、コンポーネント・クラスのコンストラクターに直接<a href="/ja/applications/dependency-injection" aria-label="`injected`"><code>{`注入`}</code></a>できます。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;DocumentOperationWrapper&#42;</td>
+      <td>代替はありません。必要な場合は Vespa チームに相談してください。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;HandledProcessingException&#42;</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;ProcessingEndpoint&#42;</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;TransientFailureException&#42;</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.log&#42;</td>
+      <td>&#42;VespaFormatter&#42;</td>
+      <td>代替はありません。</td>
+    </tr>
+  </tbody>
+</table>
+
+次のメソッドは削除されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>メソッド</th>
+      <th>移行のアドバイス</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;com.yahoo.documentapi.DocumentAccess.createDefault()&#42;</td>
+      <td>コンテナー・コンポーネントは、コンストラクター経由で &#42;DocumentAccess&#42; を注入できます。カスタム・コマンドライン・ツールなどコンテナー外で使用する場合は、新しいメソッド &#42;createForNonContainer()&#42; を使用してください。</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.log.LogSetup.getLogHandler()&#42;</td>
+      <td>代替はありません。</td>
+    </tr>
+  </tbody>
+</table>
+
+### Java API の破壊的変更
+
+非推奨の型/メンバーの Javadoc に、代替 API が記載されているはずです。以下の一覧は網羅的ではありません。小規模で自明な変更の一部は記載されていません。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>型</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;com.yahoo.processing&#42;</td>
+      <td>型シグネチャーから Guava の &#42;ListenableFuture&#42; の使用を削除しました。代替では &#42;CompletableFuture&#42; を使用します。</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.search.handler.HttpSearchResponse.waitableRender()&#42;</td>
+      <td>型シグネチャーから Guava の &#42;ListenableFuture&#42; の使用を削除しました。このメソッドは &#42;asyncRender()&#42; に置き換えられます。</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.jdisc.handler&#42;</td>
+      <td>型シグネチャーから Guava の &#42;ListenableFuture&#42; の使用を削除しました。代替では &#42;CompletableFuture&#42; を使用します</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.searchlib.rankingexpression.rule&#42;</td>
+      <td>型シグネチャーから Guava コレクション型の使用を削除しました。</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.search.rendering.JsonRenderer&#42;</td>
+      <td>クラス・シグネチャーから Jackson 型の使用を削除しました。</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.jdisc.Container&#42;</td>
+      <td>クラス・シグネチャーから Guice 型の使用を削除しました。</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.vdslib.VisitorStatistics&#42;</td>
+      <td>&#42;set/getSecondPass&#42; 関連のすべてのメソッドを削除しました。</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.documentapi&#42;</td>
+      <td>&#42;com.yahoo.documentapi.messagebus.DocumentProtocol.Priority&#42; 引数を受け取るすべてのメソッドを削除しました。明示的な操作の優先度は非推奨であり、クライアントによって設定されるべきではありません。</td>
+    </tr>
+  </tbody>
+</table>
+
+### 組み込み XML ファクトリーのサポート廃止
+
+Jdisc コンテナーは、これまで次の XML ファクトリーの組み込みプロバイダーの注入をサポートしてきました:
+
+- *javax.xml.datatype.DatatypeFactory*
+- *javax.xml.parsers.DocumentBuilderFactory* と *SAXParserFactory*
+- *javax.xml.stream.XMLEventFactory*、*XMLInputFactory*、*XMLOutputFactory*
+- *javax.xml.transform.TransformerFactory*
+- *javax.xml.validation.SchemaFactory*
+- *javax.xml.xpath.XPathFactory*
+
+これらは削除されました。この種の XML 処理が必要な場合は、より新しい代替手段を確認してください。
+
+### 非推奨となった Java API
+
+同等またはより優れた機能を提供する代替が存在するため、いくつかの冗長な API が非推奨になりました。将来のメンテナンス・コストを削減するために、代替への切り替えをお勧めします。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>型</th>
+      <th>代替手段</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;com.yahoo.container.jdisc.LoggingRequestHandler&#42;</td>
+      <td>代わりに &#42;com.yahoo.container.jdisc.ThreadedHttpRequestHandler&#42; を使用してください。</td>
+    </tr>
+    <tr>
+      <td>&#42;com.yahoo.log.LogLevel&#42;</td>
+      <td>代わりに &#42;java.util.logging.Level&#42; を使用してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+## コンテナー・ランタイム環境
+
+### JDK バージョン
+
+Vespa 8 では JDK バージョンが 11 から 17 にアップグレードされます。完全な互換性を確保するため、すべてのコンテナー・コンポーネントは Vespa 8 にデプロイする前に JDK 17 でリビルドすべきです。
+
+### 提供される maven アーティファクトの変更
+
+[Guava](https://search.maven.org/artifact/com.google.guava/guava) はバージョン 20.0 から 27.1 にアップグレードされました。バージョン 20 以降にライブラリーから削除された API を使用している場合は、コードを更新する必要があります。ほとんどの場合、Java の標準ライブラリーで代替 API を見つけるのは簡単なはずです。
+
+次の Maven アーティファクトは、Jdisc コンテナーからユーザー・アプリケーションのプラグインに対してランタイムで提供されなくなりました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>アーティファクト</th>
+      <th>備考</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.fasterxml.jackson.jaxrs/jackson-jaxrs-base" aria-label="`*com.fasterxml.jackson.jaxrs:jackson-jaxrs-base*`"><code>{`*com.fasterxml.jackson.jaxrs:jackson-jaxrs-base*`}</code></a></td>
+      <td>JAX-RS 実装(例: Jersey)向けの JSON 入出力処理</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.fasterxml.jackson.jaxrs/jackson-jaxrs-json-provider" aria-label="`*com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider*`"><code>{`*com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider*`}</code></a></td>
+      <td>JAX-RS 実装(例: Jersey)向けの JSON 入出力処理</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.fasterxml.jackson.module/jackson-module-jaxb-annotations" aria-label="`*com.fasterxml.jackson.module:jackson-module-jaxb-annotations*`"><code>{`*com.fasterxml.jackson.module:jackson-module-jaxb-annotations*`}</code></a></td>
+      <td>JAXB アノテーションを使用した Jackson データ・バインディング。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.google.code.findbugs/jsr305" aria-label="`*com.google.code.findbugs:jsr305*`"><code>{`*com.google.code.findbugs:jsr305*`}</code></a></td>
+      <td>&#42;javax.annotation[.&#42;]&#42; パッケージのアノテーション(例: &#42;Nullable&#42;、&#42;Nonnnull&#42;)。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.google.inject.extensions/guice-assistedinject" aria-label="`*com.google.inject.extensions:guice-assistedinject*`"><code>{`*com.google.inject.extensions:guice-assistedinject*`}</code></a></td>
+      <td>Guice 拡張機能。<br />コンポーネントの注入については<a href="/ja/applications/dependency-injection#depending-on-another-component" aria-label="Depending on another component">別のコンポーネントへの依存</a>を参照してください</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/com.google.inject.extensions/guice-multibindings" aria-label="`*com.google.inject.extensions:guice-multibindings*`"><code>{`*com.google.inject.extensions:guice-multibindings*`}</code></a></td>
+      <td>Guice 拡張機能。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/javax.annotation/javax.annotation-api" aria-label="`*javax.annotation:javax.annotation-api*`"><code>{`*javax.annotation:javax.annotation-api*`}</code></a></td>
+      <td>&#42;javax.annotation[.&#42;]&#42; パッケージのアノテーション(例: &#42;ManagedBean&#42;、&#42;Resource&#42;)。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/javax.validation/validation-api" aria-label="`*javax.validation:validation-api*`"><code>{`*javax.validation:validation-api*`}</code></a></td>
+      <td>Javax Bean バリデーション。Jersey 2 で使用されます。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/search?q=g:org.eclipse.jetty" aria-label="`*org.eclipse.jetty:*`"><code>{`*org.eclipse.jetty:*`}</code></a></td>
+      <td>Eclipse Jetty プロジェクト。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.apache.felix/org.apache.felix.framework" aria-label="`*org.apache.felix:org.apache.felix.framework*`"><code>{`*org.apache.felix:org.apache.felix.framework*`}</code></a></td>
+      <td>Felix OSGi フレームワーク。</td>
+    </tr>
+    <tr>
+      <td>&#42;org.apache.felix:org.apache.felix.log&#42;</td>
+      <td>Felix OSGi フレームワーク。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.apache.felix/org.apache.felix.main" aria-label="`*org.apache.felix:org.apache.felix.main*`"><code>{`*org.apache.felix:org.apache.felix.main*`}</code></a></td>
+      <td>Felix OSGi フレームワーク。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.bouncycastle/bcpkix-jdk15on" aria-label="`*org.bouncycastle:bcpkix-jdk15on*`"><code>{`*org.bouncycastle:bcpkix-jdk15on*`}</code></a></td>
+      <td>Bouncy Castle 暗号 API。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.bouncycastle/bcprov-jdk15on" aria-label="`*org.bouncycastle:bcprov-jdk15on*`"><code>{`*org.bouncycastle:bcprov-jdk15on*`}</code></a></td>
+      <td>Bouncy Castle 暗号プロバイダー。</td>
+    </tr>
+    <tr>
+      <td>&#42;org.glassfish.&#42;:&#42;</td>
+      <td>Jersey 2。関連するすべてのアーティファクトが削除されました。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.json/json" aria-label="`*org.json:json*`"><code>{`*org.json:json*`}</code></a></td>
+      <td><a href="https://github.com/vespa-engine/vespa/issues/14762" aria-label="vespa-engine/vespa#14762">vespa-engine/vespa#14762</a> を参照してください</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.javassist/javassist" aria-label="`*org.javassist:javassist*`"><code>{`*org.javassist:javassist*`}</code></a></td>
+      <td>バイトコード操作。Jersey 2 で使用されます。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.jvnet.mimepull/mimepull" aria-label="`*org.jvnet.mimepull:mimepull*`"><code>{`*org.jvnet.mimepull:mimepull*`}</code></a></td>
+      <td>MIME Streaming Extension。Jersey 2 で使用されます。</td>
+    </tr>
+    <tr>
+      <td><a href="https://search.maven.org/artifact/org.lz4/lz4-java" aria-label="`*org.lz4:lz4-java*`"><code>{`*org.lz4:lz4-java*`}</code></a></td>
+      <td>圧縮ライブラリー。</td>
+    </tr>
+  </tbody>
+</table>
+
+アプリケーションの OSGi バンドルが、上記の一覧のうち必要なアーティファクトを組み込んでいる(embed している)ことを確認してください。アーティファクトは、pom.xml の *dependencies* セクションにスコープ *compile* で追加することで組み込めます。通常、これらのアーティファクトはこれまでスコープ *provided* で使用されてきました。一覧のアーティファクトが直接または推移的に依存関係として含まれているかどうかを確認するには、`mvn dependency:tree` を使用してください。
+
+いつものように、プロジェクトで必要とされていない依存関係は削除してください。推移的に含まれる依存関係を削除する方法については、Maven ドキュメントの [Dependency Exclusions](https://maven.apache.org/guides/introduction/introduction-to-optional-and-excludes-dependencies.html#dependency-exclusions) を参照してください。
+
+*org.json:json* を compile スコープの依存関係として追加する例:
+
+```xml
+<dependencies>
+  ...
+  <dependency>
+    <groupId>org.json</groupId>
+    <artifactId>json</artifactId>
+    <version>20211205</version>
+    <scope>compile</scope>
+  </dependency>
+  ...
+</dependencies>
+```
+
+## 削除された HTTP API パラメーター
+
+次の HTTP API パラメーターは[クエリー API](/ja/reference/api/query) から削除されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>標準 API パス</th>
+      <th>パラメーター名</th>
+      <th>代替手段</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>/search/</td>
+      <td>&#42;pos.ll&#42;</td>
+      <td>クエリーに <a href="/ja/reference/querying/yql#geolocation" aria-label="geoLocation">geoLocation</a> 項目を追加します</td>
+    </tr>
+    <tr>
+      <td>/search/</td>
+      <td>&#42;pos.radius&#42;</td>
+      <td>クエリーに <a href="/ja/reference/querying/yql#geolocation" aria-label="geoLocation">geoLocation</a> 項目を追加します</td>
+    </tr>
+    <tr>
+      <td>/search/</td>
+      <td>&#42;pos.attribute&#42;</td>
+      <td>クエリーに <a href="/ja/reference/querying/yql#geolocation" aria-label="geoLocation">geoLocation</a> 項目を追加します</td>
+    </tr>
+    <tr>
+      <td>/search/</td>
+      <td>&#42;pos.bb&#42;</td>
+      <td><code>{`pos.bb`}</code> クエリー・パラメーターを使用してバウンディング・ボックスで検索を制限するサポートは削除されました。クエリーに <a href="/ja/reference/querying/yql#geolocation" aria-label="geoLocation">geoLocation</a> 項目を追加してください</td>
+    </tr>
+  </tbody>
+</table>
+
+## 削除されたコマンドライン・ツール
+
+### vespa-http-client
+
+`vespa-http-client` コマンドライン・ツールは Vespa 8 で削除され、新しい [vespa-feed-client](/ja/clients/vespa-feed-client) に置き換えられました。新しいクライアントは [HTTP/2](/ja/performance/http2) と [Document v1 API](/ja/writing/document-v1-api-guide) を使用します。
+
+vespa-http-client が使用していた基盤の rest API は、Vespa 8 でも引き続き利用可能でサポートされます。したがって、Vespa 7 で配布された古いクライアントを使用して Vespa 8 インストールにフィードし続けることは可能です。Vespa 8 の最初のリリース以降、vespa-http-client の更新はリリースされませんが、rest API 実装への修正とセキュリティ更新は Vespa 8 の一部として継続されることに注意してください。早めに vespa-http-client から移行することを強くお勧めします。
+
+## 削除または名前変更されたメトリクス
+
+次のメトリクスは名前が変更されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>旧名称</th>
+      <th>新名称</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;vds.filestor.alldisks.&#42;&#42;</td>
+      <td>vds.filestor.&#42;</td>
+      <td>メトリクス名から &#42;alldisks&#42; が削除されました。</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.&#42;.sum.&#42;&#42;</td>
+      <td>vds.visitor.&#42;.&#42;</td>
+      <td>メトリクス名から &#42;sum&#42; が削除されました。</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor.&#42;.sum.&#42;&#42;</td>
+      <td>vds.filestor.&#42;.&#42;</td>
+      <td>メトリクス名から &#42;sum&#42; が削除されました。</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.&#42;.sum.&#42;&#42;</td>
+      <td>vds.distributor.&#42;.&#42;</td>
+      <td>メトリクス名から &#42;sum&#42; が削除されました。</td>
+    </tr>
+  </tbody>
+</table>
+
+次のメトリクスは削除されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;http.status.401.rate&#42;</td>
+      <td>ディメンション &#42;statusCode&#42;==401 を指定して &#42;http.status.4xx.rate&#42; を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;http.status.403.rate&#42;</td>
+      <td>ディメンション &#42;statusCode&#42;==403 を指定して &#42;http.status.4xx.rate&#42; を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;content.proton.documentdb.matching.query_collateral_time.&#42;&#42;</td>
+      <td>代わりに &#42;content.proton.documentdb.matching.query_setup_time.&#42;&#42; を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;content.proton.documentdb.matching.rank_profile.query_collateral_time.&#42;&#42;</td>
+      <td>代わりに &#42;content.proton.documentdb.matching.rank_profile.query_setup_time.&#42;&#42; を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.averagevisitorlifetime~~.sum~~.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.averagequeuewait~~.sum~~.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.queuesize~~.sum~~.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.completed~~.sum~~.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.averagemessagesendtime~~.sum~~.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.visitor.allthreads.averageprocessingtime~~.sum~~.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.queuesize.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.averagequeuewait.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.put~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.remove~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.get~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.update~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.createiterator~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.visit~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.remove_location~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.filestor~~.alldisks~~.allthreads.deletebuckets~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.puts~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.removes~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.updates~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.gets~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+    <tr>
+      <td>&#42;vds.distributor.visitor~~.sum~~.latency.average&#42;</td>
+      <td>代わりに .sum/.count を使用してください</td>
+    </tr>
+  </tbody>
+</table>
+
+## セレクション言語におけるドキュメント・タイプの厳密なマッチング
+
+[ドキュメント・セレクション言語](/ja/reference/writing/document-selector-language)は、ドキュメント・タイプに対して *継承*("is-a")マッチングではなく *厳密な* マッチングを使用するようになりました。
+
+2 つの最小限のドキュメント・スキーマを使用した例:
+
+- `document my_doc_type {}`
+- `document my_extended_doc_type inherits my_doc_type {}`
+
+以前は、セレクション式 `my_doc_type` は、`my_doc_type` 型のドキュメント・インスタンス *と* `my_extended_doc_type` 型のドキュメント・インスタンスの両方にマッチしていました。現在は `my_doc_type` 型のドキュメントに *のみ* マッチします。
+
+## セキュリティ
+
+### デフォルトで有効になった Strict モード
+
+jdisc コンテナーにおけるリクエスト・フィルタリングの *Strict モード* は、Vespa 8 でデフォルトで有効になっています。詳細については、services.xml の [strict-mode](/ja/reference/applications/services/http#filtering) 属性に関するドキュメントを参照してください。
+
+### アクセス・ログのリモート・ホスト/ポートを制御するリクエスト・ヘッダー
+
+
+jdisc コンテナーは、アクセス・ログのリモート・ホストとポートをそれぞれ設定するために、*X-Forwarded-For* および *X-Forwarded-Port* リクエスト・ヘッダーを使用します。次のリクエスト・ヘッダーはデフォルトでは処理されなくなります:
+
+- y-ra
+- yahooremoteip
+- client-ip
+- y-rp
+
+## Vespa アーティファクトのオペレーティング・システム・サポート
+
+### RPM
+
+Vespa RPM のサポート対象 OS は、Vespa 8 では [CentOS Linux 7](https://www.centos.org/centos-linux/) から [CentOS Stream 8](https://www.centos.org/centos-stream/) に変更されます。RPM は引き続き [Fedora Copr](https://copr.fedorainfracloud.org/coprs/g/vespa/vespa/) でビルド・配布されます。Vespa RPM をインストールする場合は、OS を [CentOS Stream 8](https://www.centos.org/centos-stream/) にアップグレードする必要があります。
+
+### OCI コンテナー(Docker コンテナー)
+
+OCI コンテナーで使用されるベース・イメージは、Vespa 8 では [docker.io/centos:7](https://hub.docker.com/_/centos) から [quay.io/centos/centos:stream8](https://quay.io/repository/centos/centos?tab=tags) に変更されます。これは、コンテナー・イメージがカーネル・バージョン *4.18.0*(CentOS Stream 8 の現行カーネル)を実行するシステムでビルドおよびテストされることを意味します。Vespa のコンテナー・イメージを使用する場合は、コンテナーを実行するホストを同じかそれ以降のカーネル・バージョンにアップグレードすべきです。
+
+## その他の変更
+
+### 未知のランク・プロファイル
+
+クエリー対象のすべてのスキーマに存在しないランク・プロファイルを指定したクエリーは、`default` プロファイルへのフォールバックではなく失敗するようになりました。複数のスキーマに対するクエリーでは、それらすべてに存在するランク・プロファイルを使用する必要があります。これは共通のスキーマを[継承](/ja/schemas/inheritance-in-schemas)することで保証できます。
+
+### 未知のサマリー・クラス
+
+存在しない[サマリー・クラス](/ja/querying/document-summaries)を指定したクエリーは、空のままレンダリングされるのではなく、失敗するようになりました。複数のスキーマに対するクエリーでは、それらすべてに存在するサマリー・クラスを使用する必要があります。これは共通のスキーマを[継承](/ja/schemas/inheritance-in-schemas)することで保証できます。
+
+### "qrserver" サービス名
+
+Vespa コンテナーは一般に "container" をサービス名として使用しています。しかし、[document-processing](/ja/reference/applications/services/docproc) と [document-api](/ja/reference/applications/services/container#document-api) のいずれも宣言していないコンテナー・クラスターは、以前は "qrserver" という名前でした。Vespa 8 では、すべてのコンテナー・クラスターがサービス名 "container" を使用します。これは、すべてのメトリクス API の出力と Vespa ログの出力に影響します。
+
+### コンテナーのアクセス・ログ
+
+コンテナーのアクセス・ログのフォルダーは、`$VESPA_HOME/logs/vespa/qrs/` から `$VESPA_HOME/logs/vespa/access/` に移動しました。
+
+デフォルトの圧縮形式は gzip から zstd に変更されました。[デフォルトの変更](#changed-defaults)を参照してください。
+
+### サマリー・フィーチャーにおける ONNX 出力
+
+サマリー・フィーチャーで ONNX モデルの出力を定義する場合、Vespa 8 では、サマリー・フィーチャー名が以前のバージョンの `onnxModel` ではなく `onnx` になります。
+
+### rankfeatures の変更
+
+Vespa は、すべての [rank-features](/ja/reference/api/query#ranking.listfeatures) を計算し、`rankfeatures` サマリー・フィールドで返すことができます。Vespa 8 ではこの一覧にいくつかの変更があります:
+
+- `now` が削除されました
+- `bm25(field)` が追加されました
+- `matches(field)` が追加されました
+
+### "storage" メッセージ・バス・ルーティング・ポリシーの削除
+
+"storage" ルーティング・ポリシーは Vespa 7 の初期に削除され、これを指定したクライアントは後方互換性のために content ルーティング・ポリシーに転送されてきました。この転送は Vespa 8 で削除され、クライアントは更新が必要です。
+
+"storage" ポリシーのすべての使用箇所を、同一の動作をする "content" に置き換えてください。
+
+### vespa-dispatch-bin プロセスの削除
+
+ディスパッチ機能は Vespa コンテナーに移動され、*vespa-dispatch-bin* プロセスは削除されました。これはパブリックなインターフェースではないため、Vespa-7.109.10 でデフォルトが vespa-dispatch-bin を使用 **しない** 設定に切り替えられました。このプロセスはその後の Vespa リリースで削除されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>||||</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="/ja/querying/query-api" aria-label="Dispatch">Dispatch</a> | コンテント・クラスター | 19100 - 19899 の範囲で動的に割り当て | <code>{`$VESPA_HOME/sbin/vespa-dispatch-bin`}</code> | ディスパッチャー。コンテナー・ノードとコンテント・ノード間の通信を行います。階層構造で多段にすることも可能です</td>
+    </tr>
+  </tbody>
+</table>
+
+
+ローリング・アップグレードに関する注記: Vespa-7.109.10 をまたぐローリング・アップグレードは、追加の手順なしで動作するはずです。
+
+### YQL 形式
+
+- Vespa が YQL ステートメントを出力する際、文字列の末尾にセミコロンを付けなくなりました。ステートメントをセミコロンで終端することは、引き続き任意で有効な入力です。
+- [アノテーション](/ja/reference/querying/yql#annotations)は `[]` 括弧で囲まれません(引き続き有効な入力です)。
+- アノテーション名は引用符で囲まれません(引き続き有効な入力です)。
+
+Vespa 7 / Vespa 8 の例:
+
+```js
+where text contains ([{"distance": 5}]near("a", "b"));
+where text contains ({distance: 5}near("a", "b"))
+```
+
+### アップグレード手順
+
+Vespa 8 では、[アップグレード手順](/ja/operations/self-managed/live-upgrade)が簡素化されました(Vespa 7 から Vespa 8 へのアップグレード、または Vespa 8 のバージョン間のアップグレードの場合)。Vespa 7.x から Vespa 7.y にアップグレードする場合は、[アップグレード手順](/ja/operations/self-managed/live-upgrade)の項目 3 [設定サーバーのアップグレード](/ja/operations/self-managed/live-upgrade#upgrade-config-server)を次の手順に置き換えてください:
+- 設定サーバーのアップグレード中、アプリケーションのノードは自身がアップグレードされるまで設定を受け取ることができません。続行する前に、各ノードで次のコマンドを実行して、すべてのノードをスタンドアロン・モードに設定する必要があります:   
+
+    ```bash
+    $ vespa-configproxy-cmd -m setmode memorycache
+    ```
+    各ノードは、アップグレードされると自動的に再接続します。
+- 設定サーバーに新しい Vespa バージョンをインストールし、1 台ずつ[再起動](/ja/operations/self-managed/admin-procedures#vespa-start-stop-restart)します。再び起動するまで待ちます。vespa ログで "Changing health status code from 'initializing' to 'up'" を確認するか、[ヘルスチェック](/ja/operations/self-managed/configuration-server#troubleshooting)を使用してください。
+- アプリケーションを再デプロイしてアクティブ化します:
+    
+    `$` [`vespa deploy`](/ja/clients/vespa-cli#deployment)

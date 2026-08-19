@@ -1,0 +1,161 @@
+---
+title: "外部アクセス層の構成"
+---
+
+Vespa Operator は、データのフィードおよびクエリーのための外部アクセスを可能にする Kubernetes `Service` リソースを自動的にプロビジョニングします。この動作は、`VespaSet` カスタムリソースの構成によって制御されます。
+
+ロードバランサーはコンテナー・クラスターに対してのみプロビジョニングされます。コンテント・クラスターは内部で通信し、外部ロードバランシング・サービスを必要としません。プロビジョニングされるサービスのタイプは、`VespaSet` の `spec.ingress.endpointType` フィールドによって決まります。
+
+## サポートされるエンドポイント・タイプ
+
+Operator は、さまざまなインフラ要件に対応するために 4 つのエンドポイント・タイプをサポートしています。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>エンドポイント・タイプ</th>
+      <th>Kubernetes サービス・タイプ</th>
+      <th>ユースケース</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`LOAD_BALANCER`}</code></td>
+      <td><code>{`LoadBalancer`}</code></td>
+      <td>クラウドネイティブ（AWS、GCP、Azure）のロードバランサーをプロビジョニングします。</td>
+    </tr>
+    <tr>
+      <td><code>{`NODE_PORT`}</code></td>
+      <td><code>{`NodePort`}</code></td>
+      <td>すべてのワーカーノードで静的ポートを公開し、外部トラフィックが任意のノードの IP からクラスターにアクセスできるようにします。</td>
+    </tr>
+    <tr>
+      <td><code>{`CLUSTER_IP`}</code></td>
+      <td><code>{`ClusterIP`}</code></td>
+      <td>各コンテナー Pod が内部 IP アドレスを公開します。本番ユースケースには使用すべきではありません。</td>
+    </tr>
+    <tr>
+      <td><code>{`NONE`}</code></td>
+      <td>N/A</td>
+      <td>外部アクセス層はプロビジョニングされません。自動的なサービスを必要としないカスタム・ネットワーキング構成（Istio、Ingress コントローラー）向けです。</td>
+    </tr>
+  </tbody>
+</table>
+
+## LOAD_BALANCER
+
+これは、クラウドプロバイダー（EKS、GKE、AKS）上の本番デプロイに推奨される構成です。Operator は標準の Kubernetes `LoadBalancer` サービスを作成し、クラウドプロバイダーによるマネージド・ロードバランサー（例: AWS NLB）のプロビジョニングをトリガーします。
+
+**構成:**
+
+```bash
+ingress:
+  endpointType: LOAD_BALANCER
+```
+
+AWS では、ConfigServer はすべてのコンテナー Pod にアノテーション `service.beta.kubernetes.io/aws-load-balancer-internal: "true"` を自動的に適用します。これにより、EKS クラスターノードが存在する VPC 内からのみアクセス可能な**内部** Network Load Balancer（NLB）がプロビジョニングされます。
+
+## NODE_PORT
+
+`NODE_PORT` タイプは、すべての Kubernetes ワーカーノードにわたって、特定のポート（範囲 30000〜32767）で Vespa コンテナー・クラスターを公開します。
+
+**構成:**
+
+```bash
+ingress:
+  endpointType: NODE_PORT
+```
+
+このオプションが設定されると、Kubernetes はすべてのワーカーノードで静的ポートを開きます。外部トラフィックは `<NodeIP>:<NodePort>` を介してアプリケーションに到達できます。`LOAD_BALANCER` とは異なり、これはエントリーポイント・レベルでのヘルスチェックを提供しないことに注意してください。接続を持つワーカーノードがクラッシュした場合、接続は単にタイムアウトするか失敗します。さらに、これにはすべてのワーカーノードが External IP を公開している必要があります。
+
+`NODE_PORT` サービスを使用するには、割り当てられたポートを確認します。
+
+```bash
+$ kubectl get service lb-default -n $NAMESPACE
+
+NAME         TYPE       CLUSTER-IP      EXTERNAL-IP   PORT(S)          AGE
+lb-default   NodePort   10.100.150.25   <none>        80:31942/TCP     5m
+```
+
+ノードの一覧を取得し、それらの External IP アドレスを確認します。
+
+```bash
+$ kubectl get nodes -o wide
+
+NAME                                       STATUS   ROLES    AGE   VERSION               INTERNAL-IP    EXTERNAL-IP      OS-IMAGE         KERNEL-VERSION
+ip-192-168-3-50.us-east-2.compute.internal Ready    <none>   10d   v1.27.3-eks-a5565ad   192.168.3.50   18.221.100.45    Amazon Linux 2   5.10.184-175.731.amzn2.x86_64
+ip-192-168-3-51.us-east-2.compute.internal Ready    <none>   10d   v1.27.3-eks-a5565ad   192.168.3.51   3.142.200.10     Amazon Linux 2   5.10.184-175.731.amzn2.x86_64
+```
+
+任意の External IP を選び、IP とポートを組み合わせてサービスにアクセスします。
+
+```js expandable
+$ curl http://18.221.100.45:31942/state/v1/health
+
+{
+  "time" : 1769981985754,
+  "status" : {
+    "code" : "up"
+  },
+  "metrics" : {
+    "snapshot" : {
+      "from" : 1.769981924895E9,
+      "to" : 1.769981984895E9
+    },
+    "values" : [ {
+      "name" : "requestsPerSecond",
+      "values" : {
+        "count" : 19,
+        "rate" : 0.31666666666666665
+      }
+    }, {
+      "name" : "latencySeconds",
+      "values" : {
+        "average" : 0.009578947368421053,
+        "sum" : 0.182,
+        "count" : 19,
+        "last" : 0.003,
+        "max" : 0.057,
+        "min" : 0.0,
+        "rate" : 0.31666666666666665
+      }
+    } ]
+  }
+}
+```
+
+## CLUSTER\_IP
+
+このタイプは、アクセスを Kubernetes クラスター内に制限します。安定した内部 IP と DNS 名（例: `lb-default.vespa.svc.cluster.local`）を提供しますが、外部 IP は割り当てません。
+
+**構成:**
+
+```bash
+ingress:
+  endpointType: CLUSTER_IP
+```
+
+`CLUSTER_IP` サービスは、クライアント（例: フロントエンド・アプリケーションやインジェスト・サービス）が Vespa と同じ Kubernetes クラスター内で稼働するアーキテクチャに最適です。
+
+## NONE
+
+このオプションは、自動的なサービスのプロビジョニングを無効にします。`Ingress` リソースを手動で定義する、サービスメッシュ（Istio や Linkerd など）を使用する、または標準タイプでカバーされない複雑なネットワーキング要件がある場合に使用してください。
+
+**構成:**
+
+```bash
+ingress:
+  endpointType: NONE
+```
+
+## トラフィック・ルーティングとラベリング
+
+ゼロダウンタイムのデプロイを保証するために、ConfigServer は Kubernetes ラベルを使用してトラフィック・ルーティングを動的に管理します。作成されるサービスはセレクター `vespa.ai/tenant-lb: backend` を使用します。Pod がプロビジョニングされると、これらのラベルは自動的に付与されます。
+
+ローリング・アップグレード中には、終了中の Pod がシャットダウンされる前に、その Pod からラベルが削除されます。これにより、Pod がアップグレードされる前に、残りのトラフィックがドレインされる時間的余裕が確保されます。
+
+<Note>
+**注記**: 
+
+サービスは外部に対してポート **80**（平文）と **443**（TLS）を公開し、これらをコンテナーのポート 4443 にマッピングします。
+</Note>

@@ -19,22 +19,62 @@ def remove_control_characters(s):
 
 ## Visual pattern matching of encoding bugs
 
-| Transformation | Result |
-| :--- | :--- |
-| Input | hôtel |
-| Correctly URL quoted (Vespa always uses UTF-8 there) | h%C3%B4tel |
-| Encoded as ISO-8859-1 (ISO Latin-1), then URL quoted | h%F4tel |
-| Encoded as UTF-16 (as in Java strings), then URL quoted | %00h%00%F4%00t%00e%00l |
-| For completeness, little endian UTF-16, including byte order marker | %FF%FEh%00%F4%00t%00e%00l%00 |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Transformation</th>
+      <th>Result</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Input</td>
+      <td>hôtel</td>
+    </tr>
+    <tr>
+      <td>Correctly URL quoted (Vespa always uses UTF-8 there)</td>
+      <td>h%C3%B4tel</td>
+    </tr>
+    <tr>
+      <td>Encoded as ISO-8859-1 (ISO Latin-1), then URL quoted</td>
+      <td>h%F4tel</td>
+    </tr>
+    <tr>
+      <td>Encoded as UTF-16 (as in Java strings), then URL quoted</td>
+      <td>%00h%00%F4%00t%00e%00l</td>
+    </tr>
+    <tr>
+      <td>For completeness, little endian UTF-16, including byte order marker</td>
+      <td>%FF%FEh%00%F4%00t%00e%00l%00</td>
+    </tr>
+  </tbody>
+</table>
 
 What we are looking for is single bytes outside ASCII, i.e. ordinal above 127. Given UTF-8, there should always be sequences of two or more of these when a code point is outside ASCII. The first byte for each code point will have the two most significant bits set, in other words hex C to hex F. The rest of the bytes for that code point will have the most significant bit set, and the second most unset, in other words hex 8 to hex B.
 
 From here, we move on to the two most common de-/encoding errors:
 
-| Error | Hex dump of code points | Rendered |
-| :--- | :--- | :--- |
-| UTF-8 input decoded as if it were ISO-8859-1 | h\xc3\xb4tel | hÃ´tel |
-| UTF-8 input re-encoded as UTF-8, then decoded as UTF-8 again | h\xc3\xb4tel | hÃ´tel |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Error</th>
+      <th>Hex dump of code points</th>
+      <th>Rendered</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>UTF-8 input decoded as if it were ISO-8859-1</td>
+      <td>h&#92;xc3&#92;xb4tel</td>
+      <td>hÃ´tel</td>
+    </tr>
+    <tr>
+      <td>UTF-8 input re-encoded as UTF-8, then decoded as UTF-8 again</td>
+      <td>h&#92;xc3&#92;xb4tel</td>
+      <td>hÃ´tel</td>
+    </tr>
+  </tbody>
+</table>
 
 Note how these two bugs create exactly the same byte sequences. This is because the first 256 code points of Unicode are identical to ISO-8859-1. What we are looking for is line noise in-between normal ASCII, as both ISO-8859-1 and Unicode are ASCII compatible.
 

@@ -1,0 +1,325 @@
+---
+title: "リクエスト・レスポンス処理（Processing）"
+description: "*Processing*は、低レイテンシのリクエスト/レスポンス処理アプリケーションを簡単に作成できるようにします。JDisc上でそのようなアプリケーションを作成する際の推奨される方法ですが、JDiscとは独立して使用することもできます。Processingでは、単純なタスクを実行するProcessorを組み合わせることでアプリケーションの動作を定義できます。Processorは同期呼び出しモデルを使用しますが、基盤となるIOは非同期にできます。"
+---
+
+
+Javadoc:  
+[com.yahoo.processing.Processor](https://javadoc.io/doc/com.yahoo.vespa/processing/latest/com/yahoo/processing/Processor.html)  
+[com.yahoo.processing.rendering.Renderer](https://javadoc.io/doc/com.yahoo.vespa/processing/latest/com/yahoo/processing/rendering/Renderer.html)
+
+## Processingの使用
+
+Processingを使用するには、この依存関係を*pom.xml*に追加します:
+
+```xml
+<dependency>
+  <groupId>com.yahoo.vespa</groupId>
+  <artifactId>container</artifactId>
+  <version>8.689.26</version> {/* Find latest version at [search.maven.org/search?q=g:com.yahoo.vespa%20a:container](https://search.maven.org/search?q=g:com.yahoo.vespa%20a:container) */}
+  <scope>provided</scope>
+</dependency>
+```
+
+または、[デプロイ可能なプロジェクトをゼロから始める方法](/ja/applications/developer-guide)をお読みください。
+
+## Processor
+
+*processor*はProcessorをサブクラス化し、単一のメソッドを実装します:
+
+```java
+package com.mydomain.example;
+
+import com.yahoo.processing.\*;
+import com.yahoo.processing.execution.Execution;
+import com.yahoo.processing.test.ProcessorLibrary.StringData;
+
+public class ExampleProcessor extends Processor {
+
+    @Override
+    public Response process(Request request, Execution execution) {
+        // Process the Request:
+        request.properties().set("foo","bar");
+
+        // Pass on to the next processor in the chain
+        Response response=execution.process(request);
+
+        // process the response
+        response.data().add(new StringData(request,"Hello, world!"));
+
+        return response;
+    }
+
+}
+```
+
+Processorは、リクエストとレスポンスの両方を処理したり、リクエストを1回以上後続のprocessorに渡したり、結果データを内部で、あるいはリモートサービスに接続して作成したりできます。結果データは、複数のprocessorがコンテンツを提供する、ネストされた複合構造にすることができます。
+
+## Processorのチェーン化
+
+Processorは単一のタスクを実行するべきであり、それらを組み合わせて完全なアプリケーションを構成します。これはChainを使用して実現します:
+
+```java
+Chain<Processor> myChain=new Chain<Processor>(new ExampleProcessor(),
+                                              new FooProcessor(),
+                                              new BarProcessor());
+Response response=new Execution(myChain).process(request); // execute this chain
+```
+
+これは3つのprocessorを順番に実行します。Executionが実行状態を追跡するため、同じprocessorインスタンスを同時に多くのチェーンで使用できます。実行がチェーンの終わりに達すると、実行はそれを呼び出したprocessorに空のResponseを返します。代わりに別スレッドで実行を行うための便宜として、AsyncExecutionクラスが提供されています。
+
+ほとんどの場合、外部設定を使用してチェーンとprocessorインスタンスを設定する方が便利です。processorのチェーンは、アプリケーション・パッケージの*[services.xml](/ja/reference/applications/services/services)*ファイル内の[processing](/ja/reference/applications/services/processing)要素で指定できます。コンパイルされたprocessorは、[OSGiコンポーネント](/ja/applications/components)としてアプリケーション・パッケージに追加されます。チェーン設定では、チェーンを順序制約付きのprocessorの*集合*として定義できるため、processorのグローバルな順序をフレームワークが決定でき、チェーンに対する集合演算を使用してチェーンの拡張やバリアントを定義できます。
+
+## 非同期の結果
+
+場合によっては、すべてのデータが揃う前にResponseを返すことが有用です。これにより、完全なレスポンスにゆっくり到着するデータが含まれていても、低レイテンシでクライアントに部分的なレスポンスを返すことができます。遅いデータは、実際のデータが後で到着するプレースホルダーとしてResponseに追加できます。processingフレームワークでは、そのような完了イベントを[GuavaのListenableFuture](https://guava.dev/releases/snapshot/api/docs/com/google/common/util/concurrent/ListenableFuture.html)として待機またはリッスンできます。
+
+*すべての*データがfutureプレースホルダーとしてResponseに追加される場合、processingフレームワークは完全にノンブロッキングになります。
+
+## 依存性注入（Dependency Injection）
+
+実際のアプリケーションのProcessorは通常、実行のために何らかの設定や他のコンポーネントに依存します。そのような依存関係は、構築時に注入できるように、単純なコンストラクター引数として宣言するべきです。
+
+processingフレームワークをホストするために使用されるコンテナー・ランタイムは、Guiceに基づく依存性注入フレームワークを使用します。[コンテナー・コンポーネント](/ja/applications/components)を参照してください。
+
+processorは同時に多くのprocessing実行に参加する可能性があるため、processingクラスのフィールド値は通常、構築完了後は不変（immutable）であるべきです。
+
+## レスポンスのレンダリング
+
+*Renderer*は、クライアントに返すためにResponseをシリアライズするのに使用されます。Rendererは`com.yahoo.processing.rendering.Renderer`のサブクラスです。非同期の場合にfutureデータの待機を処理する便利なスーパークラスが`com.yahoo.processing.rendering.AsynchronousSectionedRenderer`として提供されています。シンプルなJSON形式でレンダリングするデフォルトのrendererは[com.yahoo.processing.rendering.ProcessingRenderer](https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/java/com/yahoo/processing/rendering/ProcessingRenderer.java)であり、各種類のDataアイテムのレンダリングをカスタマイズするためにサブクラス化できます。
+
+Processorは通常の[コンポーネント](/ja/applications/components)であり、*services.xml*ファイルの[rendererセクション](/ja/reference/applications/services/processing#renderer)でアプリケーション・パッケージに追加されます。rendererは、リクエスト内の`format`パラメーターをrendererのidに設定することでリクエストで選択されます。
+
+## Processingのサブクラス化
+
+Processingフレームワークは、汎用的かつ最小限であることを意図しています。一部のドメインでは、そのドメインに特化した、より豊かなProcessor、Request、Response、Executionのモデルを採用することが有用です。一例は[Searchドメイン](/ja/applications/searchers)で、Searcher、Query、ResultがProcessor、Request、Responseをサブクラス化しています。Processingフレームワークは、そのようなサブクラス化によって、より豊かなフレームワークをその上に構築できるように設計されています。
+
+## アプリケーションでのProcessorのテスト
+
+processorは、コンテナー内で実行してテストできます。*services.xml*からJDiscを作成します:
+
+```java expandable
+import com.yahoo.application.container.JDisc;
+import com.yahoo.application.Networking;
+
+import com.yahoo.processing.Request;
+import com.yahoo.processing.Response;
+
+import com.yahoo.component.ComponentSpecification;
+
+import org.junit.Test;
+
+import static org.junit.Assert.assertThat;
+import static org.junit.matchers.JUnitMatchers.containsString;
+
+public class ContainerTest {
+    @Test
+    public void testSearch() {
+        String servicesXml =
+                "<container version=\\"1.0\\">" +
+                "  <processing>" +
+                "    <chain id=\\"default\\">" +
+                "      <processor id=\\"com.mydomain.example.ExampleProcessor\\" />" +
+                "    </chain>" +
+                "  </processing>" +
+                "</container>";
+        try (JDisc container = JDisc.fromServicesXml(servicesXml, Networking.disable)) {
+            Response response = container.processing().process(ComponentSpecification.fromString("default"), new Request());
+            assertThat(response.data().get(0).toString(), containsString("Hello, world!"));
+        }
+
+    }
+}
+```
+
+チェーン内にどのprocessorがあり、どのような順序になっているかを調べることもできます:
+
+```java
+ChainRegistry<Processor> chains = container.processing().getChains();
+Chain<Processor> defaultChain = chains.getComponent("default");
+boolean foundExampleProcessor = false;
+for (Processor processor: defaultChain.components()) {
+    if ("ExampleProcessor".equals(processor.getClassName()))
+        foundExampleProcessor = true;
+}
+
+
+assertTrue("No instance of ExampleProcessor found in the default chain", foundExampleProcessor)
+```
+
+## デフォルト以外のProcessorチェーンの選択
+
+完全なアプリケーションは、通常、複数のprocessorチェーンから構成され、それらは互いを呼び出す場合もあれば呼び出さない場合もあります。「default」以外の`id`で設定されたチェーンを選択するには、`chain`という名前のGETパラメーターとしてチェーンIDを追加します。
+
+つまり、次のように「testbed」という名前のチェーンがあるとします:
+
+```xml
+<container version="1.0">
+  <processing>
+    <chain id="testbed">
+      <processor id="com.yahoo.example.ExampleProcessor" />
+    </chain>
+  </processing>
+</container>
+```
+
+
+チェーンtestbedは、コマンドラインから次のようにテストできます:
+
+```bash
+$ curl http://*hostname*:*port*/processing/?chain=testbed
+```
+
+## 参考資料
+
+- [Webサービスの開発](/ja/applications/web-services)。
+- [com.yahoo.processing](https://javadoc.io/doc/com.yahoo.vespa/processing/latest/com/yahoo/processing/package-summary.html) javadoc
+- [Guava Javadoc](https://guava.dev/releases/snapshot/api/docs/)。
+
+## Processingに関するよくあるタスク
+
+このセクションには、Processingに関する「どうすればよいか」の説明を集めています。これらのほとんどはProcessingのjDiscバインディングに関するものですが、ProcessingはjDiscとは独立しており、どのような環境でもプログラムから呼び出せることに注意してください。
+
+### ProcessorからHTTPリクエストにアクセスする
+
+ネットワーク層とやり取りするProcessorは、ヘッダーやリクエストデータにアクセスするため、またはjDiscを通じて外部への呼び出しを行うために、ネットワークレベルのリクエストにアクセスする必要がある場合があります。jDiscリクエストはリクエストのプロパティを通じて利用できます:
+
+httpRequest = (com.yahoo.container.jdisc.HttpRequest)processingRequest.properties().get("jdisc.request");
+
+### Processorからレスポンスヘッダーを設定する
+
+レスポンスヘッダーは、`com.yahoo.processing.handler.ResponseHeaders`のインスタンスをResponseに追加することで、任意のResponseに追加できます（ResponseHeadersはレスポンスDataの一種です）。このインスタンスは複数個をResponseに追加でき、返されるヘッダーの完全なセットは、そのようなすべてのオブジェクトの和集合です。Processorの例:
+
+```java expandable
+import com.yahoo.processing.Processor;
+import com.yahoo.processing.Request;
+import com.yahoo.processing.Response;
+import com.yahoo.processing.handler.ResponseHeaders;
+import com.yahoo.processing.execution.Execution;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.List;
+
+public class ResponseHeaderSetter extends Processor {
+
+   private final Map<String,List<String>> responseHeaders;
+
+   public ResponseHeaderSetter(Map<String,List<String>> responseHeaders) {
+       this.responseHeaders = Collections.unmodifiableMap(responseHeaders);
+   }
+
+   @Override
+   public Response process(Request request, Execution execution) {
+       Response response = execution.process(request);
+       response.data().add(new ResponseHeaders(responseHeaders, request));
+       return response;
+   }
+
+}
+```
+
+## Processorの例
+
+このセクションでは、APIの非同期的な側面のユースケースを示すいくつかのprocessorの例を挙げます。
+
+```java expandable
+import com.yahoo.component.chain.Chain;
+import com.yahoo.processing.Processor;
+import com.yahoo.processing.Request;
+import com.yahoo.processing.Response;
+import com.yahoo.processing.execution.AsyncExecution;
+import com.yahoo.processing.execution.Execution;
+import com.yahoo.processing.response.FutureResponse;
+
+import java.util.\*;
+
+/\*\*
+ \* Call a number of chains in parallel
+ \*/
+public class Federator extends Processor {
+
+    private final List<Chain<? extends Processor>> chains;
+
+    public Federator(Chain<? extends Processor> … chains) {
+        this.chains= Arrays.asList(chains);
+    }
+
+    @Override
+    public Response process(Request request, Execution execution) {
+        List<FutureResponse> futureResponses=new ArrayList<FutureResponse>(chains.size());
+        for (Chain<? extends Processor> chain : chains) {
+            futureResponses.add(new AsyncExecution(chain,execution).process(request));
+        }
+        Response response=execution.process(request);
+        AsyncExecution.waitForAll(futureResponses,1000);
+        for (FutureResponse futureResponse : futureResponses) {
+            Response federatedResponse=futureResponse.get();
+            response.data().add(federatedResponse.data());
+            response.mergeWith(federatedResponse);
+        }
+        return response;
+    }
+}
+```
+
+```java expandable
+import com.yahoo.processing.\*;
+import com.yahoo.processing.execution.Execution;
+import com.yahoo.processing.response.\*;
+import com.yahoo.processing.test.ProcessorLibrary.StringData;
+
+/\*\*
+ \* A data producer which producer data which will receive asynchronously.
+ \* This is not a realistic, thread safe implementation as only the incoming data
+ \* from the last created incoming data can be completed.
+ \*/
+public class AsyncDataProducer extends Processor {
+
+    private IncomingData incomingData;
+
+    @Override
+    public Response process(Request request, Execution execution) {
+        DataList dataList = ArrayDataList.createAsync(request); // Default implementation
+        incomingData=dataList.incoming();
+        return new Response(dataList);
+    }
+
+    /\*\* Called by some other data producing thread, later \*/
+    public void completeLateData() {
+        incomingData.addLast(new StringData(incomingData.getOwner().request(),
+                                            "A late hello, world!"));
+    }
+
+}
+```
+
+```java expandable
+import com.google.common.util.concurrent.MoreExecutors;
+import com.yahoo.component.chain.Chain;
+import com.yahoo.processing.\*;
+import com.yahoo.processing.execution.\*;
+
+/\*\*
+ \* A processor which registers a listener on the future completion of
+ \* asynchronously arriving data to perform another chain at that point.
+ \*/
+public class AsyncDataProcessingInitiator extends Processor {
+
+    private final Chain<Processor> asyncChain;
+
+    public AsyncDataProcessingInitiator(Chain<Processor> asyncChain) {
+        this.asyncChain=asyncChain;
+    }
+
+    @Override
+    public Response process(Request request, Execution execution) {
+        Response response=execution.process(request);
+        response.data().complete().addListener(new RunnableExecution(request,
+                new ExecutionWithResponse(asyncChain, response, execution)),
+                MoreExecutors.sameThreadExecutor());
+        return response;
+    }
+
+}
+```

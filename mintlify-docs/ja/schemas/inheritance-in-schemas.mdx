@@ -1,0 +1,240 @@
+---
+title: "スキーマにおける継承"
+description: "ドキュメントタイプと完全なスキーマの両方を継承できるため、重複の少ない構造化されたアプリケーション・パッケージを簡単に設計できます。ドキュメントタイプの継承は型階層を定義します。これは、クエリーを共通のスーパータイプに対して書けるため、[クエリーをフェデレート](/ja/querying/federation)するアプリケーションにも役立ちます。このガイドでは、継承をサポートするスキーマ内のさまざまな要素を扱います:"
+---
+
+1. スキーマ
+2. ドキュメントタイプ
+3. ランクプロファイル
+4. ドキュメント・サマリー
+
+<Frame>![継承をサポートするスキーマ要素](/assets/img/inheritance-overview.svg)</Frame>
+
+<Note>
+**注:**
+
+継承は [parent/child](/ja/schemas/parent-child) と混同しないでください。こちらはクエリー時にフィールド値をインポートする機能です。
+</Note>
+
+## スキーマの継承
+
+別のスキーマを継承するスキーマは、親スキーマのすべての内容を、あたかも継承するスキーマ内で定義されているかのように取得します。別のスキーマを継承するスキーマは、そのドキュメントタイプも(明示的に)継承しなければなりません:
+
+```js
+schema books inherits items {
+    document books inherits items {
+        field author type string {
+            indexing: summary | index
+        }
+    }
+}
+```
+
+## ドキュメントタイプの継承
+
+ドキュメントタイプは別のドキュメントタイプを継承できます。これにはすべてのフィールドが含まれ、スキーマ内の document ブロックの外で宣言されたフィールドも含まれます。スーパースキーマで定義された rank-profile は、このドキュメントのスキーマで継承できます。下記の[ランクプロファイルの継承](#ランクプロファイルの継承)を参照してください。
+
+スキーマ *music* と *books* はどちらも、継承を通じて *title* フィールドを持ちます:
+
+`my-app/schemas/items.sd`:
+
+```js
+document items {
+    field title type string {
+        indexing: summary | index
+    }
+}
+```
+
+`my-app/schemas/books.sd`:
+
+```js
+schema books {
+    document books inherits items {
+        field author type string {
+            indexing: summary | index
+        }
+    }
+}
+```
+
+`my-app/schemas/music.sd`:
+
+```js
+schema music {
+    document music inherits items {
+        field artist type string {
+            indexing: summary | index
+        }
+    }
+}
+```
+
+これは次と等価です:
+
+`my-app/schemas/books.sd`:
+
+```js
+schema books {
+    document books {
+        field title type string {
+            indexing: summary | index
+        }
+        field author type string {
+            indexing: summary | index
+        }
+    }
+}
+```
+
+`my-app/schemas/music.sd`:
+
+```js
+schema music {
+    document music {
+        field title type string {
+            indexing: summary | index
+        }
+        field artist type string {
+            indexing: summary | index
+        }
+    }
+}
+```
+
+注記:
+
+- 多重継承と複数レベルの継承がサポートされています。
+- 別のコンテント・クラスターで定義されたドキュメントタイプの継承は許可されています。
+- スーパータイプで定義されたフィールドの上書きは許可されていません。
+- スーパータイプで定義された[インポートされたフィールド](/ja/reference/schemas/schemas#import-field)は継承されません。
+
+## ランクプロファイルの継承
+
+フィールドがドキュメントタイプを定義するのに対し、ランクプロファイルはドキュメントに対する計算を定義します。ランクプロファイルは、同じスキーマで定義された rank-profile から継承できます。また、このドキュメントが、ランクプロファイルが定義されているスキーマのドキュメントを継承している場合は、別のスキーマで定義されたものからも継承できます:
+
+`my-app/schemas/items.sd`:
+
+```js
+schema items {
+    document items {
+        field title type string {
+            indexing: summary | index
+        }
+    }
+
+    rank-profile items_ranking_base {
+        function title_score() {
+            expression: fieldLength(title)
+        }
+        first-phase {
+            expression: title_score
+        }
+        summary-features {
+            title_score
+        }
+    }
+}
+```
+
+`my-app/schemas/books.sd`:
+
+```js
+schema books {
+    document books inherits items {
+        field author type string {
+            indexing: summary | index
+        }
+    }
+
+    rank-profile items_ranking inherits items_ranking_base {}
+
+    rank-profile items_subschema_ranking inherits items_ranking_base {
+        first-phase {
+            expression: title_score + fieldMatch(author)
+        }
+        summary-features inherits items_ranking_base {
+            fieldMatch(author)
+        }
+    }
+}
+```
+
+`my-app/schemas/music.sd`:
+
+```js
+schema music {
+    document music inherits items {
+        field artist type string {
+            indexing: summary | index
+        }
+    }
+
+    rank-profile items_ranking inherits items_ranking_base {}
+
+    rank-profile items_subschema_ranking inherits items_ranking_base {
+        first-phase {
+            expression: title_score + fieldMatch(artist)
+        }
+        summary-features inherits items_ranking_base {
+            fieldMatch(artist)
+        }
+    }
+}
+```
+
+*items_ranking* は「ベース」のランキングと考えることができます。プロのヒント: デフォルトの[クエリー・プロファイル](/ja/querying/query-profiles)を変更して、これを *デフォルト* のランクプロファイルとして設定します:
+
+`my-app/search/query-profiles/default.xml`:
+
+```xml
+<query-profile id="default">
+    <field name="ranking.profile">items_ranking</field>
+</query-profile>
+```
+
+*ranking.profile=default* を使用するクエリーは、*items.sd* で定義された first-phase ランキングを使用するようになります。
+
+動作を継承するもう 1 つの方法は、スーパースキーマで定義された関数(例: *title_score*)を使用しながら、サブスキーマで first-phase ランキングを上書きすることです。
+
+### サマリー・フィーチャー
+
+[summary-features](/ja/reference/schemas/schemas#summary-features) と [match-features](/ja/reference/schemas/schemas#match-features) は、ランキング中に計算されるランク・フィーチャーで、[結果](/ja/reference/querying/default-result-format)に含められます。これらのフィーチャーは親のランクプロファイルから継承できます - 上記の例では、`inherits` を使用して、スーパースキーマとサブスキーマのフィーチャーのスコアを含めています - 結果の例:
+
+```json
+"summaryfeatures": {
+    "fieldMatch(author)": 0,
+    "rankingExpression(title_score)": 4
+}
+```
+
+上記の例では、*books* と *music* の両方のスキーマが同じ名前のランクプロファイル(例: *items_subschema_ranking*)を実装しているため、両方にまたがるクエリーで使用できます。クエリーのランクプロファイルがあるスキーマ内で見つからない場合、Vespa のデフォルトのランクプロファイル [nativerank](/ja/ranking/nativerank) が使用されます。
+
+ランクプロファイルへの[インプット](/ja/reference/schemas/schemas#inputs)は、親のランクプロファイルから自動的に継承されます。子のランクプロファイルで新しい inputs ブロックが定義された場合、それらのインプットは親で定義されたものに累積的に追加されます。
+
+## ドキュメント・サマリーの継承
+
+[ドキュメント・サマリー](/ja/querying/document-summaries)は、同じスキーマまたは継承されたスキーマで定義された他のものを継承できます。
+
+`my-app/schemas/books.sd`:
+
+```js
+schema books {
+    document books {
+        field title type string {
+            indexing: summary | index
+        }
+        field author type string {
+            indexing: summary | index
+        }
+    }
+
+    document-summary items_summary_tiny {
+        summary title {}
+    }
+
+    document-summary items_summary_full inherits items_summary_tiny {
+        summary author {}
+    }
+}
+```

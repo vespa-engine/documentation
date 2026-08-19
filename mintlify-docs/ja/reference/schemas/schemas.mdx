@@ -1,0 +1,3690 @@
+---
+title: "スキーマ・リファレンス"
+---
+
+このリファレンスは、スキーマ、ドキュメント・タイプ、フィールドの構文と内容を説明します。これはリファレンスです。概要と例については[スキーマ](/ja/basics/schemas)を参照してください。
+
+## Syntax
+
+このドキュメント全体を通して、角括弧で囲まれた文字列は何らかの引数を表します。括弧を含む文字列全体が、スキーマ内では具体的な文字列に置き換えられます。
+
+スキーマ内の構成要素は規則的な構文を持ちます。各要素は要素の_識別子_で始まり、場合によってはその要素の特定の出現に対する_名前_が続き、場合によってはスペース区切りの_属性名_と_属性値_が交互に並んだリストが続き、場合によっては_要素本体_が続きます。したがって、次のような種類の要素が見られます:
+
+```bash
+[element-identifier] : [element-body]  
+[element-identifier] [element-name] : [element-body]  
+[element-identifier] [element-name] [attribute-name] [attribute-value]  
+[element-identifier] [element-name] [attribute-name] [attribute-value] {
+    [element-body]
+}
+```
+
+1 行の要素値はコロンで始まり、改行で終わります。
+
+複数行の値(それをサポートするフィールドの場合)は、波括弧で囲まれた任意のテキスト・ブロックです。
+
+コメントはどこにでも挿入でき、ハッシュ(#)で始まります。
+
+名前は_識別子_であり、`["a"-"z","A"-"Z", "_"]["a"-"z","A"-"Z","0"-"9","_"]*` にマッチする必要があります。
+
+スキーマ・ファイルはインデントの影響を受けません。
+
+## Elements
+
+スキーマ・ファイルの要素と構造:
+
+```yaml expandable
+schema
+    document
+        struct
+            field
+                match
+        field
+            alias
+            attribute
+                distance-metric
+            bolding
+            dictionary
+            id
+            index
+                hnsw
+            indexing
+            linguistics
+            match
+            normalizing
+            query-command
+            rank
+            rank-type
+            sorting
+            stemming
+            struct-field
+                indexing
+                match
+                query-command
+                struct-field
+                 …
+                summary
+                summary-to DEPRECATED
+            summary
+            summary-to DEPRECATED
+            weight
+        compression
+    index
+    field
+    fieldset
+    rank-profile
+        diversity
+            attribute
+            min-groups
+        match-phase
+            attribute
+            order
+            total-max-hits
+            max-hits
+        first-phase
+            total-keep-rank-count
+            keep-rank-count
+            rank-score-drop-limit
+            expression
+        second-phase
+            expression
+            rank-score-drop-limit
+            total-rerank-count
+            rerank-count
+        global-phase
+            expression
+            rerank-count
+            rank-score-drop-limit
+        function [name] 
+        inputs
+        constants
+        onnx-model
+        significance
+        rank-properties
+        match-features
+        mutate
+            on-match
+            on-first-phase
+            on-second-phase
+            on-summary
+        summary-features
+        rank-features
+        ignore-default-rank-features
+        num-threads-per-search
+        num-search-partitions
+        min-hits-per-thread
+        termwise-limit
+        post-filter-threshold
+        approximate-threshold
+        filter-first-threshold
+        filter-first-exploration
+        exploration-slack
+        target-hits-max-adjustment-factor
+        filter-threshold
+        rank
+        filter-threshold
+        element-gap
+        rank-type
+        weakand
+            stopword-limit
+            adjust-target
+            allow-drop-all
+        rank-profile (inner)
+    constant
+    onnx-model
+    stemming
+    documentid
+    document-summary
+        summary
+    import field
+    raw-as-base64-in-summary
+schema
+```
+
+## schema
+
+スキーマのルート要素です。スキーマは、データの種類と、それに対して何を計算すべきかを記述します。スキーマは `[schema-name].sd` という名前のファイルで定義する必要があります。
+
+```bash
+schema [name] inherits [name] {
+    [body]
+}
+```
+
+`inherits` 属性はオプションです。スキーマが継承される場合、このスキーマは、継承元のすべての構成要素を、あたかもこのスキーマで定義されているかのように含みます(親のドキュメント・タイプを除く)。このスキーマ内のドキュメント・タイプは、親スキーマのドキュメント・タイプを継承することを宣言しなければなりません。
+
+body は必須で、次を含むことができます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#document" aria-label="document">document</a></td>
+      <td>1 回</td>
+      <td>このスキーマで定義されるドキュメント・タイプ</td>
+    </tr>
+    <tr>
+      <td><a href="#field" aria-label="field">field</a></td>
+      <td>0 回以上</td>
+      <td>ドキュメントに含まれないフィールド。_合成フィールド_(<a href="#document" aria-label="document">document</a> の外側)を使用して、ドキュメントのフィールドからインデキシング構造に配置する新しいフィールド値を導出します。例は<a href="/ja/operations/reindexing#use-cases" aria-label="reindexing">再インデキシング</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td><a href="#fieldset" aria-label="fieldset">fieldset</a></td>
+      <td>0 回以上</td>
+      <td>検索のためにドキュメントのフィールドをグループ化します</td>
+    </tr>
+    <tr>
+      <td><a href="#rank-profile" aria-label="rank-profile">rank-profile</a></td>
+      <td>0 回以上</td>
+      <td>クエリーで選択可能な、ランキング関数と設定の集まり。</td>
+    </tr>
+    <tr>
+      <td><a href="#constant" aria-label="constant">constant</a></td>
+      <td>0 回以上</td>
+      <td>ランキングに使用される、ファイルに配置された定数テンソル</td>
+    </tr>
+    <tr>
+      <td><a href="#onnx-model" aria-label="onnx-model">onnx-model</a></td>
+      <td>0 回以上</td>
+      <td>ランキングに使用される、アプリケーション・パッケージ内に配置された ONNX モデル</td>
+    </tr>
+    <tr>
+      <td><a href="#stemming" aria-label="stemming">stemming</a></td>
+      <td>0 回または 1 回</td>
+      <td>デフォルトのステミング設定。</td>
+    </tr>
+    <tr>
+      <td><a href="#raw-as-base64-in-summary" aria-label="raw-as-base64-in-summary">raw-as-base64-in-summary</a></td>
+      <td>0 回または 1 回</td>
+      <td>サマリー内の raw フィールドを、エスケープされた文字列ではなく Base64 でエンコードします。デフォルトは true です。</td>
+    </tr>
+    <tr>
+      <td><a href="#documentid" aria-label="documentid">documentid</a></td>
+      <td>0 回または 1 回</td>
+      <td>ドキュメント ID をディスクにのみ保存するか、属性(attribute)にするか。</td>
+    </tr>
+    <tr>
+      <td><a href="#document-summary" aria-label="document-summary">document-summary</a></td>
+      <td>0 回以上</td>
+      <td>明示的に定義されたドキュメント・サマリー</td>
+    </tr>
+    <tr>
+      <td><a href="#import-field" aria-label="import field">import field</a></td>
+      <td>0 回以上</td>
+      <td>グローバル・ドキュメントからフィールド値をインポートします</td>
+    </tr>
+  </tbody>
+</table>
+
+## document
+
+[schema](#schema) に含まれ、ドキュメント・タイプを記述します。ドキュメントを直接クエリーしない場合は、これをスキーマのルートにすることもできます。
+
+```bash
+document [name] inherits [name-list] {
+    [body]
+}
+```
+
+ドキュメント名はオプションで、デフォルトでは包含する `schema` 要素の名前になります。包含する `schema` 要素がない場合、ドキュメント名は必須です。名前付きのドキュメントがスキーマ内で定義される場合、ドキュメント名は `schema` 要素の名前と一致しなければなりません。ドキュメント内で_ドキュメント・タイプ_と言及される場合は、ここで定義されるドキュメント名を指します。
+
+`inherits` 属性はオプションで、値として他のドキュメント・タイプ名のカンマ区切りリストを取ります。ドキュメント・タイプは、1 つ以上の他のドキュメント・タイプのフィールドを継承できます。例については[ドキュメントの継承](/ja/schemas/inheritance-in-schemas)を参照してください。ドキュメント・タイプが明示的に継承されない場合、そのドキュメントは汎用の `document` タイプを継承します。
+
+ドキュメント・タイプの body はオプションで、次を含むことができます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#struct" aria-label="struct">struct</a></td>
+      <td>0 回以上</td>
+      <td>このドキュメントの struct 型定義。</td>
+    </tr>
+    <tr>
+      <td><a href="#field" aria-label="field">field</a></td>
+      <td>0 回以上</td>
+      <td>このドキュメントのフィールド。</td>
+    </tr>
+    <tr>
+      <td><a href="#compression" aria-label="compression">compression</a></td>
+      <td>0 回または 1 回</td>
+      <td>このドキュメント・タイプのドキュメントをストレージに保存する際の圧縮オプションを指定します。</td>
+    </tr>
+  </tbody>
+</table>
+
+## struct
+
+[document](#document) に含まれます。複合型を定義します。struct は 0 個以上のフィールドで構成され、ユーザーはそれらをまとめて 1 つとしてアクセスできます。struct は、フィールド指定で型として使用される前に定義されていなければなりません。
+
+```bash
+struct [name] {
+    [body]
+}
+```
+
+struct の body はオプションで、次を含むことができます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#field" aria-label="field">field</a></td>
+      <td>0 回以上</td>
+      <td>この struct のフィールド。</td>
+    </tr>
+  </tbody>
+</table>
+
+## field
+
+[schema](#schema)、[document](#document)、または [struct](#struct) に含まれます。型を持つ名前付きの値と、(オプションで)このフィールドをどのように保存、インデックス、検索、表示するか、およびランキングにどのように影響させるかを定義します。
+
+```bash
+field [name] type [type-name] {
+    [body]
+}
+```
+インデキシング言語やスキーマ・ファイル内の他の場所で別の目的に使われている名前は使用しないでください。予約されている名前は次のとおりです:
+- attribute
+- body
+- case
+- context
+- documentid
+- else
+- header
+- hit
+- host
+- if
+- index
+- position
+- reference
+- relevancy
+- sddocname
+- summary
+- switch
+- tokenize
+
+その他に使用してはいけない名前として、数字で始まる単語や特殊文字を含む単語があります。
+
+_type_ 属性は必須です - サポートされる型:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>フィールド型</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td colSpan={2}>array&lt;type&gt;</td>
+    </tr>
+  </tbody>
+</table>
+
+単一値(プリミティブ)型の場合、array\<type\> を使用して要素型の配列フィールドを作成します:
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>各要素は個別にインデックスされます</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>配列の attribute として追加されます</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>配列のサマリー・フィールドとして追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+指定した [struct 型](#struct)の配列フィールドを作成するためにも使用します。struct 型は別途定義されている必要があります。例:
+
+```js
+struct person {
+    field first_name type string {}
+    field last_name type string {}
+}
+
+field people type array<person> {
+    indexing: summary
+    summary: matched-elements-only
+    struct-field first_name {
+        indexing: attribute
+        attribute: fast-search
+    }
+}
+```
+
+_people_ フィールド全体がドキュメント・サマリーの一部となります。[struct フィールド](#struct-field) _first\_name_ は、[fast-search](/ja/content/attributes#fast-search) を伴う検索用の _attribute_ として定義されています。struct フィールドの一部、またはすべてを attribute として定義できます。
+
+同じ struct フィールドのインスタンス内でのマッチを保証するには、[sameElement](/ja/reference/querying/yql#sameelement) 演算子を使用します。
+
+ドキュメント・サマリーで返されるデータ量を減らすには、[matched-elements-only](#matched-elements-only) を使用します。
+
+<Warning>
+ **重要:**
+
+`key` と `value` は array\<struct\> における予約語です。これらは [map](#map) の実装に使用されるためです。これらを struct フィールドの名前として使用しないでください。
+</Warning>
+
+制約事項:
+
+- struct 型の配列は[ランキング・フィーチャー](/ja/basics/ranking)をサポートせず、マッチングとフィルタリングにのみ使用できます。
+- すべての struct 配列はフィードでき、取得でき、ドキュメント・サマリーで使用できます。
+- struct 配列の一部は[インデックス検索モード](/ja/reference/applications/services/content#document)で検索できますが、[ストリーミング検索](/ja/performance/streaming-search)では struct 配列のすべての部分を検索できます。サポートされるケースは以下を参照してください。
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td><a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="streaming search">ストリーミング検索</a>でのみサポートされます。トップレベルの struct 配列フィールドにこれを設定すると、すべての部分が検索可能になります。</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>プリミティブ型(bool、string、int、long、byte、float、double)を持つ <a href="#struct-field" aria-label="struct fields">struct フィールド</a>でのみサポートされます。検索に使用するには、struct フィールドを attribute として定義しなければなりません。attribute として定義しない限り、struct 型に非プリミティブ型のフィールドを含めることは可能です。</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>配列のサマリー・フィールドとして追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>bool</td>
+    </tr>
+  </tbody>
+</table>
+
+ブール値に使用します。
+
+```
+field alive type bool {
+    indexing: summary | attribute
+}
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>サポートされません</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>ブール値として追加されます</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>ブール値(<code>{`true`}</code> または <code>{`false`}</code>)として追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+<Warning>**重要:** 指定しない場合、デフォルトは `false` です。 </Warning>
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>byte</td>
+    </tr>
+  </tbody>
+</table>
+
+単一の 8 ビット数値に使用します。
+
+```js
+field smallnumber type byte {
+    indexing: summary | attribute
+}
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>サポートされません。代わりに attribute が自動的に使用されます</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>範囲検索をサポートする byte として追加されます</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>byte として追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>double</td>
+    </tr>
+  </tbody>
+</table>
+
+高精度の浮動小数点数(64 ビット IEEE 754 double)に使用します。
+
+```
+field mydouble type double {
+    indexing: summary | attribute
+}
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>サポートされません。代わりに attribute が自動的に使用されます</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>範囲検索をサポートする 64 ビット IEEE 754 double として追加されます</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>64 ビット IEEE 754 double として追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>float</td>
+    </tr>
+  </tbody>
+</table>
+
+浮動小数点数(32 ビット IEEE 754 float)に使用します。
+
+```
+field myfloat type float {
+    indexing: summary | attribute
+}
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>サポートされません。代わりに attribute が自動的に使用されます</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>範囲検索をサポートする 32 ビット IEEE 754 float として追加されます</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>32 ビット IEEE 754 float として追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>int</td>
+    </tr>
+  </tbody>
+</table>
+
+単一の 32 ビット整数に使用します。
+
+```
+field release_year type int {
+    indexing: summary | attribute
+}
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>サポートされません。代わりに attribute が自動的に使用されます</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>整数の attribute になり、範囲グルーピングと範囲検索をサポートします</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>32 ビット整数として追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>long</td>
+    </tr>
+  </tbody>
+</table>
+
+単一の 64 ビット整数に使用します。
+
+```
+field bignumber type long {
+    indexing: summary | attribute
+}
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>サポートされません。代わりに attribute が自動的に使用されます</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>64 ビット整数の attribute になり、範囲グルーピングと範囲検索をサポートします</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>64 ビット整数として追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>map&lt;key-type,value-type&gt;</td>
+    </tr>
+  </tbody>
+</table>
+
+一意の各キーが単一の値にマップされるマップを作成するために使用します。_key-type_ には任意のプリミティブ型を、_value-type_ には任意のプリミティブ型または Vespa の struct 型を使用できます。プリミティブ型のマップの例で、_key_ フィールドと _value_ フィールドを _attribute_ として指定しています:
+
+```
+field my_map type map<string, int> {
+    indexing: summary
+    struct-field key { indexing: attribute }
+    struct-field value { indexing: attribute }
+}
+```
+
+Vespa のマップのエントリーは、_key-type_ と _value-type_ を型とする _key_ フィールドと _value_ フィールドを持つ _struct_ として扱われることに注意してください。これが上記の _struct-field_ 構文の理由です。_my\_map_ フィールド全体がドキュメント・サマリーに設定されます。
+
+より複雑な例として、struct のマップがあります:
+
+```
+struct person {
+    field first_name type string {}
+    field last_name type string {}
+    field age type int {}
+}
+
+field identities type map<string, person> {
+    indexing: summary
+    summary: matched-elements-only
+    struct-field key {
+        indexing: attribute
+        attribute: fast-search
+    }
+    struct-field value.first_name {
+        indexing: attribute
+        attribute: fast-search
+    }
+    struct-field value.last_name {
+        indexing: attribute
+        attribute: fast-search
+    }
+}
+```
+
+この例は、struct の要素が個別に設定されることを示しています - _age_ に対するフィールド設定はありません - struct フィールドの一部だけを attribute として定義できます。
+
+ここでは、_key_、_value.first\_name_、_value.last\_name_ が attribute として定義されています。これにより、これらは検索と[グルーピング](/ja/querying/grouping#grouping-over-a-map-field)で利用できるようになります。よくあるユース・ケースは、同じマップ・エントリー内でのマッチを要求すること(例: 同一人物の姓と名の両方にマッチさせる)です。この実装方法については [sameElement](/ja/reference/querying/yql#sameelement) 演算子を参照してください。ドキュメント・サマリーのデータ量を減らすには [matched-elements-only](#matched-elements-only) を使用します。
+
+[fast-search](/ja/performance/feature-tuning#when-to-use-fast-search-for-attribute-fields) は、ルックアップ用のインデックス構造を作成することでクエリー・アクセスを高速化するために使用されます。
+
+マップの代替として、[array\<struct\>](#array) は同じ要素を複数回含むことができ、順序を維持します。
+
+制約事項:
+
+- struct またはプリミティブ型のマップは[ランキング・フィーチャー](/ja/basics/ranking)をサポートせず、マッチングとフィルタリングにのみ使用できます。
+- すべてのマップ型はフィードでき、取得でき、ドキュメント・サマリーで使用できます。
+- 一部のマップ型は[インデックス検索モード](/ja/reference/applications/services/content#document)で検索できますが、[ストリーミング検索](/ja/performance/streaming-search)ではすべてのマップ型を検索できます。サポートされるケースは以下を参照してください:
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td><a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="streaming search">ストリーミング検索</a>でのみサポートされます。トップレベルのマップ・フィールドにこれを設定すると、マップ・フィールド内のすべての struct フィールドが検索可能になります。</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>_value-type_ がプリミティブ型(bool、string、int、long、byte、float、double)、またはプリミティブ型のフィールドを持つ <a href="#struct" aria-label="struct type">struct 型</a>である <a href="#struct-field" aria-label="struct fields">struct フィールド</a>でのみサポートされます。検索に使用するには、struct フィールドを attribute として定義しなければなりません。attribute として定義しない限り、_value-type_ の struct に非プリミティブ型のフィールドを含めることは可能です。</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>マップとして追加されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>position</td>
+    </tr>
+  </tbody>
+</table>
+
+クエリー内の位置からの距離によってドキュメントをフィルタリングおよび/またはランキングするために使用します。[ジオ検索](/ja/querying/geo-search)を参照してください。
+
+```
+field location type position {
+    indexing: attribute
+}
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>サポートされません</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>インターリーブされた 64 ビット整数として追加されます(<a href="https://en.wikipedia.org/wiki/Z-order_curve" aria-label="Z-order curve">Z-order curve</a> を参照) - クエリーは attribute に対する一連の範囲検索として実装されます。この attribute には <a href="/ja/content/attributes#fast-search" aria-label="fast-search">fast-search</a> が暗黙的に設定されます</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td><a href="/ja/reference/schemas/document-json-format#position" aria-label="reference">リファレンス</a>を参照してください</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>predicate</td>
+    </tr>
+  </tbody>
+</table>
+
+クエリーを一連のブール制約とマッチさせるために使用します。[predicate フィールドのクエリー](/ja/schemas/predicate-fields.#queries)を参照してください。predicate フィールドは[ストリーミング検索](/ja/performance/streaming-search#differences-in-streaming-search)ではサポートされません。
+
+```
+field predicate_field type predicate {
+    indexing: attribute
+    index {
+        arity: 2 # mandatory
+        lower-bound: 3
+        upper-bound: 200
+        dense-posting-list-threshold: 0.25
+    }
+}
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>サポートされません</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>クエリー評価時の適用に最適化された可変サイズのバイナリ形式で、メモリー内にインデックスされます</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>そのまま追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>raw</td>
+    </tr>
+  </tbody>
+</table>
+
+バイナリ・データに使用します
+
+```
+field rawfield type raw {
+    indexing: summary | attribute
+}
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>サポートされません</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>raw データとして追加されます。検索はできません。</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>raw データとして追加されます。Base64 エンコードされた文字列として出力されます。詳細は <a href="/ja/reference/schemas/document-json-format#raw" aria-label="JSON feed format">JSON フィード形式</a>を参照してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>reference&lt;document-type&gt;</td>
+    </tr>
+  </tbody>
+</table>
+
+_reference\<document-type\>_ フィールドは、document-type のインスタンスへの参照、すなわち外部キーです。reference フィールドは[ストリーミング検索](/ja/performance/streaming-search#differences-in-streaming-search)ではサポートされません。
+
+```
+field artist_ref type reference<artist> {
+    indexing: attribute
+}
+```
+ 参照は、document-type インスタンスの[ドキュメント ID](/ja/schemas/documents) です。参照は、[親子関係](/ja/schemas/parent-child)でドキュメントを結合するために使用されます。参照は[グローバル](/ja/reference/applications/services/content#document)なドキュメントに対してのみ作成できます。次の種類の参照はサポートされません: 
+- 自己参照
+- 循環参照: ドキュメント・タイプ _foo_ が _bar_ への参照を持つ場合、_bar_ は _foo_ への参照を持てません
+
+ reference attribute フィールドは、親の document-type インスタンスのドキュメント ID をクエリー・タームとして使用して検索できます。[fast-search](#attribute) はサポートされないため、これは線形スキャンになる点に注意してください。 
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>無効 - デプロイは失敗します</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td><a href="#string" aria-label="string">string</a> として - 参照は attribute でなければなりません。空文字列にすることも、存在しないドキュメントを指すこともできます。メモリー使用量は親ドキュメントあたり約 33 バイトです。この内訳は、参照ストアで使用される 24 バイトと、その上にある btree 構造で平均 5 バイト(lid コンパクションに依存)です。さらに、子ドキュメントから親ドキュメントへの参照に平均 4 バイト(lid コンパクションに依存)。合計で約 33 バイトです。</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td><a href="#string" aria-label="string">string</a> として</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>string</td>
+    </tr>
+  </tbody>
+</table>
+
+任意の長さのテキスト・フィールドに使用します。文字列フィールドには、[com.yahoo.text.Text](https://github.com/vespa-engine/vespa/blob/master/vespajlib/src/main/java/com/yahoo/text/Text.java) の `isTextCharacter` で定義される_テキスト文字_のみを含めることができます
+
+```
+field surname type string {
+    indexing: summary | index
+}
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>正規化、トークン化、ステミングの詳細は<a href="/ja/linguistics/linguistics" aria-label="linguistics">リンギスティクス</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>そのまま追加されます。文字列の attribute では、<a href="#match" aria-label="match">match</a> の exact または prefix が検索としてサポートされます。ただし検索は大文字・小文字を区別しません。<code>{`BritneY.spears`}</code> のクエリーは <code>{`BrItNeY.SpEars`}</code> を含むドキュメントにマッチします</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>そのまま追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>struct</td>
+    </tr>
+  </tbody>
+</table>
+
+struct データ型を持つフィールドを定義するために使用します。ドキュメント定義の中に [struct 型](#struct)を作成し、その struct 型名をフィールド型として使用して、document または struct 内で struct フィールドを宣言します:
+
+```
+struct person {
+    field first_name type string {}
+    field last_name type string {}
+}
+field my_person type person {
+    indexing: summary
+}
+```
+ 制約事項: 
+- struct フィールドはインデックス検索モードでは検索**できません**(ただし [struct の配列](#array)と[マップ型](#map)は、いくつかの制約付きで検索可能です)。
+- struct フィールドはフィードでき、取得でき、ドキュメント・サマリーで使用できます。
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td><a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="streaming search">ストリーミング検索</a>でのみサポートされます。トップレベルのフィールドにこれを設定すると、すべての部分が検索可能になります。</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>サポートされません。</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>struct として追加されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>tensor(dimension-1,...,dimension-N)</td>
+    </tr>
+  </tbody>
+</table>
+
+指定した[テンソル型仕様](/ja/reference/ranking/tensor#tensor-type-spec)を持つテンソル・フィールドを作成するために使用します。このフィールドは[ランキング](/ja/basics/ranking)と[最近傍検索](/ja/querying/nearest-neighbor-search)に使用できます。それ以外では、テンソル・フィールドは検索できません。
+
+定義については[テンソル評価リファレンス](/ja/reference/ranking/tensor)、[テンソル・ユーザー・ガイド](/ja/ranking/tensor-user-guide)、および [JSON フィード形式](/ja/reference/schemas/document-json-format#tensor)を参照してください。
+
+```
+field tensorfield type tensor<float>(x{},y{}) {
+    indexing: attribute | summary
+}
+
+field tensorfield type tensor<float>(x[2],y[2]) {
+    indexing: attribute | summary
+}
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>次のテンソル型でサポートされます:</td>
+    </tr>
+  </tbody>
+</table>
+- インデックス付き次元が 1 つ - ドキュメントあたり 1 つのベクトル
+- 1 つ以上のマップ次元と 1 つのインデックス付き次元 - ドキュメントあたり複数のベクトル
+
+ [近似最近傍検索](/ja/querying/approximate-nn-hnsw)を参照してください。 |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Attribute</td>
+      <td>ランキングと最近傍検索に使用できるよう、そのまま attribute として追加されます。</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>そのまま追加されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>uri</td>
+    </tr>
+  </tbody>
+</table>
+
+URL 型のマッチングに使用します。URI フィールドは[ストリーミング検索](/ja/performance/streaming-search#differences-in-streaming-search)ではサポートされません。
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+    </tr>
+  </tbody>
+</table>
+
+URL はそれぞれの構成要素に分割され、個別にインデックスされます。この方法でインデックスできるのは URL のみで、その他の URI はインデックスできない点に注意してください。構成要素は HTTP 標準で定義されているとおり、Scheme、hostname、port、path、query、fragment です。例:
+
+```
+http://mysite.mydomain.com:8080/path/shop?d=hab&id=1804905709&cat=100#frag1
+```
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>scheme</td>
+      <td>http</td>
+    </tr>
+    <tr>
+      <td>hostname</td>
+      <td>mysite.mydomain.com("mysite"、"mydomain"、"com" としてインデックスされます)</td>
+    </tr>
+    <tr>
+      <td>port</td>
+      <td>8080(ポート番号 80 と 443 は通常のポート番号であるため、インデックスされない点に注意してください)</td>
+    </tr>
+    <tr>
+      <td>path</td>
+      <td>/path/shop("path" と "shop" としてインデックスされます)</td>
+    </tr>
+    <tr>
+      <td>query</td>
+      <td>d=hab&amp;id=1804905709&amp;cat=100("d"、"hab"、"id"、"1804905709"、"cat"、"100" としてインデックスされます)</td>
+    </tr>
+    <tr>
+      <td>fragment</td>
+      <td>frag1</td>
+    </tr>
+  </tbody>
+</table>
+
+ これらの各構成要素を検索する構文は次のとおりです: 
+```
+[field-name].[component-name]:term
+```
+ 例: URI フィールド `sourceurl` で、slashdot からのドキュメントを検索します: 
+```
+query=sourceurl.hostname:slashdot
+```
+
+URL の hostname は_アンカー付き検索_もサポートします。[URL フィールドでの検索](/ja/reference/querying/yql#uri)を参照してください。
+
+uri 型のフィールドを共通のインデックスにインデックスすることはできません。つまり、他のフィールドとは別にインデックスする必要があります。URL を他のフィールドと組み合わせる必要がある場合は、代わりに string フィールドに保存できますが、その場合は URL の各部分(scheme、hostname、port、path、query、fragment)を個別に検索することはできません。
+
+**エイリアス**も URL フィールドでは動作が異なります - インデックスへのエイリアス(通常どおり)と、その構成要素へのエイリアスの両方を作成できます。構成要素のエイリアスを作成するには、
+
+```
+alias [component]: [alias]
+```
+ を使用します。たとえば、次のフィールドがあるとします: 
+```
+field surl type uri {
+    indexing: summary | index
+    alias: url
+    alias hostname: site
+}
+```
+
+"surl" と "url" での検索は URL 全体を検索し、"surl.hostname" または "site" は hostname を検索します。
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Attribute</td>
+      <td>許可されません</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>文字列としてそのまま追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>weightedset&lt;element-type&gt;</td>
+    </tr>
+  </tbody>
+</table>
+
+要素型の多値フィールドを作成するために使用します。各要素には符号付き 32 ビット整数の weight が割り当てられます。
+
+```
+field tag type weightedset<string> {
+    indexing: attribute | summary
+}
+```
+
+要素型には、byte、int、long、string のいずれかのプリミティブ型を使用できます。
+
+`attribute` を使用する場合にランキングで weighted set にアクセスするには、[attribute のマッチ・フィーチャー](/ja/reference/ranking/rank-features#attribute-match-features-not-normalized)を参照するか、tensorFromWeightedSet(field, dimensionName) フィーチャーを使用して weighted set をテンソルに変換します。
+
+`index` を使用する場合にランキングで weighted set にアクセスするには、[インデックス付き多値フィールドのランキング・フィーチャー](/ja/reference/ranking/rank-features#features-for-indexed-multivalue-string-fields)を参照してください。weightedset で `index` を使用する場合、クエリーはセット内の要素をまたいでマッチする点に注意してください。
+
+更新前にキーが存在しない場合は新しいキーを作成すること、および weight が 0 に設定された場合はキーを削除することを指定できます - [リファレンス](#weightedset-properties)を参照してください。
+
+weightedset フィールドは weight によるフィルタリングをサポートしません。それが必要な場合は、[map](#map) 型と [sameElement](/ja/reference/querying/yql#sameelement) クエリー演算子を使用してください - [この例](/ja/querying/query-language#map)を参照してください。
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>Index</td>
+      <td>フィールドに存在する各トークンは個別にインデックスされます。インデックスされる情報には、要素番号、要素の weight、およびそのトークンが存在する各要素におけるトークン出現位置のリストが含まれます</td>
+    </tr>
+    <tr>
+      <td>Attribute</td>
+      <td>weight 付きの多値 attribute として追加されます</td>
+    </tr>
+    <tr>
+      <td>Summary</td>
+      <td>これが attribute の場合、多値サマリー・フィールドとして追加されます</td>
+    </tr>
+  </tbody>
+</table>
+
+ |
+
+field の body は、[schema](#schema)、[document](#document)、[struct](#struct) においてオプションです。次の要素を含むことができます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>alias</td>
+      <td>0 回以上</td>
+      <td>インデックスまたは attribute を、追加の名前でクエリーから利用できるようにします。パフォーマンスへの影響は最小限で、稼働中のアプリケーションに安全に追加できます。例: <br/><pre><code>{`field artist type string {     alias: artist_name }`}</code></pre>  <code>{`alias`}</code> はプリミティブ型、つまり <code>{`string`}</code> のように <code>{`indexing`}</code> を設定できる型で機能します。複合型はサポートされず、以下はデプロイ時にエラーになります: <br/><pre><code>{`document ppl {     struct person {         field first_name type string {}         field last_name  type string {}     }     field p type array<person> {         struct-field first_name {             indexing: attribute         }         struct-field last_name {             indexing: attribute         }         alias: members     } }`}</code></pre></td>
+    </tr>
+    <tr>
+      <td><a href="#attribute" aria-label="attribute">attribute</a></td>
+      <td>0 回以上</td>
+      <td>attribute の設定を指定します。</td>
+    </tr>
+    <tr>
+      <td><a href="#bolding" aria-label="bolding">bolding</a></td>
+      <td>0 回または 1 回</td>
+      <td>このフィールドの内容を太字にするかどうかを指定します。string 型または array&lt;string&gt; 型の <a href="#indexing-index" aria-label="index">index</a> フィールドでのみサポートされます。</td>
+    </tr>
+    <tr>
+      <td><a href="#id" aria-label="id">id</a></td>
+      <td>0 回または 1 回</td>
+      <td>このフィールドの数値 ID を明示的に決定します。通常は不要ですが、ディスク領域をいくらか節約するために使用できます。</td>
+    </tr>
+    <tr>
+      <td><a href="#index" aria-label="index">index</a></td>
+      <td>0 回以上</td>
+      <td>インデックスのパラメーターを指定します。</td>
+    </tr>
+    <tr>
+      <td><a href="#indexing" aria-label="indexing">indexing</a></td>
+      <td>0 回または 1 回</td>
+      <td>このフィールドからインデックス構造への追加を作成するために使用されるインデキシング文。</td>
+    </tr>
+    <tr>
+      <td><a href="#match" aria-label="match">match</a></td>
+      <td>0 回または 1 回</td>
+      <td>このフィールドで使用するマッチング・タイプを設定します。</td>
+    </tr>
+    <tr>
+      <td><a href="#normalizing" aria-label="normalizing">normalizing</a></td>
+      <td>0 回または 1 回</td>
+      <td>文字列フィールドで行うテキスト正規化の種類を指定します。</td>
+    </tr>
+    <tr>
+      <td><a href="#query-command" aria-label="query-command">query-command</a></td>
+      <td>0 回以上</td>
+      <td>Search Container 内のプラグイン・サーチャーが受け取れるコマンドを指定します。</td>
+    </tr>
+    <tr>
+      <td><a href="#rank" aria-label="rank">rank</a></td>
+      <td>0 回または 1 回</td>
+      <td>このフィールドをランキングに使用するかどうかを指定します。</td>
+    </tr>
+    <tr>
+      <td><a href="#rank-type" aria-label="rank-type">rank-type</a></td>
+      <td>0 回または 1 回</td>
+      <td>デフォルトの <code>{`nativeRank`}</code> を使用する際に、このフィールドに使用する低レベルのランク設定のセットを選択します。</td>
+    </tr>
+    <tr>
+      <td><a href="#sorting" aria-label="sorting">sorting</a></td>
+      <td>0 回または 1 回</td>
+      <td>このフィールドのソート指定。</td>
+    </tr>
+    <tr>
+      <td><a href="#stemming" aria-label="stemming">stemming</a></td>
+      <td>0 回または 1 回</td>
+      <td>このフィールドで使用するステミング・オプションを指定します。</td>
+    </tr>
+    <tr>
+      <td><a href="#struct-field" aria-label="struct-field">struct-field</a></td>
+      <td>0 回以上</td>
+      <td>struct 型フィールドのサブフィールド。struct 定義において、この struct がこのサブフィールドを含むように定義されている必要があります。サブフィールドを struct の他の部分と異なる方法で扱いたい場合は、struct-field の body 内で指定できます。</td>
+    </tr>
+    <tr>
+      <td><a href="#summary" aria-label="summary">summary</a></td>
+      <td>0 回以上</td>
+      <td>このフィールドのサマリー設定を設定します。<code>{`dynamic`}</code> に設定すると動的サマリーになります。</td>
+    </tr>
+    <tr>
+      <td><a href="#summary-to" aria-label="summary-to">summary-to</a></td>
+      <td>0 回または 1 回</td>
+      <td><Warning>&#42;&#42;非推奨:&#42;&#42; 代わりに <a href="#document-summary" aria-label="document-summary">document-summary</a> を使用してください。</Warning>  このフィールドを含めるドキュメント・サマリー名のリスト。</td>
+    </tr>
+    <tr>
+      <td><a href="#weight" aria-label="weight">weight</a></td>
+      <td>0 回または 1 回</td>
+      <td>複数フィールドを検索して <code>{`nativeRank`}</code> を使用する際のフィールドの重要度。</td>
+    </tr>
+    <tr>
+      <td><a href="#weightedset-properties" aria-label="weightedset">weightedset</a></td>
+      <td>0 回または 1 回</td>
+      <td>weightedset <a href="#weightedset" aria-label="weightedset&lt;element-type&gt;">weightedset&lt;element-type&gt;</a> のプロパティ</td>
+    </tr>
+  </tbody>
+</table>
+
+フィールドはデフォルト値を持てません。フィールド値を自動設定する方法は[ドキュメント・ガイド](/ja/schemas/documents#fields)を参照してください。
+
+値のないフィールドをクエリーすること(すなわち NULL のクエリー)はできません - [クエリー言語リファレンス](/ja/reference/querying/yql)を参照してください。値のないフィールドは[クエリー結果](/ja/reference/querying/default-result-format)には返されません。
+
+フィールドは、スキーマ内の document ブロックの外側で宣言できます。これらのフィールドはドキュメント・タイプの一部ではありませんが、クエリーに対しては通常のフィールドと同様に動作します。ドキュメントの一部ではないため、直接書き込むことはできず、代わりに `input` 式を使用してドキュメントのフィールドから値を取得します: `indexing: input my_document_field | embed | summary | index`
+
+これは、たとえばフィールドを複数の方法でインデックスしたり、フィールド値を変更したりする場合に便利です。これらはドキュメントのフィールドでは許可されていない操作です。入力として使用されるドキュメントのフィールドが更新されると、これらのフィールドも一緒に更新されます。
+
+## struct-field
+
+[field](#field) または [struct-field](#struct-field) に含まれます。この struct フィールド(struct のサブフィールド)をどのように保存、インデックス、検索、表示するか、およびランキングにどのように影響させるかを定義します。この struct フィールドを含むフィールドは、struct 型または struct 型のコレクションでなければなりません:
+
+```bash
+struct-field [name] {
+    [body]
+}
+```
+
+struct フィールドの body はオプションで、次の要素を含むことができます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#indexing" aria-label="indexing">indexing</a></td>
+      <td>0 回または 1 回</td>
+      <td>このフィールドからインデックス構造への追加を作成するために使用されるインデキシング文。インデックス検索では <code>{`attribute`}</code> のみがサポートされ、これにより struct フィールドは検索可能なインメモリー attribute となり、グルーピングやランキングなどにも使用できます。<a href="/ja/performance/streaming-search" aria-label="streaming search">ストリーミング検索</a>では、加えて <code>{`index`}</code> と <code>{`summary`}</code> がサポートされます。</td>
+    </tr>
+    <tr>
+      <td><a href="#attribute" aria-label="attribute">attribute</a></td>
+      <td>0 回以上</td>
+      <td>attribute の設定を指定します。例: <code>{`attribute:fast-search`}</code>。</td>
+    </tr>
+    <tr>
+      <td><a href="#rank" aria-label="rank">rank</a></td>
+      <td>0 回または 1 回</td>
+      <td><a href="#rank" aria-label="rank">rank</a> の設定を指定します</td>
+    </tr>
+    <tr>
+      <td><a href="#match" aria-label="match">match</a></td>
+      <td>0 回または 1 回</td>
+      <td><a href="#match" aria-label="match">match</a> の設定を指定します</td>
+    </tr>
+  </tbody>
+</table>
+
+この struct フィールドが struct 型の場合(すなわちネストされた struct)、[indexing:summary](#indexing) のみを指定できます。使用例は [array\<type\>](#array) を参照してください。
+
+## fieldset
+
+[schema](#schema) に含まれます。
+
+<Info>
+ **注:** これは [Document fieldset](/ja/schemas/documents#fieldsets) とは関係ありません。異なる型/match 設定を使用した場合に何が起こるかについては [FAQ](/ja/learn/faq#must-all-fields-in-a-fieldset-have-compatible-type-and-matching-settings) も参照してください。
+</Info>
+
+fieldset は、検索のためにフィールドをグループ化します:
+
+```js
+fieldset myfieldset {
+    fields: a,b,c
+}
+```
+
+デフォルト(すなわちクエリーで指定されなかった場合)として使用される `default` という名前の fieldset を作成します:
+
+```js
+fieldset default {
+    fields: a,b,c
+}
+```
+
+[クエリーの例](/ja/querying/query-api#fieldset)を参照してください。
+
+fieldset 内のフィールドは、indexing 句と [match モード](#match)の点でできるだけ類似しているべきです。そうでない場合は、アプリケーションを十分にテストしてください。fieldset 内のフィールドの match モードが異なる場合、アプリケーションのデプロイ時に警告が生成されます。_exact_ のような fieldset 固有の match 設定が必要な場合は、_match_ を使用して指定します:
+
+```js
+fieldset myfieldset {
+    fields: a,b,c
+    match {
+        exact
+    }
+}
+```
+
+検索設定を設定するには、fieldset 内で [query-command](#query-command) を使用します。例:
+
+```js
+fieldset myfieldset {
+    fields: a,b,c
+    query-command:"exact @@"
+}
+```
+
+fieldset を追加しても、メモリー/ディスク上に追加のインデックス構造が作成されることはありません。単なるマッピングです。
+
+fieldset をマッチングする際、ドキュメント頻度はすべてのメンバー・フィールドにわたって集約されることに注意してください。これは [BM25](/ja/ranking/bm25) と significance の値に影響し、_"the"_ のような一般的なタームがあるメンバー・フィールドでは頻出するが別のフィールドでは稀な場合に、[weakAnd](/ja/ranking/wand) がそれらのマッチを刈り込む原因となることがあります。詳細とフィールドごとの回避策については [FAQ](/ja/learn/faq#why-can-common-words-like-the-hurt-recall-and-collapse-significance-across-a-fieldset) を参照してください。
+
+## compression
+
+<Warning>
+ **非推奨:** [非推奨事項](/ja/reference/release-notes/vespa8#compression)を参照してください。
+</Warning>
+
+[document](#document) に含まれます。この要素内で圧縮レベルを設定すると、ドキュメント全体に対して **lz4** 圧縮が有効になります。
+
+```js
+compression {
+    [body]
+}
+```
+圧縮指定の body はオプションで、次を含むことができます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>type</td>
+      <td>0 回または 1 回</td>
+      <td>&#42;&#42;LZ4&#42;&#42; が唯一の有効な圧縮方式です。</td>
+    </tr>
+    <tr>
+      <td>level</td>
+      <td>0 回または 1 回</td>
+      <td>圧縮を有効にします。LZ4 は線形で、9 は HC(高圧縮)を意味します。</td>
+    </tr>
+  </tbody>
+</table>
+
+<table className="vespa-table">
+  <tbody>
+    <tr>
+      <td>threshold</td>
+      <td>0 回または 1 回</td>
+      <td>圧縮後の値を維持するために、圧縮データが持ちうる最大サイズを示すパーセンテージ(100 倍した値)。圧縮結果のデータがこれより大きい場合、ドキュメントは非圧縮で保存されます。デフォルト値は 95 です。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+## rank-profile
+
+[schema](#schema) に含まれるか、同等に、[アプリケーション・パッケージ](/ja/reference/applications/application-packages)内の `schemas/[schema-name]/` 配下の任意のディレクトリに `[profile-name].profile` という名前の個別ファイルとして配置されます。[ランク・プロファイル](/ja/basics/ranking#rank-profiles)は、名前付きのランキング式関数と設定のセットであり、[クエリーで選択](/ja/reference/api/query#ranking.profile)できます。
+
+スキーマ内にインラインで定義するか、個別の .profile ファイルに定義するかにかかわらず、ランク・プロファイルの構文は次のとおりです
+
+```bash
+rank-profile [name] inherits [rank-profile1], [rank-profile2], ... {
+    [body]
+}
+```
+
+`inherits` リストはオプションで、このスキーマまたはその継承元スキーマにある他のランク・プロファイルの名前を含めることができます。このランク・プロファイルで定義されていない要素は、それらのプロファイルから継承されます。同じ要素を定義する複数のプロファイルを継承すると、デプロイ時にエラーになります。
+
+rank-profile の body には次を含めることができます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#diversity" aria-label="diversity">diversity</a></td>
+      <td>0 回または 1 回</td>
+      <td>異なるフェーズ間で要求される多様性の指定。</td>
+    </tr>
+    <tr>
+      <td><a href="#strict" aria-label="strict">strict</a></td>
+      <td>0 回または 1 回</td>
+      <td>true/false: 厳密な型チェックを使用するか、緩い型チェックを使用するか。</td>
+    </tr>
+    <tr>
+      <td><a href="#match-phase" aria-label="match-phase">match-phase</a></td>
+      <td>0 回または 1 回</td>
+      <td>マッチング中のヒット数制限に使用するランキング設定。</td>
+    </tr>
+    <tr>
+      <td><a href="#firstphase-rank" aria-label="first-phase">first-phase</a></td>
+      <td>0 回または 1 回</td>
+      <td>第 1 フェーズのランキングに使用するランキング設定。</td>
+    </tr>
+    <tr>
+      <td><a href="#secondphase-rank" aria-label="second-phase">second-phase</a></td>
+      <td>0 回または 1 回</td>
+      <td>第 2 フェーズのランキングに使用するランキング設定。</td>
+    </tr>
+    <tr>
+      <td><a href="#globalphase-rank" aria-label="global-phase">global-phase</a></td>
+      <td>0 回または 1 回</td>
+      <td>グローバル・フェーズのランキングに使用するランキング設定。</td>
+    </tr>
+    <tr>
+      <td><a href="#function-rank" aria-label="function [name]">function [name]</a></td>
+      <td>0 回以上</td>
+      <td>ランキングの各フェーズで参照でき、(引数なしの場合は)match-features や summary-features の一部としても参照できる、名前付き関数を定義します。</td>
+    </tr>
+    <tr>
+      <td><a href="#inputs" aria-label="inputs">inputs</a></td>
+      <td>0 回以上</td>
+      <td>ランキング式で使用されるクエリー・フィーチャーのリスト。</td>
+    </tr>
+    <tr>
+      <td><a href="#constants" aria-label="constants">constants</a></td>
+      <td>0 回以上</td>
+      <td>ランキング式で使用できる定数フィーチャーのリスト。</td>
+    </tr>
+    <tr>
+      <td><a href="#mutate" aria-label="mutate">mutate</a></td>
+      <td>0 回以上</td>
+      <td>クエリーのさまざまなフェーズの後に適用できるミューテーションの指定。</td>
+    </tr>
+    <tr>
+      <td><a href="#onnx-model" aria-label="onnx-model">onnx-model</a></td>
+      <td>0 回以上</td>
+      <td>このプロファイルで利用可能にする onnx モデル。</td>
+    </tr>
+    <tr>
+      <td><a href="#significance" aria-label="significance">significance</a></td>
+      <td>0 回または 1 回</td>
+      <td>service.xml 設定で定義された significance モデルの使用を有効にします。</td>
+    </tr>
+    <tr>
+      <td><a href="#rank-properties" aria-label="rank-properties">rank-properties</a></td>
+      <td>0 回または 1 回</td>
+      <td>ランク・フィーチャーで使用される任意のランク・プロパティのキーと値のリスト。</td>
+    </tr>
+    <tr>
+      <td><a href="#match-features" aria-label="match-features">match-features</a></td>
+      <td>0 回以上</td>
+      <td>各ヒットとともに返される、&#42;match&#42; フェーズで計算される<a href="/ja/reference/ranking/rank-features" aria-label="rank features">ランク・フィーチャー</a>。</td>
+    </tr>
+    <tr>
+      <td><a href="#summary-features" aria-label="summary-features">summary-features</a></td>
+      <td>0 回以上</td>
+      <td>各ヒットとともに返される、&#42;fill&#42; フェーズで計算される<a href="/ja/reference/ranking/rank-features" aria-label="rank features">ランク・フィーチャー</a>。</td>
+    </tr>
+    <tr>
+      <td><a href="#rank-features" aria-label="rank-features">rank-features</a></td>
+      <td>0 回以上</td>
+      <td>クエリー引数 <a href="/ja/reference/api/query#ranking.listfeatures" aria-label="rankfeatures">rankfeatures</a> を使用した際にダンプされる<a href="/ja/reference/ranking/rank-features" aria-label="rank features">ランク・フィーチャー</a>。</td>
+    </tr>
+    <tr>
+      <td>ignore-default-rank-features</td>
+      <td>0 回または 1 回</td>
+      <td>デフォルトのランク・フィーチャーのセットはダンプせず、<a href="#rank-features" aria-label="rank-features">rank-features</a> コマンドで明示的に指定されたもののみをダンプします。</td>
+    </tr>
+    <tr>
+      <td>num-threads-per-search</td>
+      <td>0 回または 1 回</td>
+      <td>グローバルの <a href="/ja/reference/applications/services/content#requestthreads-persearch" aria-label="persearch">persearch</a> スレッド数を、より&#42;&#42;低い&#42;&#42;値でオーバーライドします。</td>
+    </tr>
+    <tr>
+      <td>min-hits-per-thread</td>
+      <td>0 回または 1 回</td>
+      <td>クエリー評価の前にクエリーのヒット数を見積もった後、この数値を使用してクエリーに使用するスレッド数を決定します。<br/>  <code>{`num_treads = min([num-threads-per-search](#num-threads-per-search),       estimated_hits / min-hits-per-thread)`}</code>   <br/>現在のデフォルトは 1 です。スレッドあたりの固定コストが高すぎると思われる場合は、この数値を増やすとよいでしょう。特に、ほとんどのクエリーが軽量である一方、多数のドキュメントをカバーする高コストなクエリーのレイテンシーを削減するために <a href="#num-threads-per-search" aria-label="num-threads-per-search">num-threads-per-search</a> を増やしている場合に有効です。デフォルトは変更される可能性があり、また最適値が適応的に決まるようになりオーバーライドが無視されたり逆効果になったりする可能性があります。</td>
+    </tr>
+    <tr>
+      <td>num-search-partitions</td>
+      <td>0 回または 1 回</td>
+      <td>検索ノード上でコーパスが分割される論理パーティションの数。デフォルトでは <a href="#num-threads-per-search" aria-label="num-threads-per-search">num-threads-per-search</a> と同じです。パーティションは検索スレッドが扱う最小単位です。ドキュメントの検索とフィードに時間的局所性がある場合は、より多くの小さなパーティションに分割するとよいでしょう。そうすることで、1 つの高コストなパーティションのために、他のスレッドが忙しく働いている間に一部のスレッドがアイドル状態になることを避けられます。<br/> 検索あたり 8 スレッドの場合、その 10 倍の 80 パーティションを持つことで、最大スキューを同程度の係数で削減できます。値を 0 にすると、これを最適に解決しようとする適応的パーティショニングが有効になる点に注意してください。<Info> &#42;&#42;注:&#42;&#42; <code>{`num-search-partitions`}</code> を 0 に設定する(ワーク・シェアリングを有効にする)場合は、<code>{`termwise-limit`}</code> を 1.0 に設定して(termwise 評価を無効にして)ください。これは、ワークがあるスレッドから別のスレッドに渡される際に termwise 評価がやり直されるのを避けるためです。</Info></td>
+    </tr>
+    <tr>
+      <td>termwise-limit</td>
+      <td>0 回または 1 回</td>
+      <td>推定ヒット数 &gt; コーパス &#42; termwise-limit の場合、<a href="/ja/performance/feature-tuning#hybrid-taat-daat" aria-label="DAAT">DAAT</a> を行う前に、ランキングに不要なタームを用いて、CPU キャッシュに優しい <a href="/ja/performance/feature-tuning#hybrid-taat-daat" aria-label="TAAT">TAAT</a> で候補を刈り込みます。現在のデフォルトは 1.0 で、これは無効を意味します。0.05 から 0.20 の間の値が良い出発点になり得ます。これは弱いフィルターが多数ある場合に特に有効です。これは手動オーバーライドである点に注意してください。デフォルトは変更される可能性があり、また最適値が適応的に決まるようになりオーバーライドが無視されたり逆効果になったりする可能性があります。</td>
+    </tr>
+    <tr>
+      <td>post-filter-threshold</td>
+      <td>0 回または 1 回</td>
+      <td>近似 <a href="/ja/reference/querying/yql#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a> 演算子とフィルターを組み合わせたクエリーを、デフォルトのフィルタリングの代わりにポスト・フィルタリングで評価するかどうかを決定する閾値([0.0, 1.0] の範囲)。クエリーの推定フィルター・ヒット率がこの閾値より&#42;大きい&#42;場合にポスト・フィルタリングが選択されます。デフォルト値は 1.0 で、ポスト・フィルタリングは無効です。詳細は <a href="https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#controlling-the-filtering-behavior-with-approximate-nearest-neighbor-search" aria-label="Controlling the filtering behavior with approximate nearest neighbor search">Controlling the filtering behavior with approximate nearest neighbor search</a> を参照してください。<br/><br/>  ポスト・フィルタリングでは、HNSW インデックスの検索時に使用される <a href="/ja/reference/querying/yql#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> の値が自動調整され、ポスト・フィルタリング適用後に、そのノードの &#42;totalTargetHits&#42; の割り当て分のヒットが第 1 フェーズのランキングに渡るようにします。次の式が使用されます:      <pre><code>{`adjustedTargetHits = min(targetHits / estimatedFilterHitRatio, targetHits * targetHitsMaxAdjustmentFactor)`}</code></pre>。  調整後の &#42;targetHits&#42; の上限を制御するには <a href="#target-hits-max-adjustment-factor" aria-label="target-hits-max-adjustment-factor">target-hits-max-adjustment-factor</a> を使用します。  このパラメーターは<a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="streaming search">ストリーミング検索</a>では効果がありません。</td>
+    </tr>
+    <tr>
+      <td>approximate-threshold</td>
+      <td>0 回または 1 回</td>
+      <td>近似 <a href="/ja/reference/querying/yql#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a> 演算子とフィルターを組み合わせたクエリーを、フィルタリング付きで <a href="#index-hnsw" aria-label="HNSW">HNSW</a> グラフを検索して近似の近傍を求めるか、プレ・フィルタリング付きの<a href="/ja/querying/nearest-neighbor-search" aria-label="exact nearest neighbor search">厳密最近傍検索</a>を実行するかを決定する閾値([0.0, 1.0] の範囲)。クエリーの推定フィルター・ヒット率がこの閾値より&#42;小さい&#42;場合、厳密検索へのフォールバックが選択されます。デフォルト値は 0.02 です。詳細は <a href="https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#controlling-the-filtering-behavior-with-approximate-nearest-neighbor-search" aria-label="Controlling the filtering behavior with approximate nearest neighbor search">Controlling the filtering behavior with approximate nearest neighbor search</a> を参照してください。  このパラメーターは<a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="streaming search">ストリーミング検索</a>では効果がありません。</td>
+    </tr>
+    <tr>
+      <td>filter-first-threshold</td>
+      <td>0 回または 1 回</td>
+      <td>フィルタリング付きで <a href="#index-hnsw" aria-label="HNSW">HNSW</a> グラフを検索して近似の近傍を求める際に、距離を計算する前にフィルターをチェックするか(&#42;filter-first ヒューリスティック&#42;)を決定する閾値([0.0, 1.0] の範囲)。これによりヒット率が低い場合の応答時間は改善しますが、リコールが低下します。クエリーの推定フィルター・ヒット率がこの閾値より&#42;小さい&#42;場合にこのヒューリスティックが使用されます。デフォルト値は 0.2 です。  このパラメーターは<a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="streaming search">ストリーミング検索</a>では効果がありません。</td>
+    </tr>
+    <tr>
+      <td>filter-first-exploration</td>
+      <td>0 回または 1 回</td>
+      <td>フィルタリング付きで <a href="#index-hnsw" aria-label="HNSW">HNSW</a> グラフを検索して近似の近傍を求める際に、filter-first ヒューリスティックがどれだけ積極的にグラフを探索するかを指定する値([0.0, 1.0] の範囲)。値が大きいほどグラフはより積極的に探索され、応答時間と引き換えにリコールが向上します。デフォルト値は 0.01 です。  このパラメーターは<a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="streaming search">ストリーミング検索</a>では効果がありません。</td>
+    </tr>
+    <tr>
+      <td>exploration-slack</td>
+      <td>0 回または 1 回</td>
+      <td>フィルタリングの有無にかかわらず、近似の近傍を求める <a href="#index-hnsw" aria-label="HNSW">HNSW</a> グラフ検索の終了を遅らせるスラックを指定する値([0.0, 1.0] の範囲)。値が大きいほどグラフのより多くの部分が探索され、応答時間と引き換えにリコールが向上します。デフォルト値は 0.0 です。  このパラメーターは<a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="streaming search">ストリーミング検索</a>では効果がありません。</td>
+    </tr>
+    <tr>
+      <td>target-hits-max-adjustment-factor</td>
+      <td>0 回または 1 回</td>
+      <td>ポスト・フィルタリング付きの近似 <a href="/ja/reference/querying/yql#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a> 演算子を評価する際に使用される <a href="/ja/reference/querying/yql#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> の自動調整を制御するための値([1.0, inf] の範囲)。デフォルト値は 20.0 です。  この値を 1.0 に設定すると、&#42;targetHits&#42; の自動調整が無効になります。詳細は <a href="#post-filter-threshold" aria-label="post-filter-threshold">post-filter-threshold</a> を参照してください。  このパラメーターは<a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="streaming search">ストリーミング検索</a>では効果がありません。</td>
+    </tr>
+    <tr>
+      <td>filter-threshold</td>
+      <td>0 回または 1 回</td>
+      <td>&#42;index&#42; フィールドでのマッチングをフィルターとして扱うタイミングを決定する閾値([0.0, 1.0] の範囲)。これは、<a href="/ja/learn/glossary#estimated-hit-ratio" aria-label="estimated hit ratios">推定ヒット率</a>([0.0, 1.0] の範囲)が &#42;filter-threshold&#42; を上回るクエリー・タームに対して発生します。<a href="#filter" aria-label="rank: filter">rank: filter</a> と <a href="#normal" aria-label="rank: normal">rank: normal</a> の動作をクエリーごとに組み合わせることで、大きなテキスト <a href="/ja/basics/schemas#document-fields" aria-label="index">index</a> フィールドを検索する際のクエリー・パフォーマンスを最適化するために使用します。このパラメーターは &#42;index&#42; フィールドごとにオーバーライドできます。トレードオフを含むより詳細な説明は<a href="#rank-filter-threshold" aria-label="field-level filter-threshold">フィールド・レベルの filter-threshold</a> を参照してください。<br/><br/> さまざまなテキスト・データセット(Wikipedia など)でのテストでは、&#42;filter-threshold&#42; を 0.05 に設定するのが良い出発点であることが示されています。詳細は <a href="/ja/performance/feature-tuning#tuning-query-performance-for-lexical-search" aria-label="Tuning query performance for lexical search">レキシカル検索のクエリー・パフォーマンスのチューニング</a>を参照してください。  このパラメーターは<a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="streaming search">ストリーミング検索</a>では効果がありません。  この値をオーバーライドするには <a href="/ja/reference/api/query#ranking.matching.filterThreshold" aria-label="ranking.matching.filterThreshold">ranking.matching.filterThreshold</a> クエリー・パラメーターを使用します。</td>
+    </tr>
+    <tr>
+      <td><a href="#rank" aria-label="rank">rank</a></td>
+      <td>0 回以上</td>
+      <td>このプロファイルにおけるフィールドのランク設定を指定します。</td>
+    </tr>
+    <tr>
+      <td><a href="#rank-type" aria-label="rank-type">rank-type</a></td>
+      <td>0 回以上</td>
+      <td>このプロファイルにおけるフィールドの rank-type。</td>
+    </tr>
+    <tr>
+      <td><a href="#weakand" aria-label="weakand">weakand</a></td>
+      <td>0 回または 1 回</td>
+      <td>ドキュメント・コーパスに存在する<a href="/ja/learn/glossary#document-frequency-normalized" aria-label="document frequency">ドキュメント頻度</a>の統計に基づいて、クエリーにおける重要度(significance)が低いと予想されるタームとドキュメントを自動的に除外するように、<a href="/ja/ranking/wand#weakand" aria-label="weakAnd">weakAnd</a> アルゴリズムをチューニングします。これにより、リコールが低下する可能性と引き換えにマッチングが高速になります。</td>
+    </tr>
+    <tr>
+      <td><a href="#rank-profile" aria-label="rank-profile (inner)">rank-profile (inner)</a></td>
+      <td>0 回以上</td>
+      <td>内部ランク・プロファイル。関連するプロファイルをグループ化するのに便利で、特に個別の .profile ファイルで定義する場合に有用です。これはトップレベルのランク・プロファイルとまったく同様に動作しますが、次の点が異なります: <br/> - クエリーで使用するプロファイルの完全な名前は <code>{`containing-profile-name.inner-profile-name`}</code> になります。<br/> - プロファイルは、それを含むプロファイルを明示的に継承しなければなりません。</td>
+    </tr>
+  </tbody>
+</table>
+
+## match-phase
+
+[rank-profile](#rank-profile) に含まれます。match-phase 機能を使用すると、第 1 フェーズのランキングに渡されるヒットを、ある attribute の最高値(または最低値)に限定することでパフォーマンスを向上させることができます。特に第 1 フェーズの関数が高コストな場合、パフォーマンスの向上は大きくなり得ます。品質の低下は、選択した attribute が第 1 フェーズのスコアとどれだけよく相関するかに依存します。
+
+選択した attribute に値を持たないドキュメントは、値 0 を持つものとして扱われます。
+
+[グレースフル・デグラデーション](/ja/performance/graceful-degradation#match-phase-degradation)と[結果の多様性](/ja/querying/result-diversity#match-phase-diversity)も参照してください。
+
+```js
+match-phase {
+    attribute: [numeric single value attribute]
+    order: [ascending | descending]
+    total-max-hits: [integer]
+}
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>attribute</td>
+      <td>match フェーズで、ヒット数がノードの <a href="#match-phase-total-max-hits" aria-label="total-max-hits">total-max-hits</a> の割り当て分を超えると見積もられた場合に、どのドキュメントをマッチとするかを決定する品質 attribute。この attribute は、<a href="#attribute" aria-label="fast-search">fast-search</a> が有効な単一値の数値型でなければなりません。これは、完全なクエリー評価によって生成されるであろう順序と相関しているべきです。デフォルトはありません。</td>
+    </tr>
+    <tr>
+      <td>order</td>
+      <td>attribute を<code>{`descending`}</code>(降順: 値の大きいドキュメントを優先)で使用するか、<code>{`ascending`}</code>(昇順: 値の小さいドキュメントを優先)で使用するか。デフォルト値の <code>{`descending`}</code> が圧倒的に一般的であるため、通常はこれを指定する必要はありません。</td>
+    </tr>
+    <tr>
+      <td>total-max-hits</td>
+      <td>クエリーを評価するグループ内の全ノードにわたって、match フェーズで生成すべき合計最大ヒット数。この数は大きくすべきであり、match-phase の attribute と第 1 フェーズの関数の相関が悪いほど大きくします。</td>
+    </tr>
+    <tr>
+      <td>max-hits</td>
+      <td>各コンテント・ノードが match フェーズで生成を試みるべき最大ヒット数。これよりも <a href="#match-phase-total-max-hits" aria-label="total-max-hits">total-max-hits</a> の使用を推奨します。</td>
+    </tr>
+  </tbody>
+</table>
+
+## strict
+
+[rank-profile](#rank-profile) に含まれます。true または false。デフォルトでは、Vespa は緩い型チェックを使用し、クエリー・プロファイル・タイプで定義されていないのに使用されているクエリー・フィーチャーは float とみなされます。true に設定すると、クエリー・プロパティの型定義が欠けている場合に、代わりにデプロイの失敗を引き起こします。
+
+```bash
+strict: true
+```
+
+## diversity
+
+[rank-profile](#rank-profile) に含まれます。diversity は、異なるクエリー・フェーズにおける多様性を保証するために使用されます。[match-phase](#match-phase) がある場合、match-phase から first-phase へ多様な結果を提供します。[second-phase](#secondphase-rank) がある場合、first-phase から second-phase へ多様な結果を提供します。
+
+詳細は[結果の多様性](/ja/querying/result-diversity)を参照してください。
+
+多様性を提供するために使用される attribute の名前を指定します。結果セットは、このフェーズから [diversity attribute](#diversity-min-groups) の一意な値を少なくとも [min-groups](#diversity-min-groups) 個得ることが保証されますが、max-hits を超えることはありません。[match-phase](#match-phase) の場合、max-hits = ノードの [match-phase total-max-hits](#match-phase-max-hits) の割り当て分です。[second-phase](#secondphase-rank) の場合、max-hits = ノードの [total-rerank-count](#secondphase-total-rerank-count) の割り当て分です。ドキュメントは次の場合に候補とみなされます:
+
+- クエリーがこのフェーズから生成される _max-hits_ 数にまだ達していない。
+- クエリーが 1 グループ内の候補の最大数にまだ達していない。これはフェーズの _max-hits_ を [min-groups](#diversity-min-groups) で割って計算されます
+
+```js
+diversity {
+    attribute: [attribute name]
+    min-groups: [integer]
+}
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>attribute</td>
+      <td>多様性を決定する際に使用する attribute。attribute は単一値の数値型、文字列型、または <a href="#reference" aria-label="reference">reference</a> 型でなければなりません。</td>
+    </tr>
+    <tr>
+      <td>min-groups</td>
+      <td>フェーズから返されるグループの最小数を指定します。これを <a href="#match-phase" aria-label="match-phase">match-phase</a> とともに使用すると、多くの場合 <a href="#match-phase-total-max-hits" aria-label="total-max-hits">total-max-hits</a> を減らせます。<a href="#secondphase-rank" aria-label="second-phase">second-phase</a> では、<a href="#secondphase-total-rerank-count" aria-label="total-rerank-count">total-rerank-count</a> を減らしても、良質で多様な結果を得られる可能性があります。</td>
+    </tr>
+  </tbody>
+</table>
+
+## first-phase
+
+[rank-profile](#rank-profile) に含まれます。ランキングの第 1 フェーズを指定する設定です。[Vespa におけるフェーズ・ランキング](/ja/ranking/phased-ranking)を参照してください。これは、マッチするすべてのドキュメントに対して実行される最初のランキングです。したがって、ここでは計算コストの高い関連度計算を行うことは避けるべきです。デフォルトでは、ランキング・フィーチャー `nativeRank` が使用されます。
+
+```js
+first-phase {
+    [body]
+}
+```
+first-phase ランキング文の body は次で構成されます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#expression" aria-label="expression">expression</a></td>
+      <td>ランキングの第 1 フェーズに使用するランキング式を指定します - <a href="/ja/reference/ranking/ranking-expressions" aria-label="ranking expressions">ランキング式</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>total-keep-rank-count</td>
+      <td>クエリーを評価するノード全体で、第 1 フェーズの上位ランク値を保持するドキュメントの合計数。デフォルト値はノードあたり 10000 です。</td>
+    </tr>
+    <tr>
+      <td>keep-rank-count</td>
+      <td>ノードごとに、第 1 フェーズの上位ランク値を保持するドキュメント数。これよりも <a href="#total-keep-rank-count" aria-label="total-keep-rank-count">total-keep-rank-count</a> を推奨します。</td>
+    </tr>
+    <tr>
+      <td>rank-score-drop-limit</td>
+      <td>第 1 フェーズのランク・スコアがこの浮動小数点数以下のヒットをすべて破棄します。ランクのカットオフを実装するために使用します。デフォルトは <code>{`-Double.MAX_VALUE`}</code> です。</td>
+    </tr>
+  </tbody>
+</table>
+
+## expression
+
+[first-phase](#firstphase-rank)、[second-phase](#secondphase-rank)、または [global-phase](#globalphase-rank) に含まれます。[ランキング式](/ja/reference/ranking/ranking-expressions)を指定します。式は直接記述することも、ファイルから読み込むこともできます。直接記述する場合の構文は次のとおりです:
+
+```bash
+expression: [ranking expression]
+```
+または
+```js
+expression {
+    [ranking expression]
+    [ranking expression]
+    [ranking expression]
+}
+```
+
+2 番目の形式は主に、長い式を使用する際の便宜のための機能で、式を複数行に分割できるようにします。
+
+式は別ファイルから読み込むこともできます。これは、たとえば MLR によって生成される長い式を扱う場合に便利です。構文は次のとおりです:
+
+```js
+expression: file:[path-to-expressionfile]
+```
+
+パスはスキーマ定義ファイルの場所からの相対パスです。ファイル自体は `.expression` で終わらなければなりません。このサフィックスはスキーマ内では省略可能です。したがって、`expression: file:mlrranking.expression` と `expression: file:mlrranking` は同一です。どちらも _schemas_ ディレクトリにある `mlrranking.expression` というファイルを参照します。
+
+<Info>
+ **注:** パスにディレクトリを含めることはできません。
+</Info>
+
+## rank-features
+
+[rank-profile](#rank-profile) に含まれます。クエリー引数 [rankfeatures](/ja/reference/api/query#ranking.listfeatures) を使用した際にダンプされる追加の[ランク・フィーチャー](/ja/reference/ranking/rank-features)のリスト。
+
+```bash
+rank-features: [feature] [feature]
+```
+または
+```js
+rank-features {
+    [feature]
+    [feature]
+}
+```
+
+各行には、スペースで区切って任意の数のランキング・フィーチャーを列挙できます。
+
+## inputs
+
+[rank-profile](#rank-profile) に含まれます。入力のリスト: このプロファイルのランキング式によって使用されるクエリー・フィーチャーです。
+
+クエリー・フィーチャーは、[リクエスト・プロパティ](/ja/reference/api/query#ranking.features)として設定するか、同等に [Searcher](/ja/applications/searchers) から `query.getRanking().getFeatures().put("query(myInput)", myValue)` を呼び出して設定します。
+
+クエリー・フィーチャーの型は[クエリー・プロファイル・タイプ](/ja/querying/query-profiles#query-profile-types)でも宣言できますが、通常はそれらを必要とするプロファイル内で inputs を宣言する方が望ましいです。
+
+inputs は継承元のプロファイルから継承されます。
+
+```js
+inputs {
+    name [type]? (: value)?
+}
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>入力の名前。完全なフィーチャー名 <code>{`query(myName)`}</code> または単に <code>{`name`}</code> と記述します。</td>
+    </tr>
+    <tr>
+      <td>type</td>
+      <td>定数の型。<code>{`double`}</code> または<a href="/ja/reference/ranking/tensor#tensor-type-spec" aria-label="tensor type">テンソル型</a>。省略した場合、型は double です。</td>
+    </tr>
+    <tr>
+      <td>value</td>
+      <td>この入力がクエリーで設定されない場合に使用される、オプションのデフォルト値。数値、または<a href="/ja/reference/ranking/tensor#tensor-literal-form" aria-label="tensor on literal form">リテラル形式のテンソル</a>。</td>
+    </tr>
+  </tbody>
+</table>
+
+入力の例:
+
+```bash
+inputs {
+    myDouble: 0.5
+    query(myOtherDouble) double
+    query(myArray) tensor(x[3])
+    query(myMap) tensor(key{}):{key1: 1.0, key2: 2.0}
+}
+```
+
+## constants
+
+[rank-profile](#rank-profile) に含まれます。ランキング式で使用できる定数のリストで、設定時に解決および最適化されます。
+
+定数は、継承元のプロファイルおよびスキーマ自体から継承されます。
+
+```js
+constants {
+    name [type]?: value|file:[path]
+}
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>定数の名前。完全なフィーチャー名 <code>{`constant(myName)`}</code> または単に <code>{`name`}</code> と記述します。</td>
+    </tr>
+    <tr>
+      <td>type</td>
+      <td>定数の型。<code>{`double`}</code> または<a href="/ja/reference/ranking/tensor#tensor-type-spec" aria-label="tensor type">テンソル型</a>。省略した場合、型は double です。</td>
+    </tr>
+    <tr>
+      <td>value</td>
+      <td>数値、<a href="/ja/reference/ranking/tensor#tensor-literal-form" aria-label="tensor on literal form">リテラル形式のテンソル</a>、または <code>{`file:`}</code> の後にアプリケーション・パッケージのルートから定数を含むファイルへのパスを続けたもの。ファイルは有効な<a href="/ja/reference/ranking/constant-tensor-json-format" aria-label="tensor JSON Format">テンソル JSON 形式</a>で保存され、<code>{`.json`}</code> で終わらなければなりません。ファイルは lz4 圧縮可能で、その場合は末尾が <code>{`.json.lz4`}</code> でなければなりません。</td>
+    </tr>
+  </tbody>
+</table>
+
+定数の例:
+
+```js
+constants {
+    myDouble: 0.5
+    constant(myOtherDouble) double: 0.6
+    constant(myArray) tensor(x[3]):[1, 2, 3]
+    constant(myMap) tensor(key{}]):{key1: 1.0, key2: 2.0}
+    constant(myLargeTensor) tensor(x[10000]): file:constants/myTensor.json.lz4
+}
+```
+
+## rank-properties
+
+[rank-profile](#rank-profile) に含まれます。ランキング・フィーチャーで使用される、キー/値ペア形式の汎用プロパティのリスト。[例](/ja/reference/ranking/rank-feature-configuration)。
+
+```js
+rank-properties {
+    key: value
+}
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>key</td>
+      <td>プロパティの名前。</td>
+    </tr>
+    <tr>
+      <td>value</td>
+      <td>数値または任意の文字列。空白を含む場合は引用符で囲まなければなりません。</td>
+    </tr>
+  </tbody>
+</table>
+
+## function (inline)? [name]
+
+[rank-profile](#rank-profile) に含まれます。ランキング式の一部として、または(引数を持たない場合は)フィーチャーとして参照できる名前付き関数を定義します。関数は任意の数の引数を受け取ります。
+
+```js
+function [name]([arg1], [arg2], [arg3]) {
+    expression: â€¦
+}
+```
+または
+```js
+function [name] ([arg1], [arg2], [arg3]) {
+    expression {
+        [ranking expression]
+        [ranking expression]
+        â€¦
+}
+```
+名前の後には括弧が必須である点に注意してください。rank-profile の例を以下に示します:
+```js
+rank-profile default inherits default {
+    function myfeature() {
+        expression: fieldMatch(title) + freshness(timestamp)
+    }
+    function otherfeature(foo) {
+        expression{ nativeRank(foo, body) }
+    }
+
+    first-phase {
+        expression: myfeature * 10
+    }
+    second-phase {
+        expression: otherfeature(title) * myfeature
+    }
+    summary-features: myfeature
+}
+```
+
+引数を受け取る関数を summary features に含めることはできません。
+
+`inline` 修飾子を追加すると、その関数が引数も持たない場合、呼び出し元の式にインライン展開されます。これは、小さく低コストな関数では高速になります(それ以外では、よりコストが高くなります)。
+
+## second-phase
+
+[rank-profile](#rank-profile) に含まれます。ランキングの第 2 フェーズを指定する設定です。[Vespa におけるフェーズ・ランキング](/ja/ranking/phased-ranking)を参照してください。これは、`first-phase` からの上位ランクのヒットに対して実行されるオプションの再ランキング・フェーズで、高度な関連度計算はここに置くべきです。たとえば、機械学習ランキング(MLR)モデルなどです。デフォルトでは、第 2 フェーズのランキングは実行されません。
+
+```js
+second-phase {
+    [body]
+}
+```
+second-phase ランキング文の body は次で構成されます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#expression" aria-label="expression">expression</a></td>
+      <td>ランキングの第 2 フェーズに使用するランキング式を指定します。(説明については<a href="/ja/reference/ranking/ranking-expressions" aria-label="ranking expression">ランキング式</a>のドキュメントを参照してください。  再ランクされなかったヒットは、再ランクされたヒットのうち最も低いものよりランク・スコアが高くならないように、線形関数を使用して再スコアリングされることがあります。この線形関数は通常、再ランクされたヒットの第 1 フェーズのランク・スコア範囲を、再ランク後のランク・スコア範囲にマップしようとします</td>
+    </tr>
+    <tr>
+      <td>rank-score-drop-limit</td>
+      <td>設定すると、第 2 フェーズのランク・スコア(<a href="#secondphase-rescoring" aria-label="re-scored">再スコアリング</a>されたランク・スコアの場合もあります)がこの浮動小数点数以下のヒットをすべて破棄します。第 2 フェーズのランクのカットオフを実装するために使用します。デフォルトでは、この値は設定されていません。<a href="/ja/reference/api/query#ranking.secondphase.rankscoredroplimit" aria-label="set in the query">クエリーでも設定</a>できます。</td>
+    </tr>
+    <tr>
+      <td>total-rerank-count</td>
+      <td>オプションの引数。クエリーの評価に参加するコンテント・ノード(&#42;グループ&#42;)全体で、第 2 フェーズで再ランクされるヒットの合計数を指定します。デフォルト値はノードあたり 100 です。<a href="/ja/reference/api/query#ranking.secondphase.totalrerankcount" aria-label="set in the query">クエリーでも設定</a>できます。再ランクされなかったヒットは<a href="#secondphase-rescoring" aria-label="re-scored">再スコアリング</a>されることがあります。</td>
+    </tr>
+    <tr>
+      <td>rerank-count</td>
+      <td>オプションの引数。各コンテント・ノードで第 2 フェーズで再ランクされるヒット数を指定します。<a href="/ja/reference/api/query#ranking.secondphase.rerankcount" aria-label="set in the query">クエリーでも設定</a>できます。これよりも <a href="#secondphase-total-rerank-count" aria-label="total-rerank-count">total-rerank-count</a> の使用を推奨します。</td>
+    </tr>
+  </tbody>
+</table>
+
+## global-phase
+
+[rank-profile](#rank-profile) に含まれます。ランキングのグローバル・フェーズを指定する設定です。[Vespa におけるフェーズ・ランキング](/ja/ranking/phased-ranking)を参照してください。これは、すべてのコンテント・ノードからのヒットをマージした後、ステートレス・コンテナーで上位ランクのヒットに対して実行されるオプションの再ランキング・フェーズです。ここでの「上位ランク」とは、first-phase のランキング式、または(指定されている場合は)second-phase のランキング式によってスコアリングされた順を意味します。通常、すべてのコンテント・ノードで計算するにはコストが高すぎる大きな ONNX モデルの計算に使用されます。デフォルトでは、グローバル・フェーズのランキングは実行されません。
+
+```js
+global-phase {
+    [body]
+}
+```
+global-phase ランキング文の body は次で構成されます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#expression" aria-label="expression">expression</a></td>
+      <td>ランキングのグローバル・フェーズに使用するランキング式を指定します。(説明については<a href="/ja/reference/ranking/ranking-expressions" aria-label="ranking expression">ランキング式</a>のドキュメントを参照してください。</td>
+    </tr>
+    <tr>
+      <td>rerank-count</td>
+      <td>オプションの引数。グローバル・フェーズで再ランクされるヒット数を指定します。デフォルト値は 100 です。複雑な構成における注意: 一度に 1 つのスキーマからのヒットに適用されるため、クエリーが複数のスキーマを同時に検索する場合、global-phase はデフォルトでスキーマごとに 100 ヒットに対して実行されることがあります。</td>
+    </tr>
+    <tr>
+      <td>rank-score-drop-limit</td>
+      <td>設定すると、グローバル・フェーズのランク・スコア(<a href="#globalphase-rank" aria-label="re-scored">再スコアリング</a>されたランク・スコアの場合もあります)がこの浮動小数点数以下のヒットをすべて破棄します。グローバル・フェーズのランクのカットオフを実装するために使用します。デフォルトでは、この値は設定されていません。<a href="/ja/reference/api/query#ranking.globalphase.rankscoredroplimit" aria-label="set in the query">クエリーでも設定</a>できます。</td>
+    </tr>
+  </tbody>
+</table>
+
+## summary-features
+
+[rank-profile](#rank-profile) に含まれます。各結果ヒットとともに [summaryfeatures](/ja/reference/querying/default-result-format#summaryfeatures) フィールドに含められる[ランク・フィーチャー](/ja/reference/ranking/rank-features)のリスト。[結果でのフィーチャー値](/ja/ranking/ranking-expressions-features#accessing-feature-function-values-in-results)も参照してください。
+
+指定されていない場合、フィーチャーは親プロファイル(存在する場合)で指定されたとおりになります。親プロファイルからフィーチャーを継承し、_かつ_追加のフィーチャーを指定するには、以下に示すようにフィーチャーを親から継承することを明示的に指定します。例については[スキーマの継承](/ja/schemas/inheritance-in-schemas)を参照してください。
+
+ここで指定されたランク・フィーチャーは、マルチフェーズ・クエリーの [fill フェーズ](/ja/applications/searchers#multiphase-searching)で計算されます。
+
+<Info>
+ **注:** _summary-features_ 内のランク・フィーチャー参照は、(全ノードからの)グローバルな上位ランキング・ヒットに入ったヒットに対して、_fill プロトコル・フェーズ_中に**再計算**されます。代替手段については [match-features](#match-features) を参照してください。
+</Info>
+
+```bash
+summary-features: [feature] [feature]â€¦
+```
+
+または
+
+```bash
+summary-features [inherits parent-profile (, other-parent-profile)*]? {
+    [feature]
+    [feature]
+}
+```
+
+各行には、スペースで区切って任意の数のランク・フィーチャーを列挙できます。
+
+<Info>
+ **注:** 複合式は、match/summary-features からアクセスできるようにするために、[関数](/ja/ranking/ranking-expressions-features#accessing-feature-function-values-in-results)でラップしなければならない点に注意してください。 
+</Info>
+
+## match-features
+
+[rank-profile](#rank-profile) に含まれます。各結果ヒットとともに [matchfeatures](/ja/reference/querying/default-result-format#matchfeatures) フィールドに含められる[ランク・フィーチャー](/ja/reference/ranking/rank-features)のリスト。[結果でのフィーチャー値](/ja/ranking/ranking-expressions-features#accessing-feature-function-values-in-results)も参照してください。
+
+指定されていない場合、フィーチャーは親プロファイル(存在する場合)で指定されたとおりになります。親プロファイルからフィーチャーを継承し、_かつ_追加のフィーチャーを指定するには、以下に示すようにフィーチャーを親から継承することを明示的に指定します。[スキーマの継承](/ja/schemas/inheritance-in-schemas)も参照してください。
+
+親ランク・プロファイルからの match-features を無効にするには、`match-features {}` を使用します。
+
+_match-features_ は [summary-features](#summary-features) に似ていますが、ここで指定されたランク・フィーチャーは、[マルチプロトコル・クエリー実行](/ja/applications/searchers#multiphase-searching)の_最初のプロトコル・フェーズ_(_match_ プロトコル・フェーズとも呼ばれます)で計算されます。これにより、パフォーマンスのトレードオフが異なります。詳細は[結果でのフィーチャー値](/ja/ranking/ranking-expressions-features#accessing-feature-function-values-in-results)を参照してください。
+
+```bash
+match-features: [feature] [feature]â€¦
+```
+
+または
+
+```bash
+match-features [inherits parent-profile (, other-parent-profile)*]? {
+    [feature]
+    [feature]
+}
+```
+
+各行には、スペースで区切って任意の数のランキング・フィーチャーを列挙できます。
+
+<Info>
+ **注:** 複合式は、match/summary-features からアクセスできるようにするために、[関数](/ja/ranking/ranking-expressions-features#accessing-feature-function-values-in-results)でラップしなければならない点に注意してください。 
+</Info>
+
+## mutate
+
+[rank-profile](#rank-profile) に含まれます。4 つのクエリー・フェーズ(_on-match_、_on-first-phase_、_on-second-phase_、_on-summary_)を通過した各ドキュメントに対して実行できるミューテーション操作を指定します。
+
+```js
+mutate {
+    [phase name] { [attribute name] [operation] [numeric_value] }
+}
+```
+フェーズは次のとおりです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>on-match</td>
+      <td>クエリーを満たすすべてのドキュメント。</td>
+    </tr>
+    <tr>
+      <td>on-first-phase</td>
+      <td><a href="#on-match" aria-label="on-match">on-match</a> からのすべてのドキュメントのうち、オプションの <a href="#rank-score-drop-limit" aria-label="rank-score-drop-limit">rank-score-drop-limit</a> によって破棄されなかったもの</td>
+    </tr>
+    <tr>
+      <td>on-second-phase</td>
+      <td><a href="#on-first-phase" aria-label="on-first-phase">on-first-phase</a> からのすべてのドキュメントのうち、<a href="#secondphase-rank" aria-label="second-phase">second-phase</a> のヒープに入ったもの。</td>
+    </tr>
+    <tr>
+      <td>on-summary</td>
+      <td>サマリーが要求されたすべてのドキュメント。</td>
+    </tr>
+  </tbody>
+</table>
+
+attribute は、[mutable](#mutable) として有効化された単一値の数値 attribute でなければなりません。また、[document](#document) 句の外側で定義されている必要があります。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>操作</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>=</td>
+      <td>attribute の値を指定された値に設定します。</td>
+    </tr>
+    <tr>
+      <td>+=</td>
+      <td>指定された値を attribute に加算します</td>
+    </tr>
+    <tr>
+      <td>-=</td>
+      <td>指定された値を attribute から減算します</td>
+    </tr>
+  </tbody>
+</table>
+
+
+例とユース・ケースは[ランク・フェーズ統計](/ja/ranking/phased-ranking#rank-phase-statistics)を参照してください。
+
+## constant
+
+_定数は、繰り返しを避けるためにランク・プロファイルの継承を利用し、それを必要とするランク・プロファイル内で定義することを推奨します。[constants](#constants) を参照してください。_
+
+[schema](#schema) に含まれます。これは、指定された型を持つファイルに配置された名前付き定数テンソルを定義します。この定数は、ランク・フィーチャー [constant(name)](/ja/reference/ranking/rank-features#constant(name)) を使用してランキング式で使用できます:
+
+```bash
+constant [name] {
+    [body]
+}
+```
+constant の body には次を含めなければなりません:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>出現回数</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>file</td>
+      <td>この定数を含むファイルへの、アプリケーション・パッケージのルートからの相対パス。ファイルは有効な<a href="/ja/reference/ranking/constant-tensor-json-format" aria-label="tensor JSON Format">テンソル JSON 形式</a>で保存され、<code>{`.json`}</code> で終わらなければなりません。ファイルは lz4 圧縮可能で、その場合は末尾が <code>{`.json.lz4`}</code> でなければなりません。</td>
+      <td>1 回</td>
+    </tr>
+    <tr>
+      <td>type</td>
+      <td>定数テンソルの型。リファレンスとして <a href="/ja/reference/ranking/tensor#tensor-type-spec" aria-label="tensor-type-spec">tensor-type-spec</a> を参照してください。</td>
+      <td>1 回</td>
+    </tr>
+  </tbody>
+</table>
+
+定数テンソルの例:
+
+```js
+constant my_constant_tensor {
+    file: constants/my_constant_tensor_file.json
+    type: tensor<float>(x{},y{})
+}
+```
+この例には、2 つのマップ次元 `x` と `y` を持つ定数テンソルがあります:
+```json
+{
+    "cells": [
+        { "address": { "x": "a", "y": "b"}, "value": 2.0 },
+        { "address": { "x": "c", "y": "d"}, "value": 3.0 }
+    ]
+}
+```
+
+テンソル定数を持つアプリケーションがデプロイされると、新しい設定が検索ノードで使用される前に、ファイルがコンテント・ノードに配布されます。定数テンソルへの増分変更はサポートされていません。変更する場合は、古いファイルを新しいファイルで置き換えてアプリケーションを再デプロイするか、新しいファイルに新しい名前で新しい定数を作成してください。
+
+## raw-as-base64-in-summary
+
+[schema](#schema) に含まれます。raw フィールドをサマリーで、エスケープされた文字列ではなく、[json フィード形式](/ja/reference/schemas/document-json-format#raw)と同じように Base64 エンコードされた文字列としてレンダリングするかどうか。デフォルトは true です。
+
+## onnx-model
+
+[rank-profile](#rank-profile) または [schema](#schema) に含まれます。これは、"onnx" ランク・フィーチャーを使用してランキング式で使用できる、ファイルに配置された名前付き ONNX モデルを定義します。
+
+onnx モデルは、それを使用するランク・プロファイル内で定義することを推奨します。onnx モデルは親プロファイルおよびスキーマから継承されます。
+
+```bash
+onnx-model [name] {
+    [body]
+}
+```
+
+ONNX モデルの body には次を含めなければなりません:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>file</td>
+      <td>1 回</td>
+      <td>ONNX モデルを含むファイルの場所へのパス。パスは、このスキーマを含むアプリケーション・パッケージのルートからの相対パスです。</td>
+    </tr>
+    <tr>
+      <td>input</td>
+      <td>0 回以上</td>
+      <td>ONNX モデルへの入力。モデルで指定された ONNX 名と、入力のソースを指定します。</td>
+    </tr>
+    <tr>
+      <td>output</td>
+      <td>0 回以上</td>
+      <td>ONNX モデルの出力。モデルで指定された ONNX 名と、Vespa で使用する名前を指定します。output が定義されておらず、ランク・フィーチャーからも参照されていない場合、モデルで最初に定義されている出力が使用されます。</td>
+    </tr>
+    <tr>
+      <td>gpu-device</td>
+      <td>0 回または 1 回</td>
+      <td>計算に使用する GPU デバイス番号を 0 から始まる番号で設定します。つまり、GPU が <code>{`/dev/nvidia0`}</code> の場合は 0 に設定します。これは Nvidia CUDA 対応 GPU でなければなりません。現在、GPU アクセラレーションを利用できるのは <a href="#globalphase-rank" aria-label="global-phase">global-phase</a> で使用されるモデルのみです。</td>
+    </tr>
+    <tr>
+      <td>intraop-threads</td>
+      <td>0 回または 1 回</td>
+      <td>マルチスレッド実装を持つ演算の実行に利用できるスレッド数。</td>
+    </tr>
+    <tr>
+      <td>interop-threads</td>
+      <td>0 回または 1 回</td>
+      <td>複数の演算を並列に実行するために利用できるスレッド数。これは <code>{`parallel`}</code> 実行モードにのみ適用されます。</td>
+    </tr>
+    <tr>
+      <td>execution-mode</td>
+      <td>0 回または 1 回</td>
+      <td>グラフの演算子をどのように実行するかを制御します。<code>{`sequential`}</code> または <code>{`parallel`}</code> です。</td>
+    </tr>
+  </tbody>
+</table>
+
+例を含む詳細は、[ONNX モデルによるランキング](/ja/ranking/onnx)を参照してください。
+
+## significance
+
+[rank-profile](#rank-profile) に含まれます。[significance モデル](/ja/ranking/significance)を設定します。
+
+```js
+significance {
+    use-model: true
+}
+```
+
+body には次を含めなければなりません:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>use-model</td>
+      <td>1 回</td>
+      <td><a href="/ja/reference/applications/services/search#significance" aria-label="service.xml">service.xml</a> で指定された significance モデルの使用を有効または無効にします。</td>
+    </tr>
+  </tbody>
+</table>
+
+詳細は [Significance モデル](/ja/ranking/significance)を参照してください。
+
+## document-summary
+
+[schema](#schema) に含まれます。明示的に定義されたドキュメント・サマリーです。デフォルトでは、`default` という名前のドキュメント・サマリーが作成されます。この要素を使用して、異なるフィールドのセットを含む他のドキュメント・サマリーを作成できます。
+
+```bash
+document-summary [name] inherits [document-summary1], [document-summary2], ... {
+    [body]
+}
+```
+
+`inherits` 属性はオプションです。定義されている場合、このサマリーがフィールドを継承すべき、同じスキーマ(または親)内の他のドキュメント・サマリーの名前を含みます。例については[スキーマの継承](/ja/schemas/inheritance-in-schemas)を参照してください。
+
+ドキュメント・サマリーの body は次で構成されます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>from-disk</td>
+      <td>0 回または 1 回</td>
+      <td>このサマリーをディスク上のフィールドにアクセスするものとしてマークします。これにより、このサマリーがディスクから読み取ることに関する警告(本番デプロイではコンソール、手動デプロイではコマンドライン)が抑制されます。ディスク・アクセスを回避してクエリーを高速化する方法については、<a href="/ja/querying/document-summaries#performance" aria-label="Document Summaries">ドキュメント・サマリー</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td><a href="#summary" aria-label="summary">summary</a></td>
+      <td>0 回以上</td>
+      <td>このドキュメント・サマリー内のサマリー・フィールド。</td>
+    </tr>
+    <tr>
+      <td>omit-summary-features</td>
+      <td>0 回または 1 回</td>
+      <td><a href="#summary-features" aria-label="summary-features">summary-features</a> をこのドキュメント・サマリーから省略することを指定します。複数のドキュメント・サマリーを使用してヒットを埋める<a href="/ja/applications/searchers#multiphase-searching" aria-label="multiphase searching">マルチフェーズ検索</a>で、<a href="#rank-profile" aria-label="rank-profile">rank-profile</a> で指定された summary features を必要とするのが一部のサマリーのみである場合に、CPU コストを削減するために使用します。</td>
+    </tr>
+  </tbody>
+</table>
+
+検索または[グルーピング](/ja/reference/querying/grouping-language#summary)でドキュメント・サマリーを選択するには、[summary](/ja/reference/api/query#presentation.summary) クエリー・パラメーターを使用します。[ドキュメント・サマリー](/ja/querying/document-summaries)も参照してください。
+
+## documentid
+
+`Vespa 8.691.19` 以降で利用可能です。
+
+[schema](#schema) に含まれます。ドキュメント ID をディスクにのみ保存するか、メモリーにも保存して attribute にするかを設定します。この設定の変更は、`searchnode` サービスの次回の再起動時にのみ有効になります。
+
+ドキュメント ID を attribute にすると、[検索結果でドキュメント ID を返す](/ja/schemas/documents#docid-in-results)ことができ、ディスク・アクセスなしでドキュメント ID を visit できます。[ドキュメントのエクスポート](/ja/operations/data-management#export-documents)を参照してください。
+
+```bash
+documentid: [setting]
+```
+設定は次のとおりです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>設定</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>from-disk</td>
+      <td>ドキュメント ID をディスクにのみ保存します。これがデフォルト設定です。</td>
+    </tr>
+    <tr>
+      <td>attribute</td>
+      <td>ドキュメント ID をメモリーにも保存して attribute にします。</td>
+    </tr>
+  </tbody>
+</table>
+
+## stemming
+
+[field](#field)、[schema](#schema)、または [index](#index) に含まれます。フィールドまたはインデックスをどのようにステミングするか、あるいはデフォルトでどのようにステミングするかを設定します。通常、[OpenNLP リンギスティクス](/ja/linguistics/linguistics-opennlp)とともに使用されます。詳細は[ステミング](/ja/linguistics/linguistics-opennlp#stemming)を参照してください。
+
+```bash
+stemming: [stemming-type]
+```
+ステミング・タイプは次のとおりです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>タイプ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>none</td>
+      <td>ステミングなし: 単語を変更せずに保持します</td>
+    </tr>
+    <tr>
+      <td>best</td>
+      <td>何らかのヒューリスティックなスコアリングに基づき、各単語の「最良の」語幹を使用します。これがデフォルト設定です</td>
+    </tr>
+    <tr>
+      <td>shortest</td>
+      <td>各単語の最も短い語幹を使用します</td>
+    </tr>
+    <tr>
+      <td>multiple</td>
+      <td>複数の語幹を使用します。リンギスティクス・ライブラリーから返されたすべての語幹を保持します</td>
+    </tr>
+  </tbody>
+</table>
+
+<Info>
+ **注:** [fieldset](#fieldset) で複数のフィールドを組み合わせる場合、すべてのフィールドで同じステミング・タイプを使用すべきです。
+</Info>
+
+## normalizing
+
+[field](#field) に含まれます。このフィールドで行われる[正規化](/ja/linguistics/linguistics-opennlp#normalization)を設定します。デフォルトは正規化を行うことです。
+
+```js
+normalizing: [normalizing-type]
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>タイプ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>none</td>
+      <td>正規化なし。</td>
+    </tr>
+  </tbody>
+</table>
+
+## dictionary
+
+[field](#field) に含まれ、フィールドの転置インデックスで使用される辞書の詳細を指定します。`fast-search` が付与された [attribute](#attribute) にのみ適用されます。`btree` または `hash`、あるいは両方を指定できます。両方指定した場合、範囲/前方一致には btree が、完全一致のルックアップには hash が使用されます。
+
+### Dictionary Types
+
+**btree**(デフォルト): 完全一致、前方一致、範囲のルックアップで良好なパフォーマンスを提供します。ほとんどのユース・ケースで推奨されます。詳細は [attribute のインデックス構造](/ja/content/attributes#index-structures)を参照してください。
+
+**hash**: 一意な ID フィールドのような、カーディナリティの高い(一意な値が多い)フィールド用に最適化されています。この場合、各ポスティング・リストには 1 つの項目しか含まれません。
+
+<Info>
+ **注:** `hash` を使用する場合、文字列の前方一致検索と数値フィールドの範囲検索はフル・スキャンにフォールバックします。これは主に、出現回数がそれぞれ少ない一意なタームが多数存在し、辞書ルックアップのコストがそうでなければ大きくなる場合に有効です。 
+</Info>
+
+### Case Handling for String Fields
+
+文字列の attribute では、文字の大文字・小文字の扱いを指定できます:
+
+- **uncased**(デフォルト): 大文字・小文字を区別しません - 'bear'、'Bear'、'BEAR' は同一として扱われます
+- **cased**: 大文字・小文字を区別します - 'bear'、'Bear'、'BEAR' は異なるタームとして扱われます
+
+この設定は、フィールドの [match:casing](#match) 設定と自動的に照合されます。
+
+### Important Rules for String Fields with Dictionaries
+
+**`btree` 辞書の場合**: `cased` と `uncased` の両方のオプションがサポートされます。
+
+**`hash` 辞書の場合**: 文字列フィールドでは `cased` のみがサポートされます。`hash` 辞書を使用する場合:
+
+    - フィールドに `match: cased` を設定**しなければなりません**
+    - dictionary ブロックに `cased` を含め**なければなりません**
+
+```js
+dictionary {
+  hashcased}
+```
+
+### Example: Case-Sensitive Hash Dictionary
+
+```js
+field id_str type string {
+      indexing: summary | attribute
+      attribute: fast-searchmatch: casedrank: filter
+      dictionary {
+        hashcased}
+}
+```
+
+## attribute
+
+[field](#field) または [struct-field](#struct-field) に含まれます。インデックス構造 attribute のプロパティを指定します:
+
+```bash
+attribute [attribute-name]: [property]
+```
+または
+```bash
+attribute [attribute-name] {
+    [property]
+    [property]
+    â€¦
+}
+```
+[attribute の概要](/ja/content/attributes)を参照してください。attribute 名を指定した場合、フィールド名の代わりにそれが attribute の名前として使用されます。
+<Warning>
+ **非推奨:** 非推奨です。代わりに、document の外側で目的の名前を持つフィールドを使用してください。
+</Warning>
+[attribute の追加または変更](#modifying-schemas)の際に必要なアクション。プロパティ:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>プロパティ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>fast-search</td>
+      <td>attribute での検索を高速化するために辞書/インデックス構造を作成します。<a href="/ja/content/attributes#index-structures" aria-label="Read more">詳細を読む</a>。</td>
+    </tr>
+    <tr>
+      <td>fast-access</td>
+      <td><a href="/ja/reference/applications/services/content#searchable-copies" aria-label="searchable-copies">searchable-copies</a> &lt; <a href="/ja/reference/applications/services/content#redundancy" aria-label="redundancy">redundancy</a> の場合、_fast-access_ を使用して、ドキュメントのレプリカを持つすべてのノードで attribute をメモリーにロードします。<a href="/ja/writing/reads-and-writes" aria-label="partial updates">部分更新</a>を行う場合や、ガベージ・コレクションのための<a href="/ja/reference/applications/services/content#documents" aria-label="selection expression">セレクション式</a>で使用される場合に、高速アクセスのために使用します。<a href="/ja/reference/applications/services/content#searchable-copies" aria-label="searchable-copies">searchable-copies</a> == <a href="/ja/reference/applications/services/content#redundancy" aria-label="redundancy">redundancy</a>(デフォルト)の場合、このプロパティは何もしません。<a href="/ja/performance/sizing-feeding#redundancy-settings" aria-label="Read more">詳細を読む</a>。</td>
+    </tr>
+    <tr>
+      <td>fast-rank</td>
+      <td>少なくとも 1 つのマップ次元を持つ<a href="/ja/ranking/tensor-user-guide" aria-label="tensor">テンソル</a>・フィールド型でのみサポートされます。ドキュメントごとのテンソルが、<a href="/ja/reference/ranking/ranking-expressions" aria-label="ranking expression">ランキング式</a>の評価により適した形式でメモリー内に保存されることを保証します。これは、より多くのメモリーを使用するというコストを伴います。この設定がない場合、これらのテンソルはメモリー内でシリアライズされて保持され、ランキング式の評価の一部としてデシリアライズが必要になります。<a href="/ja/performance/feature-tuning#tensor-ranking" aria-label="tensor performance">テンソルのパフォーマンス</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>paged</td>
+      <td>attribute データをメモリーからディスクへページングできるようにすることで、メモリー・フットプリントを削減できます。fast-rank 付きの<a href="#tensor" aria-label="tensor">テンソル</a>型と <a href="#predicate" aria-label="predicate">predicate</a> 型ではサポートされません。詳細は <a href="/ja/content/attributes#paged-attributes" aria-label="paged attributes">paged attributes</a> を参照してください。影響を完全に理解する前に _paged_ を有効にしないでください。</td>
+    </tr>
+    <tr>
+      <td><a href="#sorting" aria-label="sorting">sorting</a></td>
+      <td>この attribute のソート指定。</td>
+    </tr>
+    <tr>
+      <td><a href="#distance-metric" aria-label="distance-metric">distance-metric</a></td>
+      <td><a href="/ja/reference/querying/yql#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a> クエリー演算子とともに使用する距離メトリックを指定します。テンソル attribute フィールドにのみ関係します。</td>
+    </tr>
+    <tr>
+      <td>mutable</td>
+      <td>attribute を、クエリー評価中に <a href="#mutate" aria-label="mutate">mutate</a> 操作によって更新できる特別なミュータブル attribute としてマークします。</td>
+    </tr>
+  </tbody>
+</table>
+
+attribute は、インデキシング中に複数の値を割り当てる場合、[多値](/ja/querying/searching-multivalue-fields)になります。これは、array や map のような多値フィールド型を使用する、[split](/ja/reference/writing/indexing-language#split) / [for\_each](/ja/reference/writing/indexing-language#for_each) などを使用する、あるいは複数のフィールドがその値を attribute フィールドに書き込むようにすることで実現されます。
+
+attribute フィールドでは、[正規化](#normalizing)と[トークン化](/ja/linguistics/linguistics-opennlp#tokenization)はサポートされない点に注意してください。
+
+attribute フィールドへのクエリーは、正規化もステミングもされません。有効にするには、フィールドに [index](#index) を使用してください。1 つのフィールドに _index_ と _attribute_ の両方を設定できます。
+
+## sorting
+
+[attribute](#attribute) または [field](#field) に含まれます。ソートをどのように行うかを指定します。
+
+```bash
+sorting : [property]
+```
+または
+```js
+sorting {
+    [property]
+    â€¦
+}
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>プロパティ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>order</td>
+      <td><code>{`ascending`}</code>(デフォルト)または <code>{`descending`}</code>。クエリーで <a href="/ja/reference/querying/yql#function" aria-label="order by">order by</a> によってオーバーライドされない限り使用されます。</td>
+    </tr>
+    <tr>
+      <td>function</td>
+      <td><a href="/ja/reference/querying/yql#function" aria-label="Sort function">ソート関数</a>: <code>{`uca`}</code>(デフォルト)、<code>{`lowercase`}</code>、または <code>{`raw`}</code>。クエリー、フィールド、またはクエリー全体で言語やロケールが指定されていない場合、<code>{`uca`}</code> の代わりに <code>{`lowercase`}</code> が使用される点に注意してください。詳細は <a href="/ja/reference/querying/yql#order-by" aria-label="order by">order by</a> を参照してください。</td>
+    </tr>
+    <tr>
+      <td>strength</td>
+      <td><a href="/ja/reference/querying/yql#strength" aria-label="UCA sort strength">UCA ソート強度</a>。デフォルトは <code>{`primary`}</code> - 値については <a href="/ja/reference/querying/yql#strength" aria-label="strength">strength</a> を参照してください。クエリーで設定された値はスキーマ定義をオーバーライドします。</td>
+    </tr>
+    <tr>
+      <td>locale</td>
+      <td><a href="/ja/reference/querying/yql#locale" aria-label="UCA locale">UCA ロケール</a>。デフォルトはなしで、クエリーから推測されることを示します。attribute が単一言語のデータのみで満たされている場合にのみ、ここで設定すべきです。詳細は <a href="/ja/reference/querying/yql#locale" aria-label="locale">locale</a> を参照してください。クエリーで設定された値はスキーマ定義をオーバーライドします。</td>
+    </tr>
+  </tbody>
+</table>
+
+## distance-metric
+
+[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor) クエリー演算子とともに使用して、ドキュメントの位置とクエリーの位置の間の距離を計算するための距離メトリックを指定します。各テンソルが 1 つまたは複数のベクトルを保持する、テンソル attribute フィールドにのみ関係します。
+
+どの距離メトリックを使用するかは、ベクトルを生成するために使用されたモデルに依存します。表現学習(モデル学習)中に使用された距離メトリックと一致していなければなりません。「既製の」モデルを使用してデータをベクトル化する場合は、そのモデルでの使用が推奨される距離メトリックと一致することを確認してください。ベクトル化モデルの種類によって、使用される距離メトリックの種類も異なります。
+
+<Danger>
+ **重要:** `distance-metric` または `max-links-per-node` を変更する場合、HNSW インデックスを再構築するためにコンテント・ノードを再起動しなければなりません - [再起動が必要だが再フィードは不要な変更](#changes-that-require-restart-but-not-re-feed)を参照してください
+</Danger>
+
+計算された距離は、_nearestNeighbor_ クエリー演算子で最も近いヒットを選択するために使用されるほか、(指定されている場合は)[HNSW](/ja/querying/approximate-nn-hnsw) インデックスの構築、および [distance](/ja/reference/ranking/rank-features#distance(dimension,name)) と [closeness](/ja/reference/ranking/rank-features#closeness(dimension,name)) ランキング・フィーチャーの生成にも使用されます。
+
+```bash
+distance-metric: [metric]
+```
+利用可能なメトリックは次のとおりです。_distance_ と _closeness_ の式は、クエリー・ベクトル _qv = [x0, x1, ...]_ と attribute ベクトル _av = [y0, y1, ...]_ が、すべてのベクトルでサイズ _n_ の同じ次元を持つと仮定しています。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>メトリック</th>
+      <th>説明</th>
+      <th>DISTANCE</th>
+      <th>CLOSENESS</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>euclidean</td>
+      <td>通常の<a href="#euclidean" aria-label="euclidean">ユークリッド</a>(L2)距離。</td>
+      <td>$d = &#92;sqrt&#123;(x_1 - y_1)^2 + (x_2 - y_2)^2 + etc + (x_n - y_n)^2&#125;$ <br/>範囲: $[0, &#92;infty)$</td>
+      <td>$&#92;frac&#123;1&#125;&#123;1 + d&#125;$</td>
+    </tr>
+    <tr>
+      <td>angular</td>
+      <td>$q_v$ ベクトルと $a_v$ ベクトルの間の<a href="#angular" aria-label="angle">角度</a>。</td>
+      <td>$d = &#92;cos^&#123;-1&#125;((qa)/(q a))$ <br/>範囲: $[0, &#92;pi]$</td>
+      <td>$&#92;frac&#123;1&#125;&#123;1 + d&#125;$</td>
+    </tr>
+    <tr>
+      <td>dotproduct</td>
+      <td><a href="#dotproduct" aria-label="maximal inner product search">最大内積検索</a>に使用されます。</td>
+      <td>$d = -(&#92;vec&#123;q&#125; &#92;cdot &#92;vec&#123;a&#125;)$ <br/>範囲: $[-&#92;infty, +&#92;infty]$</td>
+      <td>$-d = &#92;vec&#123;q&#125; &#92;cdot &#92;vec&#123;a&#125;$</td>
+    </tr>
+    <tr>
+      <td>prenormalized-angular</td>
+      <td>正規化されたベクトルを前提とします。下記の<a href="#prenormalized-angular" aria-label="note">注</a>を参照してください。</td>
+      <td>$d = 1.0 - ((qa)/(q a))$ <br/>範囲: $[0,2]$</td>
+      <td>$&#92;frac&#123;1&#125;&#123;1 + d&#125;$</td>
+    </tr>
+    <tr>
+      <td>geodegrees</td>
+      <td>地理座標を前提とします。下記の<a href="#geodegrees" aria-label="note">注</a>を参照してください。</td>
+      <td>$d =$ 大円距離 (km) <br/>範囲: $[0, 20015]$</td>
+      <td>$&#92;frac&#123;1&#125;&#123;1 + d&#125;$</td>
+    </tr>
+    <tr>
+      <td>hamming</td>
+      <td>int8 精度を使用するバイナリ・テンソルでのみ有用です。下記の<a href="#hamming" aria-label="note">注</a>を参照してください。</td>
+      <td>$d = &#92;sum_&#123;i=1&#125;^&#123;n&#125; &#92;mathrm&#123;popcount&#125;(x_i &#92;oplus y_i)$ <br/>範囲: $[0, 8n]$</td>
+      <td>$&#92;frac&#123;1&#125;&#123;1 + d&#125;$</td>
+    </tr>
+  </tbody>
+</table>
+
+### euclidean
+
+デフォルトのメトリックは[ユークリッド距離](https://en.wikipedia.org/wiki/Euclidean_distance)で、これは単に 2 点間の線分の長さです。nearestNeighbor クエリー演算子で既に計算されたものを取得する代わりに、ランキング式で直接ユークリッド距離を計算するには、[Euclidean\_distance ヘルパー関数](/ja/reference/ranking/ranking-expressions#euclidean-distance-t)を使用します:
+
+```js
+function mydistance() {
+        expression: euclidean_distance(attribute(myembedding), query(myqueryvector), mydim))
+    }
+```
+
+### angular
+
+_angular_ 距離メトリックは、ベクトル間の_角度_を計算します。範囲は `[0,pi]` で、これが角距離です。これは[コサイン類似度](https://en.wikipedia.org/wiki/Cosine_similarity)による順序付けとしても知られており、その場合のスコア関数は単に角度のコサインです。ランキング式で直接角距離を計算するには、[cosine\_similarity ヘルパー関数](/ja/reference/ranking/ranking-expressions#cosine-similarity-t)を使用します:
+
+```js
+function angle() {
+        expression: acos(cosine_similarity(attribute(myembedding), query(myqueryvector), mydim))
+    }
+```
+ 逆に、nearestNeighbor クエリー演算子を使用する場合、コサイン類似度は [distance ランク・フィーチャー](/ja/reference/ranking/rank-features#distance(dimension,name))から復元できます:
+
+```js
+rank-profile cosine {
+        first-phase {
+            expression: cos(distance(field, myembedding))
+        }
+    }
+```
+可能であれば、クエリー・ベクトルとドキュメント・ベクトルの両方を同じ L2 ノルムに正規化し、代わりに `prenormalized-angular` メトリックを使用する方がパフォーマンスの点でわずかに優れています。ただし、返される distance と closeness は異なる点に注意してください。
+
+### dotproduct
+
+_dotproduct_ 距離メトリックは、「最大内積」検索を最近傍検索で解ける形に_数学的に変換_するために使用され、内積が直接スコアとして使用されます(大きな正の内積が「近い」とみなされます)。内部的には、追加の次元が加えられ(すべてのベクトルが同じ長さに正規化されることを保証)、_prenormalized-angular_ に似た距離が HNSW インデックスの構築に使用されます。詳細は、[この論文のセクション 3.1 Order Preserving Transformations](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf) に基づいた[このハイレベルなガイド](https://towardsdatascience.com/maximum-inner-product-search-using-nearest-neighbor-search-algorithms-c125d24777ef)を参照してください。
+
+_dotproduct_ 距離メトリックを使用する場合、_distance_ および _closeness_ ランク・フィーチャーは通常の意味を持たない点に注意してください。特に、_closeness_ は単に内積 âˆ‘n(xi\*yi) を返し、これは任意の負または正の値を取り得ます。また _distance_ は単に内積の符号を反転したものです。`[0,1]` の範囲に正規化された closeness が必要な場合は、適切な[シグモイド関数](https://en.wikipedia.org/wiki/Sigmoid_function)を適用しなければなりません。たとえば、attribute の名前が "foobar" で、観測される最大の内積が 4000 前後の場合、式 `sigmoid(0.001*closeness(field,foobar))` が 1 つの選択肢になり得ます。
+
+_dotproduct_ 距離メトリックは、正規化されていないベクトルで「最大内積」(MIP)を使用する、行列分解を含む一部のベクトル化モデルに有用です。これらのモデルは方向と大きさの両方を使用します。
+
+### prenormalized-angular
+
+_prenormalized-angular_ 距離メトリックは、クエリーとドキュメントの**両方**のベクトルが正規化されている場合に**のみ使用しなければなりません**。このメトリックは以前 "innerproduct" という名前で、単位長のベクトルを必要としました。新しいバージョンはクエリー・ベクトルの長さを一度だけ計算し、他のすべてのベクトルが同じ長さであると仮定します。
+
+正規化されていないベクトルで _prenormalized-angular_ を使用すると、最近傍検索が予測不能になり、パフォーマンスと品質の両面で悪い結果をもたらすことが観測されています。
+
+ベクトル _x_ の長さ、大きさ、またはノルムは `length = sqrt(sum(pow(xi,2)))` として計算されます。単位長に正規化されたベクトルは `[xi/length]` で与えられます。ゼロ・ベクトルはまったく使用できません。
+
+Vespa の _prenormalized-angular_ は[コサイン類似度](https://en.wikipedia.org/wiki/Cosine_similarity)を計算し、`1.0 - cos(angle)` を距離メトリックとして使用します。これは `angular` 距離とまったく同じ順序を与えますが、コサイン類似度の範囲が [1,-1] であるため、距離は [0,2] の範囲になります。最終的な結果は、同じ方向のベクトルで 0.0、直角で 1.0、正反対の方向のベクトルで 2.0 になります。したがって、コサイン・スコア(または角度)を得るのは簡単です:
+
+```js
+rank-profile cosine {
+        first-phase {
+          expression: 1.0 - distance(field, embedding)
+        }
+        function angle() {
+          expression: acos(1.0 - distance(field, embedding))
+        }
+    }
+```
+ nearestNeighbor クエリー演算子で既に計算されたものを取得する代わりに、ランキング式で直接コサイン類似度を計算するには、[cosine\_similarity ヘルパー関数](/ja/reference/ranking/ranking-expressions#cosine-similarity-t)を使用します:
+
+```js
+function mysimilarity() {
+        expression: cosine_similarity(attribute(myembedding), query(myqueryvector), mydim))
+    }
+```
+
+### geodegrees
+
+_geodegrees_ 距離メトリックは、地理座標(地球上の緯度と経度を度単位で含む 2 次元ベクトル)に対してのみ有効です。[Haversine の公式](https://en.wikipedia.org/wiki/Haversine_formula)を使用して、2 つの地理的地点間の大円距離(キロメートル単位)を計算します。例については [geodegrees システム・テスト](https://github.com/vespa-engine/system-test/blob/master/tests/search/nearest_neighbor/geo.sd)を参照してください。
+
+### hamming
+
+[ハミング距離](https://en.wikipedia.org/wiki/Hamming_distance)メトリックは、ベクトルの座標が異なる次元の数を数えます。これは浮動小数点データには有用ではありません。各浮動小数点数から 1 ビットの情報しか得られないことになるためです。代わりに、各ビットが個別の座標とみなされるバイナリ・データに使用すべきです。実際には、テンソルに `int8` の[セル値型](/ja/performance/feature-tuning#cell-value-types)を使用し、ビット・パターンから数値への通常のエンコーディングを用いることを意味します。例:
+
+- `00000000` â†’ `0` (hex `00`)
+- `00010001` â†’ `17` (hex `11`)
+- `00101010` â†’ `42` (hex `2A`)
+- `01111111` â†’ `127` (hex `7F`)
+- `10000000` â†’ `-128` (hex `80`)
+- `10000001` â†’ `-127` (hex `81`)
+- `11111110` â†’ `-2` (hex `FE`)
+- `11111111` â†’ `-1` (hex `FF`)
+
+このユース・ケースでは、`[-128,127]` の範囲の数値の代わりに ["hex dump"](/ja/reference/schemas/document-json-format#tensor-hex-dump) 形式でデータをフィードできます。これにより、バイナリ・データをより自然な形式で表現でき、大きな数値の JSON 配列をパースするオーバーヘッドを回避できます。
+
+## bolding
+
+[field](#field) または [summary](#summary) に含まれます。[summary](#summary) 内でマッチしたクエリー・タームをハイライトします:
+
+```bash
+bolding: on
+```
+
+デフォルトは太字化なしで、有効にするには `bolding: on` を設定します。このコマンドは `summary: dynamic` によってオーバーライドされる点に注意してください。両方指定された場合、bolding は無視されます。`summary: dynamic` の代わりに bolding を使用する場合の違いは、後者はクエリー・タームのハイライトに加えて動的な要約を提供するのに対し、前者はハイライトのみを行うことです。bolding は、string 型または array\<string\> 型の [index](#indexing-index) フィールドでのみサポートされます。
+
+検索タームのハイライトに使用されるデフォルトの XML 要素は \<hi\> です - オーバーライドするには、_container.qr-searchers_ の設定を行います。`<strong>` を使用する例:
+
+```xml
+<container>
+    <search>
+        <config name="container.qr-searchers">
+            <tag>
+                <bold>
+                    <open>&lt;strong&gt;</open>
+                    <close>&lt;/strong&gt;</close>
+                </bold>
+                <separator>...</separator>
+            </tag>
+        </config>
+    </search>
+</container>
+```
+
+bolding の最大フィールド・バイト長は 64Mb です - これより大きいフィールド値は、`summary: dynamic` と同様にスニペットとして表現されます。
+
+## id
+
+[field](#field) に含まれます。このフィールドの数値 ID を設定します。すべてのフィールドは、転送と保存のために内部的にドキュメント内 ID を持ちます。ID は通常、31 ビットの数値としてプログラム的に決定されます。代わりに ID を 7 ビットの数値に明示的に設定することで、保存と転送のスペースをいくらか節約できます。
+
+```js
+id: [positive integer]
+```
+
+ID は次の要件を満たさなければなりません:
+
+- 正の整数であること
+- 100 未満または 127 より大きいこと
+- ドキュメント内、およびこのドキュメントが継承するすべてのドキュメント内で一意であること
+
+## index
+
+[field](#field) または [schema](#schema) に含まれます。インデックスのパラメーターを設定します。
+
+_index_ を持つ [string](#string) フィールドの内容は、デフォルトで[正規化](#normalizing)され、[トークン化](/ja/linguistics/linguistics-opennlp#tokenization)されます。フィールドは単一値でも多値(例: `array<string>`)でもかまいません。
+
+[tensor](#tensor) 型のフィールドの場合、_index_ は[近似最近傍](/ja/querying/nearest-neighbor-search-guide)クエリー用の [HNSW](#index-hnsw) インデックスを作成し、デフォルトの距離メトリックは [euclidean](#euclidean) です。インデックスは[コンテント・ノードの再起動](#changes-that-require-restart-but-not-re-feed)後に構築されます(Vespa Cloud では自動化されています)。
+
+例:
+
+```js
+index [index-name]: [property]
+```
+または
+```js
+index [index-name] {
+    [property]
+    [property]
+    â€¦
+}
+```
+
+<Warning>
+ **非推奨:** `index-name` を指定した場合、フィールド名の代わりにそれがインデックスの名前として使用されます。この使い方は非推奨です。代わりに、`document` ブロックの外側で目的の名前を持つ合成フィールドを使用してください - [例](/ja/writing/indexing#date-indexing)を参照してください。
+</Warning>
+パラメーター:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>プロパティ</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#stemming" aria-label="stemming">stemming</a></td>
+      <td>0 回または 1 回</td>
+      <td>このインデックスのステミングを設定します。ステミング設定を持たないインデックスは、インデックスに追加されたフィールドからステミング設定を取得します。ステミング設定が矛盾するフィールドがこのインデックスに追加される場合、これを明示的に設定すると便利です。</td>
+    </tr>
+    <tr>
+      <td>arity</td>
+      <td>1 回(predicate フィールドでは必須)、それ以外は 0 回。</td>
+      <td><a href="/ja/schemas/predicate-fields#index-size" aria-label="arity value for a predicate field">predicate フィールドの arity 値</a>を設定します。これを含むフィールドのデータ型は <code>{`predicate`}</code> でなければなりません。</td>
+    </tr>
+    <tr>
+      <td>lower-bound</td>
+      <td>0 回または 1 回</td>
+      <td><a href="/ja/schemas/predicate-fields#upper-and-lower-bounds" aria-label="lower bound value for a predicate field">predicate フィールドの下限値</a>を設定します。これを含むフィールドのデータ型は <code>{`predicate`}</code> でなければなりません。</td>
+    </tr>
+    <tr>
+      <td>upper-bound</td>
+      <td>0 回または 1 回</td>
+      <td><a href="/ja/schemas/predicate-fields#upper-and-lower-bounds" aria-label="upper bound value for predicate fields">predicate フィールドの上限値</a>を設定します。これを含むフィールドのデータ型は <code>{`predicate`}</code> でなければなりません。</td>
+    </tr>
+    <tr>
+      <td>dense-posting-list-threshold</td>
+      <td>0 回または 1 回</td>
+      <td><a href="/ja/schemas/predicate-fields#dense-posting-list-threshold" aria-label="dense posting list threshold value for predicate fields">predicate フィールドの dense posting list threshold 値</a>を設定します。これを含むフィールドのデータ型は <code>{`predicate`}</code> でなければなりません。</td>
+    </tr>
+    <tr>
+      <td>enable-bm25</td>
+      <td>0 回または 1 回</td>
+      <td>このインデックス・フィールドを <a href="/ja/reference/ranking/rank-features#bm25" aria-label="bm25 rank feature">bm25 ランク・フィーチャー</a>で使用できるようにします。これにより、このフィールドの<a href="/ja/content/proton#index" aria-label="indexes">インデックス</a>に、ドキュメント ID ストリームにフィーチャーがインターリーブされたポスティング・リストが作成されます。これにより _bm25_ スコアの計算が高速になります。詳細と使用例は <a href="/ja/ranking/bm25" aria-label="BM25 reference">BM25 リファレンス</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td><a href="#index-hnsw" aria-label="hnsw">hnsw</a></td>
+      <td>0 回または 1 回</td>
+      <td>より高速な近似最近傍検索を可能にする HNSW インデックスのオプションのパラメーターを指定します。次のテンソル型を持つテンソル attribute フィールドでのみサポートされます:</td>
+    </tr>
+  </tbody>
+</table>
+- インデックス付き次元が 1 つ - ドキュメントあたり 1 つのベクトル
+- 1 つ以上のマップ次元と 1 つのインデックス付き次元 - ドキュメントあたり複数のベクトル
+
+ [nearestNeighbor](/ja/reference/querying/yql#nearestneighbor) クエリー演算子と組み合わせて使用します。 |
+
+## hnsw
+
+[index](#index) に含まれます。[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor) クエリー演算子を使用した、より高速な近似最近傍検索を可能にする HNSW インデックスのオプションのパラメーターを指定します。
+
+<Info>
+ **注:** テンソルの [indexing](#indexing) 文で `index` キーワードを指定すると、このブロックが指定されていなくても、デフォルト設定の HNSW インデックスが作成されます! 
+これは、Hierarchical Navigable Small World (HNSW) グラフ・アルゴリズム([論文](https://arxiv.org/abs/1603.09320))の修正バージョンを実装しています。
+</Info>
+
+次のテンソル attribute フィールド型でのみサポートされます:
+
+- ドキュメントあたり 1 つのベクトル: インデックス付き次元を 1 つ持つテンソル型。例: `tensor<float>(x[3])`
+- ドキュメントあたり複数のベクトル: 1 つ以上のマップ次元と 1 つのインデックス付き次元を持つテンソル型。例: `tensor<float>(m{},x[3])`、`tensor<float>(m{},n{},x[3])`
+
+HNSW インデックスは[ストリーミング検索](/ja/performance/streaming-search#differences-in-streaming-search)ではサポートされません。
+
+```js
+hnsw {
+    [parameter]: [value]
+    [parameter]: [value]
+    ...
+}
+```
+
+インデックス・グラフの構築時には、次のパラメーターが使用されます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>パラメーター</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>max-links-per-node</td>
+      <td>グラフ構築時に HNSW ノードごとに選択するリンク数を指定します。デフォルト値は 16 です。<a href="https://github.com/nmslib/hnswlib/blob/master/ALGO_PARAMS.md" aria-label="HNSWlib">HNSWlib</a>(論文に基づく実装)では、このパラメーターは _M_ として知られています。</td>
+    </tr>
+    <tr>
+      <td>neighbors-to-explore-at-insert</td>
+      <td>HNSW グラフにドキュメントを挿入する際に探索する近傍の数を指定します。デフォルト値は 200 です。HNSWlib では、このパラメーターは _ef_construction_ として知られています。</td>
+    </tr>
+  </tbody>
+</table>
+
+グラフの構築と検索には、_attribute_ で指定された[距離メトリック](#distance-metric)が使用されます。例:
+
+```js
+field text_embedding type tensor<float>(x[384]) {
+    indexing: summary | attribute | index
+    attribute {
+        distance-metric: prenormalized-angular
+    }
+    index {
+        hnsw {
+            max-links-per-node: 24
+            neighbors-to-explore-at-insert: 200
+        }
+    }
+}
+```
+
+使用例は [HNSW インデックスを使用した近似最近傍検索](/ja/querying/approximate-nn-hnsw)を、Vespa チームが Vespa での拡張と統合のベースライン・アルゴリズムとして HNSW を選択した経緯についてはブログ記事 [Approximate Nearest Neighbor Search in Vespa - Part 1](https://blog.vespa.ai/approximate-nearest-neighbor-search-in-vespa-part-1/) を参照してください。
+
+## indexing
+
+[field](#field) または [struct-field](#struct-field) に含まれます。このフィールドからインデックス、attribute、サマリーのデータを生成するために使用される、1 つ以上のインデキシング言語の命令です。インデキシング命令は、Unix シェル・コマンドに似たパイプライン・セマンティクスを持ちます。フィールドの値はインデキシング中にパイプラインに入り、パイプラインはその値を目的のインデックス構造に配置します。その過程で変換を行ったり、他の値を取り込んだりすることもあります。
+
+```bash
+indexing: [index-statement]
+```
+または
+```js
+indexing {
+    [indexing-statement];
+    [indexing-statement];
+    â€¦
+}
+```
+
+これを含むフィールドが document の外側で定義されている場合、値を出力するインデキシング文で始まらなければなりません(フィールド値を取得する "input [fieldname]"、またはリテラル(例: "some-value"))。document 内のフィールドは、明示的に指定されていない場合、それを囲むフィールドの値を入力(input [fieldname])として使用します。
+
+操作はパイプ(`|`)文字で区切って指定します。高度な処理が必要な場合は、[インデキシング言語](/ja/reference/writing/indexing-language)を使用するか、[ドキュメント・プロセッサー](/ja/applications/document-processors)を作成してください。フィールドでサポートされる式は次のとおりです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>式</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>attribute</td>
+      <td><a href="/ja/content/attributes" aria-label="Attribute">attribute</a> は、<a href="#match" aria-label="match">match</a> モード <code>{`word`}</code> を使用して、フィールドをソート、グルーピング、ランキング、検索で利用できるようにするために使用されます。</td>
+    </tr>
+    <tr>
+      <td>index</td>
+      <td><a href="#match" aria-label="match">match</a> モード <code>{`text`}</code> を使用して、このフィールドの値に対する検索可能な<a href="/ja/content/proton#index" aria-label="index">インデックス</a>を作成します。デフォルトでは、インデックス名はスキーマのフィールド名と同じになります。検索用に複数のフィールドを同じセットにまとめるには <a href="#fieldset" aria-label="fieldset">fieldset</a> を使用します。</td>
+    </tr>
+    <tr>
+      <td>set_language</td>
+      <td>ドキュメントの言語を設定します - <a href="/ja/reference/writing/indexing-language#set_language" aria-label="details">詳細</a>。</td>
+    </tr>
+    <tr>
+      <td>summary</td>
+      <td>このフィールドの値を<a href="/ja/reference/writing/indexing-language#summary" aria-label="summary">サマリー</a>・フィールドに含めます。サマリー出力を変更するには <a href="#summary" aria-label="summary:">summary:</a> を使用します(例: 動的ティーザーの生成)。</td>
+    </tr>
+  </tbody>
+</table>
+
+フィールドのインデキシング文で `index` と `attribute` の両方を組み合わせる場合(例: `indexing: summary | attribute | index`)、そのフィールドの [match](#match) モードは `text` になります。したがって、このフィールドへの検索は [attribute](#attribute) の内容ではなくインデックスを検索します。
+
+例と詳細は[テキスト・マッチング](/ja/querying/text-matching)ガイドを参照してください。
+
+## linguistics
+
+このフィールドに対するコンテンツと検索を言語的にどのように処理するかを決定するリンギスティクスの「プロファイル」を設定します。プロファイル値は[リンギスティクス・コンポーネント](/ja/linguistics/linguistics)に伝播され、プロファイル固有の処理を行うように設定できます。
+
+```js
+linguistics {
+    profile: myIndexAndSearchProfile
+}
+```
+または
+```js
+linguistics {
+    profile {
+        index: myIndexProfile
+        search: mySearchProfile
+    }
+}
+```
+
+## match
+
+[field](#field)、[fieldset](#fieldset)、または [struct-field](#struct-field) に含まれます。このフィールドで使用するマッチング方式を、デフォルトのトークン・マッチング以外のものに設定します。
+
+```bash
+match: [property]
+```
+または
+```js
+match {
+    [property]
+    [property]
+    â€¦
+}
+```
+
+match タイプが `text`、`word`、`exact` のいずれであっても、すべてのターム・マッチングは[正規化](/ja/linguistics/linguistics-opennlp#normalization)とロケール非依存の小文字化(この順)の後に行われます。
+
+例と詳細は[テキスト・マッチング](/ja/querying/text-matching)ガイドを参照してください。[正規表現](/ja/reference/querying/yql#matches)を使用した検索も参照してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>プロパティ</th>
+      <th>有効な対象</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>text</td>
+      <td>index</td>
+      <td><code>{`index`}</code> を持つ文字列フィールドのデフォルト。exact マッチングとは組み合わせられません。フィールドは<a href="/ja/linguistics/linguistics-opennlp#tokenization" aria-label="token">トークン</a>ごとにマッチされます。</td>
+    </tr>
+    <tr>
+      <td>exact</td>
+      <td>index, attribute</td>
+      <td>&#42;text&#42; マッチングとは組み合わせられません。  フィールドは&#42;完全一致&#42;でマッチされます: どのような文字を含む文字列でも、そのままインデックスされマッチされます。<code>{`match: cased`}</code> も併用しない限り、小文字化は引き続き実行されます。クエリーでは、exact マッチ文字列は exact マッチ・ターミネーター(下記)で終わります。<br/><br/>  <code>{`match: exact`}</code> を持つフィールドは、<code>{`rank: filter`}</code> が指定された場合と同様に<a href="#filter" aria-label="filter field">フィルター・フィールド</a>とみなされます。これは、フィールドごとに(<code>{`array<string>`}</code> のような多値型の場合は項目ごとに)単語が 1 つしかなく、ランキング情報がほとんどないためです。暗黙の <code>{`rank: filter`}</code> を無効にするには <code>{`rank: normal`}</code> を追加します。</td>
+    </tr>
+    <tr>
+      <td>exact-terminator</td>
+      <td>index, attribute</td>
+      <td><code>{`match: exact`}</code> でのみ有効です。デフォルトは <code>{`@@`}</code> です。<a href="/ja/reference/api/query#model.querystring" aria-label="query strings">クエリー文字列</a>内のターミネーターを指定します。クエリー文字列に <code>{`@@`}</code> が含まれ得る場合は、別のターミネーターを設定するか、<code>{`match: word`}</code> を使用してください(下記参照)。例 - 次を使用:  <pre><code>{`{     exact     exact-terminator: "@%" }`}</code></pre><code>{`tag`}</code> というフィールドにこれを設定すると、クエリー <code>{`tag:a b c!@%`}</code> は文字列 &#42;a b c!&#42; を持つドキュメントにマッチします <br/><br/> デフォルトのターミネーターを使用する例: <code>{`tag`}</code> が exact マッチ・フィールドの場合、クエリー: <pre><code>{`someword AND (tag:!*!@@ OR tag:(kanoo)@@)`}</code></pre> は、<code>{`someword`}</code> と、タグとして <code>{`!*!`}</code> または <code>{`(kanoo)`}</code> のいずれかを持つドキュメントにマッチします。2 番目のタグ文字列を終端する <code>{`@@`}</code> がなければ、2 番目のタグ値は <code>{`(kanoo))`}</code> になる点に注意してください。</td>
+    </tr>
+    <tr>
+      <td>word</td>
+      <td>index, attribute</td>
+      <td>これは<a href="/ja/content/attributes" aria-label="string attributes">文字列 attribute</a> のデフォルトのマッチング・モードです。&#42;text&#42; マッチングとは組み合わせられません。  word マッチとは、フィールドの内容全体が単一の単語としてインデックスされることを意味します。  word マッチングは exact マッチングに似ていますが、より高度なクエリー・パースを行います。クエリー・タームは、いくつかの一般的なクエリー構文文字を考慮してヒューリスティックにパースされます。二重引用符を使用して、スペース、アスタリスク、感嘆符を含めることもできます。  例: <code>{`artist`}</code> が文字列 attribute の場合、クエリー:  foo AND (artist:"'N Sync" OR artist:"&#42;NSYNC" OR artist:A&#42;teens OR artist:"Wham!")  は、<code>{`foo`}</code> と、artist フィールドに <code>{`'N Sync`}</code>、<code>{`*NSYNC`}</code>、<code>{`A*teens`}</code>、<code>{`Wham!`}</code> の少なくとも 1 つを持つドキュメントにマッチします  引用符がない場合、<code>{`'N Sync`}</code> のスペースはその単語を終わらせ、単に <code>{`'N`}</code> の検索になります。同様に、<code>{`!`}</code> は引用されていなければ <code>{`Wham`}</code> タームの weight を増やす意味になります。</td>
+    </tr>
+    <tr>
+      <td>prefix</td>
+      <td>attribute</td>
+      <td>効果はありません。<a href="/ja/content/attributes" aria-label="attributes">attribute</a> は常に前方一致検索をサポートするためです。前方一致マッチングは<a href="/ja/reference/querying/yql#prefix" aria-label="specified in the query">クエリーで指定</a>しなければなりません。<a href="/ja/reference/querying/yql#matches" aria-label="regular expressions">正規表現</a>も参照してください。</td>
+    </tr>
+    <tr>
+      <td>substring</td>
+      <td><a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="Streaming mode">ストリーミング・モード</a>のみ</td>
+      <td>フィールドのデフォルトの match モードを &#42;substring&#42; に設定します。ストリーミング検索でのみ利用可能です。ストリーミング検索のデータ構造は部分文字列検索をサポートするため、フィールドを substring デフォルトに設定しなくても、常にクエリーで substring マッチングを設定できます。<a href="/ja/reference/querying/yql#matches" aria-label="regular expressions">正規表現</a>も参照してください。</td>
+    </tr>
+    <tr>
+      <td>suffix</td>
+      <td><a href="/ja/performance/streaming-search" aria-label="Streaming mode">ストリーミング・モード</a>のみ</td>
+      <td>上記の substring と同様です。</td>
+    </tr>
+    <tr>
+      <td>uncased</td>
+      <td>index, attribute</td>
+      <td>大文字・小文字を区別しないマッチングを使用します(デフォルト)。</td>
+    </tr>
+    <tr>
+      <td>cased</td>
+      <td>index, attribute</td>
+      <td>大文字・小文字を区別するマッチングを使用します。通常、<code>{`match: exact`}</code> または <code>{`match: word`}</code> モードとのみ併用されます。<code>{`match: text`}</code> を使用する場合、カスタムの<a href="/ja/linguistics/linguistics-custom" aria-label="linguistics implementation">リンギスティクス実装</a>を使用しているなら、その実装が大文字・小文字を保持するトークンを生成する場合にのみ、文字列 index フィールドに対して効果がある点に注意してください。</td>
+    </tr>
+    <tr>
+      <td>max-length</td>
+      <td>index</td>
+      <td>マッチングに使用されるフィールドの長さを制限します。デフォルトでは、最初の 100 万文字のみがインデックスされます。  この制限を調整する場合、<a href="#max-occurrences" aria-label="max-occurrences">max-occurrences</a> も調整する必要があるかもしれません。</td>
+    </tr>
+    <tr>
+      <td>max-occurrences</td>
+      <td>index</td>
+      <td>指定されたドキュメントについて、フィールド内の一意なトークン/タームごとにインデックスされる最大出現回数を設定します。この制限に達すると、そのドキュメントでは同じトークン/タームの以降の出現は無視されます。デフォルト値は 10000 です。  <br/><br/>共通のトークン/タームの出現が 10000 回を超える大きなフィールド値(<a href="#max-length" aria-label="max-length">max-length</a> を参照)を持つドキュメントを、<a href="/ja/reference/querying/yql#phrase" aria-label="phrase">phrase</a>、<a href="/ja/reference/querying/yql#near" aria-label="near">near</a>、<a href="/ja/reference/querying/yql#onear" aria-label="onear">onear</a> クエリー演算子でクエリーする場合、この制限の調整が必要になることがあります。これらの演算子を使用する場合、ドキュメント内のトークン/タームの最初の &#42;max-occurrences&#42; 回の出現の中でしかマッチできません。</td>
+    </tr>
+    <tr>
+      <td>max-token-length</td>
+      <td>index</td>
+      <td>フィールドでインデックスされるトークンの最大長を設定します。これより長いトークンは黙って無視されます。単位は文字数です(java.lang.String.length() を参照)。デフォルト値は 1000 です。</td>
+    </tr>
+    <tr>
+      <td>gram</td>
+      <td>index</td>
+      <td>このフィールドは n-gram を使用してマッチされます。たとえば、デフォルトの gram サイズ 2 では、文字列 "hi blue" はインデックス内でも、そのインデックスへのクエリーでも "hi bl lu ue" とトークン化されます。<br/><br/> N-gram マッチングは、主に CJK 言語における<a href="/ja/linguistics/linguistics-opennlp#tokenization" aria-label="segmentation">セグメンテーション</a>の代替として有用です。通常、リコールの向上と精度の低下をもたらします。ただし、Vespa は通常ランキングで近接度を使用するため、精度の低下はそれほど重要ではないかもしれません。gram は、インデックスとクエリーの両方でタームが増え、タームに同じ文字の繰り返しが含まれるため、他のマッチング方式よりも多くのリソースを消費します。一方、CPU 集約的な CJK セグメンテーションは回避されます。  一般的な部分文字列マッチングにも使用できます。</td>
+    </tr>
+    <tr>
+      <td>gram-size</td>
+      <td>index</td>
+      <td>正の非ゼロの数値で、デフォルトは 2 です。gram マッチングを使用する際の gram サイズを設定します。例:  <pre><code>{`{     gram     gram-size: 3 }`}</code></pre></td>
+    </tr>
+  </tbody>
+</table>
+
+## rank
+
+[field](#field)、[struct-field](#struct-field)、または [rank-profile](#rank-profile) に含まれます。フィールドに対して行われるランキング計算の種類を設定します。実際のランキングはランキング式が決定しますが、この設定は、フィールドにどの準備計算とどのデータ構造が必要かを Vespa に伝えます。
+
+```bash
+rank [field-name]: [ranking settings]
+```
+または
+```js
+rank {
+    [ranking setting]
+}
+```
+フィールド名は rank-profile 内で使用する場合にのみ指定すべきです。デフォルトに加えて、次のランキング設定がサポートされます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>ランキング設定</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>filter</td>
+      <td>このフィールドでのマッチングに、高速なビット・ベクトルのデータ構造のみを使用すべきであることを示します。これによりマッチング時の CPU を節約できますが、このフィールドで利用できるのは少数の単純なランキング・フィーチャーのみになります。この設定は、ドキュメントの言語によるフィルタリングやブースティングのように、フィルタリングや単純なブースティングの目的で通常使用されるフィールドに適しています。<br/><br/> - &#42;index&#42; フィールドの場合、この設定はインデックス形式を変更しませんが、フィールドに対するマッチングの際に最もコンパクトな表現を選択するのに役立ちます。<br/><br/> - &#42;fast-search&#42; 付きの &#42;attribute&#42; フィールドの場合、この設定は追加のポスティング・リスト表現(ビット・ベクトル)を構築し、クエリー評価を大幅に高速化できます。  <a href="/ja/performance/feature-tuning#when-to-use-fast-search-for-attribute-fields" aria-label="feature tuning">フィーチャー・チューニング</a>と<a href="/ja/performance/practical-search-performance-guide" aria-label="the practical search performance guide">実践的な検索パフォーマンス・ガイド</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>normal</td>
+      <td><code>{`filter`}</code> の逆です。このフィールドでのマッチングは通常のデータ構造を使用し、ランキングのための通常のマッチ情報を提供します。<a href="#exact" aria-label="match: exact">match: exact</a> 使用時の暗黙の <code>{`rank: filter`}</code> を無効にするために使用します。<code>{`filter`}</code> と <code>{`normal`}</code> の両方が何らかの形で設定された場合、効果は <code>{`normal`}</code> のみが指定された場合と同じです。</td>
+    </tr>
+  </tbody>
+</table>
+
+関連: クエリー・タームをフィルターとしてアノテーションする方法については、[filter](/ja/reference/querying/yql#filter) クエリー・アノテーションを参照してください。
+
+### filter-threshold
+
+[rank-profile](#rank-profile) に含まれます。[rank: filter](#filter) と [rank: normal](#normal) の動作をクエリーごとに組み合わせることで、大きなテキスト [index](/ja/basics/schemas#document-fields) フィールドを検索する際のクエリー・パフォーマンスを最適化するために使用します。すべての _index_ フィールドに同じ値を使用する方法については、[プロファイル・レベルの filter-threshold](#filter-threshold) を参照してください。
+
+```bash
+rank [field-name] {
+    filter-threshold: 0.05
+}
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>設定</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>filter-threshold</td>
+      <td>この _index_ フィールドでのマッチングをフィルターとして扱うタイミングを決定する閾値([0.0, 1.0] の範囲)。これは、<a href="/ja/learn/glossary#estimated-hit-ratio" aria-label="estimated hit ratios">推定ヒット率</a>([0.0, 1.0] の範囲)が _filter-threshold_ を上回るクエリー・タームに対して発生します。その場合、フィールドが <a href="#filter" aria-label="rank: filter">rank: filter</a> に設定されている場合と同様に、高速なビット・ベクトルのデータ構造が使用されます。これによりマッチング時の CPU とディスク I/O が節約され、通常はクエリー評価が高速になります。欠点は、ランキングに利用できるのがブール・シグナル(ドキュメントがマッチしたかどうか)のみになることです。<a href="/ja/ranking/bm25" aria-label="BM25">BM25</a> は、ドキュメント内にクエリー・タームが 1 回出現し、フィールド長が平均フィールド長に等しいと仮定してこれを処理します。<br/><br/>大きなテキスト _index_ フィールドを、たとえば <a href="/ja/ranking/wand#weakand" aria-label="weakAnd">weakAnd</a> クエリー演算子と <a href="/ja/ranking/bm25" aria-label="BM25">BM25</a> ランキングで検索する際のクエリー・パフォーマンスを最適化するために使用します。コーパス内で一般的なクエリー・ターム(ストップワードなど)は、より高速なマッチングと簡略化されたランキングでフィルターとして扱われ、その他のクエリー・タームは通常どおり完全なランキングで処理されます。<br/><br/>さまざまなテキスト・データセット(Wikipedia など)でのテストでは、_filter-threshold_ を 0.05 に設定するのが良い出発点であることが示されています。<a href="/ja/performance/feature-tuning#posting-lists" aria-label="Read more">詳細を読む</a>。<br/><br/>この設定は <a href="/ja/basics/schemas#document-fields" aria-label="index">index</a> フィールドにのみ関係し、<a href="#filter" aria-label="rank: filter">rank: filter</a> と組み合わせて使用することはできません。<a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="streaming search">ストリーミング検索</a>では効果がありません。</td>
+    </tr>
+  </tbody>
+</table>
+
+### element-gap
+
+[rank-profile](#rank-profile) に含まれます。多値フィールドの隣接する要素間の位置のギャップを指定するために使用します。デフォルト値は `infinity` です。`infinity` または正の整数として指定します。
+
+3 つの要素 `["a c", "x b x a x x x x x x b", "x x d"]` を持つ `array<string>` フィールドを考えてみます。通常、距離計算は要素内でのみ実行されるため、ターム _a_ と _b_ の出現間の最小前方距離は 7 です。フィールドの `element-gap` を 0 に設定すると、隣接する要素が考慮され、ターム _a_ と _b_ の出現間の最小前方距離は 3 になります。ターム _c_ と _d_ の出現間の最小距離は、それらが隣接する要素にないため計算されません。
+
+`element-gap` 設定は、[nativeProximity](/ja/reference/ranking/rank-features#nativeProximity) ランク・フィーチャー、[near](/ja/reference/querying/yql#near) クエリー演算子、[onear](/ja/reference/querying/yql#onear) クエリー演算子に影響します。
+
+```bash
+rank [field-name] {
+    element-gap: 0
+}
+```
+
+この設定の変更には再起動も再インデキシングも不要で、即座に有効になります。
+
+## query-command
+
+[fieldset](#fieldset)、[field](#field)、または [struct-field](#struct-field) に含まれます。検索時に、このフィールドのインデックスへのクエリー・タームに対して実行される機能を指定します。Search Container サーバーは、これらのコマンドを処理する Vespa Searcher プラグインの作成をサポートしています。
+
+```js
+query-command: [an identifier or quoted string]
+```
+
+インデックス固有の設定パラメーターを必要とするプラグイン・サーチャーを作成する場合、そのパラメーターをここで設定できます。
+
+組み込みの query-command が 1 つあります: `phrase-segmenting`。これが設定されると、ユーザー・クエリー内で非単語文字で連結されたターム("a.b" など)は、デフォルトの connectivity が 1 に設定された AND アイテムではなく、フレーズ・アイテムとしてパースされます。
+
+## rank-type
+
+[field](#field) または [rank-profile](#rank-profile) に含まれます。`nativeRank` を使用する際に、このフィールドに使用する低レベルのランク設定を選択します。
+
+```bash
+rank-type [field-name]: [rank-type-name]
+```
+フィールド内ではフィールド名を省略できます。定義されているランク・タイプは次のとおりです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>タイプ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>identity</td>
+      <td>このドキュメントが何_である_かだけを含むフィールドに使用されます。例: "Title"。完全な identity のヒットは高いランクを得ます。</td>
+    </tr>
+    <tr>
+      <td>about</td>
+      <td>このドキュメントに(のみ)関するテキスト。例: "Description"。about のヒットは、部分マッチで高いランクを得て、テキストの早い位置でのマッチや繰り返しのマッチではさらに高くなります。これがデフォルトのランク・タイプです。</td>
+    </tr>
+    <tr>
+      <td>tags</td>
+      <td>tag 型の単純なタグ・フィールドに使用されます。tags ランク・タイプは、低い範囲でより大きな相対ブーストを与えるために対数テーブルを使用します: タグが追加されるとランク・スコアに大きな影響を与えるべきですが、タグが増えるにつれて、新しいタグ 1 つあたりの寄与は小さくなるべきです。</td>
+    </tr>
+    <tr>
+      <td>empty</td>
+      <td>マッチに対して関連度の効果を与えません。単にフィルターとして扱いたいフィールドに使用します。</td>
+    </tr>
+  </tbody>
+</table>
+
+`nativeRank` では、フィールドごとにランク・タイプを指定できます。サポートされているランク・タイプが要件を満たさない場合、rank-properties を使用して native ランク・フィーチャーを明示的に設定できます。詳細は [native rank リファレンス](/ja/reference/ranking/nativerank)を参照してください。
+
+## weakand
+
+[rank-profile](#rank-profile) に含まれます。
+
+ドキュメント・コーパスに存在するドキュメント頻度の統計に基づいて、クエリーにおける重要度(significance)が低いと予想されるタームとドキュメントを自動的に除外するように、[weakAnd](/ja/ranking/wand#weakand) アルゴリズムをチューニングします。これにより、リコールが低下する可能性と引き換えにマッチングが高速になります。
+
+```js
+weakand {
+    [body]
+}
+```
+
+すべてのドキュメント頻度の計算は、_コンテント・ノード・ローカル_のドキュメント統計を使用して行われる点に注意してください(すなわち、[グローバル significance](/ja/ranking/significance#global-significance-model) は効果がありません)。つまり、結果はコンテント・ノードやコンテント・ノードのグループによって異なる可能性があります。
+
+`weakand` 文の body は次で構成されます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>プロパティ</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>stopword-limit</td>
+      <td>0 回または 1 回</td>
+      <td>[0, 1] の範囲の数値。クエリー・タームがストップワードとみなされ、<code>{`weakAnd`}</code> 評価の一部から完全に除外されるまでに、そのタームがコーパス内で持ちうる最大の<a href="/ja/learn/glossary#document-frequency-normalized" aria-label="normalized document frequency">正規化ドキュメント頻度</a>(すなわち、そのタームが少なくとも 1 回出現する全ドキュメントの比率)を表します。これにより、より多くのヒットが生成される可能性と引き換えにマッチングが高速になります。除外されたタームはランキングの一部として公開されません。  <br/> 例: <br/>  stopword-limit: 0.60  これは、ドキュメントの 60% 以上に出現するすべてのクエリー・タームを除外します。<br/>  <code>{`stopword-limit`}</code> の使用は、クエリーからストップワードを事前に明示的に除去するのと似ていますが、実際のドキュメント・コーパスに動的に適応し、ストップワードのセットを知ったり指定したりする必要がないという利点があります。<a href="/ja/performance/feature-tuning#posting-lists" aria-label="Read more">詳細を読む</a>。</td>
+    </tr>
+    <tr>
+      <td>adjust-target</td>
+      <td>0 回または 1 回</td>
+      <td><a href="/ja/learn/glossary#document-frequency-normalized" aria-label="normalized document frequency">正規化ドキュメント頻度</a>を表す [0, 1] の範囲の数値。クエリーごとのドキュメント・スコアの閾値を導出するために使用され、閾値より低いスコアのドキュメントは <code>{`weakAnd`}</code> 演算子からの潜在的なヒットとして考慮されなくなります。スコアの閾値は、ドキュメント頻度が設定された <code>{`adjust-target`}</code> の値に&#42;最も近い&#42;クエリー・タームのものと等しくなるように選択されます。<br/> これは、ドキュメント・コーパス内で非常に頻繁に出現するタームにのみマッチするドキュメントを効率的に&#42;除外&#42;するために使用できます。そのようなタームは、クエリーに対する意味的価値の低いストップワードである可能性が高く、それらのみを含むドキュメントを除外してもリコールへの影響はわずかである可能性が高いです。<br/> これにより、<code>{`weakAnd`}</code> 演算子が生成するヒット数を減らすことで、全体的なマッチングが高速になります。<br/> 例:  <pre><code>{`adjust-target: 0.01`}</code></pre> これは、ドキュメント・コーパスの約 1% 超に出現するタームのみを持つドキュメントを除外します。実際の閾値はクエリー固有で、ドキュメント頻度が 1% に最も近いクエリー・タームのスコアに基づきます。  <br/><code>{`adjust-target`}</code> は <a href="#weakand-stopword-limit" aria-label="stopword-limit">stopword-limit</a> とともに使用でき、クエリー処理時に重要度の低いタームとドキュメントの両方を効率的に刈り込めます。<a href="/ja/performance/feature-tuning#posting-lists" aria-label="Read more">詳細を読む</a>。</td>
+    </tr>
+    <tr>
+      <td>allow-drop-all</td>
+      <td>0 回または 1 回</td>
+      <td>ブール値。<code>{`weakAnd`}</code> のデフォルトの動作は、ストップワードとみなされる場合でも、常に少なくとも 1 つのターム(最も出現頻度の低いもの)を保持することです。これは、確実にヒットが生成されるように、すべてのクエリー・タームが除外されるのを避けるためです。<br/>  <code>{`true`}</code> に設定すると、すべてのクエリー・タームがストップワードとみなされる場合(すなわち、<code>{`stopword-limit`}</code> が設定され、すべてのクエリー・タームが制限を超える場合)、<code>{`weakAnd`}</code> 演算子はすべてのクエリー・タームの除去を許可します。<br/>  <code>{`weakAnd`}</code> を別のクエリー演算子(例: <a href="/ja/querying/nearest-neighbor-search#querying-using-nearestneighbor-query-operator" aria-label="nearestNeighbor">nearestNeighbor</a> 演算子)とともに使用する場合、これが望ましい(そしてクエリー・パフォーマンスを大幅に改善する)ことがあります。<br/> これが <code>{`true`}</code> に設定され、すべてのクエリー・タームがストップワードとみなされる場合、<code>{`weakAnd`}</code> 演算子は&#42;一切&#42;ヒットを生成しない点に注意してください。ひいては、<code>{`weakAnd`}</code> を単独で使用する場合、クエリーはヒットを返さない可能性があります。<br/> 例: <br/>  <pre><code>{`allow-drop-all: true`}</code></pre>  これは <code>{`weakAnd`}</code> のデフォルトの動作をオーバーライドし、すべてのクエリー・タームがストップワードとみなされる場合にそれらすべてを除外することを許可します。  <Danger>&#42;&#42;重要:&#42;&#42; 指定しない場合、デフォルトは <code>{`false`}</code> です。</Danger></td>
+    </tr>
+  </tbody>
+</table>
+
+## summary-to
+
+<Warning>
+ **非推奨:** 代わりに [document-summary](#document-summary) を使用してください。
+</Warning>
+
+[field](#field) または [struct-field](#struct-field) に含まれます。このフィールドを含めるべきドキュメント・サマリーの名前を指定します。
+```bash
+summary-to: [summary-name], [summary-name], â€¦
+```
+
+summary を持つフィールドは、この設定にかかわらず常に default サマリーの一部になります。代わりに明示的な [document-summary](#document-summary) を使用してください。[ドキュメント・サマリー](/ja/querying/document-summaries)も参照してください。
+
+## summary
+
+[field](#field)、[document-summary](#document-summary)、または [struct-field](#struct-field) に含まれます。サマリー・フィールドを宣言します。
+
+```bash
+summary: [property]
+```
+または
+```bash
+summary [name] {
+    [body]
+}
+```
+これが field 内で設定される場合、サマリーの _name_ は省略できます。その場合、名前はソース・フィールドの名前と同じになります。デフォルトは _full_ サマリーです。長いフィールド値(ドキュメントのコンテンツ・フィールドなど)は _dynamic_ にすべきです。summary の body には次を含めることができます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>full</td>
+      <td>0 回または 1 回</td>
+      <td>サマリーでフィールド値全体を返します(デフォルト)。</td>
+    </tr>
+    <tr>
+      <td>bolding: on</td>
+      <td>0 回または 1 回</td>
+      <td>このフィールドの内容を<a href="#bolding" aria-label="bolded">太字化</a>するかどうかを指定します。string 型または array&lt;string&gt; 型の <a href="#indexing-index" aria-label="index">index</a> フィールドでのみサポートされます。</td>
+    </tr>
+    <tr>
+      <td>dynamic</td>
+      <td>0 回または 1 回</td>
+      <td>このサマリー・フィールドから結果に返される値を、マッチしたクエリー・タームの周辺のテキスト断片を抽出することによる、ソース・フィールドの&#42;動的要約&#42;にします。bolding 機能と同様に、マッチしたクエリー・タームもハイライトされます。このハイライトは、クエリー引数の bolding の影響を受けません。クエリー・タームのハイライトに使用されるデフォルトの XML 要素は <code>{`<hi>`}</code> です - 設定方法は <a href="#bolding" aria-label="bolding">bolding</a> を参照してください。&#42;dynamic&#42; は、string 型または array&lt;string&gt; 型の <a href="#indexing-index" aria-label="index">index</a> フィールドでのみサポートされます。array&lt;string&gt; フィールドの場合、動的要約は配列内の文字列項目ごとに作成されます。</td>
+    </tr>
+    <tr>
+      <td>source</td>
+      <td>0 回または 1 回</td>
+      <td>このサマリー・フィールドの値の取得元となる 1 つまたは複数のフィールドの名前を指定します。複数のフィールドが指定された場合、値は最初のフィールドに値があればそこから取得され、最初が空であれば 2 番目から、というように取得されます。  <pre><code>{`: [field-name], [field-name], …`}</code></pre>  これが指定されていない場合、ソース・フィールドはサマリー・フィールドと同じ名前のフィールドとみなされます。<br/><br/> スキーマの変更については、<a href="#add-or-remove-an-existing-document-field-from-document-summary" aria-label="attribute">attribute</a> フィールドと<a href="#add-or-remove-a-new-non-attribute-document-field-from-document-summary" aria-label="non-attribute">非 attribute</a> フィールドを参照してください。</td>
+    </tr>
+    <tr>
+      <td>to</td>
+      <td>0 回または 1 回</td>
+      <td>これを含めるべきドキュメント・サマリーの名前を指定します。<br/><br/> <pre><code>{`: [document-summary-name], [document-summary-name], …`}</code></pre> これは field 内でのみ指定でき、明示的なドキュメント・サマリー内では指定できません。指定されていない場合、フィールドは <code>{`default`}</code> ドキュメント・サマリーに含まれます。</td>
+    </tr>
+    <tr>
+      <td>matched-elements-only</td>
+      <td>0 回または 1 回</td>
+      <td>検索可能な<a href="#array" aria-label="array of primitive">プリミティブの配列</a>、<a href="#weightedset" aria-label="weightedset">weightedset</a>、<a href="#array" aria-label="array of struct">struct の配列</a>、または<a href="#map" aria-label="map type">マップ型</a>フィールドにおいて、マッチした要素のみをドキュメント・サマリーの一部として返すことを指定します。struct の配列またはマップ型フィールドの場合、これは通常 <a href="/ja/reference/querying/yql#sameelement" aria-label="sameElement">sameElement</a> 演算子とともに使用されますが、サブ struct フィールドを直接検索する場合にも使用できます。フィールドが<a href="#import-field" aria-label="imported">インポート</a>されている場合もサポートされます。<br/><br/>  <a href="#map" aria-label="example use">使用例</a>とスキーマの例を参照してください: <br/><br/> - <a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/matched_elements_only/indexed/test.sd" aria-label="matched elements only">matched elements only</a> <br/><br/> - <a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/struct_and_map_types/attribute_fields/test.sd" aria-label="array of struct and map type">array of struct and map type</a></td>
+    </tr>
+    <tr>
+      <td>select-elements-by</td>
+      <td>0 回または 1 回</td>
+      <td>summary フィーチャーを使用して、<a href="#array" aria-label="array of primitive">プリミティブの配列</a>または <a href="#array" aria-label="array of struct">struct の配列</a>フィールドのどの要素をドキュメント・サマリーの一部として返すかを制御します。  <pre><code>{`select-elements-by: <summary-feature-name>`}</code></pre>  使用する summary フィーチャーは、単一のマップ次元を持つテンソルでなければなりません。要素の ID がこのテンソルのマップ次元に沿ったラベルである場合、その要素が返されます。<br/><br/> - <a href="https://github.com/vespa-engine/system-test/blob/master/tests/search/chunk_selection/test.sd" aria-label="schema example">スキーマ例</a></td>
+    </tr>
+    <tr>
+      <td>tokens</td>
+      <td>0 回または 1 回</td>
+      <td>このサマリー・フィールドから結果に返される値を、ソース・フィールドでインデックスされたトークンの配列にします。同じ位置にある複数のトークンは、ネストされた配列に格納されます。  ソース・フィールドの指定が必須で、string、array&lt;string&gt;、または weightedset&lt;string&gt; 型の <a href="#indexing-index" aria-label="index">index</a> または <a href="#indexing-attribute" aria-label="attribute">attribute</a> フィールドでなければなりません。ソース・フィールドが weightedset&lt;string&gt; 型の場合、サマリー・フィールドはソース・フィールドが array&lt;string&gt; 型であるかのようにレンダリングされ、weight は表示されません。  これは主に、クエリー・トレースとインデックスされたトークンを対応付ける、<a href="/ja/querying/text-matching#tokens-example" aria-label="linguistics transformations debugging">リンギスティクス変換のデバッグ</a>に有用です。</td>
+    </tr>
+  </tbody>
+</table>
+
+詳細は[ドキュメント・サマリー](/ja/querying/document-summaries)を参照してください。
+
+## weight
+
+[field](#field) に含まれます。フィールドの weight - デフォルトは 100 です。フィールドの weight は[ランク・スコア](/ja/basics/ranking)の計算時に使用されます。
+
+```js
+weight: [positive integer]
+```
+
+## weightedset
+
+weightedset 型の [field](#field) に含まれます。weighted set のプロパティです。
+
+```bash
+weightedset: [property]
+```
+または
+```js
+weightedset {
+    [property]
+    [property]
+    â€¦
+}
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>プロパティ</th>
+      <th>出現回数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>create-if-nonexistent</td>
+      <td>0 回または 1 回</td>
+      <td>部分更新の increment または decrement コマンドを使用してドキュメント内のキーの weight を調整する際に、そのキーが現在存在しない場合、コマンドはデフォルトで無視されます。この場合に代わりにキーを作成するには、これを設定します。weight をキーの出現回数として使用する場合に便利です。<br/><br/> <pre><code>{`field tag type weightedset<string> {     indexing: attribute | summary     weightedset {         create-if-nonexistent         remove-if-zero     } }`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>remove-if-zero</td>
+      <td>0 回または 1 回</td>
+      <td>これは逆のケースにおける <code>{`create-if-nonexistent`}</code> の対です: デフォルトでは、キーは weight として 0 を持つことができます。これを有効にすると、weight が 0 に調整(または設定)されたキーは削除されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+## import field
+
+[schema](#schema) に含まれます。ドキュメント・タイプへの [reference](#reference) を使用して、そのドキュメント・タイプからこのスキーマにフィールドをインポートし、マッチング、ランキング、グルーピング、ソートに使用できるようにします。インポートできるのは attribute フィールドのみです。フィールドのインポートは[ストリーミング検索](/ja/performance/streaming-search#differences-in-streaming-search)ではサポートされません。
+
+インポートされたフィールドは、次を除くすべてのプロパティを親フィールドから継承します:
+
+- [attribute: fast-access](#attribute)
+
+完全な例は[親/子](/ja/schemas/parent-child)を参照してください。インポートされたフィールドはドキュメント・タイプの外側に置かれる点に注意してください:
+
+```js
+schema myschema {
+    document myschema {
+        field parentschema_ref type reference<parentschema> {
+            indexing: attribute
+        }
+    }
+    import field parentschema_ref.name as parent_name {}
+}
+```
+
+一部のフィールド型には追加の制約が適用されます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>フィールド型</th>
+      <th>制約</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>array of struct</td>
+      <td>struct フィールドの少なくとも 1 つが attribute を持つ場合にインポートできます。attribute を持つすべての struct フィールドはプリミティブ型でなければなりません。attribute を持つ struct フィールドのみが見えるようになります。</td>
+    </tr>
+    <tr>
+      <td>map of struct</td>
+      <td>key フィールドが attribute を持ち、かつ struct フィールドの少なくとも 1 つが attribute を持つ場合にインポートできます。attribute を持つすべての struct フィールドはプリミティブ型でなければなりません。key フィールドと attribute を持つ struct フィールドのみが見えるようになります。</td>
+    </tr>
+    <tr>
+      <td>map</td>
+      <td>key フィールドと value フィールドの両方がプリミティブ型で attribute を持つ場合にインポートできます。</td>
+    </tr>
+    <tr>
+      <td>position</td>
+      <td>attribute を持つ場合にインポートできます。</td>
+    </tr>
+    <tr>
+      <td>array of position</td>
+      <td>attribute を持つ場合にインポートできます。</td>
+    </tr>
+  </tbody>
+</table>
+
+インポートされたフィールドを summary で使用するには、そのフィールドを含む明示的な[ドキュメント・サマリー](#document-summary)を作成してください。
+
+インポートされたフィールドはドキュメントの有効期限管理に使用できますが、[まずこちらを読んでください](/ja/schemas/documents#document-expiry)。
+
+## Document and search field types
+
+document の外側で、他のフィールドを入力として使用するフィールドを宣言することで、ある型のドキュメント・フィールドを、別の型の 1 つ以上の検索フィールドのインスタンスにできる点に注意してください。たとえば、ドキュメント内のカンマ区切りの整数リストを含む文字列から整数の attribute を作成するには、次のようにします:
+
+```js
+schema example {
+    document example {
+        field yearlist type string { # Comma-separated years
+        }
+    }
+
+    field year type array<int> { # Search field using the yearlist value
+        indexing: input yearlist | split "," | attribute
+    }
+}
+```
+
+## Modifying schemas
+
+このセクションでは、稼働中のアプリケーションのスキーマをどのように変更できるかを説明します。カテゴリー:
+
+1. [再起動も再フィードも不要な有効な変更](#valid-changes-without-restart-or-re-feed)
+2. [再起動が必要だが再フィードは不要な変更](#changes-that-require-restart-but-not-re-feed)
+3. [再インデキシングが必要な変更](#changes-that-require-reindexing)
+4. [再フィードが必要な変更](#changes-that-require-re-feed)
+
+新しいアプリケーション・パッケージに対して `vespa prepare` を実行すると、スキーマ・ファイルの変更が現在アクティブなパッケージのファイルと比較されます。一部の変更に再起動または再フィードが必要な場合、`vespa prepare` の出力に必要なアクションが示されます。
+
+<Danger>
+ **重要:** 以下でカバーされていない変更で、`vespa prepare` から出力が返されない場合、その影響は未定義であり、再フィードまでシステムが稼働し続けられることは一切保証されません。スキーマに関連しない変更については、[管理手順](/ja/operations/self-managed/admin-procedures)で説明しています。
+</Danger>
+
+### Valid changes without restart or re-feed
+
+手順:
+
+1. 変更したアプリケーションに対して `vespa prepare` を実行します
+2. `vespa activate` を実行します。変更は即座に有効になります
+
+変更:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>変更</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>新しいドキュメント・フィールドの追加</td>
+      <td>新しいドキュメント・フィールドを index、attribute、summary、またはこれらの任意の組み合わせとして追加します。既存のドキュメントは暗黙的に、内容のない新しいフィールドを持つことになります。変更後にフィードされたドキュメントは新しいフィールドを指定できます。同じ型のフィールドが以前に存在していた場合、古い内容が再び現れる&#42;可能性も、現れない可能性も&#42;あります</td>
+    </tr>
+    <tr>
+      <td>ドキュメント・フィールドの削除</td>
+      <td>既存のドキュメントでは削除されたフィールドは見えなくなりますが、フィールドのデータが検索ノードから完全に削除されるわけではありません</td>
+    </tr>
+    <tr>
+      <td>既存のドキュメント・フィールドのドキュメント・サマリーへの追加または削除</td>
+      <td>既存のフィールドを summary または任意の数のサマリー・クラスに追加したり、既存のフィールドを summary または任意の数のサマリー・クラスから削除したりします。例: <br/><br/> <pre><code>{`document-summary short-summary {         summary artist {}     }`}</code></pre> <br/><br/> <a href="#source" aria-label="source">source</a> を使用して、新しい名前で <a href="/ja/content/attributes" aria-label="attribute">attribute</a> フィールドをサマリー・クラスに追加する変更には、再起動も再フィードも不要です: <br/><br/> <pre><code>{`field artist type string {             indexing: summary | attribute     }      document-summary rename-summary {         summary artist_name {             source: artist         }     }`}</code></pre> <br/><br/> <a href="#add-or-remove-a-new-non-attribute-document-field-from-document-summary" aria-label="non-attribute">非 attribute</a> フィールドも参照してください。</td>
+    </tr>
+    <tr>
+      <td>index フィールドでもあるフィールドからの attribute アスペクトの削除</td>
+      <td>これは、再起動なしで許可される、ドキュメント・フィールドの attribute アスペクトを変更する唯一のシナリオです</td>
+    </tr>
+    <tr>
+      <td>フィールド・セットの追加、変更、削除</td>
+      <td>検索のためにフィールドをグループ化する <a href="#fieldset" aria-label="fieldsets">fieldset</a> を変更します</td>
+    </tr>
+    <tr>
+      <td>attribute フィールドの alias または sorting attribute 設定の変更</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>ランク・プロファイルの追加、変更、削除</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>ドキュメント・フィールドの weight の変更</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>フィールドの alias の追加、変更、削除</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>フィールドのランク設定の追加、変更、削除</td>
+      <td>例外: モード &#42;index&#42; の attribute フィールドで <code>{`rank: filter`}</code> を変更するには再起動が必要です。詳細は<a href="#changes-that-require-restart-but-not-re-feed" aria-label="next section">次のセクション</a>を参照してください</td>
+    </tr>
+    <tr>
+      <td>スキーマの追加または削除</td>
+      <td>スキーマ定義ファイルを削除すると、<a href="/ja/content/proton" aria-label="proton">proton</a> はそのタイプのすべてのドキュメントを破棄し、その後メモリーとディスクを解放します。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+### Changes that require restart but not re-feed
+
+手順:
+
+1. 変更したアプリケーションに対して `vespa prepare` を実行します。出力に必要な再起動アクションが示されます 
+2. `vespa activate` を実行します
+3. `prepare` の出力で指定されたサービスで `services` を再起動します
+
+変更:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>変更</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ドキュメント・フィールドの attribute アスペクトの変更</td>
+      <td>フィールドを attribute として追加または削除します。追加する場合、再起動中に、保存されているドキュメントのフィールド値に基づいて attribute が構築されます。削除する場合、再起動中に、attribute の内容に基づいて保存されているドキュメントのフィールド値が更新されます。</td>
+    </tr>
+    <tr>
+      <td>attribute フィールドの attribute 設定の変更</td>
+      <td>次の attribute 設定を変更します: <code>{`fast-search`}</code>、<code>{`fast-access`}</code>、<code>{`fast-rank`}</code>、<code>{`paged`}</code>。</td>
+    </tr>
+    <tr>
+      <td>attribute フィールドの rank filter 設定の変更</td>
+      <td>attribute フィールドで <code>{`rank: filter`}</code> を追加または削除します。</td>
+    </tr>
+    <tr>
+      <td>テンソル attribute フィールドの hnsw インデックス設定の変更</td>
+      <td>テンソル attribute フィールドでの <a href="#index-hnsw" aria-label="hnsw index">hnsw インデックス</a>の追加または削除、あるいは <code>{`distance-metric`}</code> または <code>{`max-links-per-node`}</code> の変更には、インデックスを再構築するために再起動が必要です。<code>{`neighbors-to-explore-at-insert`}</code> の変更には再起動が必要ですが、インデックスの再構築は行われません。</td>
+    </tr>
+    <tr>
+      <td>テンソル attribute フィールドの距離メトリックの変更</td>
+      <td>テンソル attribute フィールドで<a href="#distance-metric" aria-label="distance metric">距離メトリック</a>を変更、追加、または削除します。距離メトリックが指定されていない場合、デフォルトとして _euclidean_ が使用されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+例: モード _index_ のコンテント・クラスター _mycluster_ があるとします:
+
+```js
+schema test {
+    document test {
+        field f1 type string { indexing: summary }
+    }
+}
+```
+次に、フィールド `f1` を attribute として追加します:
+```js
+schema test {
+    document test {
+        field f1 type string { indexing: attribute | summary }
+    }
+}
+```
+次は `vespa prepare` からの出力で、必要な再起動アクションを示しています:
+```js
+WARNING: Change(s) between active and new application that require restart:
+In cluster 'mycluster' of type 'search':
+    Restart services of type 'searchnode' because:
+        1) Document type 'test': Field 'f1' changed: add attribute aspect
+```
+
+### Changes that require reindexing
+
+以下に列挙するすべての変更には、全ドキュメントの[再インデキシング](/ja/operations/reindexing)が必要です。外部のデータ・ソースを必要とする再フィードとは異なり、再インデキシングは Vespa に保存されているドキュメントを使用して行われ、(一度トリガーされれば)自動的です。フィードやサービングと並行して実行することもできますが、再インデキシングが完了するまで、影響を受けるフィールドは空になるか、クエリー処理と一致しない誤ったアノテーションを持つ可能性があります。手順:
+
+1. 変更したアプリケーションに対して `vespa prepare` を実行します。出力に必要な再インデキシング・アクションが示されます 
+2. `vespa activate` を実行します
+3. 指定されたドキュメント・タイプとクラスターに対して[再インデキシングを有効化](/ja/reference/api/deploy-v2#reindex)します
+4. 再インデキシング・プロセスを開始するために、再度 `vespa prepare` と `vespa activate` を実行します
+
+変更:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>変更</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ドキュメント・フィールドの index アスペクトの変更</td>
+      <td>これは、ドキュメントがバックエンドに到着する前のドキュメント処理パイプラインを変更します。index アスペクトが追加された後にフィードされたドキュメントのみがアノテーションを持ち、転置インデックスに存在します。index アスペクトが削除された後にフィードされたドキュメントのみが、不要なアノテーションによるディスクの肥大化を回避できます。</td>
+    </tr>
+    <tr>
+      <td>ステミング/正規化のオン/オフの切り替え</td>
+      <td>これは、ドキュメントがバックエンドに到着する前のドキュメント処理パイプラインと、インデックス・フィールドに対して作成されるアノテーションを変更します。  <Danger>&#42;&#42;重要:&#42;&#42; このような変更の後に再フィードしない場合、サービングは動作しますが、クエリー・タームのステミング/正規化に使用される設定とは異なる設定でインデックスが生成されているため、リコールは未定義です。</Danger></td>
+    </tr>
+    <tr>
+      <td>フィールドの match 設定の追加、変更、削除</td>
+      <td>例: フィールドへの <code>{`match: word`}</code> の追加。  これは、ドキュメントがバックエンドに到着する前のドキュメント処理パイプラインと、インデックス・フィールドに対して作成されるアノテーションを変更します。  <Danger>&#42;&#42;重要:&#42;&#42; このような変更の後に再インデキシングしない場合、サービングは動作しますが、インデックスがある match モードで生成されている一方、実行時には別の match モードが使用されているため、リコールは未定義です。</Danger></td>
+    </tr>
+    <tr>
+      <td>新しい非 attribute ドキュメント・フィールドのドキュメント・サマリーへの追加または削除</td>
+      <td><a href="#source" aria-label="source">source</a> を使用して、新しい名前で(<a href="/ja/content/attributes" aria-label="attribute">attribute</a> ではない)<a href="#document-fields" aria-label="index or summary">index または summary</a> フィールドをサマリー・クラスに追加する変更には、再インデックスが必要です:   <pre><code>{`artist type string {             indexing: summary | index     }      document-summary rename-summary {         summary artist_name {             source: artist         }     }`}</code></pre> <a href="#add-or-remove-an-existing-document-field-from-document-summary" aria-label="attribute">attribute</a> フィールドも参照してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+例: 次のモードのコンテント・クラスター *mycluster* があるとします 
+
+```js
+schema test {
+    document test {
+        field f1 type string { indexing: summary }
+    }
+}
+```
+
+次に、フィールド `f1` を index として追加します:
+
+```js
+schema test {
+    document test {
+        field f1 type string { indexing: index | summary }
+    }
+}
+```
+
+次は `vespa prepare` からの出力で、必要な再インデックス・アクションを示しています:
+
+```js
+WARNING: Change(s) between active and new application that require re-index:
+Reindex document type 'test' in cluster 'mycluster' because:
+    1) Document type 'test': Field 'f1' changed: add index aspect, indexing script: '{ input f1 | summary f1; }' -> '{ input f1 | tokenize normalize stem:"SHORTEST" | index f1 | summary f1; }'
+```
+
+### Changes that require re-feed
+
+以下に列挙するすべての変更には、全ドキュメントの再フィードが必要です。上記のセクションに列挙されていない変更は、ここに列挙されているものとして扱ってください。再フィードが完了するまで、影響を受けるフィールドは空になるか、クエリー処理と一致しない誤ったアノテーションを持つ可能性があります。手順:
+
+1. 変更したアプリケーションに対して `vespa prepare` を実行します。出力に必要な再フィード・アクションが示されます 
+2. フィードを停止し、完了するまで待ちます
+3. `vespa activate` を実行します
+4. すべてのドキュメントを再フィードします
+
+変更:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>変更</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;ドキュメント・フィールドのデータ型またはコレクション型の変更&#42;&#42;</td>
+      <td>既存のドキュメントは、このフィールドの内容を持たなくなります。フィールドにデータを投入するには、このフィールドの新しい型を使用して既存のドキュメントを再フィードします。古いフィールド型から新しいフィールド型への自動変換はありません。<Danger>&#42;&#42;重要:&#42;&#42; このような変更の後に再フィードしない場合、サービングは動作しますが、このフィールドの検索は結果を返しません。</Danger></td>
+    </tr>
+    <tr>
+      <td>テンソル attribute のテンソル型の変更</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+例: モード *index* のコンテント・クラスター *mycluster* があるとします:
+
+```js
+schema test {
+    document test {
+        field f1 type string { indexing: summary }
+    }
+}
+```
+次に、フィールド `f1` を int を保持するように変更します:
+```js
+schema test {
+    document test {
+        field f1 type int { indexing: summary }
+    }
+}
+```
+次は `vespa prepare` からの出力で、必要な再フィード・アクションを示しています:
+```js
+WARNING: Change(s) between active and new application that require re-feed:
+Re-feed document type 'test' in cluster 'mycluster' because:
+    1) Document type 'test': Field 'f1' changed: data type: 'string' -> 'int'
+```

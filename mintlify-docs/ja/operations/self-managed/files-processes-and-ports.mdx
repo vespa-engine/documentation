@@ -1,0 +1,254 @@
+---
+title: "ファイル、プロセス、ポート、環境変数"
+---
+
+これは、Vespaインストールで使用されるディレクトリ、Vespaノード上で実行されるプロセス、および使用されるポート/環境変数のリファレンスです。[ログファイル](/ja/reference/operations/log-files)も参照してください。
+
+## ディレクトリ
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>ディレクトリ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`$VESPA_HOME/bin/`}</code></td>
+      <td>コマンドライン・ユーティリティとスクリプト</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/libexec/vespa/`}</code></td>
+      <td>コマンドライン・ユーティリティとスクリプト</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/sbin/`}</code></td>
+      <td>サーバー・プログラム、デーモンなど</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/lib64/`}</code></td>
+      <td>動的リンク・ライブラリ、主にサードパーティ・ライブラリ</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/lib/jars/`}</code></td>
+      <td>Javaアーカイブ</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/logs/vespa/`}</code></td>
+      <td>ログファイル</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/var/db/vespa/config_server/serverdb/`}</code></td>
+      <td>Configサーバーのデータベースとユーザー・アプリケーション</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/share/vespa/`}</code></td>
+      <td>アプリケーション・パッケージの検証用のconfig定義とXMLスキーマを含むディレクトリ</td>
+    </tr>
+    <tr>
+      <td><code>{`$VESPA_HOME/conf/vespa`}</code></td>
+      <td>Vespaまたは Vespaが依存するライブラリが使用する各種configファイル</td>
+    </tr>
+  </tbody>
+</table>
+
+## プロセスとポート
+
+以下は、Vespaシステム内のさまざまなサービスがどのポートおよびポート範囲を使用するかの概要です。同じノード上で複数のインスタンスを実行できるサービスでは、すべてのインスタンスが記載されたポート範囲内で実行されることに注意してください。
+
+プロセスはユーザー `vespa` として実行されます。
+
+多くのサービスにはポートが動的に割り当てられます。割り当ては決定的であり、つまり同じシステムであれば次回以降の起動時にも同じポートが割り当てられますが、[services.xml](/ja/reference/applications/services/services) を通じてシステム全体の構成が変更されると、特定のサービス・インスタンスに異なるポートが割り当てられることがあります。ポートの割り当てを確認するには [vespa-model-inspect](/ja/reference/operations/self-managed/tools#vespa-model-inspect) を使用してください。
+
+- 範囲内で使用されるポート数は、実行中のインスタンス数に依存します
+- 範囲内のすべてのポートが使用されるわけではありませんが、将来の拡張に対応するため各サービスに割り当てられています
+- 19100からの範囲は内部通信ポート、つまり外部APIから使用する必要のないポートに使用されます
+- コンテナーのポートの設定方法は [Configuring Http Servers and Filters](/ja/applications/http-servers-and-filters) を、その他のポートの設定方法は [services.xml](/ja/reference/applications/services/services) を参照してください
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>プロセス</th>
+      <th>ホスト</th>
+      <th>ポート/範囲</th>
+      <th>ps</th>
+      <th>機能</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="/ja/operations/self-managed/configuration-server" aria-label="Config server">Configサーバー</a></td>
+      <td>Configサーバー・ノード</td>
+      <td>19070-19071</td>
+      <td><code>{`java (...) -jar $VESPA_HOME/lib/jars/standalone-container-jar-with-dependencies.jar`}</code></td>
+      <td>Vespa Configurationサーバー</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td></td>
+      <td>2181-2183</td>
+      <td></td>
+      <td>組み込みZookeeperクラスターのポート。<a href="https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/zookeeper-server.def" aria-label="zookeeper-server.def">zookeeper-server.def</a> を参照</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/operations/self-managed/config-sentinel" aria-label="Config sentinel">Config sentinel</a></td>
+      <td>すべてのノード</td>
+      <td>19098</td>
+      <td><code>{`$VESPA_HOME/sbin/vespa-config-sentinel`}</code></td>
+      <td>vespaサービスを起動・停止し、手動で停止されない限りサービスが実行され続けるようにするsentinel</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/operations/self-managed/config-proxy" aria-label="Config proxy">Configプロキシ</a></td>
+      <td>すべてのノード</td>
+      <td>19090</td>
+      <td><code>{`java (…) com.yahoo.vespa.config.proxy.ProxyServer`}</code></td>
+      <td>VespaプロセスとConfigサーバー間の通信の仲介役。configをメモリにキャッシュする</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/operations/self-managed/slobrok" aria-label="Slobrok">Slobrok</a></td>
+      <td>Adminノード</td>
+      <td>RPCポートは19099、HTTPポートは19100-19899の範囲で動的に割り当て</td>
+      <td><code>{`$VESPA_HOME/sbin/vespa-slobrok`}</code></td>
+      <td>Service location object broker</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/reference/operations/log-files#logd" aria-label="logd">logd</a></td>
+      <td>すべてのノード</td>
+      <td>19089</td>
+      <td><code>{`$VESPA_HOME/sbin/vespa-logd`}</code></td>
+      <td>ローカルのログファイルを読み取り、ログサーバーへ送信する</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/reference/operations/log-files#log-server" aria-label="Log server">ログサーバー</a></td>
+      <td>ログサーバー・ノード</td>
+      <td>19080</td>
+      <td><code>{`java (...) -jar lib/jars/logserver-jar-with-dependencies.jar`}</code></td>
+      <td>Vespaログサーバー</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/operations/self-managed/monitoring#metrics-proxy" aria-label="Metrics proxy">Metricsプロキシ</a></td>
+      <td>すべてのノード</td>
+      <td>19092-19095</td>
+      <td><code>{`java (...) -jar $VESPA_HOME/lib/jars/container-disc-with-dependencies.jar`}</code></td>
+      <td>Vespaノード上のすべてのサービスのメトリクスへの単一アクセスポイントを提供する</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/content/content-nodes#distributor" aria-label="Distributor">Distributor</a></td>
+      <td>コンテント・クラスター</td>
+      <td>19100-19899の範囲で動的に割り当て</td>
+      <td><code>{`$VESPA_HOME/sbin/vespa-distributord-bin`}</code></td>
+      <td>コンテント層のdistributorプロセス</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/content/content-nodes#cluster-controller" aria-label="Cluster controller">クラスター・コントローラー</a></td>
+      <td>コンテント・クラスター</td>
+      <td>19050、および19100-19899の範囲で動的に割り当てられるポート</td>
+      <td><code>{`java (...) -jar $VESPA_HOME/lib/jars/container-disc-jar-with-dependencies.jar`}</code></td>
+      <td>クラスター・コントローラーのプロセス。コンテント・ノードの状態を管理する</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/content/proton" aria-label="proton">proton</a></td>
+      <td>コンテント・クラスター</td>
+      <td>19100-19899の範囲で動的に割り当て</td>
+      <td><code>{`$VESPA_HOME/sbin/vespa-proton-bin`}</code></td>
+      <td>Searchnodeプロセス。コンテナーからクエリーを受け取り、インデックスから結果を返す。また、フィードを受け取ってドキュメントをインデックスする</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/applications/containers" aria-label="container">container</a></td>
+      <td>コンテナー・クラスター</td>
+      <td>8080</td>
+      <td><code>{`java (...) -jar $VESPA_HOME/lib/jars/container-disc-with-dependencies.jar`}</code></td>
+      <td>サーバー、ハンドラー、処理コンポーネントを実行するコンテナー</td>
+    </tr>
+  </tbody>
+</table>
+
+## システム制限
+
+[起動スクリプト](/ja/operations/self-managed/admin-procedures#vespa-start-stop-restart)はシステム制限が設定されていることをチェックし、設定されていない場合は起動に失敗します。最小値については [vespa-configserver.service](https://github.com/vespa-engine/vespa/blob/master/vespabase/src/vespa-configserver.service.in) と [vespa.service](https://github.com/vespa-engine/vespa/blob/master/vespabase/src/vespa.service.in) を参照してください。
+
+## コアダンプ
+
+設定例:
+
+```bash
+$ mkdir -p /tmp/cores && chmod a+rwx /tmp/cores
+$ echo "/tmp/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
+```
+
+これにより、*/tmp/cores/core.vespa-proton-bi.1721.localhost.1580387387* のようなファイルが書き込まれます。
+
+## 環境変数
+
+Vespaの設定は[アプリケーション・パッケージ](/ja/basics/applications)で行います。一部の設定はノードのブートストラップに使用され、これは環境変数で設定します。環境変数は起動時にのみ読み取られます。
+
+*`$VESPA_HOME/conf/vespa/default-env.txt`* はVespaの起動スクリプトで読み込まれます - 変数を変更するにはこれを使用してください([例](/ja/operations/self-managed/multinode-systems#aws-ec2))。各行は `action variablename value` という形式で、各項目は次のとおりです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>項目</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>action</td>
+      <td><code>{`fallback`}</code>、<code>{`override`}</code>、<code>{`unset`}</code> のいずれか。<code>{`fallback`}</code> は変数が未設定(または空)の場合に設定します。<code>{`override`}</code> は状態に関わらず値を設定します。<code>{`unset`}</code> は変数の設定を解除します。</td>
+    </tr>
+    <tr>
+      <td>variablename</td>
+      <td>変数の名前。例: <code>{`VESPA_CONFIGSERVERS`}</code></td>
+    </tr>
+    <tr>
+      <td>value</td>
+      <td>行の残りの部分が変数の値になります。</td>
+    </tr>
+  </tbody>
+</table>
+
+形式については[テンプレート](https://github.com/vespa-engine/vespa/blob/master/vespabase/conf/default-env.txt.in)を参照してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>環境変数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>VESPA_CONFIGSERVERS</td>
+      <td>Configサーバーを実行するホストのカンマ区切りリスト。完全修飾ホスト名を使用してください。マルチホスト構成では、すべてのホストで常に同じ値を設定する必要があります。未設定の場合、<code>{`localhost`}</code> が仮定されます。<a href="/ja/operations/self-managed/configuration-server" aria-label="configuration server operations">Configurationサーバーの運用</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>VESPA_HOSTNAME</td>
+      <td>Vespaはノードの識別に <code>{`hostname`}</code> を使用します。しかし、その名前からノード上で実行されるサービスへの接続に使えるIPアドレスを見つけられない場合や、その名前がConfigサーバーが認識しているノードのホスト名と一致しない場合など、これが正しく機能しないことがあります。この場合、<code>{`VESPA_HOSTNAME`}</code> を設定してオーバーライドすると、<code>{`hostname`}</code> コマンドの実行結果の代わりに使用されます。<br/><br/>  <code>{`VESPA_HOSTNAME`}</code> は、ノードがConfigサーバーに対して自身を識別するとき&#42;と&#42;、そのノード上のサービスが他のサービスから接続可能なネットワーク接続ポイントを登録するときの&#42;両方&#42;で使用されることに注意してください。<br/><br/>  <code>{`VESPA_HOSTNAME`}</code> が設定されておらず、かつホスト名が使用できない場合は、"hostname detection failed" というエラーメッセージが出力されます。<code>{`VESPA_HOSTNAME`}</code> が機能し得ない値に設定されている場合は、代わりに "hostname validation failed" というエラーが出力されます。</td>
+    </tr>
+    <tr>
+      <td>VESPA_CONFIG_SOURCES</td>
+      <td><a href="/ja/writing/document-api-guide" aria-label="Document API">Document API</a> のようなライブラリがConfigサーバーのエンドポイントを設定するために使用します。使用例については <a href="/ja/operations/self-managed/configuration-server#configuration" aria-label="configuration server operations">Configurationサーバーの運用</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>VESPA_WEB_SERVICE_PORT</td>
+      <td>REST APIが実行されるポート番号。デフォルトは <code>{`8080`}</code>。ポート番号は <code>{`services.xml`}</code> でHTTPサーバーごとに設定できるため、これは厳密には必要ありませんが、大規模なアプリケーションではデフォルトのポート番号を一度だけ設定する方が簡単な場合があります。また、REST APIの実装はポート番号をそこから取得するため、&#42;configserver&#42; の起動時にこれを設定する必要があることにも注意してください。</td>
+    </tr>
+    <tr>
+      <td>VESPA_TLS_CONFIG_FILE</td>
+      <td><a href="/ja/security/mtls" aria-label="TLS configuration file">TLS設定ファイル</a>への絶対パス。</td>
+    </tr>
+    <tr>
+      <td>VESPA_CONFIGSERVER_JVMARGS</td>
+      <td>ConfigサーバーのJVM引数 - <a href="/ja/performance/container-tuning#config-server-and-config-proxy" aria-label="tuning">チューニング</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>VESPA_CONFIGPROXY_JVMARGS</td>
+      <td>ConfigプロキシのJVM引数 - <a href="/ja/performance/container-tuning#config-server-and-config-proxy" aria-label="tuning">チューニング</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>VESPA_LOG_LEVEL</td>
+      <td>ツールのログ出力のチューニング。<a href="/ja/reference/operations/log-files#controlling-log-levels" aria-label="controlling log levels">ログレベルの制御</a>を参照してください</td>
+    </tr>
+  </tbody>
+</table>

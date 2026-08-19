@@ -1,0 +1,30 @@
+---
+title: "Vespa のライブ・アップグレード"
+sidebarTitle: "Vespa ライブ・アップグレード手順"
+---
+
+このドキュメントでは、Vespa インスタンスをライブ・アップグレードする方法を説明します。読み取り・書き込みトラフィックを中断せずにアップグレードするには、この手順を使用してください。
+
+1. **アップグレード前**
+	- **新しいメジャー・バージョン**にアップグレードする場合: まず現在のメジャー・バージョンの最新バージョンにアップグレードし、次に進む前に新しいメジャー・バージョンのリリース・ノートを読んでください。
+	- 新しいマイナー・バージョンにアップグレードする場合、[現在実行中のバージョンより 2 か月以上古くならないバージョンにアップグレードすべきです](/ja/learn/releases#versions)。コンフィグ・サーバーをアップグレードする際には、マイナー・バージョン番号の増分が 30 未満であることが検証され、そうでない場合、コンフィグ・サーバーは起動を拒否します。この動作は、アップグレード前にコンフィグ・サーバーで環境変数 *VESPA\_SKIP\_UPGRADE\_CHECK=true* を設定することで、自己責任でオーバーライドできます。
+	- 冗長性: 可用性のためには、クラスターごとに一度に 1 ノードをサービスから外せるだけの十分なキャパシティーが必要です。クラスターが redundancy=1 または searchable-copies=1 の場合、アップグレード中に一部のデータが利用できなくなります(カバレッジの低下)。
+	- ノードのダウンタイムを減らすため、新しい Vespa バージョンを事前にすべてのホストにダウンロードしておきます。
+2. **アプリケーション・ノードのデタッチ** Vespa 8 では不要です。Vespa 7 のバージョン間のアップグレードについては [Vespa 8 リリース・ノート](/ja/reference/release-notes/vespa8#upgrade-procedure)を参照してください。
+3. **コンフィグ・サーバーのアップグレード**
+	- コンフィグ・サーバーに新しい Vespa バージョンをインストールし、1 台ずつ[再起動](/ja/operations/self-managed/admin-procedures#vespa-start-stop-restart)します。再び起動するまで待ちます。vespa ログで "Changing health status code from 'initializing' to 'up'" を確認するか、[ヘルスチェック](/ja/operations/self-managed/configuration-server#troubleshooting)を使用します。
+	- アプリケーションを再デプロイして activate します:
+        
+        `$` [`vespa`](/ja/clients/vespa-cli#deployment) `prepare <app> && vespa activate`
+	- システム内の他のノードは、新しいバージョンにアップグレードされるまで設定を受信しません(ノードがアップグレードされるまで、vespa ログに "Request callback failed: UNKNOWN\_VESPA\_VERSION" を含む警告が出力されます)。これは、互換性がない可能性のある新しい設定が配信されないようにするためです。
+4. **その他のすべてのノードを 1 台ずつアップグレード** - システム内の他の各ノードについて:
+	- ノードの[サービスを停止](/ja/operations/self-managed/admin-procedures#vespa-start-stop-restart)します。
+	- 新しい Vespa バージョンをインストールします。
+	- ノードの[サービスを起動](/ja/operations/self-managed/admin-procedures#vespa-start-stop-restart)します。
+	- 次のノードに進む前に、ノードが完全に起動するまで待ちます - 次のノードを停止してよいかを評価するために使用するメトリクス/インターフェース:
+		- [/state/v1/health](/ja/reference/api/state-v1#state-v1-health) を使用して、ノードが起動しているかを確認します。
+		- コンテント・ノードで `vds.idealstate.merge_bucket.pending.average` メトリクスを確認します。0 になれば、すべてのバケットが同期しています - [例](/ja/operations/metrics)を参照してください。
+
+### トラブルシューティング
+
+[コンフィグ・サーバーのトラブルシューティング](/ja/operations/self-managed/configuration-server#troubleshooting)を参照してください。

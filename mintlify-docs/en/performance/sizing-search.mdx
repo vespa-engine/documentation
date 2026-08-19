@@ -47,10 +47,24 @@ With a grouped distribution, content is distributed to a configured set of *grou
 
 Ideally, the data is available and searchable at all times, even during node failures. High availability costs resources due to data replication. How many replicas of the data to configure depends on what kind of availability guarantees the deployment should provide. Configure availability vs cost:
 
-|||
-| :--- | :--- |
-| [redundancy](/en/reference/applications/services/content#redundancy) | Defines the total number of copies of each piece of data the cluster will store and maintain to avoid data loss. Example: with a redundancy of 2, the system tolerates 1 node failure before any further node failures may cause data to become unavailable. |
-| [searchable-copies](/en/reference/applications/services/content#searchable-copies) | Configures how many of the copies (as configured with *redundancy*) to be indexed (*ready*) at any time. Configuring *searchable-copies* to be less than *redundancy* saves resources (memory, disk, cpu), as not all copies are indexed (*ready*). In case of node failure, the remaining nodes needs to index the *not ready* documents which belonged to the failed node. In this transition period, the search has reduced search coverage. |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="/en/reference/applications/services/content#redundancy" aria-label="redundancy">redundancy</a></td>
+      <td>Defines the total number of copies of each piece of data the cluster will store and maintain to avoid data loss. Example: with a redundancy of 2, the system tolerates 1 node failure before any further node failures may cause data to become unavailable.</td>
+    </tr>
+    <tr>
+      <td><a href="/en/reference/applications/services/content#searchable-copies" aria-label="searchable-copies">searchable-copies</a></td>
+      <td>Configures how many of the copies (as configured with &#42;redundancy&#42;) to be indexed (&#42;ready&#42;) at any time. Configuring &#42;searchable-copies&#42; to be less than &#42;redundancy&#42; saves resources (memory, disk, cpu), as not all copies are indexed (&#42;ready&#42;). In case of node failure, the remaining nodes needs to index the &#42;not ready&#42; documents which belonged to the failed node. In this transition period, the search has reduced search coverage.</td>
+    </tr>
+  </tbody>
+</table>
 
 ### Content node database
 
@@ -133,11 +147,28 @@ Merge all threads results and return up to the container.
 
 Vespa is a parallel computing platform where the work of matching and ranking is parallelized across a set of nodes and processors. The speedup one can get by altering the number of nodes in a Vespa content group follows [Amdahl's law](https://en.wikipedia.org/wiki/Amdahl%27s_law), which is a formula used to find the maximum improvement possible by improving a particular part of a system. In parallel computing, *Amdahl's law* is mainly used to predict the theoretical maximum speedup for program processing using multiple processors. In Vespa, as in any parallel computing system, there is work which can be parallelized and work which cannot. The relationship between these two work types determine how to best scale the system, using a flat or grouped distribution.
 
-|||
-| :--- | :--- |
-| **static query work** | Portion of the query work on a content node that does not depend on the number of documents indexed on the node. This is an administrative overhead caused by system design and abstractions, e.g. number of memory allocations per query term. Typically, a large query tree means higher static work, and this work cannot be parallelized over multiple processors, threads or nodes. The static query work portion is described in step 1 to 4 and step 9 in the detailed life of a query explanation above. |
-| **dynamic query work** | Portion of the query work on a content node that depends on the number of documents indexed and active on the node. This portion of the work scales mostly linearly with the number of matched documents. The dynamic query work can be parallelized over multiple processors and nodes. Referenced later as *DQW*. The *DQW* also depends on the phase two protocol summary fill where the actual contents of the global best documents is fetched from the content nodes which produced the hit in the first protocol phase. |
-| **Total query work** | The total query work is given as the dynamic query work (*DQW*) + static query work (*SQW*). |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;static query work&#42;&#42;</td>
+      <td>Portion of the query work on a content node that does not depend on the number of documents indexed on the node. This is an administrative overhead caused by system design and abstractions, e.g. number of memory allocations per query term. Typically, a large query tree means higher static work, and this work cannot be parallelized over multiple processors, threads or nodes. The static query work portion is described in step 1 to 4 and step 9 in the detailed life of a query explanation above.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;dynamic query work&#42;&#42;</td>
+      <td>Portion of the query work on a content node that depends on the number of documents indexed and active on the node. This portion of the work scales mostly linearly with the number of matched documents. The dynamic query work can be parallelized over multiple processors and nodes. Referenced later as &#42;DQW&#42;. The &#42;DQW&#42; also depends on the phase two protocol summary fill where the actual contents of the global best documents is fetched from the content nodes which produced the hit in the first protocol phase.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Total query work&#42;&#42;</td>
+      <td>The total query work is given as the dynamic query work (&#42;DQW&#42;) + static query work (&#42;SQW&#42;).</td>
+    </tr>
+  </tbody>
+</table>
 
 Adding content nodes to a content cluster (keeping the total document volume fixed) with flat distribution reduces the dynamic query work per node (*DQW*), but does not reduce the static query work (*SQW*). The overall system cost also increases as you need to rent another node.
 
@@ -169,10 +200,24 @@ In the second figure there is a system where the dynamic work portion is much hi
 
 Given the theory, one can derive two rules of thumb for scaling throughput and latency:
 
-|||
-| :--- | :--- |
-| **Add nodes in a flat distribution** | When DQW/TQW is large (close to 1.0), throughput QPS can be scaled by just adding more content nodes in a system using flat distribution. This will reduce the number of documents per node, and thus reduce the *DQW* per node. |
-| **Add groups using grouped distribution** | When DQW/TQW is low, one can no longer just add more content nodes to scale throughput and must instead use a grouped distribution to scale throughput. |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Add nodes in a flat distribution&#42;&#42;</td>
+      <td>When DQW/TQW is large (close to 1.0), throughput QPS can be scaled by just adding more content nodes in a system using flat distribution. This will reduce the number of documents per node, and thus reduce the &#42;DQW&#42; per node.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Add groups using grouped distribution&#42;&#42;</td>
+      <td>When DQW/TQW is low, one can no longer just add more content nodes to scale throughput and must instead use a grouped distribution to scale throughput.</td>
+    </tr>
+  </tbody>
+</table>
 
 ## Scaling latency in a content group
 

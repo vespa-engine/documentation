@@ -1,0 +1,385 @@
+---
+title: "コンテントノードと状態"
+---
+
+<Frame>
+![](/assets/img/elastic-feed.svg)
+</Frame>
+
+コンテント・クラスターのプロセスは、*distributor*、*proton*、*cluster controller* です。
+
+distributor は、分散アルゴリズムと[クラスター状態](#cluster-state)を使用して正しいコンテントノードを算出します。既知のクラスター状態がない場合、クライアントライブラリーはランダムなノードにリクエストを送信し、そのノードが正しくなかった場合は、更新されたクラスター状態を含む応答が返されます。クラスター状態はバージョン管理されており、古い distributor にアクセスしたクライアントが、更新された状態を古い状態で上書きすることはありません。
+
+[distributor](#distributor) は、[redundancy](/ja/reference/applications/services/content#redundancy) と *cluster controller* からの情報に基づいて、各バケットのレプリカをどのコンテントノードが保存しているか(それぞれ最大 1 レプリカ)を追跡します。1 つのバケットは 1 つの distributor のみにマッピングされます。distributor は、バケットのメタデータを持つバケットデータベースを保持します。メタデータには、バケットのレプリカを保存しているコンテントノード、バケット内容のチェックサム、およびバケット内のドキュメント数とメタエントリー数が含まれます。各ドキュメントはアルゴリズムによってバケットにマッピングされ、正しいコンテントノードに転送されます。distributor は、コンテントノード上に十分なバケットレプリカがあるかどうかを検出し、必要に応じて追加/削除します。書き込み操作はすべてのレプリカからの応答を待ち、タイムアウト内に redundancy 未満の数しか永続化されなかった場合は失敗します。
+
+[cluster controller](#cluster-controller) は、distributor とコンテントノードの状態を管理します。この*クラスター状態*は、ドキュメント処理チェーンがどの distributor にドキュメントを送るべきかを知るために使用されるほか、distributor がどのコンテントノードがどのバケットを持つべきかを知るためにも使用されます。
+
+## クラスター状態
+
+状態には 3 つの種類があります: [unit state](/ja/reference/api/cluster-v2#state-unit)、[user state](/ja/reference/api/cluster-v2#state-user)、[generated state](/ja/reference/api/cluster-v2#state-generated)(いわゆる*クラスター状態*)です。
+
+新しいクラスター状態が生成されるたびに、クラスター状態のバージョンがインクリメントされ、新しいクラスター状態がすべてのノードにブロードキャストされます。クラスター状態の変更と変更の間には最小時間が設けられています。
+
+クラスター状態が `up` であるための最小キャパシティを設定することができます。
+  
+利用不可のノードが多すぎてクラスターがダウンと見なされる場合、各ノードの状態は無関係となるため、クラスターが復旧するのに十分な数のノードが戻るまで、新しいクラスター状態は作成もブロードキャストもされません。したがって、クラスター全体がダウンしていることを示すクラスター状態は、ノードレベルでは古いデータを持っている可能性があります。
+
+## Cluster controller
+
+cluster controller の主なタスクは、[クラスター状態](#cluster-state)を維持することです。これは、ノードの状態を*ポーリング*し、クラスター状態を*生成*し、それをクラスター内のすべてのコンテントノードに*ブロードキャスト*することで行われます。クライアントは cluster controller とやり取りしないことに注意してください - クライアントはクラスター状態を distributor から取得します - [詳細](#distributor)。
+
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>タスク</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ノード状態のポーリング</td>
+      <td>cluster controller は、現在のクラスター状態を送信しながらノードをポーリングします。クラスター状態がすでに正しくない場合、ノードはただちに正しい情報を返します。状態が正しい場合、リクエストはノード上に保留され、ノードの状態が変化したときにただちに応答できるようにします。しばらくすると、cluster controller は保留中のリクエストがあっても新しい状態リクエストをノードに送信します。これにより、保留されていたリクエストへの応答がトリガーされ、代わりに新しいリクエストが保留されます。このように、ノードは常に保留中の状態リクエストを持ちます。<br/>制御されたノードシャットダウンの際は、保留中の状態リクエストに対して停止中であることを応答することでシャットダウンプロセスを開始します。<br/> <Note>&#42;&#42;注:&#42;&#42; 制御された再起動やシャットダウンは config-sentinel からの TERM シグナルとして実装されているため、cluster controller は制御されたシャットダウンとそれ以外のシャットダウンを区別できません。</Note></td>
+    </tr>
+    <tr>
+      <td>クラスター状態の生成</td>
+      <td>cluster controller は、unit state と user state を generated クラスター状態に変換します</td>
+    </tr>
+    <tr>
+      <td>クラスター状態のブロードキャスト</td>
+      <td>ノードの unit state を受信すると、cluster controller 内部のクラスター状態が更新されます。新しいクラスター状態は、最小間隔を空けて配布されます。unit state ごとの猶予期間もあります - たとえば、同じノード上にある distributor とコンテントノードは、多くの場合同時に停止します。<br/> バージョン番号がインクリメントされ、新しいクラスター状態がブロードキャストされます。<br/> クラスター状態のバージョンがリセットされた場合、システムが新しい状態に収束するためには、distributor とコンテントノードのプロセスの再起動が必要になることがあります。ノードは、cluster controller のリーダーシップ期間の重複によって引き起こされるレースコンディションを防ぐため、より低いクラスター状態バージョンを拒否します。</td>
+    </tr>
+  </tbody>
+</table>
+
+[cluster controller の設定](/ja/operations/self-managed/admin-procedures#cluster-controller-configuration)を参照してください。
+
+### マスター選出
+
+Vespa は 1 つの cluster controller で構成することもできます。cluster controller がダウンした場合でも読み取りと書き込みは問題なく動作しますが、クラスターに対するその他の変更(コンテントノードのダウンなど)は処理されません。そのため、複数の cluster controller を構成することが推奨されます。
+
+cluster controller ノードはマスターを選出し、マスターがノードのポーリングとクラスター状態のブロードキャストを行います。他の cluster controller ノードは、マスター選出を行うため、およびマスターが停止した場合に引き継ぐ可能性があるためだけに存在します。
+
+すべての cluster controller は、準備ができていると申告している中で最も低いインデックスを持つ cluster controller に投票します。ある cluster controller が過半数の票を得た場合、その cluster controller がマスターに選出されます。過半数の票が必要となるため、cluster controller の数は 3 以上の奇数にすべきです。新しいマスターは、遷移時間が経過するまで状態をブロードキャストしません。これにより、古いマスターが自分はもはやマスターではないと気付くための時間が確保されます。
+
+## Distributor
+
+バケットは、[理想状態アルゴリズム](/ja/content/idealstate)を使用して distributor にマッピングされます。クラスター状態が変化すると、バケットはただちに再マッピングされます。このマッピングは重複しません - 1 つのバケットは 1 つの distributor によって所有されます。
+
+distributor はバケットデータベースを永続化しません。バケットからコンテントノードへのマッピングは、distributor のメモリー内に保持されます。バケットごとのドキュメント数、永続化サイズ、メタデータのチェックサムも保存されます。distributor の(再)起動時には、コンテントノードにバケット情報をポーリングし、コンテントノードは(理想状態アルゴリズムを使用して)この distributor が所有するバケットを返します。中央集権的なバケットディレクトリーノードは存在しません。同様に、distributor のクラスター状態が変化するたびに、バケットの引き継ぎのためにコンテントノードがポーリングされます - その後、distributor は新しいバケットのセットを扱うことになります。
+
+ドキュメント操作は、バケットの位置に基づいてコンテントノードにマッピングされます - 各 put/update/get/remove は[バケット](/ja/content/buckets)にマッピングされ、正しいコンテントノードに送信されます。ドキュメントセットの増大やノードの変化に対応するため、バケットはコンテントノード間を移動します。
+
+Document API クライアント(つまり [document-api](/ja/reference/applications/services/container#document-api) を持つコンテナーノード)は、cluster controller と直接通信せず、起動時にはクラスター状態を知りません。そのため、クライアントはまずランダムな distributor にリクエストを送信することから始めます。ドキュメント操作が間違った distributor に到達した場合、`WRONG_DISTRIBUTION` が返され、応答には現在のクラスター状態が含まれます。したがって、`WRONG_DISTRIBUTION` はコールドスタートや状態変化のイベント時には想定される正常な動作です。
+
+### タイムスタンプ
+
+[書き込み操作](/ja/writing/reads-and-writes)には、distributor を通過する際に*最終更新時刻*のタイムスタンプが割り当てられます。このタイムスタンプは、それが保存されている[バケット](/ja/content/buckets)内で一意であることが保証されています。タイムスタンプは、どの操作が最新かを判断するためにコンテントレイヤーで使用されます。これらのタイムスタンプは、[visiting](/ja/writing/visiting) の際に、指定した時間範囲内のドキュメントを処理/取得するために使用できます。タイムスタンプの一意性を保証するため、タイムスタンプはマイクロ秒単位です - マイクロ秒の部分は、他のドキュメントとの競合を避けるために生成されます。
+
+ドキュメントがクラスター*間*で移行される場合、移行先クラスターのエントリーには新しいタイムスタンプが付与されます。また、クラスター*内*で[ドキュメントを再処理する](/ja/applications/document-processors)場合も、変更されていなくてもドキュメントには新しいタイムスタンプが付与されます。
+
+### 順序性
+
+Document API は、[ドキュメント ID](/ja/schemas/documents#document-ids) を使用して操作の順序を決めます。Document API クライアントは、同時に保留される操作が 1 つだけであることを保証します。これにより、クライアントが同じドキュメントに対して複数の操作を送信した場合、それらは定められた順序で処理されることが保証されます。これは、保留中の操作をクライアント側で*ローカルに*キューイングすることによって実現されます。
+
+<Note>
+**注:**
+
+同じドキュメントに対して 2 つの書き込み操作を送信し、最初の操作が失敗した場合でも、キューに入れられた操作は送信されます。言い換えれば、クライアントは、同じドキュメントに対する別々の操作の間に何らかの依存関係が存在するとは想定しません。これを強制する必要がある場合は、書き込みに [test-and-set 条件](/ja/writing/document-v1-api-guide#conditional-writes)を使用してください。
+</Note>
+
+*異なる*クライアントが同じドキュメントに対して保留中の操作を持っている場合、順序は不定です。
+
+### メンテナンス操作
+
+distributor は、どのコンテントノードがどのバケットを持っているかをバケットデータベースで追跡します。distributor は次に、[理想状態アルゴリズム](/ja/content/idealstate)を使用して、バケットの*メンテナンス操作*を生成します。安定したシステムでは、すべてのバケットが理想状態のとおりに配置されています:
+
+- バケットのレプリカが少なすぎる場合、他のコンテントノード上に新しいレプリカが生成されます。
+- レプリカに差異がある場合、レプリカを一致させるためにバケットのマージが実行されます。
+- バケットのレプリカが多すぎる場合、余分なものは削除されます。不整合がある場合は、削除の前にバケットがマージされます。
+- 両方に同じドキュメントが含まれている可能性のある 2 つのバケットが存在する場合、そのような重複バケットを取り除くためにバケットが分割または結合されます。詳細は[不整合のあるバケット](/ja/content/buckets)を参照してください。
+- バケットが小さすぎる/大きすぎる場合、結合または分割されます。
+
+メンテナンス操作には異なる優先度があります。メンテナンス操作が不要な場合、クラスターは*理想状態*にあると言われます。distributor はメンテナンスの負荷をユーザーの負荷と同期させます。たとえば、バケットの分割や結合の後、リクエストを他のバケットに再マッピングします。
+
+### 再起動
+
+distributor が停止するとき、まず保留中のクラスター状態リクエストに応答しようとします。シャットダウン開始後の新しい受信リクエストは、ソケットがリクエストを受け付けなくなるため、ただちに失敗します。そのため、cluster controller はプロセスの停止をほぼ即座に検出します。
+
+クラスター状態は、cluster controller 内部で新しい状態に更新されます。その後、cluster controller は、短期的な状態の変動を減らすため、新しいクラスター状態を公開する前に最大 [min_time_between_new_systemstates](https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def) の時間待機します。
+
+cluster controller は、他の distributor にバケットの所有権を引き継がせるように状態を設定することも、変化をマスクして、再起動中の distributor が所有するバケットを当面利用不可にしておくこともできます。
+
+distributor が `up` から `down` に遷移した場合、他の distributor は、再起動中の distributor が以前所有していたバケットの所有権を引き継ぐために、コンテントノードからメタデータをリクエストします。distributor がすべてのコンテントノードからこの新しいメタデータを収集し終えるまで、これらのバケットへのリクエストは処理できず、クライアントに失敗として返されます。再起動中のノードが復帰してクラスター状態で再び `up` とマークされると、追加のノードは以前に取得した余分なバケットに関する知識を破棄します。
+
+タイムアウトが数秒あるリクエストの場合、クライアントの自動再送により、この遷移は見えないはずです。タイムアウトがそれより短いリクエストは失敗する可能性があり、再送するか失敗したリクエストを処理するかはアプリケーション次第です。
+
+再起動中の distributor が所有していないバケットへのリクエストは影響を受けません。
+
+## コンテントノード
+
+コンテントノードは、クエリーバックエンドである *proton* を実行します。
+
+### 再起動
+
+コンテントノードが制御された再起動を行うとき、自身を `stopping` 状態にマークし、新しいリクエストを拒否します。シャットダウンの前に、保留中のリクエストキューを処理します。したがって、クライアントリクエストは通常、コンテントノードの再起動の影響を受けません。現在保留中のリクエストは通常完了します。新しいリクエストを適切な冗長性で保存するため、バケットの新しいコピーが他のノード上に作成されます。これは、ノードが `down` 状態を経由するか `maintenance` 状態を経由するかにかかわらず発生します。違いは、`maintenance` を経由する場合、distributor は新しいコピーを既存のコピーと同期させる作業を開始しないことです。メンテナンス中のノードが復帰するまで、新しいリクエストを保存するだけです。
+
+起動時、コンテントノードはまず、どのバケットのデータを保存しているかの情報収集から始めます。この処理が行われている間、サービスレイヤーは `down` であることを公開します。
+
+## メトリクス
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>メトリクス</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>.idealstate.idealstate_diff</td>
+      <td>このメトリクスは、理想状態までの距離を示す単一の値の生成を試みます。値がゼロの場合、クラスターが理想状態にあることを示します。このメトリクスをグラフ化した値は、変更後にクラスターがどれだけ速く理想状態に戻るかのよい指標になります。ある問題が他の問題を隠している場合があるため、1 つの問題を解決したことで別の 1 つまたは複数の問題が検出され、グラフが停滞したり、少し上昇したりするように見えることもあることに注意してください。</td>
+    </tr>
+    <tr>
+      <td>.idealstate.buckets_toofewcopies</td>
+      <td>コピーが少なすぎるバケットの数を具体的に示します。&#42;buckets&#42; メトリクスと比較して、これがクラスターのどの程度の割合を占めるかを確認してください。</td>
+    </tr>
+    <tr>
+      <td>.idealstate.buckets_toomanycopies</td>
+      <td>コピーが多すぎるバケットの数を具体的に示します。&#42;buckets&#42; メトリクスと比較して、これがクラスターのどの程度の割合を占めるかを確認してください。</td>
+    </tr>
+    <tr>
+      <td>.idealstate.buckets</td>
+      <td>管理されているバケットの総数。バケット数を報告する他のメトリクスが、クラスターのどの程度の割合に関係しているかを知るために使用されます。</td>
+    </tr>
+    <tr>
+      <td>.idealstate.buckets_notrusted</td>
+      <td>trusted なコピーが 1 つもないバケットの数を示します。trusted なバケットがないと、一貫した応答を作成するために多くのコピーにリクエストを送信しなければならず、そのバケットに対する操作のパフォーマンスが低下する可能性があります。</td>
+    </tr>
+    <tr>
+      <td>.idealstate.delete_bucket.pending</td>
+      <td>削除が必要なバケットの数を示します。</td>
+    </tr>
+    <tr>
+      <td>.idealstate.merge_bucket.pending</td>
+      <td>すべてのコピーが同一のドキュメントセットを保存していないと疑われるバケットの数を示します。</td>
+    </tr>
+    <tr>
+      <td>.idealstate.split_bucket.pending</td>
+      <td>現在分割中のバケットの数を示します。</td>
+    </tr>
+    <tr>
+      <td>.idealstate.join_bucket.pending</td>
+      <td>現在結合中のバケットの数を示します。</td>
+    </tr>
+    <tr>
+      <td>.idealstate.set_bucket_state.pending</td>
+      <td>アクティブ状態への変更が現在行われているバケットの数を示します。これらは高優先度のリクエストであり、すぐに完了するはずなので、保留中として観測されることはめったにないはずです。</td>
+    </tr>
+  </tbody>
+</table>
+
+[クイックスタート](/ja/basics/deploy-an-application-local)を使用した例 - distributor のポートを見つけます(HTTP を探してください):
+
+```txt
+$ docker exec vespa vespa-model-inspect service distributor
+
+distributor @ vespa-container : content
+music/distributor/0
+    tcp/vespa-container:19112 (MESSAGING)
+    tcp/vespa-container:19113 (STATUS RPC)
+    tcp/vespa-container:19114 (STATE STATUS HTTP)
+```
+
+メトリクスの値を取得します:
+
+```txt
+$ docker exec vespa curl -s http://localhost:19114/state/v1/metrics | jq . | \
+  grep -A 10 idealstate.merge_bucket.pending
+
+        "name": "vds.idealstate.merge_bucket.pending",
+        "description": "The number of operations pending",
+        "values": {
+          "average": 0,
+          "sum": 0,
+          "count": 1,
+          "rate": 0.016666,
+          "min": 0,
+          "max": 0,
+          "last": 0
+        },
+```
+
+## /cluster/v2 API の例
+
+[/cluster/v2 API](/ja/reference/api/cluster-v2) を使用した状態操作の例です。
+
+コンテント・クラスターの一覧を取得します:
+
+```txt
+$ curl http://localhost:19050/cluster/v2/
+```
+
+```json
+{
+    "cluster": {
+        "music": {
+            "link": "/cluster/v2/music"
+        },
+        "books": {
+            "link": "/cluster/v2/books"
+        }
+    }
+}
+```
+
+クラスター状態を取得し、クラスター内のサービスタイプの一覧を取得します:
+
+```txt
+$ curl http://localhost:19050/cluster/v2/music
+```
+
+```json
+{
+    "state": {
+        "generated": {
+            "state": "state-generated",
+            "reason": "description"
+        }
+    },
+    "service": {
+        "distributor": {
+            "link": "/cluster/v2/music/distributor"
+        },
+        "storage": {
+            "link": "/cluster/v2/music/storage"
+        }
+    }
+}
+```
+
+クラスターのサービスタイプごとのノードの一覧を取得します:
+
+```txt
+$ curl http://localhost:19050/cluster/v2/music/storage
+```
+
+```json
+{
+    "node": {
+        "0": {
+            "link": "/cluster/v2/music/storage/0"
+        },
+        "1": {
+            "link": "/cluster/v2/music/storage/1"
+        }
+    }
+}
+```
+
+ノードの状態を取得します:
+
+```txt
+$ curl http://localhost:19050/cluster/v2/music/storage/0
+```
+
+```json
+{
+    "attributes": {
+        "hierarchical-group": "group0"
+    },
+    "state": {
+        "generated": {
+            "state": "up",
+            "reason": ""
+        },
+        "unit": {
+            "state": "up",
+            "reason": ""
+        },
+        "user": {
+            "state": "up",
+            "reason": ""
+        }
+    },
+    "metrics": {
+        "bucket-count": 0,
+        "unique-document-count": 0,
+        "unique-document-total-size": 0
+    }
+}
+```
+
+トポロジー情報を含む、すべてのノードを取得します(`hierarchical-group` を参照):
+
+```txt
+$ curl http://localhost:19050/cluster/v2/music/?recursive=true
+```
+
+```json expandable
+{
+    "state": {
+        "generated": {
+            "state": "up",
+            "reason": ""
+        }
+    },
+    "service": {
+        "storage": {
+            "node": {
+                "0": {
+                    "attributes": {
+                        "hierarchical-group": "group0"
+                    },
+                    "state": {
+                        "generated": {
+                            "state": "up",
+                            "reason": ""
+                        },
+                        "unit": {
+                            "state": "up",
+                            "reason": ""
+                        },
+                        "user": {
+                            "state": "up",
+                            "reason": ""
+                        }
+                    },
+                    "metrics": {
+                        "bucket-count": 0,
+                        "unique-document-count": 0,
+                        "unique-document-total-size": 0
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+ノードの user state を設定します:
+
+```txt
+curl -X PUT -H "Content-Type: application/json" --data '
+  {
+      "state": {
+          "user": {
+              "state": "retired",
+              "reason": "This node will be removed soon"
+          }
+      }
+  }' \
+  http://localhost:19050/cluster/v2/music/storage/0
+```
+
+```json
+{
+    "wasModified": true,
+    "reason": "ok"
+}
+```
+
+## さらに読む
+
+- 設定および状態の監視/管理については、[管理手順](/ja/operations/self-managed/admin-procedures)を参照してください。
+- インターフェイスと動作に慣れるには、[Multinode testing and observability](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) サンプルアプリを試してください。

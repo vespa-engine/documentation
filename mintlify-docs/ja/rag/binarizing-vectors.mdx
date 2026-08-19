@@ -1,0 +1,645 @@
+---
+title: "ベクトルのバイナリ化"
+---
+
+この文脈におけるバイナリ化とは、ベクトル(埋め込み)内の数値をビットにマッピングし(値の範囲を縮小し)、そのビットのベクトルを `int8` データ型を使って効率的に表現することです。例:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>入力ベクトル</th>
+      <th>バイナリ化された float</th>
+      <th>pack_bits(INT8 へ)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]</td>
+      <td>[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]</td>
+      <td>-1</td>
+    </tr>
+    <tr>
+      <td>[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</td>
+      <td>[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]</td>
+      <td>[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</td>
+      <td>[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</td>
+      <td>-128</td>
+    </tr>
+    <tr>
+      <td>[2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]</td>
+      <td>[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]</td>
+      <td>-127</td>
+    </tr>
+  </tbody>
+</table>
+
+バイナリ化はメモリ要件、ひいてはコストを削減するための鍵となります。メモリ帯域幅の要件もそれに応じて低下するため、バイナリ化はフィード性能の向上にもつながります。
+
+テキストから埋め込みを作成する方法の詳細については、[埋め込み](/ja/rag/embedding)を参照してください。
+
+## 概要
+
+このガイドは、Vespa のみを使用してバイナリ化プロジェクトを成功させるために必要なすべての手順を示します。データの再フィードは不要です。これにより、必要となる追加リソースと工数を抑えてプロジェクトを実現できます。
+
+近似最近傍ベクトル演算は、Vespa の HNSW インデックスとオンラインデータ構造を使用して実行されます。この手順の実行中もクラスターは稼働を続け、必要なデータ構造を段階的に構築します。
+
+このガイドは、ベクトルのバイナリ化を成功させるための手順とトレードオフを整理するのに役立ちます。メモリ内のベクトルサイズを削減する方法に関するその他の関連記事:
+
+- [Exploring the potential of OpenAI Matryoshka 🪆 embeddings with Vespa](https://blog.vespa.ai/matryoshka-embeddings-in-vespa/)
+- [Matryoshka 🤝 Binary vectors: Slash vector search costs with Vespa](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/)
+
+これに加えて、SPANN のようなアルゴリズムを使用することで、巨大なベクトルデータサイズの問題を解決できます。詳細は [Billion-scale vector search using hybrid HNSW-IF](https://blog.vespa.ai/vespa-hybrid-billion-scale-vector-search/) を参照してください。
+
+バイナリ化プロジェクトでは通常、さまざまな設定を反復し、反復のたびに品質の低下を測定します。この手順はそれを念頭に置いて構成されています。
+
+## コンバーター
+
+Vespa の組み込みインデキシング言語の[コンバーター](/ja/reference/writing/indexing-language#converters)である `binarize` と `pack_bits` を使用すると、バイナリ化されたベクトルを簡単に生成できます。上記の表のベクトルを生成するために使用したスキーマ定義の例:
+
+```bash
+schema doc {
+
+    document doc {
+        field doc_embedding type tensor<float>(x[8]) {
+            indexing: summary | attribute
+        }
+    }
+
+    field doc_embedding_binarized_floats type tensor<float>(x[8]) {
+        indexing: input doc_embedding | binarize | attribute
+    }
+
+    field doc_embedding_binarized type tensor<int8>(x[1]) {
+        indexing: input doc_embedding | binarize | pack_bits | attribute
+    }
+}
+```
+
+`binarize` 関数自体はベクトルをより小さいサイズに圧縮しないことがわかります。出力のセル型は入力と同じであり、値が 0 または 1 にマッピングされるだけです。上記では、ベクトルは Vespa のデフォルトである閾値 0 を使用してバイナリ化されており、0 より大きい任意の数値は 1 にマッピングされます。この閾値は設定可能です。
+
+`pack_bits` はバイナリ化されたベクトルを読み取り、int8 を使って表現します。上記の例では:
+
+- `tensor<float>(x[8])` は 8 x sizeof(float) = 8 x 32 ビット = 256 ビット = 32 バイト
+- `tensor<int8>(x[1])` は 1 x sizeof(int8) = 1 x 8 ビット = 8 ビット = 1 バイト
+
+つまり圧縮率は 32 であり、32 ビットの float を 1 ビットにマッピングすることから予想されるとおりです。
+
+メモリ使用量はアプリケーションのコスト要因となることが多いため、これには大きな可能性があります。ただし精度の低下があるため、トレードオフを評価する必要があります。詳細は [billion-scale-knn](https://blog.vespa.ai/billion-scale-knn/) と [combining-matryoshka-with-binary-quantization-using-embedder](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/) を参照してください。
+
+## 既存の埋め込みフィールドのバイナリ化
+
+上記の例では、`doc_embedding` が元の埋め込みデータを保持し、フィールド `doc_embedding_binarized_floats` と `doc_embedding_binarized` は `doc_embedding` から生成されています。これは `indexing: input …` 文によって設定され、生成されるフィールドを `document { … }` ブロックの外側に定義します。
+
+<Info>
+ **注:** `doc_embedding_binarized_floats` フィールドは説明のためのものにすぎず、メモリ要件の低いバイナリ化・パック済みのターゲットフィールドである `doc_embedding_binarized` フィールドへの入力です。以降、これをバイナリ化埋め込みと呼びます。
+</Info>
+
+これは多くのアプリケーションに共通するケースです。すなわち、安全にバイナリ化を行い、その後の利用に向けてバイナリ化されたデータを評価する方法です。このプロセスは次のように分解できます:
+
+- 前提条件。
+- 新しいバイナリ化埋め込みを定義します。通常は元のフィールドへの追加として定義します。
+- デプロイしてデータを再インデックスし、バイナリ化埋め込みを生成します。
+- バイナリ化埋め込みを使用する新しいランキングプロファイルを作成します。
+- バイナリ化埋め込みの品質を評価します。
+- コスト削減のため、元の埋め込みフィールドをメモリから削除します。
+
+## 前提条件
+
+新しいフィールドの追加には、ディスクとメモリのリソースが必要です。新しいバイナリ化埋め込みフィールドはより小さく、上記の例では元のフィールドの 1/32 です。また、埋め込みフィールドには次のようにインデックスが設定されていることが多い点にも注意してください:
+
+```bash
+field doc_embeddings type tensor<float>(x[8]) {
+    indexing: summary | attribute | index
+    attribute {
+        distance-metric: angular
+    }
+    index {
+        hnsw {
+            max-links-per-node: 16
+            neighbors-to-explore-at-insert: 100
+        }
+    }
+}
+```
+
+このインデックスは近似最近傍(ANN)検索に使用され、メモリも消費します。
+
+Vespa Cloud コンソールを使用して元のフィールドのサイズとインデックスのサイズを評価し、新しい埋め込みフィールド(場合によってはインデックス付き)のための余裕があることを確認してください。
+
+<Info>
+**注:** インデックスのサイズはテンソル型に関係なくドキュメント数の関数です。この文脈では、インデックス付きの新しいフィールドを追加した場合、新しいインデックスは既存の埋め込みフィールドのインデックスと同じサイズになるということを意味します。
+</Info>
+
+メモリ内のインデックスサイズを確認するにはステータスページを使用します。例:
+
+https://api-ctl.vespa-cloud.com/application/v4/tenant/  
+TENANT\_NAME/application/APP\_NAME/instance/INSTANCE\_NAME/environment/prod/region/REGION/  
+service/searchnode/NODE\_HOSTNAME/  
+state/v1/custom/component/documentdb/SCHEMA/subdb/ready/attribute/ATTRIBUTE\_NAME
+
+### 例
+
+```json
+tensor: {
+    compact_generation: 33946879,
+    ref_vector: {
+        memory_usage: {
+            used: 1402202052,
+            dead: 0,
+            allocated: 1600126976,
+            onHold: 0
+        }
+    },
+    tensor_store: {
+        memory_usage: {
+            used: 205348904436,
+            dead: 10248636768,
+            allocated:206719921232,
+            onHold: 0
+        }
+    },
+    nearest_neighbor_index: {
+        memory_usage: {
+            all: {
+                used: 10452397992,
+                dead: 360247164,
+                allocated:13346516304,
+                onHold: 0
+            }
+```
+
+この例では、インデックスは 13G、テンソルデータは 206G であり、インデックスはテンソルデータの 6.3% です。元のテンソルは `bfloat16` 型で、バイナリ化されたバージョンはその 1/16、すなわち 13G です。追加のインデックスも 13G であるため、この手順中の一時的な追加メモリ使用量は約 26G となります。
+
+## バイナリ化埋め込みフィールドの定義
+
+新しいフィールドはスキーマに_追加_されます。変更前のスキーマ例:
+
+```bash
+schema doc {
+
+    document doc {
+        field doc_embedding type tensor<float>(x[8]) {
+            indexing: summary | attribute
+        }
+    }
+}
+```
+
+変更後:
+
+```bash
+schema doc {
+
+    document doc {
+        field doc_embedding type tensor<float>(x[8]) {
+            indexing: summary | attribute
+        }
+    }
+
+    field doc_embedding_binarized type tensor<int8>(x[1]) {
+        indexing: input doc_embedding | binarize | pack_bits | attribute
+    }
+}
+```
+
+上記はフィールドに ANN 設定のない単純な例です。以下はより複雑な例です。変更前のスキーマ:
+
+```bash
+schema doc {
+
+    document doc {
+        field doc_embedding type tensor<float>(x[8]) {
+            indexing: summary | attribute | index
+            attribute {
+                distance-metric: angular
+            }
+            index {
+                hnsw {
+                    max-links-per-node: 16
+                    neighbors-to-explore-at-insert: 200
+                }
+            }
+        }
+    }
+}
+```
+
+変更後のスキーマ:
+
+```bash
+schema doc {
+
+    document doc {
+        field doc_embedding type tensor<float>(x[8]) {
+            indexing: summary | attribute | index
+            attribute {
+                distance-metric: angular
+            }
+            index {
+                hnsw {
+                    max-links-per-node: 16
+                    neighbors-to-explore-at-insert: 200
+                }
+            }
+        }
+    }
+
+    field doc_embedding_binarized type tensor<int8>(x[1]) {
+        indexing: input doc_embedding | binarize | pack_bits | attribute | index
+        attribute {
+            distance-metric: hamming
+        }
+        index {
+            hnsw {
+                max-links-per-node: 16
+                neighbors-to-explore-at-insert: 200
+            }
+        }
+    }
+}
+```
+
+インデックス設定を新しいフィールドに複製している点に注意してください。
+
+## バイナリ化埋め込みフィールドのデプロイと再インデックス
+
+このフィールドをデプロイすると、Vespa Cloud ではバイナリ化埋め込みを生成するための再インデックスが完全に自動でトリガーされます。
+
+セルフホストの場合、`deploy` 操作は以下を出力します。[再インデックスをトリガー](/ja/operations/reindexing)してください。
+
+```sh
+$ vespa deploy
+
+Uploading application package... done
+
+Success: Deployed '.' with session ID 3
+WARNING Change(s) between active and new application that may require re-index:
+reindexing: Consider re-indexing document type 'doc' in cluster 'doc' because:
+    1) Document type 'doc': Non-document field 'doc_embedding_binarized' added; this may be populated by reindexing
+```
+
+コーパスのサイズと設定されたリソースに応じて、再インデックスの処理には時間がかかります。
+
+## バイナリ化埋め込みを使用する新しいランキングプロファイルとクエリーの作成
+
+再インデックス後は、新しいバイナリ化埋め込みフィールドを使ってクエリーを実行できます。doc\_embedding フィールドを使用するクエリーを想定します:
+
+```sh
+$ vespa query \
+    'yql=select * from doc where {totalTargetHits:5}nearestNeighbor(doc_embedding, q)' \
+    'input.query(q)=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]' \
+    'ranking=app_ranking'
+```
+
+同じクエリーを、バイナリ化されたクエリーベクトルでバイナリ化フィールドに対して実行:
+
+```sh
+$ vespa query \
+    'yql=select * from doc where {totalTargetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
+    'input.query(q_bin)=[-119]' \
+    'ranking=app_ranking_bin'
+```
+
+int8 型のテンソルの作成方法の詳細については、[tensor-hex-dump](/ja/reference/schemas/document-json-format#tensor-hex-dump) を参照してください。
+
+### ハミング距離の簡単な紹介
+
+埋め込みの例:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>ドキュメント埋め込み</th>
+      <th>バイナリ化された float</th>
+      <th>pack_bits(INT8 へ)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]</td>
+      <td>[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;クエリー埋め込み&#42;&#42;</td>
+      <td>&#42;&#42;バイナリ化された float&#42;&#42;</td>
+      <td>&#42;&#42;INT8 へ&#42;&#42;</td>
+    </tr>
+    <tr>
+      <td>[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]</td>
+      <td>[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]</td>
+      <td>-119</td>
+    </tr>
+  </tbody>
+</table>
+
+ランキングのデバッグには [matchfeatures](/ja/reference/schemas/schemas#match-features) を使用します(下記のランキングプロファイル `app_ranking_bin` を参照):
+
+```json
+"matchfeatures": {
+    "attribute(doc_embedding_binarized)": {
+    "type": "tensor<int8>(x[1])",
+    "values": [0]
+    },
+    "distance(field,doc_embedding_binarized)": 3.0,
+    "query(q_bin)": {
+        "type": "tensor<int8>(x[1])",
+        "values": [-119]
+    }
+}
+```
+
+距離が 3.0 と計算されているのがわかります。これはバイナリ化されたベクトル間で異なるビットの数、すなわちハミング距離です。
+
+## ランクプロファイルとクエリー
+
+次のようなランクプロファイルを想定します:
+
+```bash
+rank-profile app_ranking {
+    match-features {
+        distance(field, doc_embedding)
+        query(q)
+        attribute(doc_embedding)
+    }
+    inputs {
+        query(q) tensor<float>(x[8])
+    }
+    first-phase {
+        expression: closeness(field, doc_embedding)
+    }
+}
+```
+
+クエリー:
+
+```sh
+$ vespa query \
+    'yql=select * from doc where {totalTargetHits:5}nearestNeighbor(doc_embedding, q)' \
+    'input.query(q)=[2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]' \
+    'ranking=app_ranking'
+```
+
+バイナリ化したバージョンは次のようになります:
+
+```bash
+rank-profile app_ranking_bin {
+    match-features {
+        distance(field, doc_embedding_binarized)
+        query(q_bin)
+        attribute(doc_embedding_binarized)
+    }
+    inputs {
+        query(q_bin) tensor<int8>(x[1])
+    }
+    first-phase {
+        expression: closeness(field, doc_embedding_binarized)
+    }
+}
+```
+
+クエリー:
+
+```bash
+$ vespa query \
+    'yql=select * from doc where {totalTargetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
+    'input.query(q_bin)=[-119]' \
+    'ranking=app_ranking_bin'
+```
+
+フル精度のクエリーベクトルを使ってバイナリ化ベクトルに対してクエリーする場合のランクプロファイル:
+
+```bash
+rank-profile app_ranking_bin_full {
+    match-features {
+        distance(field, doc_embedding_binarized)
+        query(q)
+        query(q_bin)
+        attribute(doc_embedding_binarized)
+    }
+    function unpack_to_float() {
+        expression: 2*unpack_bits(attribute(doc_embedding_binarized), float)-1
+    }
+    function dot_product() {
+        expression: sum(query(q) * unpack_to_float)
+    }
+    inputs {
+        query(q) tensor<float>(x[8])
+        query(q_bin) tensor<int8>(x[1])
+    }
+    first-phase {
+        expression: closeness(field, doc_embedding_binarized)
+    }
+    second-phase {
+        expression: dot_product
+    }
+}
+```
+
+注意点:
+
+- first-phase のランキングは、上記のバイナリ化クエリーと同じです。
+- second-phase のランキングは、フル精度のクエリーベクトル query(q) と、型を合わせるために float にキャストしたビット精度ベクトルを使用します。
+- クエリーには両方のクエリーベクトルを指定する必要があります。
+
+クエリーテンソルにフルの値を使用した場合の違いに注目してください。結果の relevance スコアを確認します:
+
+```sh
+$ vespa query \
+    'yql=select * from music where {totalTargetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
+    'input.query(q)=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]' \
+    'input.query(q_bin)=[-119]' \
+    'ranking=app_ranking_bin_full'
+
+...
+
+"relevance": 3.0
+```
+
+```sh
+$ vespa query \
+    'yql=select * from music where {totalTargetHits:5}nearestNeighbor(doc_embedding_binarized, q_bin)' \
+    'input.query(q)=[2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]' \
+    'input.query(q_bin)=[-119]' \
+    'ranking=app_ranking_bin_full'
+
+"relevance": 4.0
+```
+
+[closeness](/ja/reference/ranking/rank-features#closeness(dimension,name)) のリファレンスドキュメントも参照してください。
+
+### ANN の TargetHits
+
+バイナリ化によって精度が下がるため、クエリー内の `{targetHits:5}` アノテーションを増やして、後段のランキングフェーズ向けにより多くの候補を生成するとよいでしょう。
+
+## バイナリ化埋め込みの品質評価
+
+この作業は、元のフルサイズ(ここでは float を使用)のクエリー・結果ペアを基準として、より低精度の検索フェーズを評価するものです。実験対象となるクエリー・ドキュメントの精度の組み合わせ:
+
+1. float-float
+2. binarized-binarized
+3. float-binarized
+4. float-float(バイナリ化による検索を使用)
+
+精度を評価するには、各クエリーの上位 10 件について差分を次のように計算します:
+
+```python
+def compute_list_differences(list1, list2):
+    set1 = set(list1)
+    set2 = set(list2)
+    return len(set1 - set2)
+
+list1 = [1, 3, 5, 7, 9, 11, 13, 15, 17, 20]
+list2 = [2, 3, 5, 7, 9, 11, 14, 15, 18, 20]
+num_hits = compute_list_differences(list1, list2)
+print(f"Hits different: {num_hits}")
+```
+
+## 元の埋め込みフィールドをメモリから削除する
+
+バイナリ化の目的はメモリフットプリントの削減です。上記の評価結果に基づき、フル精度の埋め込みをディスクに保存するか、完全に削除します。属性をディスクのみにページングする例:
+
+```bash
+schema doc {
+
+    document doc {
+        field doc_embedding type tensor<float>(x[8]) {
+            indexing: summary | attribute | index
+            attribute: paged
+        }
+    }
+
+    field doc_embedding_binarized type tensor<int8>(x[1]) {
+        indexing: input doc_embedding | binarize | pack_bits | attribute | index
+        attribute {
+            distance-metric: hamming
+        }
+        index {
+            hnsw {
+                max-links-per-node: 16
+                neighbors-to-explore-at-insert: 200
+            }
+        }
+    }
+}
+```
+
+この例では、インデックス作成前にバイナリ化されたデータを用いて、バイナリ化埋め込みのみをインデックスします:
+
+```bash
+schema doc {
+
+    document doc {
+        field doc_embedding_binarized type tensor<int8>(x[1]) {
+            indexing: input doc_embedding | binarize | pack_bits | attribute | index
+            attribute {
+                distance-metric: hamming
+            }
+            index {
+                hnsw {
+                    max-links-per-node: 16
+                    neighbors-to-explore-at-insert: 200
+                }
+            }
+        }
+    }
+}
+```
+
+## 付録: テキスト入力からのバイナリ化
+
+テキストなどの他のデータ型から埋め込みを生成するには、[コンバーター](/ja/reference/writing/indexing-language#converters)を使用します。例:
+
+```bash
+field doc_embedding type tensor<int8>(x[1]) {
+        indexing: (input title || "") . " " . (input content || "") | embed | attribute
+        attribute {
+            distance-metric: hamming
+        }
+    }
+```
+
+例は [Matryoshka 🤝 Binary vectors: Slash vector search costs with Vespa](https://blog.vespa.ai/combining-matryoshka-with-binary-quantization-using-embedder/) にあります。
+
+## 付録: int8 への変換
+
+コードで値をバイナリ化する方法の例:
+
+```python
+import numpy as np
+
+def floats_to_bits(floats):
+    if len(floats) != 8:
+        raise ValueError("Input must be a list of 8 floats.")
+    bits = [1 if f > 0 else 0 for f in floats]
+    return bits
+
+def bits_to_int8(bits):
+    bit_string = ''.join(str(bit) for bit in bits)
+    int_value = int(bit_string, 2)
+    int8_value = np.int8(int_value)
+    return int8_value
+
+def floats_to_int8(floats):
+    bits = floats_to_bits(floats)
+    int8_value = bits_to_int8(bits)
+    return int8_value
+
+floats = [0.5, -1.2, 3.4, 0.0, -0.5, 2.3, -4.5, 1.2]
+int8_value = floats_to_int8(floats)
+print(f"The int8 value is: {int8_value}")
+```
+
+```python
+import numpy as np
+
+def binarize_tensor(tensor: torch.Tensor) -> str:
+    """
+    Binarize a floating-point 1-d tensor by thresholding at zero
+    and packing the bits into bytes. Returns the hex str representation of the bytes.
+    """
+    if not tensor.is_floating_point():
+        raise ValueError("Input tensor must be of floating-point type.")
+    return (
+        np.packbits(np.where(tensor > 0, 1, 0), axis=0).astype(np.int8).tobytes().hex()
+    )
+```
+
+マルチベクトルの例([ColPali: Efficient Document Retrieval with Vision Language Models](https://vespa-engine.github.io/pyvespa/examples/colpali-document-retrieval-vision-language-models-cloud.html) より):
+
+```python expandable
+import numpy as np
+from typing import Dict, List
+from binascii import hexlify
+
+def binarize_token_vectors_hex(vectors: List[torch.Tensor]) -> Dict[str, str]:
+    vespa_tensor = list()
+    for page_id in range(0, len(vectors)):
+        page_vector = vectors[page_id]
+        binarized_token_vectors = np.packbits(
+            np.where(page_vector > 0, 1, 0), axis=1
+        ).astype(np.int8)
+        for patch_index in range(0, len(page_vector)):
+            values = str(
+                hexlify(binarized_token_vectors[patch_index].tobytes()), "utf-8"
+            )
+            if (
+                values == "00000000000000000000000000000000"
+            ): # skip empty vectors due to padding of batch
+                continue
+            vespa_tensor_cell = {
+                "address": {"page": page_id, "patch": patch_index},
+                "values": values,
+            }
+        vespa_tensor.append(vespa_tensor_cell)
+
+    return vespa_tensor
+```

@@ -1,0 +1,681 @@
+---
+title: "YQL クエリー言語リファレンス"
+sidebarTitle: "YQL クエリー言語"
+---
+
+Vespa は、非構造化の人間による入力と、アプリケーションロジックのための構造化クエリーを別々に受け取り、それらを実行のための単一のデータ構造に結合します。人間による入力はヒューリスティックに解析され、アプリケーションのクエリーは YQL で記述されます。
+
+<Info>
+ **注:** クエリーの例については[クエリー言語ガイド](/ja/querying/query-language)を参照してください
+</Info>
+
+クエリー URL は次のようになります:
+
+```bash
+http://myhost.mydomain.com:8080/search/?yql=select%20%2A%20from%20sources%20%2A%20where%20text%20contains%20%22blues%22
+```
+
+言い換えると、`yql` には次の内容が含まれます:
+
+```bash
+select * from sources * where text contains "blues"
+```
+
+これは、_text_ という名前のフィールドに _blues_ という単語が含まれるすべてのドキュメントに[マッチ](/ja/reference/schemas/schemas#match)します。
+
+テキスト値内の引用符 `"` およびバックスラッシュ `\` 文字は、バックスラッシュでエスケープしなければなりません。[バックスラッシュによるエスケープの仕組み](/ja/learn/faq#how-does-backslash-escapes-work)も参照してください。
+
+<Danger>
+ **重要:** 設定されていない、または `null` や `NaN` に等しいフィールドをクエリーする方法はありません。ドキュメント内で通常使用されない「マジック」値(MAXINT など)を使用して回避してください。
+</Danger>
+
+## select
+
+_select_ は、リクエストする[サマリーフィールド](/ja/querying/document-summaries#selecting-summary-fields-in-yql)(`summary` インデックス属性を持つフィールド)のリストです。Vespa は、マッチしたドキュメント内の他のフィールドを非表示にします。
+
+```bash
+select price,isbn from sources * where title contains "madonna"
+```
+
+上記は、(すべてのソースから)フィールド「price」と「isbn」を明示的にリクエストします。すべてのフィールドをリクエストするには、フィールド選択にアスタリスクを使用します:
+
+```sql
+select * from sources * where title contains "madonna"
+```
+
+## from sources
+
+_from sources_ は、クエリー対象のコンテント・[ソース](/ja/reference/api/query#model.sources)を指定します。例:
+
+```sql
+select * from music where title contains "madonna"
+```
+
+は、_music_ コンテント・クラスターまたはフェデレーションソース内のすべてのドキュメントタイプをクエリーします。クエリー対象:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>すべてのソース</td>
+      <td><code>{`select ... from sources * where ...`}</code></td>
+    </tr>
+    <tr>
+      <td>ソースの集合</td>
+      <td><code>{`select ... from sources source1, source2 where ...`}</code></td>
+    </tr>
+    <tr>
+      <td>単一のソース</td>
+      <td><code>{`select ... from source1 where ...`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+言い換えると、_sources_ は一部またはすべてのソースをクエリーするために使用します。単一のソースのみをクエリーする場合、_sources_ キーワードは省略されます。クエリーを 1 つのスキーマ(すなわちドキュメントタイプ)のみに制限するには、[model.restrict](/ja/reference/api/query#model.restrict) URL パラメーターを使用します。[フェデレーション](/ja/querying/federation)も参照してください。
+
+## where
+
+`where` 句は演算子のツリーです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>numeric</td>
+      <td>利用可能な数値演算子は次のとおりです: <code>{`= < > <= >= range(field, lower bound, upper bound)`}</code>。  where 500 &gt;= price where range(fieldname, 0, 5000000000L)  数値は符号付き 32 ビットの範囲内でなければなりません。64 ビットの符号付き数値は、接尾辞として <code>{`L`}</code> を付けて入力します。  <code>{`range`}</code> 演算子では、文字列 <code>{`Infinity`}</code> または <code>{`-Infinity`}</code> を使用することもできます:  where (range(year, 2000, Infinity))  すべてを包含する範囲は、そのフィールドに値が設定されているすべてのドキュメントにマッチします。これは、数値フィールドが存在するドキュメントを選択する方法の 1 つです:  where range(size, -Infinity, Infinity)  フィールドが未設定のドキュメントはマッチしません。その逆のクエリー、つまり値が&#42;欠落している&#42;ドキュメントを見つけるには、<a href="/ja/querying/grouping#count-fields-with-nan" aria-label="count fields with NaN">NaN を持つフィールドのカウント</a>と、<a href="/ja/learn/faq#querying-for-fields-with-no-value" aria-label="querying for fields with no value">値のないフィールドのクエリー</a>に関する FAQ エントリーを参照してください。  | アノテーション | 効果 | | --- | --- | | <a href="#bounds" aria-label="bounds">bounds</a> | 範囲: 開区間または閉区間。 | | <a href="#hitlimit" aria-label="hitLimit">hitLimit</a> | &#42;上限付き範囲検索(capped range search)&#42;に使用します。<code>{`hitLimit`}</code> を付けた <code>{`range()`}</code> クエリー演算子は、インデックス内のドキュメントの一部をランキングするための top-k 選択を効率的に実装するために使用できます。<a href="/ja/performance/practical-search-performance-guide#advanced-range-search-with-hitlimit" aria-label="example and use cases">例とユースケース</a>を参照してください。 |  <a href="/ja/reference/schemas/schemas#weightedset" aria-label="weightedset">weightedset</a> フィールドは weight によるフィルタリングをサポートしていません。これは <a href="/ja/reference/schemas/schemas#map" aria-label="map">map</a> 型と <a href="#sameelement" aria-label="sameElement">sameElement</a> クエリー演算子を使用して解決します。<a href="/ja/querying/query-language#map" aria-label="example">例</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>boolean</td>
+      <td>ブール演算子は次のとおりです: <code>{`=`}</code>  where alive = true</td>
+    </tr>
+    <tr>
+      <td>contains</td>
+      <td>contains 演算子の右辺の引数は、文字列リテラル、または <code>{`phrase`}</code> のような関数です。  <code>{`contains`}</code> はテキストマッチングの基本的な構成要素です。実行される<a href="/ja/reference/schemas/schemas#match" aria-label="matching">マッチング</a>の種類は、スキーマ内のフィールド設定に依存します。  where title contains "madonna"  | アノテーション | 効果 | | --- | --- | | <a href="#stem" aria-label="stem">stem</a> | デフォルトでは、文字列リテラルは検索対象のフィールドに合わせて<a href="/ja/linguistics/linguistics-opennlp#tokenization" aria-label="tokenized">トークナイズ</a>されます。<a href="#stem" aria-label="stem">stem</a> を使用してトークナイズを明示的に制御します:where title contains <pre><code>{`({stem: false}"madonna")`}</code></pre> |  マッチ対象のフィールドは、<a href="/ja/basics/schemas#document-fields" aria-label="indexed field or attribute">インデックス付きフィールドまたは attribute</a> でなければなりません。  構造体(struct)内のフィールドはドット記法で参照します。例: <code>{`mystruct.mystructfield`}</code>。</td>
+    </tr>
+    <tr>
+      <td>and</td>
+      <td><code>{`and`}</code> は、他の <code>{`and`}</code> 文、<code>{`or`}</code> 文、<a href="#userquery" aria-label="userQuery">userQuery</a>、論理反転された文、そして contains 文を引数として受け取ります:  where title contains "madonna" and title contains "saint"</td>
+    </tr>
+    <tr>
+      <td>or</td>
+      <td><code>{`or`}</code> は、他の <code>{`or`}</code> 文、<code>{`and`}</code> 文、<a href="#userquery" aria-label="userQuery">userQuery</a>、そして contains 文を引数として受け取ります:  where title contains "madonna" or title contains "saint"</td>
+    </tr>
+    <tr>
+      <td>not</td>
+      <td>ある条件を満たさ&#42;ない&#42;ドキュメントにマッチさせるには、<code>{`!`}</code> 演算子を使用します:  where title contains "madonna" and !(title contains "saint")</td>
+    </tr>
+    <tr>
+      <td>phrase</td>
+      <td>フレーズは関数として表現します:  where text contains phrase("st", "louis", "blues")</td>
+    </tr>
+    <tr>
+      <td>near</td>
+      <td><code>{`near()`}</code> は、すべての引数の語が指定された距離内に、任意の順序で出現する場合にマッチします。否定の語(<code>{`!`}</code> を前置)は、それらの語が除外距離内に出現するマッチを除外します。  where field contains near("a", "b", "c") where field contains <code>{``}</code><code>{`({distance: 5}near("web", "search"))`}</code><code>{``}</code> where field contains near("sql", "database", !"nosql")  | アノテーション | デフォルト | 説明 | | --- | --- | --- | | <a href="#distance" aria-label="distance">distance</a> | 2 | 語がマッチするための最大位置差。 | | exclusionDistance | (distance+1)/2 | 否定の語の周囲の除外ゾーンのサイズ。 |  否定の語は、すべての肯定の語の後に置かなければなりません。複数値フィールドの場合、ランクプロファイルでそのフィールドに <a href="/ja/reference/schemas/schemas#rank-element-gap" aria-label="element-gap">element-gap</a> を設定すると、隣接する要素間の距離計算が可能になります。  <code>{`near()`}</code> および <code>{`onear()`}</code> の配下のフィーチャーは、ランキングフィーチャーに公開される前に、演算子のマッチのスパンに基づいてフィルタリングされます。クエリー  text contains <code>{``}</code><code>{`({distance:1}near("a","b"))`}</code><code>{``}</code>と 2 つのドキュメントがあるとします。  1 つ目のドキュメントの text フィールドは <code>{`"a a a a a a b b b b b b"`}</code> です。near マッチのスパンは <code>{`[[5,6]]`}</code> です。<code>{`"a"`}</code> の最後の出現と <code>{`"b"`}</code> の最初の出現のみが保持されます。  2 つ目のドキュメントの text フィールドは <code>{`"a b c a b c a b c a b c"`}</code> です。near マッチのスパンは <code>{`[[0,1],[3,4],[6,7],[9,10]]`}</code> です。<code>{`"a"`}</code> と <code>{`"b"`}</code> のすべての出現が保持されます。</td>
+    </tr>
+    <tr>
+      <td>onear</td>
+      <td><code>{`onear()`}</code>(ordered near)は <code>{`near()`}</code> に似ていますが、語がクエリーで指定されたのと同じ順序で出現することを要求します。distance を(語数 - 1)に設定すると、<code>{`onear()`}</code> は <code>{`phrase()`}</code> と等価になります。  where field contains onear("web", "search", "engine") where field contains <code>{``}</code><code>{`({distance: 5}onear("neural", "network"))`}</code><code>{``}</code> where field contains onear("java", "tutorial", !"script")  | アノテーション | デフォルト | 説明 | | --- | --- | --- | | <a href="#distance" aria-label="distance">distance</a> | 2 | 語がマッチするための最大位置差。 | | exclusionDistance | (distance+1)/2 | 否定の語の周囲の除外ゾーンのサイズ。 |  否定の語は、すべての肯定の語の後に置かなければなりません。複数値フィールドの場合、ランクプロファイルでそのフィールドに <a href="/ja/reference/schemas/schemas#rank-element-gap" aria-label="element-gap">element-gap</a> を設定すると、隣接する要素間の距離計算が可能になります。</td>
+    </tr>
+    <tr>
+      <td>sameElement</td>
+      <td><code>{`sameElement()`}</code> 演算子を使うと、struct や文字列を含む複数値フィールドにおいて、&#42;同じ&#42;要素内でマッチしなければならない条件を指定できます。  デフォルトでは、sameElement は <code>{`AND`}</code> を使用して条件を結合します: マッチを生成するには、&#42;すべて&#42;の条件が同じ要素内でマッチしなければなりません。  例えば、次の&#42;&#42;struct&#42;&#42;があるとします:  struct person <code>{``}</code><code>{`{     field first_name    type string {}     field last_name     type string {}     field year_of_birth type int {} }  field persons type array<person> {     indexing: summary     struct-field first_name    { indexing: attribute }     struct-field last_name     { indexing: attribute }     struct-field year_of_birth { indexing: attribute } }`}</code><code>{``}</code>  次のクエリーを使用すると:  where persons contains sameElement(first_name contains 'Joe', last_name contains 'Smith', year_of_birth &lt; 1940)  <code>{`persons`}</code> 配列内に 1940 年より前に生まれた Joe Smith を含むすべてのドキュメントを返すことができます。  &#42;&#42;map&#42;&#42; の検索は、フィールドメンバー <code>{`key`}</code> と <code>{`value`}</code> を持つ struct の配列として扱うことで行います。例えば、次の map があるとします:  <code>{``}</code><code>{`field identities type map<string, person> {     indexing: summary     struct-field key                 { indexing: attribute }     struct-field value.first_name    { indexing: attribute }     struct-field value.last_name     { indexing: attribute }     struct-field value.year_of_birth { indexing: attribute } }`}</code><code>{``}</code>  次のクエリーを使用すると:  where identities contains sameElement(key contains 'father', value.first_name contains 'Joe', value.last_name contains 'Smith', value.year_of_birth &lt; 1940)  'father' をキーとして、1940 年より前に生まれた Joe Smith を持つすべてのドキュメントを返すことができます。  <code>{`sameElement()`}</code> は、&#42;&#42;文字列の配列&#42;&#42;フィールドの検索にも使用できます。sameElement() 内でサポートされるクエリー演算子は <code>{`and`}</code>、<code>{`equiv`}</code>、<code>{`near`}</code>、<code>{`onear`}</code>、<code>{`or`}</code>、<code>{`rank`}</code>、<code>{`phrase`}</code> です。<code>{`and`}</code> は <code>{`!`}</code> と組み合わせて使用できます。  例えば、次のフィールドがあるとします:  field chunks type <code>{``}</code><code>{`array<string> {     indexing: index | summary } `}</code><code>{``}</code>  次のクエリーを使用できます:  where chunks contains sameElement("one" and "two") where chunks contains sameElement("one" and equiv("two","three")) where chunks contains <code>{``}</code><code>{`sameElement("one" and ({distance: 5}near("two","three",!"four"))) `}</code><code>{``}</code>where chunks contains sameElement("one" and phrase("two","three")) where chunks contains sameElement("one" and !"two") where chunks contains sameElement("one" or "two") where chunks contains sameElement(rank("one" and "two", "three"))  インデックス付きフィールドに対する sameElement() 内のフィーチャーは、マッチした要素に基づいてフィルタリングされます。例えば、<a href="/ja/reference/ranking/rank-features#elementwise-bm25" aria-label="elementwise(bm25(descriptions),x,double)">elementwise(bm25(descriptions),x,double)</a> は、マッチした要素に基づくテンソルのセルのみを含みます。  マッチを特定の要素インデックスに制限するには、<a href="#elementfilter" aria-label="`elementFilter`"><code>{`elementFilter`}</code></a> アノテーションを使用します。例えば、フィールド <code>{`my_numbers type array<int>`}</code> があるとします:  where<code>{``}</code><code>{`bash my_numbers contains ({elementFilter:[2]}sameElement("42"))`}</code><code>{``}</code>  これは配列フィールドのインデックス 2 の要素にのみマッチします。複数のインデックスを指定できます: <code>{`{elementFilter:[0, 2, 5]}`}</code>。  短縮形も利用できます:  where my_numbers[2] = 42  短縮形は単一のインデックスのみをサポートします。複数のインデックスにマッチさせるには、<a href="#elementfilter" aria-label="`elementFilter`"><code>{`elementFilter`}</code></a> アノテーションを使用します。</td>
+    </tr>
+    <tr>
+      <td>equiv</td>
+      <td>同じフィールド内の 2 つの語がマッチ時にまったく同じ挙動をすべき場合には、<code>{`equiv()`}</code> 演算子を使用できます。これは <code>{`or`}</code> の特殊なケースのように動作します。  where fieldName contains equiv("A","B")  equiv のマッチングロジックは OR と同じであり、OR には EQUIV が持つ制限(下記)はありません。違いは、マッチがランキング関数からどのように見えるかにあります。OR の子であるすべての単語はランキングでカウントされますが、EQUIV の場合、ランキングからは単一の単語のように見えます:  - queryTermCount では +1 としてのみカウントされます - 完全性(completeness)の指標では 1 単語としてカウントされます - Proximity は EQUIV 内の異なる単語を区別しません - Connectivity は、EQUIV 全体とその前後の単語との間に設定できます - EQUIV 内のアイテムはランキングフィーチャーから直接見えないため、それらに対する weight や connectivity は効果がありません  クエリー内での <code>{`equiv`}</code> の使用に関する制限:  - <code>{`equiv`}</code> はフレーズの中に置くことはできません - <code>{`TermItem`}</code> と <code>{`PhraseItem`}</code> のインスタンスのみを含むことができます。<code>{`and`}</code> のような演算子は <code>{`equiv`}</code> の中に置けません - <code>{`equiv`}</code> 内の <code>{`PhraseItems`}</code> は、サイズが 1 であるかのようにランク付けされます  <a href="/ja/linguistics/query-rewriting#equiv" aria-label="equiv">equiv</a> の使い方を学んでください。</td>
+    </tr>
+    <tr>
+      <td>uri</td>
+      <td><a href="/ja/reference/schemas/schemas#uri" aria-label="uri field type">uri フィールドタイプ</a>を使用してインデックスされた URL を検索するために使用します。  where myUrlField contains uri("vespa.ai/foo")  URL の構成要素を検索するためのさまざまなサブフィールドがサポートされています。フィールドタイプの定義を参照してください。  | アノテーション | 効果 | | --- | --- | | <a href="#startanchor" aria-label="startAnchor">startAnchor</a> | uri.hostname を先頭にアンカーします。 | | <a href="#endanchor" aria-label="endAnchor">endAnchor</a> | uri.hostname を末尾にアンカーします。 |</td>
+    </tr>
+    <tr>
+      <td>fuzzy</td>
+      <td><a href="https://en.wikipedia.org/wiki/Levenshtein_distance" aria-label="Levenshtein">Levenshtein</a> 編集距離による、string または array&lt;string&gt; の <a href="/ja/reference/schemas/schemas#attribute" aria-label="attribute">attribute</a> 内の検索です。  where myStringAttribute contains (&#123;prefixLength:1, maxEditDistance:2&#125;fuzzy("parantesis"))  以下のアノテーションで <code>{`fuzzy`}</code> を設定します:  | アノテーション | 効果 | | --- | --- | | <a href="#maxeditdistance" aria-label="maxEditDistance">maxEditDistance</a> | クエリーと文字列 attribute の間の編集距離の上限(その値を含む。デフォルトは 2)。 | | <a href="#prefixlength" aria-label="prefixLength">prefixLength</a> | 固定とみなされる文字数。fuzzy マッチは残りのサフィックス部分に対してのみ実行されます。デフォルトは 0(つまり <code>{`fuzzy`}</code> はクエリー全体にわたってマッチします) | | <a href="#prefix" aria-label="prefix">prefix</a> | <code>{`true`}</code> の場合、候補文字列の&#42;プレフィックス&#42;を最大 <code>{`maxEditDistance`}</code> 回の編集でクエリー文字列に変換できるとき、その文字列はマッチとみなされます。<a href="/ja/querying/text-matching#fuzzy-prefix-match" aria-label="fuzzy prefix match">fuzzy プレフィックスマッチ</a>を参照してください。デフォルトは <code>{`false`}</code> で、この場合は文字列全体が対象となります。 |  例は<a href="/ja/querying/text-matching#fuzzy-match" aria-label="text matching">テキストマッチング</a>にあります。  &#42;&#42;重要:&#42;&#42; <a href="/ja/reference/applications/services/content#document" aria-label="documents">ドキュメント</a>内の string <a href="/ja/reference/schemas/schemas#attribute" aria-label="attribute">attribute</a> フィールドのみがサポートされます(単一値、array、または weightedset)。<code>{`maxEditDistance`}</code> が 1 または 2 の場合、マッチングは内部的に最適化されます。<a href="#prefixlength" aria-label="prefixLength">prefixLength</a> を 0 より大きく設定すると、<a href="/ja/reference/schemas/schemas#attribute" aria-label="fast-search">fast-search</a> におけるマッチが絞り込まれ、考慮しなければならない語の数が大幅に削減されます。</td>
+    </tr>
+    <tr>
+      <td>matches</td>
+      <td>正規表現マッチは <a href="https://en.wikibooks.org/wiki/Regular_Expressions/POSIX_Extended_Regular_Expressions" aria-label="posix extended syntax">POSIX 拡張構文</a>を使用してサポートされます。ただし、&#42;&#42;大文字と小文字を区別しない&#42;&#42;という制限があります。  <code>{`madonna`}</code> と <code>{`madona`}</code> の両方、および任意の数の <code>{`n`}</code> にマッチする例:  where attribute_field matches "mado[n]+a"  その他の例は<a href="/ja/querying/text-matching#regular-expression-match" aria-label="text matching">テキストマッチング</a>ガイドにあります。  &#42;&#42;重要:&#42;&#42; <a href="/ja/reference/applications/services/content#document" aria-label="documents">ドキュメント</a>内の <a href="/ja/reference/schemas/schemas#attribute" aria-label="attribute">attribute</a> フィールドのみがサポートされます。パフォーマンスのための最適化は行われていません。<code>{`^`}</code> を使用したプレフィックスがある方が、ない場合よりも高速です。さらに、attribute と index の両方として機能するフィールドには対応していません。</td>
+    </tr>
+    <tr>
+      <td>text</td>
+      <td>&#42;text()&#42; は任意のテキストを受け取り、指定されたフィールドまたは fieldSet で検索されるトークンの集合にトークナイズします。デフォルトでは、トークンは <a href="#weakand" aria-label="weakAnd">weakAnd</a> 演算子で検索されます。アノテーションによってデフォルトの動作を上書きできます: <code>{`text()`}</code> は <a href="#userinput" aria-label="userInput()">userInput()</a> と同じアノテーションをサポートします。  例:        where text_field contains text("some text")         アノテーション付き:        where text_field contains (&#123;language:'en'&#125;text("some text"))         text 引数は「@parameterName」を使用した参照として与えることができます:        yql=select &#42; from sources &#42; where text_field contains (@text)&amp;text=some text</td>
+    </tr>
+    <tr>
+      <td>userInput</td>
+      <td>&#42;userInput()&#42; は、エンドユーザーまたはモデルからのテキストを解析します。このテキストには、検索対象フィールドの選択、フレーズや否定の語の指定などのためのクエリー構文が含まれる場合があります。userInput 内のクエリーはフィールドを指定できるため、userInput 演算子の前に「contains field」プレフィックスはありません。  yql=select &#42; from sources &#42; where userInput('some text')  引数は「@parameterName」を使用した参照として与えることができます:  yql=select &#42; from sources &#42; where userInput(@text)&amp;text=some text  これらはどちらも次のクエリーになります  select &#42; from sources &#42; where weakAnd(default contains "some", default contains "text")  デフォルトの動作はアノテーションで上書きできます:  yql=select &#42; from sources &#42; where (&#123;grammar.syntax:'none',grammar.tokenization:'linguistics',grammar.composite:'near',distance:3&#125;userInput('some text'))  | アノテーション | 効果 | | --- | --- | | <a href="#grammar" aria-label="grammar">grammar</a> | ユーザー入力テキストを解釈する際に適用するクエリー解析タイプを設定します。  <code>{`grammar`}</code> の値が <code>{`raw`}</code> または <code>{`segment`}</code> 以外の場合、適用されるアノテーションは次のもののみです:  - <a href="#defaultindex" aria-label="defaultIndex">defaultIndex</a> - <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a>(weakAnd 用)- <a href="#targethits" aria-label="targetHits">targetHits</a>(weakAnd 用)- <a href="#distance" aria-label="distance">distance</a>(near/oNear 用)- <a href="#ranked" aria-label="ranked">ranked</a> - <a href="#filter" aria-label="filter">filter</a> - <a href="#stem" aria-label="stem">stem</a> - <a href="#normalizecase" aria-label="normalizeCase">normalizeCase</a> - <a href="#accentdrop" aria-label="accentDrop">accentDrop</a> - <a href="#usepositiondata" aria-label="usePositionData">usePositionData</a>  例えば、<code>{`userInput`}</code> に <code>{`phrase`}</code> をアノテーションした場合、<code>{`filter`}</code> アノテーションは効果を持ちますが、<code>{`language`}</code> は効果を持ちません。  リクエスト/クエリープロファイルでデフォルトの grammar を設定する方法については、<a href="/ja/reference/api/query#model.type.isYqlDefault" aria-label="isYqlDefault">isYqlDefault</a> を参照してください。 | | <a href="#defaultindex" aria-label="defaultIndex">defaultIndex</a> | クエリー API の <a href="/ja/reference/api/query#model.defaultindex" aria-label="model.defaultIndex">model.defaultIndex</a> と同じです。 | | <a href="#language" aria-label="language">language</a> | この userInput() 呼び出しの言語処理(linguistics)のための言語設定。 | | <a href="#allowempty" aria-label="allowEmpty">allowEmpty</a> | クエリー解析および検索語に対して空の入力を許可するかどうか。 |  加えて、<a href="#stem" aria-label="stem">stem</a> や <a href="#ranked" aria-label="ranked">ranked</a> などの他のアノテーションは通常どおり効果を持ちます。  その他の例は<a href="/ja/querying/query-api#input-examples" aria-label="query API">クエリー API</a> ガイドにあります。</td>
+    </tr>
+    <tr>
+      <td>userQuery</td>
+      <td>&#42;userQuery()&#42; は <a href="/ja/reference/api/query#model.querystring" aria-label="model.queryString">model.queryString</a> から読み取り、<a href="/ja/reference/querying/simple-query-language" aria-label="simple query language">シンプルクエリー言語</a>を使用してクエリーを解析します。<a href="/ja/reference/api/query#model.filter" aria-label="model.filter">model.filter</a> が設定されている場合、解析の前に &#42;model.queryString&#42; と結合されます。  ユーザークエリーはまず解析され、その結果のツリーが YQL クエリーツリー内の対応する場所に挿入されます。例:  $ vespa query 'select &#42; from sources &#42; where vendor contains "brick and mortar" AND price &lt; 50 AND userQuery()' &#92;   query="abc def -ghi" &#92;   type=all  これは次の条件を満たすクエリーとして評価されます:  - 数値フィールド &#42;price&#42; は 50 未満でなければならない - &#42;vendor&#42; は &#42;brick and mortar&#42; にマッチしなければならない - デフォルトインデックスは 2 つの語 &#42;abc&#42; と &#42;def&#42; を含み、&#42;かつ&#42; &#42;ghi&#42; を含まないこと。  &#42;default&#42; 以外のフィールドまたは fieldset を指定するには、<a href="/ja/reference/api/query#model.defaultindex" aria-label="model.defaultIndex">model.defaultIndex</a> を使用します。<a href="/ja/querying/query-api#fieldset" aria-label="example">例</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>rank</td>
+      <td>&#42;rank()&#42; 関数の最初の引数、かつ最初の引数のみが、ドキュメントがマッチであるかどうかを決定しますが、すべての引数がランクフィーチャーの計算に使用されます。<code>{`rank`}</code> 演算子は、マッチングや検索(retrieval)のロジックに影響を与えることなく、特定の語の存在に基づいてドキュメントをブーストするのに役立ちます。  where rank(a contains "A", b contains "B", c contains "C")  ハイブリッド検索のユースケースでも役立ちます。使用例は<a href="https://blog.vespa.ai/redefining-hybrid-search-possibilities-with-vespa/" aria-label="blog post">ブログ記事</a>を参照してください。例えば、最初の引数として <a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a> クエリー演算子を使用して検索し、他の引数についてマッチングフィーチャーを計算させることができます。  where rank(nearestNeighbor(field, queryVector), a contains "A", b contains "B", c contains "C")</td>
+    </tr>
+    <tr>
+      <td>in</td>
+      <td>&#42;in&#42; 演算子は、整数または文字列フィールドにおいて値の集合をマッチさせるために使用します。値のうち少なくとも 1 つがフィールドの内容にマッチした場合、そのドキュメントはマッチとみなされます。これは複数の OR 条件の最適化された短縮形であり、SQL の IN 演算子に似ています。Vespa 8.293.15 以降で利用可能です。例:  where integer_field in (10, 20, 30) where string_field in ('germany', 'france', 'norway') ここで <code>{`string_field`}</code> は <code>{`match:word`}</code> を持つフィールドです。&#42;in&#42; 演算子で使用される文字列値には、小文字化を除き、トークナイズやステミングのような<a href="/ja/linguistics/linguistics.html" aria-label="linguistic">言語(linguistic)</a>処理は行われません。文字列の <a href="/ja/reference/schemas/schemas#match" aria-label="match">match</a> を参照してください。field string_field type string &#123;     indexing: summary | index # or attribute     match: word     rank:filter     attribute: fast-search # if attribute   &#125;  <code>{`match:text`}</code> を持つ文字列フィールドに対して &#42;in&#42; 演算子を使用すると、フィールドの内容はインデックス時にトークナイズされる一方で &#42;in&#42; 演算子は値をトークナイズしないため、リコール(再現率)の問題が発生します。  &#42;in&#42; の前の引数は、検索対象のフィールドまたは <a href="/ja/reference/schemas/schemas#fieldset" aria-label="fieldset">fieldset</a> の名前です。&#42;in&#42; の後の引数は、括弧で囲まれたカンマ区切りの値のリストです。YQL にインラインで渡す場合、文字列値はシングルクォートまたはダブルクォートで囲まなければなりません  複数値フィールド(配列など)の場合、&#42;in&#42; 演算子は、配列内のいずれかの要素が集合内のいずれかの値にマッチするかどうかを確認することで動作します。これは SQL の IN 演算子に似ていますが、配列の比較により適した形になっています。例:  where integer_array_field in (10, 20, 30)  integer_array_field = [5, 10, 15] の場合、10 が配列に含まれるためマッチします。同様に、integer_array_field = [20, 25, 30] の場合、20 と 30 の両方が配列に含まれるためマッチします。  クエリー解析を高速化するには、<a href="#parameter-substitution" aria-label="parameter substitution">パラメーター置換</a>を使用して、値を追加のリクエストパラメーターとして送信します。文字列値のクォートは任意です。例:  where integer_field in (@integer_values)&amp;integer_values=10,20,30 where string_field in (@string_values)&amp;string_values=germany,france,norway  &#42;in&#42; 演算子はクエリーツリー内で単一の語として振る舞い、テキストランキングフィーチャーに対するマッチ情報は提供しません。  使用方法と例については、次を参照してください:  - <a href="/ja/ranking/multivalue-query-operators#in-example" aria-label="multivalue query operators">複数値クエリー演算子</a> - <a href="/ja/performance/feature-tuning#multi-lookup-set-filtering" aria-label="multi-lookup set filtering">マルチルックアップ集合フィルタリング</a> - <a href="https://github.com/vespa-engine/system-test/tree/master/tests/search/in_operator" aria-label="in operator system test">in 演算子のシステムテスト</a>  | フィールドタイプ | 基本型 <a href="/ja/reference/schemas/schemas#byte" aria-label="byte">byte</a>、<a href="/ja/reference/schemas/schemas#int" aria-label="int">int</a>、<a href="/ja/reference/schemas/schemas#long" aria-label="long">long</a>、<a href="/ja/reference/schemas/schemas#string" aria-label="string">string</a> の、単一値または<a href="/ja/querying/searching-multivalue-fields" aria-label="multivalue">複数値</a>の <a href="/ja/basics/schemas#document-fields" aria-label="attribute or index field">attribute または index フィールド</a>。文字列フィールドは <code>{`match:word`}</code> または <code>{`match:exact`}</code> を持たなければなりません。 | | --- | --- | | クエリーモデル | 値/トークンの集合。 | | マッチング | フィールドにクエリー内の値の少なくとも 1 つが含まれるドキュメント。 | | ランキング | なし。 | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/NumericInItem.html" aria-label="NumericInItem">NumericInItem</a> および <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/StringInItem.html" aria-label="StringInItem">StringInItem</a>。 |  &#42;&#42;重要:&#42;&#42; attribute フィールドで &#42;in&#42; 演算子を使用する場合、最良のパフォーマンスを得るために <a href="/ja/content/attributes#fast-search" aria-label="fast-search">fast-search</a> と <a href="/ja/reference/schemas/schemas#filter" aria-label="rank: filter">rank: filter</a> を設定してください。文字列フィールドには常に <code>{`match:word`}</code> を使用してください。</td>
+    </tr>
+    <tr>
+      <td>dotProduct</td>
+      <td>&#42;dotProduct&#42; は、クエリー内の weighted set とドキュメント内の weighted set フィールドとの間のドット積を、そのランクスコアへの寄与として計算します:  where dotProduct(description, &#123;"a":1, "b":2&#125;)  結果は <a href="/ja/ranking/multivalue-query-operators#raw-scores-and-query-item-labeling" aria-label="raw score">raw スコア</a>として保存されます。  典型的なユースケースは、あるアルゴリズムによって生成された重み付きトークンのコレクションを、別のアルゴリズムによって生成された重み付きトークンを含むコーパスとマッチさせて、パーソナライズされたコンテンツ探索を実装することです。&#42;dotProduct&#42; の使用例は<a href="/ja/performance/practical-search-performance-guide#multi-valued-query-operators" aria-label="practical performance guide">実践的パフォーマンスガイド</a>を参照してください 。  使用方法と例の説明は<a href="/ja/ranking/multivalue-query-operators" aria-label="multivalue query operators">複数値クエリー演算子</a>を参照してください。  YQL にインラインで渡す場合、キーはシングルクォートまたはダブルクォートで囲まなければなりません。代わりに、<a href="#parameter-substitution" aria-label="parameter substitution">パラメーター置換</a>を使用してシンプルな形式で weighted set を送信すると、クエリー解析が高速になります。例: <code>{`where dotProduct(description, @myterms)`}</code>。  | フィールドタイプ | fast-search を持つ weighted set attribute。注: 通常の attribute または index フィールドでもサポートされますが、その場合パフォーマンスは大幅に低下します)。 | | --- | --- | | クエリーモデル | &#123;トークン, 重み&#125; ペアの weighted set | | マッチング | weighted set フィールドにクエリー内のトークンの少なくとも 1 つが含まれるドキュメント。 | | ランキング | マッチしたクエリートークンの重みとフィールドトークンの重みとの間のドット積スコア。このスコアは <a href="/ja/reference/ranking/rank-features#rawScore(field)" aria-label="rawScore">rawScore</a> または <a href="/ja/reference/ranking/rank-features#itemRawScore(label)" aria-label="itemRawScore">itemRawScore</a> ランクフィーチャーで利用できます。 | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/DotProductItem.html" aria-label="DotProductItem">DotProductItem</a> |</td>
+    </tr>
+    <tr>
+      <td>weightedSet</td>
+      <td>フィールドの検索に &#42;weightedSet&#42; を使用すると、検索対象フィールドに存在するすべてのトークンが、クエリー内の weighted set とマッチされます。つまり、weighted set を使用して単一値の attribute フィールドを検索することは、通常の語を使用して weighted set フィールドを検索することと似たセマンティクスを持ちます。クエリー内の weighted set とドキュメントをマッチさせた結果として得られる低レベルのマッチ情報には、マッチしたすべてのトークンの重みが降順で含まれます。マッチした各重みは、要素 0 の位置 0 における標準的な出現として表現されます。  where weightedSet(description, &#123;"a":1, "b":2&#125;)  &#42;weightedSet&#42; は、クエリー内で単一の語として振る舞うという点で、<a href="#equiv" aria-label="equiv">equiv</a> と似たセマンティクスを持ちます。ただし、重み付きトークンのコレクションを含むという制約により、特定のバックエンド最適化が直接可能となり、汎用の <a href="#equiv" aria-label="equiv">equiv</a> や <a href="#or" aria-label="or">or</a> 演算子を使用する場合と比べて、大規模なトークン集合でのパフォーマンスが向上します。  YQL にインラインで渡す場合、キーはシングルクォートまたはダブルクォートで囲まなければなりません。代わりに、<a href="#parameter-substitution" aria-label="parameter substitution">パラメーター置換</a>を使用してシンプルな形式で weighted set を送信すると、クエリー解析が高速になります。例: <code>{`where weightedSet(description, @myterms)`}</code>。  | フィールドタイプ | 単一値または<a href="/ja/querying/searching-multivalue-fields" aria-label="multivalue">複数値</a>の attribute または index フィールド。(注: ほとんどのユースケースは単一値フィールドを対象とします)。 | | --- | --- | | クエリーモデル | &#123;トークン, 重み&#125; ペアの weighted set。 | | マッチング | フィールドにクエリー内のトークンの少なくとも 1 つが含まれるドキュメント。フィルタリングのユースケースでは、よりシンプルでパフォーマンスもわずかに優れている <a href="#in" aria-label="in operator">in 演算子</a>の使用を推奨します。 | | ランキング | この演算子はバックエンドで単一の語として振る舞います。クエリー語の重みは演算子自体に割り当てられた重みであり、マッチの重みは weighted set のうちマッチしたトークンの中で最大の重みです。この演算子は raw スコアを生成しません。より良いランキングとパフォーマンスのため、代わりに <a href="#dotproduct" aria-label="dotProduct">dotProduct</a> の使用を推奨します。 | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WeightedSetItem.html" aria-label="WeightedSetItem">WeightedSetItem</a> |</td>
+    </tr>
+    <tr>
+      <td>wand</td>
+      <td><code>{`wand`}</code> は、フィールド内の重み付きトークンがクエリー内の重み付きトークンの部分集合とマッチするドキュメントを検索するために使用できます。同時に、クエリーとフィールドのトークンの重みの間のドット積を内部的に計算します。<code>{`wand`}</code> は、その内部的なドット積ランクスコアに基づいて top-k ヒットを返すことが保証されています。これは <a href="#or" aria-label="or">or</a> から <a href="#and" aria-label="and">and</a> まで適応的にスケールする演算子です。  なお、wand を使用すると総ヒット数は不正確になります。  <code>{`wand`}</code> はバックエンドでの検索ごとに複数スレッドを使用する際のパフォーマンスを最適化し、&#42;Parallel Wand&#42; とも呼ばれます。  <code>{`wand`}</code> は数値引数も受け付けます。その場合、検索引数は長さ 2 の配列の配列です。各ペアで、最初の数値は検索語、2 番目はその重みです:  where wand(description, [[11,1], [37,2]])  YQL にインラインで渡す場合、キーはシングルクォートまたはダブルクォートで囲まなければなりません。代わりに、<a href="#parameter-substitution" aria-label="parameter substitution">パラメーター置換</a>を使用してシンプルな形式で weighted set を送信すると、クエリー解析が高速になります。例: <code>{`where wand(description, @myterms)`}</code>。  | アノテーション | 効果 | | --- | --- | | <a href="#scorethreshold" aria-label="scoreThreshold">scoreThreshold</a> | ヒットとして含めるための最小ランクスコア。 | | <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> | クエリーを評価するコンテントノード全体の合計で、first-phase ランキング関数に公開したいヒット数。 | | <a href="#targethits" aria-label="targetHits">targetHits</a> | コンテントノードごとに first-phase ランキング関数に公開したいヒット数。こちらよりも <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> の使用を推奨します。 |  where (&#123;scoreThreshold: 0.13, totalTargetHits: 7&#125;wand(description, &#123;"a":1, "b":2&#125;))  WAND アルゴリズムの紹介は <a href="/ja/ranking/wand" aria-label="using wand">wand の使用</a>を、&#42;wand&#42; の使用例は<a href="/ja/performance/practical-search-performance-guide#multi-valued-query-operators" aria-label="practical performance guide">実践的パフォーマンスガイド</a>を参照してください 。  | フィールドタイプ | fast-search を持つ weighted set attribute。注: 通常の attribute または index フィールドでもサポートされますが、その場合パフォーマンスは大幅に低下します)。 | | --- | --- | | クエリーモデル | &#123;トークン, 重み&#125; ペアの weighted set。 | | マッチング | weighted set フィールドにクエリー内のトークンの少なくとも 1 つが含まれ、かつ、そのドキュメントの内部ドット積スコアが現在の top-k ベストヒットのうち最下位のものより大きいドキュメント。つまり、top-k を超える数のドキュメントがマッチしてランキングのために返されます。また、ドット積スコアが低すぎるために、クエリー内の複数のトークンにマッチしていても多くのドキュメントがスキップされることも意味します。このスキップにより、場合によっては &#42;wand&#42; は <a href="#dotproduct" aria-label="dotProduct">dotProduct</a> より高速になります。 | | ランキング | マッチしたクエリートークンの重みとフィールドトークンの重みとの間のドット積スコア。このスコアは <a href="/ja/reference/ranking/rank-features#rawScore(field)" aria-label="rawScore">rawScore</a> または <a href="/ja/reference/ranking/rank-features#itemRawScore(label)" aria-label="itemRawScore">itemRawScore</a> ランクフィーチャーで利用できます。なお、top-k ベストヒットは、この内部スコアを最終的なランキング式として使用する場合にのみ返されることが保証されます。 | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WandItem.html" aria-label="WandItem">WandItem</a> |</td>
+    </tr>
+    <tr>
+      <td>weakAnd</td>
+      <td><code>{`weakAnd`}</code> は &#42;Vespa Wand&#42; と呼ばれることもあります。<a href="#wand" aria-label="wand">wand</a> と異なり、(任意のフィールドにまたがる)任意の単語マッチを引数として受け付けます。ランキングのために返されるドキュメント数は限られています(デフォルトは 100)が、ベスト k ヒットを返すことは保証されません。この関数は最適化された <a href="#or" aria-label="or">or</a> とみなすことができます:  where weakAnd(a contains "A", b contains "B")  | アノテーション | 効果 | | --- | --- | | <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> | クエリーを評価するコンテントノード全体の合計で、first-phase ランキング関数に公開したいヒット数。 | | <a href="#targethits" aria-label="targetHits">targetHits</a> | コンテントノードごとに first-phase ランキング関数に公開したいヒット数。こちらよりも <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> の使用を推奨します。 |  where (&#123;totaltargetHits: 7&#125;weakAnd(a contains "A", b contains "B"))  <a href="#wand" aria-label="wand">wand</a> と異なり、<code>{`weakAnd`}</code> はさまざまなタイプの複数のフィールドを横断して検索できますが、top-k ベストのヒット数を返すことは保証されません。ただし、任意のランキング式と組み合わせることができます。この式は、マッチした語に対してクエリー語の重みと逆文書頻度を使用するシンプルな内部ランキングスコアと相関しているべきであることに留意してください。  使用方法と例については <a href="/ja/ranking/wand" aria-label="using wand">wand の使用</a>を参照してください。  | フィールドタイプ | すべてのタイプの複数のフィールド(attribute と index の両方)。 | | --- | --- | | クエリーモデル | 異なるフィールドを横断して検索する任意の数のクエリーアイテム。 | | マッチング | クエリー内のトークンの少なくとも 1 つにマッチし、かつ、そのドキュメントの内部演算子スコアが現在の top-k ベストヒットのうち最下位のものより大きいドキュメント。<a href="#wand" aria-label="wand">wand</a> と同様、これは通常 top-k を超える数のドキュメントがマッチし、多くのドキュメントがスキップされることを意味します。 | | ランキング | top-k ヒットを見つけるための、マッチした語に対するクエリー語の重みと逆文書頻度に基づく内部ランキングスコア。このスコアは現在、ランキングフレームワークでは利用できません。マッチした語はランキングフレームワークに公開されるため(<a href="#and" aria-label="and">and</a> や <a href="#or" aria-label="or">or</a> を使用する場合と同様)、この演算子と組み合わせて任意のランキング式を使用できます。使用するランキング式は、この内部ランキングスコアと相関しているべきであることに留意してください。<a href="/ja/reference/ranking/rank-features#bm25" aria-label="bm25">bm25</a>、<a href="/ja/reference/ranking/rank-features#nativeFieldMatch" aria-label="nativeFieldMatch">nativeFieldMatch</a>、<a href="/ja/reference/ranking/rank-features#nativeDotProduct(field)" aria-label="nativeDotProduct">nativeDotProduct</a> ランクフィーチャーが良い出発点です。 | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WeakAndItem.html" aria-label="WeakAndItem">WeakAndItem</a> |</td>
+    </tr>
+    <tr>
+      <td>geoLocation</td>
+      <td><code>{`geoLocation`}</code> は、緯度、経度、最大距離(半径)として指定された地理的な円の内側にある <a href="/ja/reference/schemas/schemas#position" aria-label="position">position</a> にマッチします。<a href="#geoboundingbox" aria-label="geoBoundingBox">geoBoundingBox</a> も参照してください。例:  where geoLocation(myfieldname, 63.5, 10.5, "200 km")  この例では、北緯 63.5°、東経 10.5° の近くで、半径 200 km 以内のドキュメントを検索します。したがって、ノルウェーのトロンハイム(N63°25'47;E10°23'36)に「myfieldname」の position を持つドキュメントはマッチします。最初のパラメーターは attribute フィールドの名前です。2 番目のパラメーターは緯度(北が正、南が負)です。3 番目のパラメーターは経度(東が正、西が負)です。4 番目のパラメーターは半径とその単位を指定する文字列でなければなりません。サポートされる単位/接尾辞には "km"、"m"(メートルの略)、"miles"、"mi"(マイルの略)、"deg"(度の略)、"d"(文脈上の度の略)が含まれます。"deg" / "d" の単位/接尾辞は、半径に緯度と同じ単位を与えます。半径に負の数(例: "-1 m")を指定すると「無限」の半径として解釈され、あらゆる地理的位置が geoLocation 演算子にマッチするようになります。  スキーマ内の position attribute は次のようになります:  field myfieldname type position &#123;     indexing: attribute | summary &#125;  position の配列も可能です:  field myfieldname type array&lt;position&gt; &#123;     indexing: attribute &#125;  | アノテーション | 効果 | | --- | --- | | <a href="#label" aria-label="label">label</a> | ランキング時にこの語を参照するためのラベル。 |  プロパティ:  | フィールドタイプ | position attribute(単一値または配列)。 | | --- | --- | | クエリーパラメーター | フィールド名、緯度、経度、半径。 | | マッチング | 指定された地理円の内側にあるドキュメントを返します。 | | ランキング | ランキング計算では <code>{`closeness(myfieldname)`}</code> または <code>{`distance(myfieldname)`}</code> を使用します。<a href="/ja/reference/ranking/rank-features#closeness(name)" aria-label="closeness">closeness</a> および <a href="/ja/reference/ranking/rank-features#distance(name)" aria-label="distance">distance</a> のドキュメントを参照してください。 | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/GeoLocationItem.html" aria-label="GeoLocationItem">GeoLocationItem</a> |</td>
+    </tr>
+    <tr>
+      <td>geoBoundingBox</td>
+      <td><code>{`geoBoundingBox`}</code> は、<a href="/ja/reference/schemas/schemas#position" aria-label="position">position</a> が地理的な矩形の内側にあることを要求します。矩形は 4 つの数値(度単位)で指定します。4 つの数値は特定の順序で指定しなければなりません: 南西の角(最小緯度、最小経度)の後に北東の角(最大緯度、最大経度)が続きます。例:  where geoBoundingBox(myfieldname, 63.25, 10.01, 63.45, 10.61) where geoBoundingBox(myfieldname, -23.12, -43.85, -22.59, -42.89)  最初の例では、ノルウェーのトロンハイム周辺の矩形のマップビューの内側にあるドキュメントを検索します。したがって、<a href="https://www.google.com/maps/place/63%C2%B025&#x27;50.0%22N+10%C2%B023&#x27;42.0%22E" aria-label="63°25&#x27;50&quot;N 10°23&#x27;42&quot;E">63°25'50"N 10°23'42"E</a> に「myfieldname」の position を持つドキュメントはマッチします。2 番目の例はブラジルの<a href="https://www.google.com/maps/place/22%C2%B059&#x27;13.0%22S+43%C2%B012&#x27;10.0%22W" aria-label="Rio de Janeiro">リオデジャネイロ</a>を囲みます。  - 最初のパラメーターは attribute フィールドの名前です。 - 2 番目のパラメーターは最小(南側)の緯度です(北が正、南が負)。 - 3 番目のパラメーターは最小(西側)の経度です(東が正、西が負)。 - 4 番目のパラメーターは最大(北側)の緯度です(北が正、南が負)。 - 5 番目のパラメーターは最大(東側)の経度です(東が正、西が負)。  position の詳細については <a href="#geolocation" aria-label="geoLocation">geoLocation</a> 演算子を参照してください。なお、この演算子からのランキングへの寄与はありません。ボックスの中心までの距離を取得したい場合は、その地点を指定した追加の <code>{`geoLocation`}</code> アイテムが必要です。  プロパティ:  | フィールドタイプ | position attribute(単一値または配列)。 | | --- | --- | | クエリーパラメーター | フィールド名、南、西、北、東の境界。 | | マッチング | 指定された地理的バウンディングボックスの内側にあるドキュメントを返します。 | | ランキング | なし。 | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/GeoLocationItem.html" aria-label="GeoLocationItem">GeoLocationItem</a> |</td>
+    </tr>
+    <tr>
+      <td>nearestNeighbor</td>
+      <td><code>{`nearestNeighbor`}</code> は、多次元ベクトル空間における top-k 最近傍にマッチします。ベクトル空間内の点は、1 つの indexed ディメンションを持つ<a href="/ja/ranking/tensor-user-guide" aria-label="tensors">テンソル</a>として指定され、そのディメンションのサイズはベクトル空間の次元数に等しくなります。  ドキュメントのベクトルは<a href="/ja/reference/schemas/schemas#tensor" aria-label="tensor field attribute">テンソル・フィールド attribute</a> に格納され、クエリーベクトルはクエリーリクエストと共に送信されます。次のテンソル・フィールドタイプがサポートされています:  - ドキュメントごとに単一ベクトル: 1 つの indexed ディメンションを持つテンソルタイプ。例: <code>{`tensor<float>(x[3])`}</code> - ドキュメントごとに複数ベクトル: 1 つ以上の mapped ディメンションと 1 つの indexed ディメンションを持つテンソルタイプ。例: <code>{`tensor<float>(m{},x[3])`}</code>、<code>{`tensor<float>(m{},n{},x[3])`}</code>  デフォルトの<a href="/ja/reference/schemas/schemas#distance-metric" aria-label="distance metric">距離メトリック</a>としてユークリッド距離が使用され、厳密な最近傍が返されます。ドキュメントごとに複数のベクトルを格納する場合、ドキュメントとクエリー間の距離の計算には、クエリーベクトルに最も近いベクトルが使用されます。テンソル・フィールドに <a href="/ja/reference/schemas/schemas#index-hnsw" aria-label="HNSW index">HNSW インデックス</a>が指定されている場合、近似最近傍が返されます。例:  where (&#123;totaltargetHits: 10&#125;nearestNeighbor(doc_vector, query_vector))&amp;input.query(query_vector)=[3,5,7]&amp;ranking=semantic  この例では、3 次元ベクトル空間における top 10 の最近傍を検索します。&#42;totalTargetHits&#42; は、ユーザー定義の <code>{`semantic`}</code> <a href="/ja/basics/ranking" aria-label="rank profile">ランクプロファイル</a>に公開する top-k 最近傍を指定します。<a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> アノテーションは必須です。&#42;nearestNeighbor&#42; の最初のパラメーターは、ドキュメントのベクトルを含むテンソル・フィールド attribute の名前(&#42;doc_vector&#42;)です。  2 番目のパラメーターは、クエリーリクエストと共に送信されるテンソルの名前(&#42;query_vector&#42;)です。名前として &#42;query_vector&#42; を指定するということは、クエリーリクエストがこのテンソルを &#42;input.query(query_vector)&#42; として設定しなければならないことを意味します。<a href="/ja/reference/api/query#ranking.features" aria-label="reference">リファレンス</a>を参照してください。ランクプロファイル内で、&#42;&#42;入力クエリーベクトルのテンソルタイプを定義しなければなりません&#42;&#42;:  rank-profile semantic &#123;     inputs &#123;         query(query_vector) tensor&lt;float&gt;(x[3])     &#125;     first-phase: closeness(field, doc_vector) &#125;  <a href="../../ranking/ranking-expressions-features#query-feature-types" aria-label="defining query feature types">クエリーフィーチャータイプの定義</a>も参照してください。スキーマ内でクエリー入力テンソルを定義しないと、リクエストは失敗します:    Expected 'query(query_vector)' to be a tensor, but it is the string '[3,5,7]'  ドキュメントのテンソル・フィールド attribute は次のように定義します:  field doc_vector type tensor&lt;float&gt;(x[3]) &#123;     indexing: attribute | summary &#125;  上記の例では HNSW <code>{`index`}</code> を定義しておらず、近傍の検索は厳密(exact)になります。  より詳細な例については、<a href="/ja/querying/nearest-neighbor-search" aria-label="Nearest Neighbor Search">最近傍検索</a>、<a href="/ja/querying/approximate-nn-hnsw" aria-label="Approximate Nearest Neighbor Search using HNSW Index">HNSW インデックスを使用した近似最近傍検索</a>、<a href="/ja/querying/nearest-neighbor-search-guide" aria-label="Nearest Neighbor Search Guide">最近傍検索ガイド</a>を参照してください。  | アノテーション | 効果 | | --- | --- | | <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> | クエリーを評価するコンテントノード全体の合計で、nearestNeighbor が<a href="/ja/basics/ranking" aria-label="ranking">ランキング</a>に公開すべきヒット数を指定します。実際にはこれより多い、または少ないヒットが生成される場合があります。target hits の設定は必須です。 | | <a href="#mintargethits" aria-label="minTargetHits">minTargetHits</a> | この最近傍演算子で生成する&#42;最小&#42;の target hits を指定します。デフォルト値は 100 です。グラフの探索が少なすぎると品質の低下につながります。このパラメーターは、totalTargetHits によってコンテントの少ないノードの targetHits が低くなりすぎる場合に、それを防ぎます。 | | <a href="#targethits" aria-label="targetHits">targetHits</a> | &#42;ノードごと&#42;の target hits を指定します。こちらよりも <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> の使用を推奨します。 | | <a href="#approximate" aria-label="approximate">approximate</a> | オプションの <code>{`approximate`}</code> アノテーションを <code>{`false`}</code> に設定すると、近似 <a href="/ja/reference/schemas/schemas#index-hnsw" aria-label="HNSW index">HNSW インデックス</a>を使用しないようにできます。これは、HNSW パラメーターのチューニングを行うために厳密な結果と近似の結果を比較する際に特に役立ちます。このアノテーションは、HNSW インデックスが指定されている場合はデフォルトで <code>{`true`}</code> であり、それ以外の場合は常に <code>{`false`}</code> です。これを <code>{`false`}</code> に設定すると、<a href="../../performance/graceful-degradation.html" aria-label="graceful query degradation">グレースフルなクエリーデグラデーション</a>が発生する可能性があります。必要に応じて <a href="#timeout" aria-label="timeout">timeout</a> を調整してください。 | | <a href="#hnsw-exploreadditionalhits" aria-label="hnsw.exploreAdditionalHits">hnsw.exploreAdditionalHits</a> | ベストヒットを選択する前に、HNSW グラフ内で(<code>{`totalTargetHits`}</code> に加えて)追加で探索するノード数をチューニングします。デフォルトは <code>{`0`}</code> です。このパラメーターを増やすと、より多くの距離計算というコストと引き換えに、近似検索の精度が向上します。 | | <a href="#label" aria-label="label">label</a> | ランクプロファイル内のランキング式から参照できるラベルをクエリー演算子に付けるために使用します。<a href="/ja/reference/ranking/rank-features#closeness(dimension,name)" aria-label="closeness">closeness</a> および <a href="/ja/reference/ranking/rank-features#distance(dimension,name)" aria-label="distance">distance</a> ランクフィーチャーを参照してください。同じクエリー内に複数の <code>{`nearestNeighbor`}</code> 演算子がある場合(例: スキーマに複数のベクトルフィールドがある場合)に有用です。使用例は<a href="/ja/querying/nearest-neighbor-search-guide#multiple-nearest-neighbor-search-operators-in-the-same-query" aria-label="nearest neighbor search guide">最近傍検索ガイド</a>を参照してください。 | | <a href="#distancethreshold" aria-label="distanceThreshold">distanceThreshold</a> | しきい値より大きい距離を持つヒットをフィルタリングして除外するために使用します。使用例は<a href="/ja/querying/nearest-neighbor-search-guide#strict-filters-and-distant-neighbors" aria-label="nearest neighbor search guide">最近傍検索ガイド</a>を参照してください。 |  プロパティ:  | フィールドタイプ | サイズ N の 1 つの indexed ディメンションを持つ、または 1 つ以上の mapped ディメンションとサイズ N の 1 つの indexed ディメンションを持つテンソル attribute。 | | --- | --- | | クエリーモデル | サイズ N の 1 つの indexed ディメンションを持つテンソル。 | | マッチング | ドキュメントのテンソルとクエリーのテンソルの間の距離(使用される<a href="/ja/reference/schemas/schemas#distance-metric" aria-label="distance metric">距離メトリック</a>に基づく)が、現在の top-k ベストヒットの中で最大の距離より小さいドキュメントを返します。つまり、通常は top-k を超える数のドキュメントがマッチしてランキングのために返されます。これは <a href="#wand" aria-label="wand">wand</a> の挙動に似ています。<a href="/ja/reference/schemas/schemas#index-hnsw" aria-label="HNSW index">HNSW インデックス</a>を使用する場合、top-k ベストヒットは通常のマッチングが行われる前に、クエリーの残りのフィルターを考慮して計算されます。 | | ランキング | <code>{`1 / (1 + d)`}</code> として定義される closeness スコアを計算します。ここで <code>{`d`}</code> はドキュメントのテンソルとクエリーのテンソルの間の距離です。このスコアは <a href="/ja/reference/ranking/rank-features#rawScore(field)" aria-label="rawScore">rawScore</a>、<a href="/ja/reference/ranking/rank-features#itemRawScore(label)" aria-label="itemRawScore">itemRawScore</a>、または <a href="/ja/reference/ranking/rank-features#closeness(dimension,name)" aria-label="closeness">closeness</a> ランクフィーチャーで利用できます。raw の距離は <a href="/ja/reference/ranking/rank-features#distance(dimension,name)" aria-label="distance">distance</a> ランクフィーチャーで利用できます。 | | Java Query Item | <a href="https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/NearestNeighborItem.html" aria-label="NearestNeighborItem">NearestNeighborItem</a> |</td>
+    </tr>
+    <tr>
+      <td>nonEmpty</td>
+      <td>&#42;nonEmpty&#42; は、唯一の引数として任意の検索式を取ります。そして、その式に対して一連のチェックを実行します。すべてのチェックに合格した場合、結果は同じ式となり、そうでない場合はクエリーは失敗します。チェックは次のとおりです: <br/> 1. 空の検索語がないこと <br/> 2. 語のないフレーズなど、空の演算子がないこと <br/> 3. クエリー解析の失敗などによる null マーカー(NullItem)がないこと <pre><code>{`=select * from sources * where bar contains "a" and nonEmpty(bar contains "bar" and foo contains @foo)&foo=`}</code></pre> この場合「foo」が空であることに注意してください。これによりクエリーは強制的に失敗します。「foo」に検索可能な語が含まれていれば、クエリーは失敗しません。</td>
+    </tr>
+    <tr>
+      <td>predicate</td>
+      <td>&#42;predicate()&#42; は predicate クエリーを指定します。<a href="/ja/schemas/predicate-fields" aria-label="predicate fields">predicate フィールド</a>を参照してください。3 つの引数を取ります: 検索対象の predicate フィールド、attribute のマップ、range attribute のマップです:  <pre><code>{`predicate(predicate_field,{"gender":"Female"},{"age":20L})`}</code></pre>  YQL 解析の特性により、空のマップは指定できません。代わりに数値 0 を使用してください。 <pre><code>{`where predicate(predicate_field,0,{"age":20L})`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>true</td>
+      <td>任意のタイプのすべてのドキュメントにマッチします。すべてのドキュメントをマッチとして処理するのは高コストであるため、使用時には注意が必要です。最低限、コーパスが大きすぎないことがわかっている 1 つのスキーマのみへの制限を検討してください。<a href="/ja/reference/api/query#model.restrict" aria-label="model.restrict">model.restrict</a> URL パラメーターを参照してください。</td>
+    </tr>
+    <tr>
+      <td>false</td>
+      <td>どのドキュメントにも一切マッチしません。それ自体では有用ではありませんが、クエリーツリー内のプレースホルダーとして使用できる可能性があります。</td>
+    </tr>
+  </tbody>
+</table>
+
+## order by
+
+`order by` を使用してソートします。[attribute](/ja/content/attributes) の名前の後に `asc` または `desc` を追加してソート順を設定します。デフォルトは昇順です。別のソート attribute を追加すると二次ソートが得られ、これは一次ソート attribute のタイブレーカーとなります。これは通常、一次ソート attribute が複数のドキュメントで同じ値を持つ場合に、予測可能な順序を得るために使用されます。
+
+where title contains "madonna" order by price asc, releasedate desc
+
+ソート関数、ロケール、強度は、次のようにアノテーション「function」、「locale」、「strength」を使用して定義します:
+
+```bash
+where title contains "madonna" order by {function: "uca", locale: "en\_US", strength: "IDENTICAL"}other desc, {function: "lowercase"}something
+```
+
+<Info>
+**注:** ソート時には [match-phase](/ja/reference/schemas/schemas#match-phase) が有効になります。[ソートのリファレンス](/ja/reference/querying/sorting-language)を参照してください。
+</Info>
+[ランクプロファイル](/ja/basics/ranking)は、各ドキュメントが得るランクスコアを決定します。結果はデフォルトでその値によって順序付けられますが、`order by` はその順序を上書きします。この場合でも Vespa はランクスコアの計算を最適化によって省略せず、モデルのスコアが破棄されるとしても計算は実行されます。ソートクエリーのパフォーマンスを最適にするには、組み込みの rank-profile *unranked* を使用してください。
+
+ランクスコアで一次ソートを行い、attribute で二次ソートを行うには、最初の order by の attribute として `'[relevance]'` を使用します。詳細は[特殊なソート attribute](/ja/reference/querying/sorting-language#special-sorting-attributes)を参照してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>アノテーション</th>
+      <th>効果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="#function" aria-label="function">function</a></td>
+      <td>ソート関数。デフォルトは UCA。</td>
+    </tr>
+    <tr>
+      <td><a href="#locale" aria-label="locale">locale</a></td>
+      <td><a href="#function" aria-label="UCA sort function">UCA ソート関数</a>のロケール識別子。</td>
+    </tr>
+    <tr>
+      <td><a href="#strength" aria-label="strength">strength</a></td>
+      <td><a href="#function" aria-label="UCA sort function">UCA ソート関数</a>の強度設定。</td>
+    </tr>
+  </tbody>
+</table>
+
+## limit / offset
+
+スライスの指定、返されるヒット数の制限、ページネーションを行うには、`limit` や `offset` を使用します。これは[ネイティブ実行パラメーター](/ja/reference/api/query#native-execution-parameters)を使用して制御することもできます。
+
+<Danger>
+**重要:** YQL で設定された値は [hits/offset](/ja/reference/api/query#hits) より優先されます。クエリープロファイル内の hits/offset の値も YQL によって上書きされます。例えば、`limit 100` は `<field name="hits" overridable="false">50</field>` を上書きします。
+</Danger>
+
+[maxHits](/ja/reference/api/query#hits)(デフォルト 400)と [maxOffset](/ja/reference/api/query#offset)(デフォルト 1000)によって制限されます。これらは [queryProfile](/ja/querying/query-profiles) で設定できます。
+
+例: これは、最初の 29 件のドキュメントをスキップして、(クエリーにマッチするヒットが十分にある場合)2 件のヒットを返します
+
+<Card>
+where title contains "madonna" limit 31 offset 29
+</Card>
+## timeout
+
+`timeout` を使用して、クエリーのタイムアウトをミリ秒単位で設定します。これはネイティブ実行パラメーター [timeout](/ja/reference/api/query#timeout) を使用して制御することもできます。YQL で指定された値が優先されます。:
+
+<Card>
+where title contains "madonna" timeout 70
+</Card>
+リテラルの数値のみが有効です。つまり、別の単位を設定することはサポートされていません。
+
+<Note>
+**注:** この値はミリ秒単位ですが、ネイティブ実行パラメーター [timeout](/ja/reference/api/query#timeout) は秒単位です
+</Note>
+## パラメーター置換
+
+パラメーター置換を使用して、YQL 文字列をユーザー入力値から分離します。例えば、[text(value)](#text) クエリー演算子は、`value` パラメーターのパラメーター置換をサポートしています:
+
+<Card>
+... where default contains text(@userinput)&userinput=free+text
+</Card>
+
+クエリー演算子 [field in (value)](#in)、[dotProduct(field, value)](#dotproduct)、[weightedSet(field, value)](#weightedset)、[wand(field, value)](#wand) は、`value` パラメーターのパラメーター置換をサポートしています。
+
+`value` 文字列は、次のいずれかの形式で渡すことができます(キーに `,` または `:` が含まれない限り、クォートは省略できます):
+
+- リスト: `value, ...`。[in](#in) 演算子専用。
+- 配列: `[[key, value], ...]`。[dotproduct](#dotproduct)、[weightedset](#weightedset)、[wand](#wand) 用。
+- マップ: `{key: value, ...}`。[dotproduct](#dotproduct)、[weightedset](#weightedset)、[wand](#wand) 用。
+
+例については[クエリー API ガイド](/ja/querying/query-api#parameter-substitution)を参照してください。
+
+## アノテーション
+
+語やフレーズにアノテーションを付けて、挙動を操作できます。`{}` を使用してアノテーションを追加します:
+
+```
+where text contains ({distance: 5}near("a", "b")) and text contains ({distance:2}near("c", "d"))
+```
+
+アノテーションを演算子にスコープするために、アノテーションが括弧で囲まれていることに注意してください。
+
+すべてのアノテーションは、phrase() や near() のような関数への文字列引数、および「contains」演算子への文字列引数でサポートされています。一部のアノテーションは、クエリーツリー内部で葉ノードのように扱われる関数でもサポートされています: phrase()、near()、onear()、range()、equiv()、dotProduct()、weightedSet()、weakAnd()、wand()、nearestNeighbor()。
+
+使用例については [SelectTestCase.java](https://github.com/vespa-engine/vespa/blob/master/container-search/src/test/java/com/yahoo/select/SelectTestCase.java) を参照してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>アノテーション</th>
+      <th>デフォルト</th>
+      <th>値</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>accentDrop</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>このフィールドの設定である場合、この語からアクセントを除去します。<a href="/ja/linguistics/linguistics-opennlp#normalization" aria-label="linguistics">linguistics</a> を参照してください。</td>
+    </tr>
+    <tr>
+      <td>allowEmpty</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td><a href="#text" aria-label="text">text</a>/<a href="#userinput" aria-label="userInput">userInput</a> におけるクエリー解析およびクエリー語に対して、空の入力を許可するかどうか。<code>{`true`}</code> の場合、NullItem インスタンスがクエリーツリーの適切な場所に挿入されます。<code>{`false`}</code> の場合、ユーザーが提供した入力が解析できないか空であれば、クエリーは失敗します。</td>
+    </tr>
+    <tr>
+      <td>andSegmenting</td>
+      <td></td>
+      <td>true|false</td>
+      <td>この語の再セグメンテーション(例: ステミング時)の結果、複数の語になる場合に、フレーズまたは AND 演算子を強制します。デフォルトは言語設定からの選択です。</td>
+    </tr>
+    <tr>
+      <td>annotations</td>
+      <td></td>
+      <td>map</td>
+      <td><code>{`string: string`}</code> のマップ。カスタムアノテーション。YQL レイヤー内では特別なセマンティクスはありません。例: <code>{``}</code><code>{` annotations : {cox: "another"}`}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>approximate</td>
+      <td></td>
+      <td>boolean</td>
+      <td><a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a> で使用します。オプションの &#42;approximate&#42; アノテーションを <code>{`false`}</code> に設定すると、近似 <a href="/ja/reference/schemas/schemas#index-hnsw" aria-label="HNSW index">HNSW インデックス</a>の使用を禁止できます。これは、他のパラメーターのチューニングを行うために厳密な結果と近似の結果を比較する際に特に役立ちます。このアノテーションは、HNSW インデックスが指定されている場合はデフォルトで <code>{`true`}</code> であり、それ以外の場合は常に <code>{`false`}</code> です。</td>
+    </tr>
+    <tr>
+      <td>ascending</td>
+      <td></td>
+      <td>boolean</td>
+      <td>昇順のヒット順序。<a href="#hitlimit" aria-label="hitLimit">hitLimit</a> で使用されます。</td>
+    </tr>
+    <tr>
+      <td>bounds</td>
+      <td><code>{`closed`}</code></td>
+      <td>enum</td>
+      <td><a href="#numeric" aria-label="numeric">数値</a>の区間はデフォルトで閉区間です。下限を含まない場合は <code>{`leftOpen`}</code> に設定します。上限を含まない場合は <code>{`rightOpen`}</code> に設定します。両方の境界を含まない場合は、アノテーションを <code>{`open`}</code> に設定します。例:  <code>{``}</code><code>{`where ({bounds:"rightOpen"}range(year, 2000, 2018))`}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>connectivity</td>
+      <td></td>
+      <td>map</td>
+      <td><code>{`id: int, weight: double`}</code> のマップ。このアイテムと、指定された <a href="#id" aria-label="id">id</a> を持つアイテムとの間の明示的な connectivity。<a href="/ja/ranking/nativerank#weight-significance-and-connectedness" aria-label="text matching and ranking">テキストマッチングとランキング</a>を参照してください。例:  <code>{``}</code><code>{`connectivity: {id: 4, weight: 0.8}`}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>descending</td>
+      <td></td>
+      <td>boolean</td>
+      <td>降順のヒット順序。<a href="#hitlimit" aria-label="hitLimit">hitLimit</a> で使用されます。</td>
+    </tr>
+    <tr>
+      <td>defaultIndex</td>
+      <td><code>{`default`}</code></td>
+      <td>スキーマ内の任意の検索可能なフィールド。</td>
+      <td><a href="#userinput" aria-label="userInput">userInput</a> で使用されます。クエリー API の <a href="/ja/reference/api/query#model.defaultindex" aria-label="model.defaultIndex">model.defaultIndex</a> と同じです。<a href="#grammar" aria-label="grammar">grammar</a> が <code>{`raw`}</code> または <code>{`segment`}</code> に設定されている場合、これが検索対象のフィールドになります。</td>
+    </tr>
+    <tr>
+      <td>distance</td>
+      <td>2</td>
+      <td>int</td>
+      <td>&#42;distance&#42; アノテーションは、マッチとみなす最大位置差を設定します。<a href="#near" aria-label="near">near</a> / <a href="#onear" aria-label="onear">onear</a> を参照してください。マッチするすべての語は、位置 [P, P+distance] の範囲内に収まらなければなりません。ここで P は最初の語の位置です。デフォルトは 2 です。 <code>{``}</code><code>{` where text contains ({distance: 5}near("a", "b"))`}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>elementFilter</td>
+      <td></td>
+      <td>list of int</td>
+      <td><a href="#sameelement" aria-label="sameElement">sameElement</a> と共に使用します。配列フィールドでのマッチを特定のインデックスに制限します。空でないリストを指定すると、sameElement は指定されたインデックスの 1 つ以上でマッチがある場合に限りマッチします。  where my_numbers contains <code>{``}</code><code>{`({elementFilter:[0, 2, 5]}sameElement("42")) `}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>distanceThreshold</td>
+      <td>+infinity</td>
+      <td>double</td>
+      <td><a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a> で使用します。<code>{`distanceThreshold`}</code> アノテーションは、指定されたしきい値より大きい距離を持つヒットを結果からフィルタリングして除外するために使用できます。なお、<code>{`distanceThreshold`}</code> を使用して、使用しない場合より多くのヒットが得られることは決してありません。より多くのヒットを得るには、<a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> も増やしてください。しきい値の単位は、使用される<a href="/ja/reference/schemas/schemas#distance-metric" aria-label="distance metric">距離メトリック</a>に依存します。</td>
+    </tr>
+    <tr>
+      <td>endAnchor</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td><a href="#uri" aria-label="uri">uri</a> の <code>{`hostname`}</code> サブフィールドは、ホスト名の先頭および/または末尾へのアンカーをサポートしており、<code>{`startAnchor`}</code> および <code>{`endAnchor`}</code> アノテーションで制御されます。末尾へのアンカーはデフォルトで有効ですが、先頭へのアンカーは有効ではありません。したがって、  where myUrlField.hostname contains uri("vespa.ai")  は &#42;vespa.ai&#42; と &#42;docs.vespa.ai&#42; にマッチしますが、  <code>{``}</code><code>{`where myUrlField.hostname contains ({startAnchor: true}uri("vespa.ai")) `}</code><code>{``}</code> は vespa.ai のみにマッチします。</td>
+    </tr>
+    <tr>
+      <td>filter</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td>この語をエンドユーザーからの語ではなく「フィルター」語とみなします。「filter:true」がアノテーションされた語は太字化されません。<a href="/ja/reference/api/query#model.filter" aria-label="model.filter">model.filter</a> も参照してください。語の太字化は <a href="/ja/reference/schemas/schemas#bolding" aria-label="schema:bolding">schema:bolding</a> によって制御されます。</td>
+    </tr>
+    <tr>
+      <td>function</td>
+      <td></td>
+      <td></td>
+      <td>文字列のデフォルトのソート関数は <code>{`uca`}</code> です。フィールドのソート指定は<a href="/ja/reference/schemas/schemas#sorting" aria-label="schema">スキーマ</a>で設定でき、クエリー内の値はスキーマの設定を上書きします。  数値フィールドは数値としてソートされます。  | 関数 | 説明 | | --- | --- | | <code>{`uca`}</code> | このソートは、<a href="https://unicode.org/reports/tr10/" aria-label="Universal Collation Algorithm">Universal Collation Algorithm</a> に従う <a href="https://icu.unicode.org/" aria-label="icu">icu</a> ライブラリに基づいています。<a href="https://unicode-org.github.io/icu-docs/apidoc/dev/icu4j/com/ibm/icu/util/ULocale.html" aria-label="locale">locale</a> と <a href="https://unicode-org.github.io/icu-docs/apidoc/dev/icu4j/com/ibm/icu/text/Collator.html" aria-label="strength">strength</a> の指定は、<a href="https://icu.unicode.org/" aria-label="icu">icu</a> での指定方法と同一です。  <a href="#locale" aria-label="locale">locale</a> と <a href="#strength" aria-label="strength">strength</a> はどちらも省略可能ですが、<code>{`strength`}</code> には <code>{`locale`}</code> が必要です。  <a href="#locale" aria-label="locale">locale</a> クエリーアノテーションは、<a href="/ja/reference/schemas/schemas#sorting" aria-label="schema">スキーマ</a>の locale 設定を上書きします。両方に <code>{`locale`}</code> がない場合、デフォルトで <code>{`lowercase`}</code> 関数が使用されます。 | | <code>{`lowercase`}</code> | これは、ソートの前にまず文字列を小文字化および正規化することでソートを改善します。これはわずかにより正確であり、ユースケースによっては十分な場合があります。<code>{`raw`}</code> ソートと比べてそれほど高コストではなく、<code>{`uca`}</code> よりも低コストです。 | | <code>{`raw`}</code> | raw のバイト順は、文字列については utf8 の memcmp に基づき、その他のフィールドについては正しいソート順に準拠したバイナリ表現に基づく、シンプルで高速な順序付けです。ただし、バイナリ表現のみを見るため、コンピューター以外にとっては正しいものではありません。 |</td>
+    </tr>
+    <tr>
+      <td>grammar</td>
+      <td><code>{`weakAnd`}</code></td>
+      <td><code>{`raw`}</code>、<code>{`segment`}</code>、およびクエリー API の <a href="/ja/reference/api/query#model.type" aria-label="model.type">model.type</a> 引数で受け付けられるすべての値。</td>
+      <td><a href="#userinput" aria-label="userInput">userInput</a> の解析方法。<code>{`raw`}</code> はユーザー入力を処理なしでマッチさせる文字列として扱い、<code>{`segment`}</code> は言語処理ライブラリによる最初のパスを実行し、残りの値は文字列を解析対象のクエリーとして扱います。  <code>{`grammar.composite`}</code>、<code>{`grammar.tokenization`}</code>、<code>{`grammar.syntax`}</code>、<code>{`grammar.profile`}</code> を使用して、個々の model.type 設定を指定することもできます。<a href="/ja/reference/api/query#model.type" aria-label="model.type">model.type</a> のドキュメントを参照してください。  <a href="/ja/querying/query-api#input-examples" aria-label="userInput examples">userInput の例</a>も参照してください。</td>
+    </tr>
+    <tr>
+      <td>hitLimit</td>
+      <td></td>
+      <td>int</td>
+      <td><a href="#numeric" aria-label="Numeric">数値</a>演算は <code>{`hitLimit`}</code> をサポートしています。これは&#42;上限付き範囲検索(capped range search)&#42;に使用されます。hitLimit に負の値と正の値を使う代わりに、常に正のヒット数を使用し(負のヒット数はあまり意味をなさないため)、これを <a href="#ascending" aria-label="ascending">ascending</a> または <a href="#descending" aria-label="descending">descending</a> アノテーションのいずれか(両方は不可)と組み合わせる方法もあります。例: <code>{`{hitLimit: 38, descending: true}`}</code> は -38 に設定するのと等価です。つまり、38 件のヒットのみを収集し、上側の境界から開始する、すなわち降順です。  なお、<code>{`hitLimit`}</code> は考慮されるドキュメントの数を制限します。これは強力な最適化であり、特に他のフィルターと組み合わせる場合には注意して使用しなければなりません。考慮対象のドキュメント集合は、範囲クエリーと hitLimit アノテーションに従ってベスト N 件のみを選択することで、以降のクエリー評価に先立って事前に制限されます。  <code>{`hitLimit`}</code> は厳密ではなく「少なくとも」です。加えて、attribute が <a href="/ja/reference/schemas/schemas#attribute" aria-label="fast-search">fast-search</a> を持つ場合にのみ機能します。辞書内で範囲の上限または下限を検索し、昇順または降順にスキャンして、hitLimit を満たすまでエントリーを選択します。選択されたすべての辞書エントリーに対応するすべてのドキュメントが得られます。  例については <a href="/ja/performance/practical-search-performance-guide#advanced-range-search-with-hitlimit" aria-label="practical-search-performance-guide">practical-search-performance-guide</a> を参照してください。</td>
+    </tr>
+    <tr>
+      <td>hnsw.exploreAdditionalHits</td>
+      <td></td>
+      <td></td>
+      <td><a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a> で使用します。<a href="/ja/reference/schemas/schemas#index-hnsw" aria-label="HNSW index">HNSW インデックス</a>を使用する場合、オプションの <code>{`hnsw.exploreAdditionalHits`}</code> アノテーションを使用して、ベストヒットを選択する前にグラフ内で(<code>{`totalTargetHits`}</code> に加えて)追加で探索するノード数をチューニングできます。ここで大きい数を使用すると品質は向上しますが、パフォーマンスは低下します。</td>
+    </tr>
+    <tr>
+      <td>id</td>
+      <td></td>
+      <td>int</td>
+      <td><a href="#connectivity" aria-label="connectivity">connectivity</a> などで使用される一意な ID。</td>
+    </tr>
+    <tr>
+      <td>implicitTransforms</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>暗黙的な語の変換(フィールドのデフォルト)。<code>{`implicitTransforms`}</code> が true の場合、スキーマ内のフィールドの設定が語の変換で尊重されます。例えば、フィールドにステミングが設定されていれば、この語はステミングされます。<code>{`implicitTransforms`}</code> が false の場合、検索バックエンドは最初の YQL 式に書かれたとおりの語をそのまま受け取ります。言い換えると、これは他のすべての<a href="/ja/linguistics/linguistics-opennlp#stemming" aria-label="stemming">ステミング</a>、アクセント除去、Unicode <a href="/ja/linguistics/linguistics-opennlp#normalization" aria-label="normalizations">正規化</a>などを無効化するトップレベルのスイッチです。</td>
+    </tr>
+    <tr>
+      <td>label</td>
+      <td></td>
+      <td>string</td>
+      <td><a href="#geolocation" aria-label="geoLocation">geoLocation</a> および <a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a> で使用されます。ランキング時にこの語/演算子を参照するためのラベル。</td>
+    </tr>
+    <tr>
+      <td>language</td>
+      <td></td>
+      <td>RFC 3066 言語コード</td>
+      <td><a href="#text" aria-label="text">text</a> および <a href="#userinput" aria-label="userInput">userInput</a> の言語処理(linguistics)のための言語設定。クエリー API リファレンスの <a href="/ja/reference/api/query#model.language" aria-label="model.language">model.language</a> も参照してください。</td>
+    </tr>
+    <tr>
+      <td>locale</td>
+      <td></td>
+      <td></td>
+      <td><a href="#function" aria-label="UCA sort function">UCA ソート関数</a>で使用されます。<a href="https://www.unicode.org/reports/tr35/#Unicode_Language_and_Locale_Identifiers" aria-label="unicode locale identifiers">Unicode ロケール識別子</a>に従う識別子。例: <code>{`en_US`}</code>。</td>
+    </tr>
+    <tr>
+      <td>maxEditDistance</td>
+      <td>2</td>
+      <td>int</td>
+      <td><a href="#fuzzy" aria-label="fuzzy">fuzzy</a> で使用します。クエリーと文字列 attribute の間の編集距離の上限(その値を含む)。</td>
+    </tr>
+    <tr>
+      <td>nfkc</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>NFKC <a href="/ja/linguistics/linguistics-opennlp#normalization" aria-label="normalization">正規化</a>。</td>
+    </tr>
+    <tr>
+      <td>normalizeCase</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>このフィールドの設定である場合、この語の大文字・小文字を正規化します。</td>
+    </tr>
+    <tr>
+      <td>origin</td>
+      <td></td>
+      <td>map</td>
+      <td><code>{`original: string, offset: int, length: int`}</code> のマップ。この語を生成した(部分)文字列。デフォルトは未設定。例: <code>{``}</code><code>{` origin: {original: "abc", offset: 1, length: 2}`}</code><code>{``}</code></td>
+    </tr>
+    <tr>
+      <td>prefix</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td>この語に対して<a href="/ja/reference/schemas/schemas#prefix" aria-label="prefix matching">プレフィックスマッチング</a>を行います。例: 「word&#42;」の検索。</td>
+    </tr>
+    <tr>
+      <td>substring</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td>インデックスで利用可能な場合、この単語に対して部分文字列マッチングを行います。(「"&#42;word&#42;" の検索」)。<a href="/ja/performance/streaming-search" aria-label="streaming search">ストリーミング検索</a>でのみサポートされています。</td>
+    </tr>
+    <tr>
+      <td>prefixLength</td>
+      <td>0</td>
+      <td>int</td>
+      <td><a href="#fuzzy" aria-label="fuzzy">fuzzy</a> で使用します。固定とみなされる文字数。fuzzy マッチは残りのサフィックス部分に対して実行されます。</td>
+    </tr>
+    <tr>
+      <td>ranked</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>この語をランキング計算に含めます。ranked を false に設定すると、クエリー評価を高速化できます。詳細は<a href="/ja/reference/schemas/schemas#rank" aria-label="schema reference">スキーマリファレンス</a>を参照してください。<a href="/ja/ranking/ranking-expressions-features#dumping-rank-features-for-specific-documents" aria-label="Example">例</a></td>
+    </tr>
+    <tr>
+      <td>scoreThreshold</td>
+      <td></td>
+      <td>double</td>
+      <td><a href="#wand" aria-label="wand">wand</a> における、マッチとして含めるヒットの最小スコアのしきい値。</td>
+    </tr>
+    <tr>
+      <td>significance</td>
+      <td></td>
+      <td>double</td>
+      <td>テキストランキングフィーチャーのための significance 値。<a href="/ja/ranking/nativerank#weight-significance-and-connectedness" aria-label="text matching and ranking">テキストマッチングとランキング</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>startAnchor</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td><a href="#endanchor" aria-label="endAnchor">endAnchor</a> を参照してください。</td>
+    </tr>
+    <tr>
+      <td>stem</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td>このフィールドの設定である場合、この語をステミングします。</td>
+    </tr>
+    <tr>
+      <td>strength</td>
+      <td><code>{`PRIMARY`}</code></td>
+      <td>- <code>{`PRIMARY`}</code> - <code>{`SECONDARY`}</code> - <code>{`TERTIARY`}</code> - <code>{`QUATERNARY`}</code> - <code>{`IDENTICAL`}</code></td>
+      <td><a href="#function" aria-label="UCA sort function">UCA ソート関数</a>で使用されます。デフォルトは <code>{`PRIMARY`}</code> で、主要な差別化特性のみでソートします。つまり、大文字/小文字の違いや、アクセントの違いのみを持つ文字は等しいものとみなされます。</td>
+    </tr>
+    <tr>
+      <td>suffix</td>
+      <td>false</td>
+      <td>boolean</td>
+      <td>この語に対して&#42;サフィックスマッチング&#42;を行います。例: 「&#42;word」の検索。</td>
+    </tr>
+    <tr>
+      <td>totalTargetHits</td>
+      <td>100</td>
+      <td>int</td>
+      <td><a href="#wand" aria-label="wand">wand</a> および <a href="#weakand" aria-label="weakAnd">weakAnd</a>(デフォルトは 100)と、<a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a>(デフォルトなし)で使用されます。これは、クエリーを評価するコンテントノード(&#42;グループ&#42;)全体の合計で、first-phase ランキング関数に公開したいヒット数を設定します。追加の second phase ランキングを使用する場合は、<code>{`totalTargetHits`}</code> を、設定されている rank-profile の <a href="/ja/reference/schemas/schemas#secondphase-total-rerank-count" aria-label="total-rerank-count">total-rerank-count</a> より小さくしないでください。  例は<a href="/ja/querying/nearest-neighbor-search" aria-label="nearest neighbor search">最近傍検索</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>minTargetHits</td>
+      <td>100</td>
+      <td>int</td>
+      <td><a href="#nearestneighbor" aria-label="nearestNeighbor">nearestNeighbor</a> と共に使用されます。この最近傍演算子で生成する&#42;最小&#42;の target hits を指定します。デフォルト値は 100 です。グラフの探索が少なすぎると品質の低下につながります。このパラメーターは、totalTargetHits によってコンテントの少ないノードの targetHits が低くなりすぎる場合に、それを防ぎます。  各コンテントノードは、ノードごとの target hits を <code>{`max(minTargetHits, ceil(totalTargetHits × share))`}</code> として解決します。ここで <code>{`share`}</code> は、クエリーを処理する<a href="/ja/reference/applications/services/content#group" aria-label="group">グループ</a>内のアクティブなドキュメントに占めるそのノードの割合です。クエリーは単一のグループにディスパッチされるため、クラスター全体に対する割合ではありません。クラスターに参加したばかりのノードや、トポロジー変更後にまだドキュメントを受信中のノードは、一時的に保持するコンテントが少なく、この下限がなければ <code>{`totalTargetHits`}</code> だけでは得られるヒットが少なすぎることになります。  <Info>&#42;&#42;注:&#42;&#42; minTargetHits を、ノードに期待される totalTargetHits の割り当て分より高く設定すると、minTargetHits が実効値となり、totalTargetHits はこの下限を超えるまで効果を持ちません。グループは通常クラスター全体よりノード数が少ないため、フラットなトポロジーからグループ化されたトポロジーに移行する際にこの状況に陥りやすくなります。</Info></td>
+    </tr>
+    <tr>
+      <td>targetHits</td>
+      <td>100</td>
+      <td>int</td>
+      <td>ノードごとの target hits を設定します。こちらよりも <a href="#totaltargethits" aria-label="totalTargetHits">totalTargetHits</a> の使用を推奨します。</td>
+    </tr>
+    <tr>
+      <td>usePositionData</td>
+      <td>true</td>
+      <td>boolean</td>
+      <td><a href="/ja/ranking/nativerank" aria-label="nativeRank">nativeRank</a> のようなテキストランキングフィーチャーのために、語の位置データを使用します。これは&#42;語&#42;の位置であり、<a href="/ja/querying/geo-search" aria-label="geo searches">地理検索</a>と混同しないでください。「usePositionData:false」を設定すると、クエリーのパフォーマンスが向上する場合があります。</td>
+    </tr>
+    <tr>
+      <td>weight</td>
+      <td>100</td>
+      <td>int</td>
+      <td>語の重み。一部のテキストランキングフィーチャーで使用されます。<a href="/ja/ranking/nativerank#weight-significance-and-connectedness" aria-label="text matching and ranking">テキストマッチングとランキング</a>を参照してください。  <code>{``}</code><code>{`where title contains ({weight:200}"heads")`}</code><code>{``}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+### 部分式のアノテーション
+
+次のクエリーを考えます:
+
+```sql
+select * from sources * where ({stem: false}(foo contains "a" and bar contains "b")) or foo contains ({stem: false}"c")
+```
+
+「stem」アノテーションは、フィールドがステミング対象フィールドとして設定されている場合に、その語をステミングすべきかどうかを制御します(デフォルトは「true」)。「AND」演算子自体には、そのオペランドをステミングすべきかどうかについての内部 API はありませんが、それでもこのようにアノテーションを付けることができます。これは、あるアノテーションの値が決定される際に、対象の語からその祖先へと式ツリーがたどられるためです。ツリーの走査は、値が見つかった時点で(または走査するものがなくなった時点で)停止します。言い換えると、この例のどの語もステミングされません。
+
+アノテーションの挙動は、ブールクエリーを S 式のスタイルで表現すると理解しやすいかもしれません:
+
+```sql
+(AND term1 term2 (OR term3 term4) (OR term5 (AND term6 term7)))
+```
+
+この場合、アノテーションのスコープは次のようになります。すなわち、ある語の設定を決定する際に、どの要素のアノテーションがチェックされるかを示します:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>term1</td>
+      <td>term1 自身と、最初の AND</td>
+    </tr>
+    <tr>
+      <td>term2</td>
+      <td>term2 自身と、最初の AND</td>
+    </tr>
+    <tr>
+      <td>term3</td>
+      <td>term3 自身、最初の OR、最初の AND</td>
+    </tr>
+    <tr>
+      <td>term4</td>
+      <td>term4 自身、最初の OR、最初の AND</td>
+    </tr>
+    <tr>
+      <td>term5</td>
+      <td>term5 自身、2 番目の OR、最初の AND</td>
+    </tr>
+    <tr>
+      <td>term6</td>
+      <td>term6 自身、2 番目の AND、2 番目の OR、最初の AND</td>
+    </tr>
+    <tr>
+      <td>term7</td>
+      <td>term7 自身、2 番目の AND、2 番目の OR、最初の AND</td>
+    </tr>
+  </tbody>
+</table>
+
+## クエリープロパティ
+
+YQL の変数構文を使用して、フレーズ内の単語や単独の語を初期化します。これにより、YQL 内での語のクォートや URL クォートを気にする必要がなくなります。語は URL にあるものと_まったく同じように_使用されます。例として、YQL 引数と、プロパティ _animal_ および _syntaxExample_ を持つクエリーを見てみましょう:
+
+```bash
+yql=select * from sources * where foo contains @animal and foo contains phrase(@animal, @syntaxExample, @animal)&animal=panda&syntaxExample=syntactic
+```
+
+この YQL 式はクエリープロパティ _animal_ と _syntaxExample_ にアクセスし、次のように評価されます:
+
+```sql
+select * from sources * where (foo contains "panda" AND foo contains phrase("panda", "syntactic", "panda"))
+```
+
+## クエリープロファイル内の YQL
+
+YQL を URL に含めるにはクォートが必要です。YQL はエンドユーザー向けではなくアプリケーションロジックに適しているため、この問題の解決策の 1 つは、アプリケーションの YQL クエリーを個別の[クエリープロファイル](/ja/querying/query-profiles)に格納することです。デフォルトのクエリープロファイルを追加するには、[アプリケーション・パッケージ](/ja/reference/applications/application-packages)に _search/query-profiles/default.xml_ を追加します:
+
+```xml
+<query-profile id="default">
+    <field name="yql">select * from sources * where default contains "latest" or userQuery()</field>
+</query-profile>
+```
+
+これは、明示的なクエリープロファイル・パラメーターを持たないすべてのクエリーに、_latest_ を _OR 語_として追加します。注目すべき重要な点は、クエリープロファイルのファイル内では何も URL クォートする必要がないことです。これらは HTTP の解析そのものとは独立して動作します。
+
+## Searcher でのクエリー書き換え
+
+テキストの YQL 文を変更する Searcher(非推奨)には、`@Before("ExternalYql")` のアノテーションを付けるべきです。入力の YQL 文から生成されたクエリーツリーを変更する Searcher には、`@After("ExternalYql")` のアノテーションを付けるべきです。
+
+## グルーピング
+
+`|` の後にグルーピング式を追加して、結果をグループ化/集約します。[詳細を読む](/ja/querying/grouping)。
+
+```sql
+select * from sources * where sddocname contains 'purchase' | all(group(customer) each(output(sum(price))))
+```

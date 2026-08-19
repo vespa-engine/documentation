@@ -1,0 +1,238 @@
+---
+title: "コンポーネント・リファレンス"
+sidebarTitle: "コンポーネント"
+---
+
+
+コンポーネントとは、そのライフタイムがコンテナーによって管理される任意の Java クラスです。導入については[開発者ガイド](/ja/applications/developer-guide)を参照してください。コンポーネントは services.xml で指定・設定され、構築時に他のコンポーネントやコンフィグ(生成された "Config" クラスで表現される)を[インジェクション](/ja/applications/dependency-injection)でき、また自身も他のコンポーネントにインジェクションされることができます。
+
+コンポーネント、またはコンポーネントが依存するリソースが再デプロイによって変更されるたびに、コンポーネントは再構築されます。変更されたすべてのコンポーネントの再構築が完了すると、新しいリクエストはアトミックに新しいセットを使用するように切り替えられ、古いものは破棄されます。
+
+コンポーネントに複数のコンストラクタがある場合は、インジェクションに使用するものに `@com.yahoo.component.annotation.Inject` アノテーションを付けてください。
+
+識別可能なコンポーネントは `com.yahoo.component.Component` を実装する必要があり、削除時にリソースを破棄する必要があるコンポーネントは `com.yahoo.component.AbstractComponent` をサブクラス化して `deconstruct()` を実装する必要があります。
+
+コンポーネントの一意性やライフタイムに関するよくある質問については、[例](/ja/operations/metrics#example-qa)を参照してください。
+
+## コンポーネントの種類
+
+Vespa は、一般的なタスクのためにさまざまなコンポーネント・タイプ(スーパークラス)を定義しています:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>コンポーネント・タイプ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Request handler&#42;&#42;</td>
+      <td><a href="/ja/applications/request-handlers" aria-label="Request handlers">リクエスト・ハンドラー</a>を使用すると、アプリケーションは任意の HTTP API を実装できます。リクエスト・ハンドラーはリクエストを受け取り、レスポンスを返します。カスタムのリクエスト・ハンドラーは <a href="https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/container/jdisc/ThreadedHttpRequestHandler.html" aria-label="ThreadedHttpRequestHandler">ThreadedHttpRequestHandler</a> のサブクラスです。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Processor&#42;&#42;</td>
+      <td><a href="/ja/applications/processing" aria-label="processing framework">プロセッシング・フレームワーク</a>は、チェーン化された一連の論理ユニットによる分解を用いた、汎用的で合成可能な同期リクエスト・レスポンス・システムを作成するために使用できます。サーチャーとサーチ・チェーンは、この汎用フレームワークを特定のドメイン向けに(サブクラスを通じて)具体化したものです。プロセッサーは同期的に呼び出され、レスポンスは任意のデータ要素のツリーです。カスタムの出力フォーマットは、<a href="#renderers" aria-label="renderers">レンダラー</a>を追加することで定義できます。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Renderer&#42;&#42;</td>
+      <td>レンダラーは、Response(またはクエリーの Result)をネットワーク経由で送信されるシリアライズされた形式に変換します。レンダラーは <a href="https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/java/com/yahoo/processing/rendering/Renderer.java" aria-label="com.yahoo.processing.rendering.Renderer">com.yahoo.processing.rendering.Renderer</a> のサブクラスです。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Searcher&#42;&#42;</td>
+      <td>サーチャーは Query とその Result を処理します。同期的であるため、複数のクエリーを直列または並列に発行して、たとえばフェデレーションを実装したり、コンテント・クラスターから取得した情報でクエリーを装飾したりできます。サーチャーは services.xml で定義された&#42;サーチ・チェーン&#42;に合成されます。クエリー・リクエストは、そのクエリーのロジックを実装する特定のサーチ・チェーンを選択します。<a href="/ja/applications/searchers" aria-label="Read more">詳細はこちら</a>。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Document processor&#42;&#42;</td>
+      <td>ドキュメント・プロセッサーは、受信したドキュメント操作を処理します。サーチャーやプロセッサーと同様にチェーンに合成できますが、ドキュメント・プロセッサーは非同期です。<a href="/ja/applications/document-processors" aria-label="Read more">詳細はこちら</a>。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Binding&#42;&#42;</td>
+      <td>バインディングは、リクエスト URI を正しい<a href="#filter" aria-label="filter chain">フィルター・チェーン</a>または<a href="#request-handlers" aria-label="request handler">リクエスト・ハンドラー</a>にマッチさせ、送信リクエストを正しい<a href="#client" aria-label="client">クライアント</a>にルーティングします。たとえば、バインディング &#42;http://&#42;/&#42;&#42; は任意の HTTP リクエストにマッチしますが、&#42;http://&#42;/processing&#42; はその特定のパスのみにマッチします。複数のバインディングがマッチする場合は、最も具体的なものが選択されます。<br/><br/>  &#42;&#42;Server binding&#42;&#42;<br/> サーバー・バインディングは、受信リクエストを正しいリクエスト・ハンドラーにマッチさせるためのルールであり、基本的に RESTful API を実装するための JDisc のビルディング・ブロックです。 <br/><br/> &#42;&#42;Client binding&#42;&#42; <br/>クライアント・バインディングは、コンテナー内部から発生するリクエスト(たとえばフェデレーション実行時)をクライアント・プロバイダーにマッチさせるために使用されるパターンです。つまり、特定の送信リクエストをどのコードが処理すべきかを決定するルールです。 |</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Filter&#42;&#42;</td>
+      <td>フィルターは軽量なリクエスト・チェッカーです。特定のリクエスト・プロパティを設定したり、セキュリティチェックを行って、必須のプロパティやヘッダーが欠けているリクエストを単純にブロックしたりできます。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Client&#42;&#42;</td>
+      <td>クライアント(またはクライアント・プロバイダー)は、さまざまなプロトコル向けのクライアントの実装、または特定のプロトコルに対する特別なルールです。JDisc アプリケーションがクライアントとして動作する場合(たとえば別のホストから Web ページを取得する場合)、そのトランザクションを処理するのはクライアント・プロバイダーです。リクエスト・ハンドラーやフィルターと同様に、バインディングを使用して、プロトコルやサーバーなどにマッチする正しいクライアントを選択し、その後リクエストをクライアント・プロバイダーに引き渡します。プロセッサーやリクエスト・ハンドラーの中で、外部サービス向けに任意の他の種類のクライアントを使用することにはまったく問題ありません。</td>
+    </tr>
+  </tbody>
+</table>
+
+## コンポーネントの構成
+
+以下は、Vespa コンテナーによってセットアップされる典型的なコンポーネント構成を示しています: 
+
+<Frame>
+![Vespa コンテナーのコンポーネント構成](/assets/img/container-components.svg)
+</Frame>
+
+ネットワーク層は Request を *response handler* に関連付け、(通常は URI バインディング・パターンに基づいて)正しい種類の[リクエスト・ハンドラー](#request-handlers)にルーティングします。
+
+アプリケーションが、チェーン化された一連の論理ユニットによる分解を用いた軽量なリクエスト・レスポンス処理を必要とする場合、[プロセッシング・フレームワーク](/ja/applications/processing)が使用すべき正しいコンポーネント・ファミリーです。リクエストは ProcessingHandler から 1 つ以上の [Processor](#processors) インスタンスのチェーンを経由してルーティングされます。出力の正確なフォーマットは、[Renderer](#renderers) を使用してカスタマイズできます。
+
+クエリーを実行する場合、SearchHandler は Query オブジェクトを作成し、それを該当する [Searcher](#searchers) インスタンスのチェーンにルーティングし、返された Result を正しい [Renderer](#renderers) インスタンスに関連付けて、出力フォーマットを必要に応じてカスタマイズします。
+
+DocumentProcessingHandler は通常 messagebus から呼び出され、ドキュメントをインデックスまたはストレージにフィードするために使用されます。受信データから Document オブジェクトが構築され、これが [DocumentProcessor](#document-processors) インスタンスのチェーンを通じてフィードされます。
+
+カスタム HTTP API(たとえば任意の REST API)を持つアプリケーションを構築する場合、最も簡単な方法はカスタムの [RequestHandler](#request-handlers) を構築することです。これは、基本的にキーと値のペアのセットである Request を受け取り、任意のデータのストリームをネットワークに返します。
+
+## インジェクション可能なコンポーネント
+
+これらのコンポーネントは、さまざまなコンテキストでアプリケーションに[インジェクション](/ja/applications/dependency-injection)するために Vespa から提供されています:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>コンポーネント</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;常に利用可能&#42;&#42;</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/java/com/yahoo/container/jdisc/athenz/AthenzIdentityProvider.java" aria-label="AthenzIdentityProvider">AthenzIdentityProvider</a></td>
+      <td>アプリケーションの Athenz アイデンティティを提供し、アイデンティティ/ロール証明書およびトークンへのアクセスを提供します。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/java/ai/vespa/embedding/BertBaseEmbedder.java" aria-label="BertBaseEmbedder">BertBaseEmbedder</a></td>
+      <td>BERT-Base 互換のエンベッダー。<a href="/ja/rag/embedding#bert-embedder" aria-label="BertBase embedder">BertBase エンベッダー</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/config-lib/src/main/java/com/yahoo/config/ConfigInstance.java" aria-label="ConfigInstance">ConfigInstance</a></td>
+      <td>設定は <code>{`ConfigInstance`}</code> コンポーネントとしてコンポーネントにインジェクションされます。<a href="/ja/applications/configuring-components" aria-label="configuring components">コンポーネントの設定</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td><a href="https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/Executor.html" aria-label="Executor">Executor</a></td>
+      <td>スレッド化されたリクエスト・ハンドラーでリクエストを処理するためのデフォルトのスレッドプール</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/Linguistics.java" aria-label="Linguistics">Linguistics</a></td>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/simple/SimpleLinguistics.java" aria-label="SimpleLinguistics">SimpleLinguistics</a> のような Linguistics コンポーネントをインジェクションするか、カスタム実装を提供します。<a href="/ja/linguistics/linguistics" aria-label="linguistics">linguistics</a> を参照してください。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/jdisc_core/src/main/java/com/yahoo/jdisc/Metric.java" aria-label="Metric">Metric</a></td>
+      <td>メトリクスのための JDisc コア・インターフェース。ThreadedRequestHandler のすべてのサブクラスで必要です。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/java/com/yahoo/metrics/simple/MetricReceiver.java" aria-label="MetricReceiver">MetricReceiver</a></td>
+      <td>コンポーネントからメトリクスを送出するために使用します。例は<a href="/ja/operations/metrics#metrics-from-custom-components" aria-label="metrics">メトリクス</a>ガイドにあります。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/model-evaluation/src/main/java/ai/vespa/models/evaluation/ModelsEvaluator.java" aria-label="ModelsEvaluator">ModelsEvaluator</a></td>
+      <td>Vespa アプリケーションに追加され、コンフィグ形式で利用可能な機械学習モデルを評価します。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/sentencepiece/SentencePieceEmbedder.java" aria-label="SentencePieceEmbedder">SentencePieceEmbedder</a></td>
+      <td>SentencePiece のネイティブ Java 実装。<a href="/ja/reference/rag/embedding#sentencepiece-embedder" aria-label="SentencePiece embedder">SentencePiece エンベッダー</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/zkfacade/src/main/java/com/yahoo/vespa/curator/api/VespaCurator.java" aria-label="VespaCurator">VespaCurator</a></td>
+      <td>ZooKeeper 用のクライアント。ZooKeeper が有効になっているコンテナー・クラスターで使用します。<a href="/ja/applications/using-zookeeper" aria-label="using ZooKeeper">ZooKeeper の使用</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/java/com/yahoo/container/handler/VipStatus.java" aria-label="VipStatus">VipStatus</a></td>
+      <td>このコンテナーから送出されるサービス・ステータス(up/down)を制御するために使用します。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/wordpiece/WordPieceEmbedder.java" aria-label="WordPieceEmbedder">WordPieceEmbedder</a></td>
+      <td>WordPiece エンベッダーの実装。通常は BERT モデルと共に使用されます。<a href="/ja/reference/rag/embedding#wordpiece-embedder" aria-label="WordPiece embedder">WordPiece エンベッダー</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/hosted-zone-api/src/main/java/ai/vespa/cloud/SystemInfo.java" aria-label="SystemInfo">SystemInfo</a></td>
+      <td>Vespa Cloud: コンポーネントが実行されている環境に関する情報を提供します。<a href="/ja/applications/components#the-systeminfo-injectable-component" aria-label="Read more">詳細はこちら</a>。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;<code>{`search`}</code> を持つコンテナーで利用可能&#42;&#42;</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/documentapi/src/main/java/com/yahoo/documentapi/DocumentAccess.java" aria-label="DocumentAccess">DocumentAccess</a></td>
+      <td><a href="/ja/writing/document-api-guide" aria-label="Document API">Document API</a> を使用するために使用します。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/searchchain/ExecutionFactory.java" aria-label="ExecutionFactory">ExecutionFactory</a></td>
+      <td>コードから新しいクエリーを実行するために使用します。<a href="/ja/applications/web-services#queries" aria-label="Read more">詳細はこちら</a>。</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/model-evaluation/src/main/java/ai/vespa/models/evaluation/Model.java" aria-label="Map`&lt;String, Model&gt;`">Map<code>{`<String, Model>`}</code></a></td>
+      <td>Model のセットをインジェクションするために使用します。<a href="/ja/ranking/stateless-model-evaluation" aria-label="Stateless Model Evaluation">Stateless Model Evaluation</a> を参照してください。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;<code>{`document-api`}</code> または <code>{`document-processing`}</code> を持つコンテナーで利用可能&#42;&#42;</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/vespa/blob/master/documentapi/src/main/java/com/yahoo/documentapi/DocumentAccess.java" aria-label="DocumentAccess">DocumentAccess</a></td>
+      <td><a href="/ja/writing/document-api-guide" aria-label="Document API">Document API</a> を使用するために使用します。</td>
+    </tr>
+  </tbody>
+</table>
+
+## コンポーネントのバージョニング
+
+コンポーネントは、コンテナー内の他の多くのアーティファクトと同様に、バージョン管理できます。このドキュメントでは、これらのバージョンの形式とセマンティクス、およびその参照方法について説明します。
+
+### 形式
+
+バージョンは次の形式です:
+
+```js
+version ::=    major [ "." minor [ "." micro [ "." qualifier ]]]
+```
+
+ここで `major`、`minor`、`micro` は整数で、`qualifier` は任意の文字列です。
+
+バージョンは、コロンで区切って id に追加されます。コンポーネントのバージョンごとにファイルが作成される場合、ファイル名ではコロンはダッシュに置き換えられます。
+
+### 順序
+
+バージョンは、まず major、次に minor、次に micro、最後に qualifier の辞書順で順序付けられます。つまり `a:1 < a:1.0 < a:1.0.0 < a:1.1 < a:1.1.0 < a:2` となります
+
+### バージョン付きコンポーネントの参照
+
+コンポーネントが(コードまたは設定で)id によって参照される場合、`id:versionSpecification` という形式を使用して、完全にまたは部分的に指定されたバージョンを参照に含めることができます。このような参照は、次のルールを使用して解決されます:
+
+- バージョン指定のない id は、qualifier を持たない最も高いバージョンに解決されます。
+- 部分的または完全なバージョン指定は、指定にマッチする、qualifier を持たない最も高いバージョンに解決されます。
+- qualifier を持つバージョンは、完全一致によってのみマッチします。
+
+例: id `a` を持つコンポーネントに次のバージョンがあるとします: `[1.1, 1.2, 1.2, 1.3.test, 2.0]`
+
+- 参照 `a` は `a:2.0` に解決されます
+- 参照 `a:1` は `a:1.2` に解決されます
+- "test" qualifier 付きのバージョンに解決する唯一の方法は、正確な参照 `a:1.3.test` を使用することです
+- 次の参照は解決されません: `a:1.3`、`a:3`、`1.2.3`
+
+### チェーン化されたコンポーネントの指定のマージ
+
+場合によっては、複数の参照を 1 つにマージする必要があります。例として、バージョン参照のチェーンの継承があり、複数の継承されたチェーンが同じコンポーネントを参照する場合があります。
+
+2 つのバージョン参照は、一方が他方のプレフィックスである場合、*互換*であると言います。この場合、最も具体的なバージョンが使用されます。互換でない場合、それらは*競合*しています。例:
+
+```xml
+<search>
+    <searcher id="Searcher:2.3" class="com.yahoo.search.example.Searcher" bundle="the name in <artifactId> in your pom.xml" />
+    <searcher id="Searcher:2.4" class="com.yahoo.search.example.Searcher" bundle="the name in <artifactId> in your pom.xml" />
+    <chain id="parenta">
+        <searcher id="Searcher:2"> bundle="the name in <artifactId> in your pom.xml" </searcher>
+    </chain>
+    <chain id="parentb">
+        <searcher id="Searcher:2.3"> bundle="the name in <artifactId> in your pom.xml" </searcher>
+    </chain>
+    <chain id="parentc">
+        <searcher id="Searcher:2.4"> bundle="the name in <artifactId> in your pom.xml" </searcher>
+    </chain>
+
+    <!-- This chain will get Searcher:2.3 -->
+    <chain id="childa" inherits="parenta parentb" />
+
+    <!-- Error, as Searcher:2.3 and Searcher:2.4 are conflicting -->
+    <chain id="childb" inherits="parentb parentc" />
+</search>
+```

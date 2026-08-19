@@ -1,0 +1,409 @@
+---
+title: "モニタリング"
+description: "Vespa は、CloudWatch、Datadog、Prometheus / Grafana とのメトリクス統合に加え、JSON HTTP API を提供します。"
+---
+
+メトリクスを外部システムに転送するには、主に 2 つのアプローチがあります:
+
+- 外部システムに Vespa からメトリクスを*プル*させる
+- Vespa から外部システムにメトリクスを*プッシュ*させる
+
+API がどこに設定され、どのように相互作用するかについては、Vespa が稼働する 2 つのノードの概要例を参照してください:
+
+<Frame>
+![メトリクスのインターフェース](/assets/img/metrics-api.svg)
+</Frame>
+
+- [/metrics/v1/values](#metrics-v1-values) はノード・メトリクス API であり、ノード上で実行されているプロセスのメトリクスを集約します。
+- [/state/v1/metrics](#state-v1-metrics) はプロセス・メトリクス API であり、個々のサービスのすべてのメトリクスを公開します。この例では、各ノードがコンテナーとコンテント・ノードを実行しています。
+- [/metrics/v2/values](#metrics-v2-values) は、全ノードにわたる [/metrics/v1/values](#metrics-v1-values) の集約です。metrics-proxy のポートで提供されます。
+- [/prometheus/v1/values](/ja/reference/api/prometheus-v1#prometheus-v1-values) は [/metrics/v1/values](#metrics-v1-values) と同じものを Prometheus 形式で提供します。metrics-proxy のポートで提供されます。
+- [/prometheus/v1/values](/ja/reference/api/prometheus-v1#prometheus-v1-values) と [/metrics/v2/values](#metrics-v2-values) は、コンテナーのポート(デフォルト 8080)でも複製されて提供されます。
+
+<Note>
+**注:** 
+
+API の実用的な使用例については、[multinode](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode) および [multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) サンプル・アプリケーションを参照してください。これらのアプリには、[vespa-model-inspect](/ja/reference/operations/self-managed/tools#vespa-model-inspect) を使用して使用中のポートを見つける方法の例も含まれています。
+</Note>
+
+`/metrics/v1/values` と `/prometheus/v1/values` を使用してメトリクスを取得する方法については、[メトリクス・ガイド](/ja/operations/metrics)を参照してください。このガイドには、カスタム・メトリクスとヒストグラムの使用方法も記載されています。
+
+## メトリクス・プロキシ
+
+各 Vespa ノードでは、この API のために *metrics-proxy* プロセスが実行されており、デフォルトのポートは 19092 です。これは、ノード上のすべてのプロセスからのメトリクス、およびノード間のメトリクスを集約します:
+
+metrics-proxy は通常ポート 19092 でリッスンします。[vespa-model-inspect](/ja/reference/operations/self-managed/tools#vespa-model-inspect) を使用して確認してください。
+
+metrics proxy がホストするメトリクス・インターフェースについては、[メトリクス・ガイド](/ja/operations/metrics)を参照してください。
+
+metric-proxy 同士は相互に通信して、内部の *applicationmetrics/v1/* API で提供されるメトリクス・キャッシュを構築します。これはコンテナー上の */metrics/v2/values* に複製され、アプリケーションのすべてのメトリクスに簡単にアクセスできるようになっています。
+
+metrics-proxy は [config-sentinel](/ja/operations/self-managed/config-sentinel) によって起動され、設定変更はできません。metrics-proxy プロセスは次のように表示されます:
+
+```bash
+$ ps ax | grep admin/metrics/vespa-container
+
+  703 ?        Sl     0:10 /usr/bin/java
+  -Dconfig.id=admin/metrics/vespa-container
+  ...
+  -cp /opt/vespa/lib/jars/jdisc_core-jar-with-dependencies.jar
+  com.yahoo.jdisc.core.StandaloneMain
+  file:/opt/vespa/lib/jars/container-disc-jar-with-dependencies.jar
+```
+
+## /state/v1/health
+
+*プロセスごと*のヘルス・ステータスは `http://host:port/state/v1/health` で確認できます
+
+<Frame>
+![Health API](/assets/img/health-api.svg)
+</Frame>
+
+`/state/v1/health` は、ハートビートに最もよく使用されます。詳細は[リファレンス](/ja/reference/api/state-v1#state-v1-health)を参照してください。例:
+
+```json
+{
+    "status": {
+        "code": "up",
+        "message": "Everything ok here"
+    }
+}
+```
+
+## /state/v1/metrics
+
+*プロセスごと*のメトリクスは `http://host:port/state/v1/metrics` で確認できます
+
+内部的には、Vespa は上記の API のメトリクスを、*プロセスごと*のメトリクス API とヘルス API から集約しています。ほとんどのユーザーは集約された API を使用しますが、特定のケースではプロセスごとのメトリクス API を使用することもできます。
+
+メトリクスはスナップショットで報告され、スナップショットにはメトリクスが収集された時間ウィンドウが指定されます。通常、サービスは報告されるたびにメトリクスを集約し、各スナップショット期間の後に現在の値のスナップショットが取得され、値はリセットされます。このアプローチにより、最小値と最大値が追跡され、完全なスナップショット期間ごとに 95 パーセンタイルなどの値が可能になります。
+
+詳細は[リファレンス](/ja/reference/api/state-v1#state-v1-metrics)を参照してください。
+
+Vespa は[カスタム・メトリクス](/ja/operations/metrics#metrics-from-custom-components)をサポートしています。
+
+例:
+
+```json expandable
+{
+    "status" : {
+        "code" : "up",
+        "message" : "Everything ok here"
+    },
+    "metrics" : {
+        "snapshot" : {
+            "from" : 1334134640.089,
+            "to" : 1334134700.088,
+        },
+        "values" : [
+            {
+                "name" : "queries",
+                "description" : "Number of queries executed during snapshot interval",
+                "values" : {
+                    "count" : 28,
+                    "rate" : 0.4667
+                },
+                "dimensions" : {
+                    "chain" : "vespa"
+                }
+            },
+            {
+                "name" : "hits_per_query",
+                "description" : "Number of hits returned for queries during snapshot interval",
+                "values" : {
+                    "count" : 28,
+                    "rate" : 0.4667,
+                    "average" : 128.3,
+                    "min" : 0,
+                    "max" : 1000,
+                    "sum" : 3584,
+                    "last" : 72,
+                    "95percentile" : 849.1,
+                    "99percentile": 672.0,
+                },
+                "dimensions" : {
+                    "chain" : "vespa"
+                }
+            }
+        ]
+    }
+}
+```
+
+メトリクスのフラットなリストが返されます。コンポーネントが報告する各メトリクス値は、個別のメトリクスであるべきです。関連するメトリクスについては、メトリクス名の先頭に共通部分を付け、ドットで区切って命名します(例: `memory.free` と `memory.virtual`)。
+
+### /metrics/v1/values
+
+この API は、[Prometheus](#pulling-into-prometheus) や [DataDog](#pulling-into-datadog) などの製品を使用したモニタリングに使用できます。レスポンスには、ノード上で実行されている各サービスから選択されたメトリクスのセットが含まれます。詳細は[リファレンス](/ja/reference/api/metrics-v1#metrics-v1-values)を参照してください。例:
+
+```bash
+$ curl http://localhost:19092/metrics/v1/values
+```
+
+```json expandable
+{
+    "services": [
+        {
+            "name": "vespa.container",
+            "timestamp": 1661945852,
+            "status": {
+                "code": "up",
+                "description": "Data collected successfully"
+            },
+            "metrics": [
+                {
+                    "values": {
+                        "memory_virt": 3693178880,
+                        "memory_rss": 1331331072,
+                        "cpu": 2.3794255627932,
+                        "cpu_util": 0.2379425562793
+                    },
+                    "dimensions": {
+                        "metrictype": "system",
+                        "instance": "container",
+                        "clustername": "default",
+                        "vespaVersion": "8.43.64"
+                    }
+                }
+            ]
+        }
+    ]
+}
+```
+
+### /metrics/v2/values
+
+```bash
+$ curl http://localhost:19092/metrics/v2/values
+```
+
+metrics proxy と同じノード上のコンテナー・サービスは、自身のポート(通常は 8080)で `/metrics/v2/values` を転送する場合があります。
+
+`/metrics/v2/values` は、アプリケーションのすべてのノード上のすべてのサービスについて、選択されたメトリクスのセットを公開します。たとえば、AWS の Lambda 関数を使用して [Vespa のメトリクスを Cloudwatch にプル](https://github.com/vespa-engine/metrics-emitter/tree/master/cloudwatch)するために使用できます。
+
+[メトリクス API](#metrics-v2-values) は、グラフ化サービスやアラート・サービスとの統合を可能にするために、アプリケーション全体または単一ノードの[選択されたメトリクスのセット](https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv)を公開します。
+
+レスポンスはメトリクスを含む `nodes` のリストです(以下の出力例を参照)。詳細は[リファレンス](/ja/reference/api/metrics-v2#metrics-v2-values)を参照してください。
+
+```json expandable
+{
+    "nodes": [
+        {
+            "hostname": "vespa-container",
+            "role": "hosts/vespa-container",
+            "services": [
+                {
+                    "name": "vespa.container",
+                    "timestamp": 1634127924,
+                    "status": {
+                        "code": "up",
+                        "description": "Data collected successfully"
+                    },
+                    "metrics": [
+                        {
+                            "values": {
+                                "memory_virt": 3685253120,
+                                "memory_rss": 1441259520,
+                                "cpu": 29.1900152827305
+                            },
+                            "dimensions": {
+                                "serviceId": "container"
+                            }
+                        },
+                        {
+                            "values": {
+                                "jdisc.gc.ms.average": 0
+                            },
+                            "dimensions": {
+                                "gcName": "G1OldGeneration",
+                                "serviceId": "container"
+                            }
+                        },
+```
+
+### /prometheus/v1/values
+
+Vespa は、各*ノード*の `http://host:port/prometheus/v1/values` で*ノード・メトリクス API* を提供します
+
+ポートと内容は */metrics/v1/values* と同じです。
+
+各ノードの Prometheus API は、[Prometheus](https://prometheus.io/docs/introduction/overview/) がスクレイプできるテキスト・ベースの[形式](https://prometheus.io/docs/instrumenting/exposition_formats/)でメトリクスを公開します。Prometheus / Grafana の例については以下を参照してください。
+
+## Vespa からメトリクスをプルする
+
+すべてのプル・ベースのソリューションは、Vespa の[メトリクス API](#metrics-v2-values) を使用します。この API は、システム全体または単一ノードのメトリクスを JSON 形式で提供します。ポーリング頻度は最大でも 30 秒に 1 回に制限するべきです。より頻繁なポーリングは粒度の向上にはつながらず、システムに不要な負荷をかけるだけです。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>サービス</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CloudWatch</td>
+      <td>メトリクスは、<a href="/" aria-label="Vespa Cloud">Vespa Cloud</a> とセルフホストの Vespa の両方から CloudWatch にプルできます。推奨されるソリューションは、<a href="https://github.com/vespa-engine/metrics-emitter/tree/master/cloudwatch" aria-label="Pulling Vespa metrics to Cloudwatch">Pulling Vespa metrics to Cloudwatch</a> に記載されているとおり、AWS の Lambda 関数を使用することです。</td>
+    </tr>
+    <tr>
+      <td>Datadog</td>
+      <td>Vespa チームは、Datadog で Vespa をリアルタイムにモニタリングできるようにするための Datadog Agent インテグレーションを作成しました。<a href="https://docs.datadoghq.com/integrations/vespa/" aria-label="Datadog Vespa">Datadog Vespa</a> インテグレーションはエージェントにはパッケージされていませんが、Datadog の <a href="https://github.com/DataDog/integrations-extras" aria-label="integrations-extras">integrations-extras</a> リポジトリに含まれています。これをクローンし、<a href="https://github.com/DataDog/integrations-extras/blob/master/vespa/README.md" aria-label="README">README</a> の手順に従ってください。<br/><br/>  <Note>&#42;&#42;注:&#42;&#42;<br/><br/> Datadog Agent インテグレーションは、現在のところセルフホストの Vespa でのみ動作します。 </Note></td>
+    </tr>
+    <tr>
+      <td>Prometheus</td>
+      <td>Vespa は、<a href="https://prometheus.io/docs/introduction/overview/" aria-label="Prometheus">Prometheus</a> がスクレイプできるテキスト・ベースの<a href="https://prometheus.io/docs/instrumenting/exposition_formats/" aria-label="format">形式</a>でメトリクスを公開します。<a href="/" aria-label="Vespa Cloud">Vespa Cloud</a> の場合は、エンドポイント URL に &#42;/prometheus/v1/values&#42; を追加します。セルフホストの Vespa の場合、URL は &#42;http://<code>{`<container-host>:<port>`}</code>/prometheus/v1/values&#42; で、&#42;port&#42; は検索に使用するものと同じポート(例: 8080)です。各個別ホストのメトリクスは <code>{`http://host:19092/prometheus/v1/values`}</code> でも取得できます。<br/><br/>  Prometheus / Grafana の例については以下を参照してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+## CloudWatch へのメトリクスのプッシュ
+
+<Note>
+**注:** 
+
+この方法は、現在のところセルフホストの Vespa でのみ動作します。
+</Note>
+
+これはおそらく、CloudWatch で Vespa をモニタリングする最も便利な方法です。手順と要件:
+
+<Steps>
+<Step>
+*putMetricData* 権限のみを持つ IAM ユーザーまたは IAM ロール。
+</Step>
+<Step>
+上記のユーザーまたはロールの認証情報を、各 Vespa ノードの[共有認証情報ファイル](https://docs.aws.amazon.com/ses/latest/dg/create-shared-credentials-file.html)に保存します。ロールを使用する場合は、キーがローテーションされたときに認証情報ファイルを最新に保つ仕組みを用意してください。
+</Step>
+<Step>
+CloudWatch にメトリクスをプッシュするように Vespa を構成します。*services.xml* の [admin](/ja/reference/applications/services/admin) セクションの設定例:
+
+```xml
+<metrics>
+    <consumer id="my-cloudwatch">
+        <metric-set id="default" />
+        <cloudwatch region="us-east-1" namespace="my-vespa-metrics">
+            <shared-credentials file="/path/to/credentials-file" />
+        </cloudwatch>
+    </consumer>
+</metrics>
+```
+
+この設定は、Vespa のデフォルトのメトリクス・セットを、`us-east-1` リージョンの CloudWatch 名前空間 `my-vespa-metrics` に送信します。`default` メトリクス・セットについては[メトリクス・リスト](https://github.com/DataDog/integrations-extras/blob/master/vespa/metadata.csv)を参照してください。
+</Step>
+</Steps>
+
+## Grafana によるモニタリング
+
+Vespa インスタンスに対して Grafana でモニタリングをセットアップするには、以下の手順に従います。このガイドは、[クイック・スタート](/ja/basics/deploy-an-application-local)を基に、さらに 3 つの Docker コンテナーを追加し、これらを Docker の *monitoring* ネットワークに接続します:
+
+<Frame>
+![Docker ネットワーク内の Docker コンテナー](/assets/img/monitoring-getting-started.svg)
+</Frame>
+
+<Steps>
+<Step title="クイック・スタートを実行する:">
+ステップ [1〜7](/ja/basics/deploy-an-application-local)(または 1〜10)を完了しますが、削除のステップはスキップします。リポジトリをクローンします:
+
+```bash
+$ git clone --depth 1 https://github.com/vespa-engine/sample-apps.git && \
+  cd sample-apps/examples/operations/monitoring/album-recommendation-monitoring
+```
+</Step>
+<Step title="ネットワークを作成し、vespa コンテナーを追加する:">
+
+```bash
+$ docker network create --driver bridge monitoring && \
+  docker network connect monitoring vespa
+```
+
+これにより、*monitoring* ネットワークが作成され、vespa コンテナーがそこにアタッチされます。詳細は [docker-compose.yml](https://github.com/vespa-engine/sample-apps/blob/master/examples/operations/monitoring/album-recommendation-monitoring/docker-compose.yml) を参照してください。
+</Step>
+<Step title="Prometheus を起動する:">
+```bash
+$ docker run --detach --name sample-apps-prometheus --hostname prometheus \
+  --network monitoring \
+  --publish 9090:9090 \
+  --volume `pwd`/prometheus/prometheus-selfhosted.yml:/etc/prometheus/prometheus.yml \
+  prom/prometheus
+```
+
+[Prometheus](https://prometheus.io/) は時系列データベースであり、タイムスタンプに関連付けられた一連の値を保持します。[http://localhost:9090/](http://localhost:9090/) で Prometheus を開きます。Prometheus が保持しているデータは簡単に見つけられます。入力ボックスはオートコンプリートに対応しているので、たとえば *feed\_operations\_rate* と入力して *Execute* をクリックします。*Status* ドロップダウンも確認してみてください。
+</Step>
+<Step title="Grafana を起動する:">
+```bash
+$ docker run --detach --name sample-apps-grafana \
+  --network monitoring \
+  --publish 3000:3000 \
+  --volume `pwd`/grafana/provisioning:/etc/grafana/provisioning \
+  grafana/grafana
+```
+
+これで [Grafana](https://grafana.com/oss/grafana/) が起動します。Grafana は、Vespa に関する重要なメトリクスを簡単に視覚化できる可視化ツールです。[http://localhost:3000/](http://localhost:3000/) を開くと Grafana のログイン画面が表示されます。admin/admin でログインします(パスワードの変更はスキップします)。左側のリストから、*Dashboards*(4 つのブロックのシンボル)の下にある *Browse* をクリックし、*Vespa Detailed Monitoring Dashboard* をクリックします。このダッシュボードには Vespa の詳細なメトリクスが表示されます(この時点ではまだ空です)。
+</Step>
+<Step title="Random Data Feeder をビルドする:">
+
+```bash
+$ docker build album-recommendation-random-data --tag random-data-feeder
+```
+
+これは [Random Data Feeder](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/monitoring/album-recommendation-monitoring/album-recommendation-random-data) をビルドします。これはランダムなデータ・セットを生成し、Vespa インスタンスに投入します。また、Grafana での可視化のために、クエリーを繰り返し実行します。Random Data Feeder のコンパイルには数分かかります。
+</Step>
+<Step title="Random Data Feeder を実行する:">
+```bash
+$ docker run --detach --name sample-apps-random-data-feeder \
+  --network monitoring \
+  random-data-feeder
+```
+</Step>
+<Step title="更新された Grafana のメトリクスを確認する:">
+Grafana と Prometheus にグラフが表示されるようになります(1〜2 分かかる場合があります)。Grafana のダッシュボードは完全にカスタマイズ可能です。[album-recommendation-monitoring](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/monitoring/album-recommendation-monitoring) の設定ファイルを編集して、Grafana と Prometheus のデフォルトのモードを変更できます。
+</Step>
+<Step title="コンテナーとネットワークを削除する:">
+
+```bash
+$ docker rm -f vespa \
+  sample-apps-grafana \
+  sample-apps-prometheus \
+  sample-apps-random-data-feeder
+```
+
+```bash
+$ docker network rm monitoring || true
+```
+</Step>
+</Steps>
+
+## ヒストグラム
+
+メトリクスのヒストグラムは [Gauge](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/metrics/simple/Gauge.html) メトリクスでサポートされています。[album-recommendation-java](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java) のようにメトリクスを作成し、ヒストグラムを追加します:
+
+```js
+public HitCountSearcher(MetricReceiver receiver) {
+    this.hitCountMetric = receiver.declareGauge(EXAMPLE_METRIC_NAME, Optional.empty(),
+        new MetricSettings.Builder().histogram(true).build());
+}
+```
+
+ログに記録された直近 5 分間のデータのヒストグラムは、[/state/v1/metrics/histograms](/ja/reference/api/state-v1#state-v1-metrics-histograms) でディメンションごとの CSV として利用できます。出力例:
+
+```bash
+# start of metric hits_per_query, dimensions: { "chain": "metalchain" }
+"Value","Percentile","TotalCount","1/(1-Percentile)"
+1.00,0.000000000000,1,1.00
+1.00,1.000000000000,1,Infinity
+# end of metric hits_per_query, dimensions: { "chain": "metalchain" }
+# start of metric example_hitcounts, dimensions: { "query_language": "en" }
+"Value","Percentile","TotalCount","1/(1-Percentile)"
+1.00,0.000000000000,1,1.00
+1.00,1.000000000000,1,Infinity
+# end of metric example_hitcounts, dimensions: { "query_language": "en" }
+# start of metric query_latency, dimensions: { "chain": "metalchain" }
+"Value","Percentile","TotalCount","1/(1-Percentile)"
+5.69,0.000000000000,1,1.00
+5.69,1.000000000000,1,Infinity
+# end of metric query_latency, dimensions: { "chain": "metalchain" }
+# start of metric totalhits_per_query, dimensions: { "chain": "metalchain" }
+"Value","Percentile","TotalCount","1/(1-Percentile)"
+1.00,0.000000000000,1,1.00
+1.00,1.000000000000,1,Infinity
+# end of metric totalhits_per_query, dimensions: { "chain": "metalchain" }
+```

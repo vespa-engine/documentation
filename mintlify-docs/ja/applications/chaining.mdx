@@ -1,0 +1,209 @@
+---
+title: "チェーン化されたコンポーネント"
+sidebarTitle: "チェーン化"
+description: "[Processor](/ja/applications/processing)、[Searcher プラグイン](/ja/applications/searchers)、[ドキュメント・プロセッサー](/ja/applications/document-processors)は、チェーン化されたコンポーネントです。これらは直列に実行され、それぞれが何らかのサービスや変換を提供し、他のコンポーネントがオプションでこれらに依存します。言い換えると、チェーンとは依存関係を持つコンポーネントのセットです。Javadoc: [com.yahoo.component.chain.Chain](https://javadoc.io/doc/com.yahoo.vespa/chain/latest/com/yahoo/component/chain/Chain)"
+---
+
+このドキュメントの前に[フェデレーション・ガイド](/ja/querying/federation)を読むと役立ちます。
+
+チェーン化されたコンポーネントには、一般的なコンポーネントとの基本的な違いが 3 つあります:
+
+- チェーン内の他のコンポーネントに *提供する* 名前付きサービス。
+- コンポーネント自身がチェーン内でそれより *前* に配置されるべきサービスまたはチェックポイントのリスト、言い換えると、そのコンポーネントに依存するもの。
+- コンポーネント自身がチェーン内でそれより *後* に配置されるべきサービスまたはチェックポイントのリスト、言い換えると、そのコンポーネントの依存先。
+
+コンポーネントを何より前に配置すべきか、何より後に配置すべきか、そして自身が何を提供するかは、コンポーネントクラスに直接 Java アノテーションを使用して定義するか、[services.xml](/ja/reference/applications/services/container) のコンポーネント宣言に個別に追加できます。一般的には、実装側に実用的な範囲でできるだけ多くの必要なアノテーションを持たせ、アプリケーション固有の設定をクリーンでシンプルに保つべきです。
+
+## コンポーネントの順序付け
+
+チェーン内のコンポーネントの実行順序は、設定内のコンポーネントの順序では定義されません。代わりに、順序はコンポーネントに *順序制約* を追加することで定義されます:
+
+- 任意のコンポーネントは、何らかの名前付き機能を `@Provides`(提供)すると宣言できます(名前は単なるラベルで、コンテナーにとって意味を持ちません)。
+- 任意のコンポーネントは、何らかの名前付き機能より `@Before`(前)に配置されなければならないと宣言できます。
+- あるいは、何らかの機能より `@After`(後)に配置されなければならないと宣言できます。
+
+コンテナーは、チェーン内のコンポーネントの制約と整合する任意の順序を選択します。
+
+依存関係は 2 つの方法で追加できます。コードに起因する依存関係は、コード内のアノテーションとして追加すべきです:
+
+```java highlight={4-6}
+import com.yahoo.processing.*;
+import com.yahoo.component.chain.dependencies.*;
+
+@Provides("SourceSelection")
+@Before("Federation")
+@After("IntentModel")
+
+public class SimpleProcessor extends Processor {
+    @Override
+    public Response process(Request request, Execution execution) {
+        //TODO: Implement this
+    }
+}
+```
+
+`@Provides/Before/After({"A", "B"})` という構文を使用して、複数の機能名を指定できます。
+
+コードに属さないアノテーションは、[設定](/ja/reference/applications/services/container)に追加できます:
+
+```xml highlight={8}
+<container version="1.0">
+
+    <processing>
+        <processor id="processor1" class="ai.vespa.examples.Processor1" />
+        <chain id="default">
+            <processor idref="processor1"/>
+            <processor id="processor2" class="ai.vespa.examples.Processor2">
+                <after>ai.vespa.examples.Processor1</after>
+            </processor>
+        </chain>
+    </processing>
+
+    <nodes>
+        <node hostalias="node1" />
+    </nodes>
+</container>
+```
+
+利便性のため、コンポーネントは常に自身の完全修飾クラス名(パッケージ名と単純クラス名を連結したもの、例: `ai.vespa.examples.SimpleProcessor`)と単純名(つまりクラス名のみ、この Searcher の例では `SimpleProcessor`)を `Provides` します。そのため、特定のコンポーネントより前または後に実行しなければならないと常に宣言できます。これは、一般的な Processor、Searcher、ドキュメント・プロセッサーのすべてに当てはまります。
+
+最後に、順序制約はあくまで順序制約であることに注意してください。特に、ある検索チェーンや検索チェーンのセットが「完全」であるかどうかの判定には使用されません。
+
+## チェーンの継承
+
+上記の例で示唆されているように、チェーンは *services.xml* 内で他のチェーンを継承できます。
+
+```xml
+<container version="1.0">
+    <processing>
+        <chain id="foo">
+            <processor id="ai.vespa.examples.ConnexityProcessor"/>
+            <processor id="ai.vespa.examples.IteratingProcessor"/>
+            <processor id="ai.vespa.examples.SignificanceProcessor" />
+        </chain>
+        <chain id="bar"
+            inherits="foo"
+            excludes="ai.vespa.examples.IteratingProcessor">
+            <processor id="ai.vespa.examples.ReverseProcessor" />
+        </chain>
+    </processing>
+    <nodes>
+        <node hostalias="node1" />
+    </nodes>
+</container>
+```
+
+チェーンは、オプションの `inherits` 属性で名前が指定されたチェーンのすべてのコンポーネントを含み、そのセットから、同じくオプションの `excludes` 属性で名前が指定されたすべてのコンポーネントを除外し、定義タグ内にリストされたすべてのコンポーネントを追加します。`inherits` と `excludes` はどちらも、スペース区切りの参照名のリストです。
+
+検索チェーンには、継承元として特に有用な 2 つの組み込み検索チェーン、`native` と `vespa` があります。`native` は基本的な検索チェーンで、ほとんどのシステムがいずれにせよ必要とする基本機能を含んでいます。`vespa` は `native` を継承し、Vespa のバックエンドを含むほとんどのインストールで必要となるいくつかの追加の Searcher を加えたものです。
+
+```xml
+<container version="1.0">
+    <search>
+        <chain id="default"
+            inherits="vespa"
+            excludes="com.yahoo.prelude.querytransform.StemmingSearcher com.yahoo.prelude.querytransform.NormalizingSearcher">
+            <searcher id="ai.vespa.examples.ConnexitySearcher"
+                bundle="the name in artifactId in pom.xml" />
+                <searcher id="ai.vespa.examples.SignificanceSearcher"
+                    bundle="the name in artifactId in pom.xml" />
+                    <searcher id="ai.vespa.examples.ReverseSearcher"
+                        bundle="the name in artifactId in pom.xml" />
+                    </chain>
+                </search>
+                <nodes>
+                    <node hostalias="node1" />
+                </nodes>
+            </container>
+```
+
+## 単体テスト
+
+コンポーネントは、それが依存するコンポーネントを含むチェーン内で単体テストすべきです。そのために依存関係処理フレームワークを実行する必要はありません。`com.yahoo.component.chain.Chain` クラスには、テスト時に使いやすい複数のコンストラクターがあります。
+
+```java
+Chain<Searcher> c = new Chain(new UselessSearcher("first"),
+new UselessSearcher("second"),
+new UselessSearcher("third"));
+Execution e = new Execution(c, Execution.Context.createContextStub(null));
+Result r = e.search(new Query());
+```
+
+上記はあまり役に立たないテストですが、基本的なワークフローをシミュレートする方法を示しています。このコンストラクターは、指定された順序で与えられた Searcher を持つチェーンを作成します(アノテーションの解析は行いません)。
+
+## コンポーネント間の情報の受け渡し
+
+異なる Searcher やドキュメント・プロセッサーが共有クラスやフィールド名に依存する場合、名前を 1 か所でのみ定義するのが良いプラクティスです。Searcher 開発の入門にある[例](/ja/applications/searchers#passing-information-between-searchers)で、その簡単な方法を示しています。
+
+## 特定の検索チェーンの呼び出し
+
+使用する検索チェーンは、リクエストにリクエストパラメーター `searchChain=myChain` を追加することで選択できます。
+
+クエリーでチェーンが選択されていない場合、`default` という名前のチェーンが使用されます。`default` という名前のチェーンが設定されていない場合、`native` という名前のチェーンが使用されます。*native* チェーンは常に存在し、ほとんどのアプリケーションで必要となる基本的な Searcher のセットを含んでいます。カスタムのチェーンは通常、これらの Searcher を含めるために native チェーンを継承します。
+
+検索チェーンは[クエリー・プロファイル](/ja/querying/query-profiles)で設定することもできます。
+
+## 例: 設定
+
+コードに属さないアノテーションは設定に追加できます。以下は[検索チェーン](/ja/reference/applications/services/search#chain)を使った簡単な例です:
+
+```xml highlight={9-12}
+<container version="1.0">
+    <search>
+        <chain id="default" inherits="vespa">
+            <searcher id="simpleSearcher" bundle="the name in artifactId in pom.xml" />
+        </chain>
+        <searcher id="simpleSearcher"
+            class="ai.vespa.examples.SimpleSearcher"
+            bundle="the name in artifactId in pom.xml" >
+            <before>Cache</before>
+            <after>Statistics</after>
+            <after>Logging</after>
+            <provides>SimpleTest</provides>
+        </searcher>
+    </search>
+    <nodes>
+        <node hostalias="node1" />
+    </nodes>
+</container>
+```
+
+そして、[ドキュメント・プロセッサー・チェーン](/ja/reference/applications/services/docproc)の場合は次のようになります:
+
+```xml highlight={5}
+<container version="1.0">
+    <document-processing>
+        <chain id="default">
+            <documentprocessor id="ReplaceInFieldDocumentProcessor">
+                <after>TextMetrics</after>
+            </documentprocessor>
+        </chain>
+    </document-processing>
+    <nodes>
+        <node hostalias="node1"/>
+    </nodes>
+</container>
+```
+
+Searcher プラグインの場合、[com.yahoo.search.searchchain.PhaseNames](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/searchchain/PhaseNames) クラスは、サードパーティの Searcher が Vespa の検索チェーンを拡張する際に自身の順序付けに利用できるチェックポイントのセットを定義しています。
+
+順序制約はあくまで順序制約であることに注意してください。特に、ある検索チェーンや検索チェーンのセットが「完全」であるかどうかの判定には使用されません。
+
+## 例: 非同期書き込みを伴うキャッシュ
+
+ユースケース: 検索チェーン内で早期リターンを行い、[ExecutorService](https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/util/concurrent/ExecutorService) を使用して以降の検索を非同期に実行します。
+
+疑似コード: キャッシュヒットの場合(例: Redis を使用)、キャッシュされたデータをそのまま返します。キャッシュミスの場合、null データを返し、チェーン内の後続の Searcher にさらなるクエリーを完了させ、キャッシュへの書き戻しを行わせます:
+
+```java
+public Result search(Query query, Execution execution) {
+    // cache lookup
+    if (cache_hit) {
+        return result;
+    }
+    else {
+        execution.search(query);  // invoke async cache update searcher next in chain
+        return result;
+    }
+}
+```

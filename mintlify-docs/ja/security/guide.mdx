@@ -1,0 +1,511 @@
+---
+title: "セキュリティガイド"
+---
+
+Vespa Cloud には、開発者が理解しておくべき複数のセキュリティ機構があります。Vespa Cloud には、*データプレーン*と*コントロールプレーン*という 2 つの異なるやり取りの経路があります。Vespa アプリケーションとの通信は*データプレーン*を通じて行われ、*コントロールプレーン*は Vespa のテナントとアプリケーションの管理に使用されます。
+
+*コントロールプレーン*と*データプレーン*には異なるセキュリティ機構があり、本ガイドで説明します。
+
+## SOC 2
+
+Vespa.ai は SOC 2 の認証を取得しています。詳細は [Trust Center](https://trust.vespa.ai/) をご覧ください。
+
+## データプレーン
+
+データプレーンのリクエストは、相互 TLS(mTLS)、またはオプションでトークンによって保護されます。
+
+### mTLS の設定
+
+証明書は [Vespa CLI](/ja/clients/vespa-cli) を使用して作成できます:
+
+```bash
+$ vespa auth cert --application <tenant>.<app>.<instance>
+```
+
+```bash
+$ vespa auth cert --application scoober.albums.default
+Success: Certificate written to '$HOME/.vespa/scoober.albums.default/data-plane-public-cert.pem'
+Success: Private key written to '$HOME/.vespa/scoober.albums.default/data-plane-private-key.pem'
+Success: Copied certificate from '$HOME/.vespa/scoober.albums.default/data-plane-public-cert.pem' to 'security/clients.pem'
+```
+
+証明書は、Vespa Cloud にアプリケーションが存在するかどうかに関係なく作成できます。このコマンドを使用して、アプリケーション・パッケージ用の `security/clients.pem` を生成できます:
+
+```bash
+$ cp $HOME/.vespa/scoober.albums.default/data-plane-public-cert.pem security/clients.pem
+```
+
+証明書は OpenSSL を使用して作成することもできます:
+
+```bash
+$ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout key.pem -out security/clients.pem
+```
+
+証明書は、アプリケーション・パッケージ内の [security/clients.pem](/ja/reference/applications/application-packages) に配置します。OpenSSL で証明書を作成した場合は、`clients.pem` が正しく配置されていることを確認してください。Vespa CLI の場合は自動的に処理されます。
+
+### mTLS 証明書のローテーション
+
+このセクションでは、mTLS に使用する証明書をローテーションする方法を説明します。これは、ダウンタイムなしで Vespa デプロイメントの証明書を変更したい場合に役立ちます。
+
+`security/clients.pem` ファイルには、複数の PEM エンコードされた証明書を連結して含めることができます。これにより、個別の秘密鍵を持つ複数のクライアントを持つことができ、ダウンタイムなしで新しい証明書にローテーションすることが可能になります。
+
+#### Vespa CLI での mTLS のローテーション
+
+<Steps>
+<Step title="新しい証明書と秘密鍵を生成する">
+```bash
+$ vespa auth cert --new-key --application scoober.albums.default
+```
+
+これは確認を求めた後、次の処理を行います:
+
+- 現在の秘密鍵を `data-plane-private-key.pem.old` にバックアップします
+- 新しい秘密鍵を `data-plane-private-key.pem` に書き込みます
+- 既存の証明書を残したまま、新しい証明書を `data-plane-public-cert.pem` の先頭に追加します
+- 生成された証明書ファイルをアプリケーション・パッケージの `security/clients.pem` にコピーします
+
+確認プロンプトをスキップするには `-f`(`--force`)を、アプリケーション・パッケージの更新をスキップするには `-N`(`--no-add`)を追加します。バックアップが既に存在する場合、コマンドは失敗します。前回のローテーションを完了するか中止して、先にバックアップファイルを削除してください。
+</Step>
+<Step title="更新したアプリケーション・パッケージをデプロイする">
+これで古い証明書と新しい証明書の両方が受け入れられるため、既存のクライアントは中断なく動作し続けます。アプリケーションをデプロイしてください。
+</Step>
+<Step title="クライアントを新しい証明書に移行する">
+新しい鍵ですべてが動作することをテストし、すべてのクライアントを新しい秘密鍵を使用するように更新します。Vespa CLI は、ステップ 1 の後には既に新しい鍵ペアを使用しています。
+</Step>
+<Step title="古い証明書を削除する">
+すべてのクライアントが新しい鍵を使用するようになったら、古い証明書を削除します:
+
+```bash
+$ vespa auth cert --prune-old --application scoober.albums.default
+```
+
+これは、現在の秘密鍵に対応する最新の証明書を残し、各古い証明書を削除する前に確認を求めます。
+
+プロンプトなしですべて削除するには `-f`(`--force`)を追加します。
+
+再度デプロイしてローテーションを完了します。古い証明書がまだ使用されているクライアントは、古い証明書が削除されてデプロイされた時点でアクセスできなくなります。デプロイが完了したら、`data-plane-private-key.pem.old` のバックアップを削除して構いません。これが存在する間は、新しいローテーションを開始できません。
+</Step>
+</Steps>
+
+#### OpenSSL での mTLS のローテーション
+
+<Steps>
+<Step title="新しい証明書と秘密鍵を生成する">
+```bash
+$ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout new-key.pem -out new-cert.pem
+```
+
+</Step>
+<Step title="新しい証明書を security/clients.pem に追加する">
+既存の証明書と新しい証明書を 1 つの `clients.pem` に連結します。両方の証明書が同時に信頼されます:
+
+```bash
+$ cat new-cert.pem security/clients.pem > security/clients-combined.pem
+$ mv security/clients-combined.pem security/clients.pem
+```
+
+出来上がった `clients.pem` は次のようになります:
+
+```text
+-----BEGIN CERTIFICATE-----
+<new certificate data>
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+<existing certificate data>
+-----END CERTIFICATE-----
+```
+
+</Step>
+<Step title="更新したアプリケーション・パッケージをデプロイする">
+連結した `clients.pem` を含むアプリケーションをデプロイします。これで古い証明書と新しい証明書の両方が受け入れられるため、既存のクライアントは中断やダウンタイムなしに動作し続けます。
+</Step>
+<Step title="クライアントを新しい証明書に移行する">
+すべてのクライアントを新しい秘密鍵を使用するように更新します。すべてのクライアントが新しい証明書を使用するようになったら、古い証明書を削除できます。
+</Step>
+<Step title="古い証明書を削除する">
+`security/clients.pem` から古い証明書を削除し、新しい証明書のみを残します:
+
+```bash
+$ cp new-cert.pem security/clients.pem
+```
+
+再度デプロイしてローテーションを完了します。古い証明書はもう信頼されません。
+</Step>
+</Steps>
+
+### パーミッション
+
+クライアントごとに異なるパーミッションをサポートするために、クライアントのパーミッションを制限できます。サポートされるのは `read` または `write` パーミッションのみです。
+
+#### リクエストのマッピング
+
+リクエストのアクションは HTTP メソッドからマッピングされます。デフォルトのマッピングルールは次のとおりです:
+
+- GET → `read`
+- PUT, POST, DELETE → `write`
+
+`/search/` については、これが次のように置き換えられます:
+
+- GET, POST → `read`
+
+#### 例
+
+3 つの異なるユースケース向けに、3 つの異なる証明書を作成します:
+
+- サービング - `read`
+- インジェスト - `write`
+- フルアクセス - `read, write`
+
+```bash
+$ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout key.pem -out security/serve.pem
+$ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout key.pem -out security/ingest.pem
+$ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout key.pem -out security/full_access.pem
+```
+
+<Note>
+注:
+
+- ファイルはアプリケーション・パッケージ内の *security* フォルダーに配置する必要があります
+- 証明書は一意でなければなりません
+- 証明書チェーンは現在サポートされていません
+- ファイルは PEM エンコーディングで書き込む必要があります
+</Note>
+
+`clients` 要素を使用して、services xml から証明書ファイルを参照します:
+
+```xml expandable
+<container version='1.0'>
+    ...
+    <clients>
+        <client id="serve" permissions="read">
+            <certificate file="security/serve.pem"/>
+        </client>
+        <client id="ingest" permissions="write">
+            <certificate file="security/ingest.pem"/>
+        </client>
+        <client id="full_access" permissions="read,write">
+            <certificate file="security/full_access.pem"/>
+        </client>
+    </clients>
+  ...
+</container>
+```
+
+#### カスタム・リクエストマッピング
+
+デフォルトのマッピングは、`requestHandlerSpec()` をオーバーライドすることで変更できます:
+
+```java expandable
+/**
+ * Example overriding acl mapping of POST requests to read
+ */
+public class CustomAclHandler extends ThreadedHttpRequestHandler {
+
+    private final static RequestHandlerSpec REQUEST_HANDLER_SPEC =
+            RequestHandlerSpec.builder().withAclMapping(
+                    HttpMethodAclMapping.standard()
+                            .override(Method.POST, AclMapping.Action.READ)
+                            .build())
+                    .build();
+
+    @Override
+    public RequestHandlerSpec requestHandlerSpec() {
+        return REQUEST_HANDLER_SPEC;
+    }
+```
+
+### トークンの設定
+
+アプリケーションのエンドポイントは、トークンベースの認証で設定することもできます。その場合でも、mTLS 用に少なくとも 1 つのクライアントを定義する必要があることに注意してください。
+
+<Note>
+**注:**  
+
+[プライベート・エンドポイント](/ja/operations/private-endpoints)と組み合わせて使用する場合、トークン認証は明示的に有効化する必要があります。
+</Note>
+
+#### コンソールでのトークンの作成
+
+トークンは名前で識別され、トークンのローテーションを容易にするために複数のバージョンを含めることができます。
+
+新しいトークンを作成するには:
+
+<Steps>
+<Step>
+[コンソール](https://console.vespa.ai)のテナントビューで、[**Account > Tokens**](https://console.vespa-cloud.com/link/tenant/account/tokens) を開きます
+</Step>
+<Step>
+**Add token** をクリックします
+</Step>
+<Step>
+後でアプリケーションで参照する名前を入力し、**Add** をクリックします。トークンの値をコピーして安全に保管することを忘れないでください。
+</Step>
+</Steps>
+
+新しいトークン*バージョン*を追加するには:
+
+<Steps>
+<Step>
+既存のトークンを見つけて、**Add version** をクリックします
+</Step>
+<Step>
+有効期限を選択し、**Add** をクリックします。トークンの値をコピーして安全に保管してください。
+</Step>
+</Steps>
+
+バージョンを失効させるには:
+
+<Steps>
+<Step>
+既存のトークンバージョンを見つけて、**Revoke** をクリックします
+</Step>
+</Steps>
+
+トークンを手動でローテーションするには:
+
+<Steps>
+<Step>
+上記の手順に従って新しいトークン*バージョン*を追加します
+</Step>
+<Step>
+古いバージョンを使用するクライアントがなくなったら、古いバージョンを失効させます
+</Step>
+</Steps>
+
+#### トークン・エンドポイントを使ったアプリケーション設定
+
+トークンを作成した後、コンテナー・クラスターに [clients](/ja/reference/applications/services/container#clients) 要素を追加して、アプリケーションの services.xml で設定する必要があります。
+
+以下は、複数のコンテナー・クラスターとトークンを使用する例です(1 つだけの場合もあります):
+
+```xml expandable
+<container id="documentapi" version="1.0">
+    ...
+    <clients>
+        <client id="mtls" permissions="read,write">
+            <certificate file="security/clients.pem"/>
+        </client>
+        <client id="feed-token-client" permissions="read,write">
+            <token id="feed-token"/>
+        </client>
+    </clients>
+    ...
+</container>
+<container id="query" version="1.0">
+    ...
+    <clients>
+        <client id="mtls" permissions="read">
+            <certificate file="security/clients.pem"/>
+        </client>
+        <client id="query-token-client" permissions="read">
+            <token id="query-token"/>
+        </client>
+    </clients>
+    ...
+</container>
+```
+
+#### セキュリティ上の推奨事項
+
+トークン認証と mTLS の暗号学的な特性は同等です。ただし、使い方にはいくつかの重要な違いがあります:
+
+- トークンはすべてのリクエストでヘッダーとして送信されます
+- リクエストの一部であるため、ログ出力やソースコード(curl コマンドなど)で漏洩しやすくなります。
+
+そのため、次のことを推奨します:
+
+- 短い有効期限でトークンを作成する(デフォルトの 30 日を維持する)。
+- トークンはシークレットプロバイダーに保管し、出力を隠すことを忘れない。
+- 秘密のトークンを絶対にソースコードのリポジトリにコミットしない!
+
+### エンドポイントの使用
+
+#### mTLS の使用
+
+アプリケーション・パッケージに証明書を含めてアプリケーションを設定・デプロイすると、アプリケーションにリクエストを送信できます。ここでも、Vespa CLI が正しい証明書の使用を支援します。
+
+```bash
+$ vespa curl --application <tenant>.<app>.<instance> /ApplicationStatus
+```
+
+```bash
+$ curl --key $HOME/.vespa/scoober.albums.default/data-plane-private-key.pem \
+       --cert $HOME/.vespa/scoober.albums.default/data-plane-public-cert.pem \
+       $ENDPOINT
+```
+
+#### トークンの使用
+
+トークンを使用する場合は、トークン・エンドポイントを使用する必要があります。デプロイが完了すると、トークン・エンドポイントはトークン・エンドポイントの一覧(「Token」と表示)で利用可能になります。トークン・エンドポイントを使用するには、トークンを bearer authorization ヘッダーとして送信します:
+
+```bash
+$ vespa query \
+  --header="Authorization: Bearer $TOKEN" \
+  'yql=select * from music where album contains "head"'
+```
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" $ENDPOINT
+```
+
+Vespa CLI は、環境変数 `VESPA_CLI_DATA_PLANE_TOKEN` が設定されている場合、自動的にトークンを使用します。これは次のコマンドで設定できます:
+
+```bash
+$ export VESPA_CLI_DATA_PLANE_TOKEN=$TOKEN
+```
+
+その場合、ヘッダーでトークンを手動で指定する必要はありません:
+
+```bash
+vespa query \
+  'yql=select * from music where album contains "head"'
+```
+
+#### ブラウザーの使用
+
+Vespa のガイドでは、次のように例で curl を使用しています:
+
+```bash
+$ curl --cert ./data-plane-public-cert.pem --key ./data-plane-private-key.pem $ENDPOINT
+```
+
+ブラウザーを使用するには、証明書の Common Name が「cloud.vespa.example」(ガイドと同じ)であると仮定して、鍵/証明書ペアを KeyChain Access(MacOS Sonoma)にインストールします:
+
+<Steps>
+<Step>
+鍵/証明書ペアをインストールします:
+
+```bash
+$ cat data-plane-public-cert.pem data-plane-private-key.pem > pkcs12.pem
+$ openssl pkcs12 -export -out pkcs12.p12 -in pkcs12.pem
+```
+
+</Step>
+<Step>
+新しいパスワードの入力が求められ、次のステップで使用します。
+</Step>
+<Step>
+Keychain Access で: login キーチェーンに対して
+	- 「File」->「Import Items」をクリックします。
+	- 先ほど作成した pkcs12.p12 ファイルを選択し、パスワードを入力します。
+	- インポートした証明書をダブルクリックし、「Trust」を開いて「When using this certificate」を「Always Trust」に設定します。
+	- 右クリックして「New Certificate Preference...」を選択し、$ENDPOINT を追加します。
+</Step>
+<Step>
+Chrome で同じ URL を開き、example.com の証明書を選択して、Chrome が秘密鍵を読み取ることを許可します。
+</Step>
+</Steps>
+
+#### Postman の使用
+
+多くの開発者は [Postman](https://postman.com/) のようなインタラクティブなツールを好みます。Vespa のブログに [Postman を Vespa で使う方法](https://blog.vespa.ai/interface-with-vespa-apis-using-postman/)の記事があります。
+
+#### Cloudflare Workers の使用
+
+[Vespa Cloud で Cloudflare Workers を使用する](/ja/security/cloudflare-workers)を参照してください。
+
+### インスタンスごとに異なる認証情報
+
+[インスタンス](/ja/learn/tenant-apps-instances)ごとに異なる認証情報を使用するには、[services.xml バリアント](/ja/operations/deployment-variants#servicesxml-variants)を使用します。例として、プロダクションのインスタンスに個別の MTLS 鍵ペアを持たせるには次のようにします(トークンを使用する場合も同じパターンを使用します):
+
+```xml expandable
+<container id="default" version="1.0">
+    <clients>
+        <client id="mtls" permissions="read" deploy:instance="default">
+            <certificate file="security/clients_dev.pem"/>
+        </client>
+        <client id="mtls" permissions="read" deploy:instance="qa">
+            <certificate file="security/clients_qa.pem"/>
+        </client>
+        <client id="mtls" permissions="read" deploy:instance="prod">
+            <certificate file="security/clients_prod.pem"/>
+        </client>
+    </clients>
+    <search/>
+    <document-api/>
+</container>
+```
+
+デプロイ先の[インスタンス](/ja/operations/automated-deployments)に応じて、データプレーンへのアクセスに異なる鍵ペアが使用されます。同じ仕組みを使い、`deploy:environment="dev"` を指定することで、[dev](/ja/operations/environments#dev) 環境専用の認証情報を持たせることができます。
+
+## コントロールプレーン
+
+コントロールプレーンは、Vespa アプリケーションの管理に使用されます。
+
+コントロールプレーンへのアクセスには 2 つの異なる方法があります。`vespa auth login` を使用して通常のユーザーとしてログインする方法と、Application Key を使用する方法です。`vespa auth login` は dev に手動でデプロイする開発者向けであり、Application Key は通常、継続的ビルドツールによってアプリケーションをプロダクションにデプロイするためのものです。これら 2 つの方法の詳細は以下を参照してください。
+
+### ユーザーの管理
+
+テナント管理者は、Vespa コンソールを通じてユーザーのアクセスを管理します。
+
+<Frame>![Vespa コンソールのユーザー管理](/assets/img/manage-users.png)</Frame>
+
+ユーザーには 2 つの異なる権限レベルがあります
+
+- **Admin:** テナントのメタデータとテナントのユーザーを管理できます。
+- **Developer:** テナントにデプロイされたアプリケーションを管理できます。
+### コントロールプレーンへのユーザーアクセス
+
+Vespa コンソールを使用する以外では、コントロールプレーンとの通信は [Vespa CLI](/ja/clients/vespa-cli) を使用するのが最も簡単です。
+
+```bash
+$ vespa auth login
+Your Device Confirmation code is: ****-****
+
+If you prefer, you can open the URL directly for verification
+Your Verification URL: https://vespa.auth0.com/activate?user_code=****-****
+
+Press Enter to open the browser to log in or ^C to quit...
+
+Waiting for login to complete in browser ... done
+
+Successfully logged in.
+```
+
+Vespa CLI でログインした後、CLI を使用してアプリケーションをデプロイできます。ユーザーは、Vespa コンソールで設定されたユーザーと同じ権限でログインします。
+
+### Application Key
+
+GitHub Actions のような CI/CD システムなどから、コントロールプレーンへのプログラムによるアクセスが必要な場合は、Application Key を使用できます。例として [deploy-vector-search.yaml](https://github.com/vespa-cloud/vector-search/blob/main/.github/workflows/deploy-vector-search.yaml) を参照してください。
+
+#### 設定
+
+Application Key は、コンソールの Deployment 画面から生成できます。鍵はブラウザーで生成されますが、秘密鍵はブラウザーでのダウンロードとして提供されます。公開鍵は Deployment 画面から別途ダウンロードできます。秘密鍵は Vespa Cloud に永続化されることはないため、秘密鍵を安全に保管することが重要です。紛失した場合、秘密鍵は復元できません。
+
+<Frame>![Vespa コンソールの Application Key 管理](/assets/img/application-key.png)</Frame>
+
+Application Key は Vespa CLI を使用して生成することもできます。
+
+```bash
+$ vespa auth api-key -a <tenant>.<app>.<instance>
+```
+
+```bash expandable
+$ vespa auth api-key -a scoober.albums.default
+Success: API private key written to $HOME/.vespa/scoober.api-key.pem
+
+This is your public key:
+-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE5fQUq12J/IlQQdE8pWC5596S7x9f
+HpPcyxCX2dXBS4aqKxnfN5HEyTkLCNGCo9HQljgLziqW1VFzshAdm3hHQg==
+-----END PUBLIC KEY-----
+
+Its fingerprint is:
+91:1f:de:e3:9f:d3:21:28:1b:1b:05:40:52:72:81:4f
+
+To use this key in Vespa Cloud click 'Add custom key' at
+https://console.vespa-cloud.com/tenant/scoober/keys
+and paste the entire public key including the BEGIN and END lines.
+```
+
+#### Application Key の使用
+
+Application Key は、Vespa CLI からコントロールプレーンに対するリクエストの実行に使用できます。たとえば、Vespa Cloud へのアプリケーションのデプロイなどです。
+
+```bash
+$ vespa deploy -z dev.aws-us-east-1c
+```
+
+## データプレーンへのアクセス
+
+有料プランの Vespa Cloud ユーザーは、Vespa Cloud サポートを利用できます。サポートを提供するために Vespa チームがアプリケーションのデータへのアクセスを必要とする場合、Vespa のサポート担当者は、オープンなサポートケースにおいて顧客からの明示的な承認を得た後にアクセスを要求できます。

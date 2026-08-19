@@ -1,0 +1,117 @@
+---
+title: "position フィールド - Vespa 8 移行"
+---
+
+[Vespa 8 リリースノート](/ja/reference/release-notes/vespa8)を参照してください - これは、position フィールドを使用している場合に Vespa 7 から Vespa 8 へ移行する方法のガイドです。このガイドは、スキーマに `position` フィールドを持つアプリケーションに関係します。
+
+このドキュメントの以降の部分では、次を含むスキーマを想定します。
+
+```bash
+field myfield type position {...}
+```
+
+## ステップ 1: geo レガシーモードで Vespa 8 にアップグレードする
+
+*services.xml* に追加します。[legacy-v7-json-rendering](/ja/reference/querying/default-result-format#geo-position-rendering) を参照し、ルートの `services` タグの下に追加します:
+
+```xml
+<services>
+    <legacy>
+        <v7-geo-positions>true</v7-geo-positions>
+    </legacy>
+```
+
+## ステップ 2: 結果のレンダリング
+
+position フィールドをフィルターとしてのみ使用し、結果セットで返さない場合は、このセクションをスキップしてください。Vespa 7 では、position フィールドは次のようにレンダリングされることがありました。
+
+```json
+"myfield.position": {
+    "y": 63453700,
+    "x": 10460800,
+    "latlong": "N63.453700;E10.460800"
+}
+```
+
+また、任意で次の形式もありました。
+
+```json
+"myfield": {
+    "y": 63453700,
+    "x": 10460800
+}
+```
+
+Vespa 8 では、結果フォーマットは次のように変更されています。
+
+```json
+"myfield": {
+    "lat": 63.4537,
+    "lng": 10.4608
+}
+```
+
+これは Vespa 8 のフィード用フォーマットでもあることに注意してください。
+
+<Warning>
+**重要:** 
+
+クエリー結果をパースするすべてのコードを、新しいフォーマットを想定するように変更してください。これには、結果の JSON をパースするプログラムや [Searcher](/ja/applications/searchers) が含まれます。
+</Warning>
+
+Vespa 7 では、`distance` ランク・フィーチャーは次のように出力されます。
+
+```bash
+"myfield.distance": 14352,
+```
+
+Vespa 8 では、代わりに summary フィーチャーを使用します。
+
+```bash
+distance(myfield).km
+```
+
+## ステップ 3: Query API
+
+`pos.ll` / `pos.radius` / `pos.bb` / `pos.attribute` パラメーターの使用、例えば:
+
+```bash
+pos.ll=63.4225N+10.3637E&pos.radius=5km
+```
+
+から、[YQL](../../querying/query-language.html) の使用に変更します:
+
+```bash
+where geoLocation(myfieldname, 63.5, 10.5, "5 km")
+```
+
+## ステップ 4: フィード用フォーマットと /document/v1/ API
+
+Vespa 7 のフィード用フォーマットは Vespa 8 でも使用できますが、次の形式に変更することを推奨します。
+
+```json
+"myfield": {
+    "lat": 63.4537,
+    "lng": 10.4608
+}
+```
+
+これはクエリー結果と同じフォーマットです。
+
+[document/v1/](/ja/reference/api/document-v1) で GET / VISIT を使用した際の結果フォーマットは、次の形式から:
+
+```json
+"myfield": {
+    "y": 63453700,
+    "x": 10460800
+}
+```
+
+次の形式に変更されています:
+
+```json
+"myfield": {
+    "lat": 63.4537,
+    "lng": 10.4608
+}
+```

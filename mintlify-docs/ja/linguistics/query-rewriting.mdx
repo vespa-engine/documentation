@@ -1,0 +1,204 @@
+---
+title: "クエリー書き換え"
+---
+
+
+検索アプリケーションは、ユーザーのクエリーの意図された意味を解釈することで品質を向上させることができます。意味が推測できれば、クエリーを、そのままのクエリーよりもユーザーをよく満足させるものに書き換えることができます。Vespa にはクエリー書き換え言語が含まれており、クエリー書き換えを使ってクエリーのセマンティクスを理解し、それに基づいて処理することが容易になります。
+
+これらのクエリー書き換えテクニックを組み合わせて、検索体験を向上させることができます:
+
+- クエリーのフォーカス: 用語を検索するフィールドを決定する
+- クエリーの強化: クエリーを改善する追加の用語を加える
+- ストップワード: 再現率や適合率を損なう用語を削除する - [例](https://github.com/vespa-cloud/cord-19-search/blob/main/src/main/java/ai/vespa/example/cord19/searcher/BoldingSearcher.java)
+- 同義語: 用語やフレーズを別のものに置き換える
+
+クエリー書き換えは、_セマンティックルール_ または _サーチャー_ によって行われます。セマンティックルールは、クエリーに対して動作するシンプルなプロダクションルール言語です。シンプルなルールでは扱えないより複雑なクエリー書き換えロジックについては、クエリー書き換えフレームワークを利用する書き換えサーチャーを作成できます。
+
+## EQUIV
+
+EQUIV は、さまざまな同義語が等価であるべき場合に、単語の同義語を追加するために使用できるクエリー演算子です - 例:
+
+- ユーザーのクエリーが `(used AND automobile)` である
+- _automobile_ は(辞書によると)_car_ の同義語である
+- クエリーを `(used AND (automobile EQUIV car))` に書き換える
+- ここでは _automobile_ と _car_ は等価です - このクエリーは、ドキュメントコーパス内の _car_ のすべての出現が _automobile_ に置き換えられていたかのように振る舞います
+
+OR と EQUIV の違いについては[リファレンス](/ja/reference/querying/yql#equiv)を参照してください。多くの場合、EQUIV の代わりに OR を使用する方がよいこともあります。_Snoop_ Dogg の例:
+
+```sql
+"Snoop" EQUIV "Snoop Doggy Dogg" EQUIV "Snoop Lion" EQUIV "Calvin Broadus" EQUIV "Calvin Cordozar Broadus Junior"
+```
+
+しかし、_Snoop_ は他の人々にも使われる名前です - そのため、それ単独でのマッチは正しいエンティティへの確実なヒットとはいえず、同じテキスト内で複数の同義語が見つかる方が高い確信が得られます。これはまさに OR が行うことです:
+
+```sql
+"Snoop"!20 OR "Snoop Doggy Dogg"!90 OR "Snoop Lion"!75 OR "Calvin Broadus"!60 OR "Calvin Cordozar Broadus Junior"!100
+```
+
+確信度の低い候補には低いウェイトを使用してください。OR 内の多くの単語やフレーズがクエリー内の他の単語を圧倒しているように見える場合は、さらに低いウェイトを与えることが有効な場合があります。たとえば、ウェイトの合計を 100(候補が 1 つだけの場合のデフォルトのウェイト)にするなどです。
+
+EQUIV を使用するかどうかの判断は、アプリケーション固有の辞書または言語処理の用途によって行う必要があります。これは [YQL](/ja/reference/querying/yql#equiv) を使用するか、コンテナー・プラグイン(例 [EquivSearcher.java](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation-java/app/src/main/java/ai/vespa/example/album/EquivSearcher.java))から次のようにクエリーオブジェクトを操作することで行えます:
+
+1. クエリー内の単語アイテムを見つける
+2. その場所で EQUIV が使用できることを確認する([制限事項](/ja/reference/querying/yql#equiv)を参照)
+3. 辞書で同義語を見つける
+4. 同義語(と元の単語)を子として持つ `EquivItem` を作成する
+5. 元の `WordItem` を新しい `EquivItem` で置き換える
+
+## ルール
+
+シンプルなセマンティックルールは次のようになります:
+
+```sql
+lotr -> lord of the rings;
+```
+
+これは、クエリー内で用語 _lotr_ が出現するたびに、それを用語 _lord of the rings_ で置き換えることを意味します。ルールは条件を参照することもでき、生成される用語は、具体的な用語の代わりに、マッチしたものを変更したバージョンにすることもできます:
+
+```sql
+[brand] -> company:[brand];
+[brand] :- sony, dell, ibm, hp;
+```
+
+このルールは、_brand_ という名前の条件がマッチするたびに、マッチした用語を、_company_ フィールドを検索する _同じ用語_ で置き換えることを意味します。加えて、_brand_ 条件はブランドのリストのいずれかにマッチするものとして定義されています。`->` は置換のプロダクションルールを、`:-` は条件を、`,` は選択肢の区切りを意味することに注目してください。
+
+括弧を使用したグルーピング、順番にマッチしなければならない複数の用語の列挙、`->` の代わりに `+>` を使用した _追加_ のプロダクションルールの記述も可能です。用語はデフォルトではクエリーのデフォルト(検索ボックスに入力された場合と同様)として追加されますが、それぞれ `+`、`?`、`-`、`$` を使用して、強制的に AND、OR、NOT、RANK にすることもできます。これを示すより複雑なルールを次に示します:
+
+```sql
+[destination] (in, by, at, on) [place] +> $name:[destination]
+```
+
+このルールは、_name_ フィールドにマッチする目的地の後に前置詞と場所が続くマッチをブーストします(_destination_ 条件と _place_ 条件の定義は示していません)。これは RANK 用語を追加することで実現されます。RANK 用語は、ドキュメントがマッチするかどうかには影響しませんが、マッチする場合には関連性のブーストを追加します。
+
+この言語の完全な構文は、[セマンティックルールのリファレンス](/ja/reference/querying/semantic-rules)にあります。
+
+## ルールベース
+
+一緒に使用されるルールのコレクションは、_ルールベース_ にまとめられます。ルールベースは、ルールと条件を含むテキストファイルで、ファイルの拡張子は `.sr`(semantic rules の略)です。例:
+
+```sql
+# Replacements
+lotr -> lord of the rings;
+colour -> color;
+audi -> skoda;
+
+# Stopwords
+[stopword] -> ; # (Replace them by nothing)
+[stopword] :- and, or, the, be;
+
+# Focus brands to the brand field. If we think the_brand_# field has high quality data, we can replace. We use the same name
+# for the condition and the field, but this is not necessary.
+[brand] :- brand:[brand];
+[brand] :- sony, dell, ibm, hp;
+
+# Boost recognized categories
+[category] +> $category:[category];
+[category] :- laptop, digital camera, camera;
+```
+
+ルールベース内のルールは、上から順に評価されます。1 つのルールは、評価が次のクエリーに移る前に、可能な限り何度もマッチされます。したがって、クエリー _colour colour_ は、次のルールに移る前に _color color_ に書き換えられます。
+
+## 設定
+
+ルールベースファイルは、[アプリケーション・パッケージ](/ja/reference/applications/application-packages)の `rules/` ディレクトリ配下に配置され、`.sr` 拡張子を除いたファイル名で名付けられます。たとえば、上記のルールを `[my-application]/rules/example.sr` に保存すると、利用可能なルールベースの名前は `example` になります。
+
+ルールベースをクエリーでデフォルトで使用するには、ルールベースの独立した行に `@default` を追加します。デフォルトのルールを無効にするには、クエリーに [rules.off](/ja/reference/api/query#rules.off) を追加します。
+
+ルールは、再度 `vespa prepare` を実行することで、いつでも安全に更新できます。ルールベースにエラーがある場合、更新は行われず、エラーがコマンドラインに報告されます。
+
+ルールが何をしているかをトレースするには、クエリーに [tracelevel.rules=[number]](/ja/reference/api/query#tracelevel.rules) を追加します。
+
+## 複数のルールベースの使用
+
+`[my-application]/rules/` に複数のルールベースを配置し、クエリーでそれらを選択することができます。ルールは相互にインクルードすることもできます。これは、大きなルールセットを整理したり、標準のベースをインクルードした新しいベースでルールセットのバリエーションを実験したり、ユースケースごとに異なるルールセットを使用したりするのに便利です。
+
+あるルールベースを別のルールベースにインクルードするには、独立した行に `@include(rulebasename)` を追加します。ここで _rulebasename_ はファイル名(_.sr_ の有無は問いません)です。結果は、インクルードされたルールベースが `include` 行の位置にコピーされた場合と同じになります。条件が両方のベースで定義されている場合、_インクルードする側_ のベースのものが使用されます。また、条件として `@super` ディレクティブを使用して、インクルードされたルールベース内の同名の条件を参照することもできます。たとえば、このルールベースは、上記の `example.sr` の _category_ 定義にいくつかのカテゴリーを追加します:
+
+```sql
+@include(example)
+
+# Category becomes laptop, digital camera, camera, palmtop, phone
+[category] :- @super, palmtop, phone;
+```
+
+複数のルールベースをインクルードでき、インクルードされたルールベース自体もルールベースをインクルードできます。アプリケーション・パッケージに含まれるすべてのルールベースは、クエリー実行時に利用可能です。ルールベースの独立した行に `@default` を追加することで、いずれかのルールベースをデフォルトにできます。別のルールベースを使用するには、クエリーに [rules.rulebase=[rulebasename]](/ja/reference/api/query#rules.rulebase) を追加します。
+
+## 有限状態オートマトンの使用
+
+_有限状態オートマトン_(FSA)は、大きな文字列リストの格納と検索に効率的です。パフォーマンスを向上させるために、ルールベースを FSA にコンパイルできます。オートマトンは、マッチさせる条件の用語と条件名を(デフォルトでは)タブで区切って列挙したテキストファイルから作成されます。条件名の後にセミコロンと追加データを続けることができますが、これらは無視されます。
+
+このオートマトンのソースファイルは、例のルールベースの _stopword_ 条件と _brand_ 条件と同じものを定義しています:
+
+```txt
+and stopword
+or stopword
+be stopword
+the stopword
+sony brand
+dell brand
+ibm brand; This text is ignored
+hp brand
+```
+
+[vespa-makefsa](/ja/reference/operations/tools#vespa-makefsa) を使用してオートマトンファイルをコンパイルします:
+
+```bash
+$ vespa-makefsa -t sourcefile.txt targetfile.fsa
+```
+
+ターゲットファイルは、ルールベースファイルの独立した行に _@automata(automatonfile)_ を追加することでルールベースから使用されます(ファイルパスは _$VESPA\_HOME_ からの相対パスです)。オートマトンファイルは、すべてのコンテナーノードに保存されている必要があります。
+
+オートマトンは他のルールベースにはインクルードされないことに注意してください。そのため、オートマトンを使用する別のルールベースをインクルードするルールベースは、同じオートマトン(またはインクルードされたベースのオートマトンからの変更を含むオートマトン)を使用することを宣言する必要もあります。
+
+## クエリーのフレーズ化
+
+ユーザーは _New York_、_Rolling Stones_、_The Who_、_daily horoscopes_ のようなフレーズを検索します。後者を例にすると、ほとんどの場合、クエリー文字列は次のようになります:
+
+```bash
+/search/?query=daily horoscopes&â€¦
+```
+
+これは実際には _daily_ と _horoscopes_ の両方がマッチするドキュメントの検索であり、必ずしも正確なフレーズ _"daily horoscopes"_ を含むドキュメントの検索ではありません。PhrasingSearcher は、クエリーをよく使われるフレーズのリストと比較し、2 つの検索用語をフレーズで置き換えるサーチャーです。_"daily horoscopes"_ がよく使われるフレーズであれば、上記のクエリーは次のようになります:
+
+```bash
+/search/?query="daily horoscopes"&â€¦
+```
+
+PhrasingSearcher には、_有限状態オートマトン_(FSA)にコンパイルされた、よく使われるフレーズのリストを設定する必要があります。フレーズのリストは次の条件を満たす必要があります:
+
+- すべて小文字であること
+- アルファベット順にソートされていること
+
+例:
+
+```bash
+$ perl -ne 'print lc' listofphrasestextfile.unsorted.mixedcase | sort > listofphrasestextfile
+```
+
+テキストファイルを小文字に変換するこの Perl コマンドは、非 ASCII 文字をうまく処理できないことに注意してください(これは単なる例です)。フレーズのリストが UTF-8 エンコードされている場合や英語以外の文字を含む場合は、結果のファイルが正しいことを再確認してください。
+
+[vespa-makefsa](/ja/reference/operations/tools#vespa-makefsa) を使用して、リストを FSA ファイルにコンパイルします:
+
+```bash
+$ vespa-makefsa listofphrasestextfile phrasefsa
+```
+
+ファイルをすべてのコンテナーノードに配置し、場所を設定して[デプロイ](/ja/basics/applications)します:
+
+```xml
+<container id="default" version="1.0">
+    <config name="container.qr-searchers">
+        <com>
+            <yahoo>
+                <prelude>
+                    <querytransform>
+                        <PhrasingSearcher>
+                            <automatonfile>/path/phrasefsa</automatonfile>
+                        </PhrasingSearcher>
+                    </querytransform>
+                </prelude>
+            </yahoo>
+        </com>
+    </config>
+```
+

@@ -62,11 +62,28 @@ There are three types of sub-databases, each with its own [document meta store](
 The sub-databases are maintained by the *Maintenance Controller*. The document distribution changes as the system is resized. When the number of nodes in the system changes, the Maintenance Controller will move documents between the Ready and Not Ready sub-databases to reflect the new distribution. When an entry in the Removed sub-database gets old, it is purged. The sub-databases are:
 
 
-|||
-| :--- | :--- |
-| **Not Ready** | Holds the redundant documents that are not searchable, i.e. the not ready documents. Documents that are not ready are only stored, not indexed. It takes some processing to move from this state to the ready state. |
-| **Ready** | Maintains attributes and indexes of all ready documents and keeps them searchable. One of the ready copies is active while the rest are not active:<br/><br/>**Active** <br/> There should always be exactly one active copy of each document in the system, though intermittently there may be more. These documents produce results when queries are evaluated.<br/><br/>>**Not Active**<br/> The ready copies that are not active are indexed but will not produce results. By being indexed, they are ready to take over immediately if the node holding the active copy becomes unavailable. Read more in searchable-copies. |
-|**Removed**|Keeps track of documents that have been removed. The id and timestamp for each document are kept. This information is used when buckets from two nodes are merged. If the removed document exists on another node but with a different timestamp, the most recent entry prevails.|
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Not Ready&#42;&#42;</td>
+      <td>Holds the redundant documents that are not searchable, i.e. the not ready documents. Documents that are not ready are only stored, not indexed. It takes some processing to move from this state to the ready state.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Ready&#42;&#42;</td>
+      <td>Maintains attributes and indexes of all ready documents and keeps them searchable. One of the ready copies is active while the rest are not active:<br/><br/>&#42;&#42;Active&#42;&#42; <br/> There should always be exactly one active copy of each document in the system, though intermittently there may be more. These documents produce results when queries are evaluated.<br/><br/>&gt;&#42;&#42;Not Active&#42;&#42;<br/> The ready copies that are not active are indexed but will not produce results. By being indexed, they are ready to take over immediately if the node holding the active copy becomes unavailable. Read more in searchable-copies.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Removed&#42;&#42;</td>
+      <td>Keeps track of documents that have been removed. The id and timestamp for each document are kept. This information is used when buckets from two nodes are merged. If the removed document exists on another node but with a different timestamp, the most recent entry prevails.</td>
+    </tr>
+  </tbody>
+</table>
 
 ## Transaction log
 
@@ -213,67 +230,175 @@ There is only one instance of each job at a time - e.g., attributes are flushed 
 The *temporary* resources used when jobs are executed are described in *CPU*, *Memory* and *Disk*. The memory and disk usage metrics of components that are optimized by the jobs are described in *Metrics* (with *Metric prefix*). For a list of all available Proton metrics, refer to the searchnode metrics in the [Vespa Metric Set](/en/reference/operations/metrics/vespa-metric-set#searchnode-metrics). Metrics are available at the [Metrics API](/en/operations/metrics).
 
 
-| Job | Description |
-| :--- | :--- |
-| CPU | Little - one thread flushes to disk |
-| Memory | Little - some temporary use |
-| Disk | A new file is written too, so 2x the size of an attribute on disk until the old flush file is deleted. |
-| Run metric | content.proton.documentdb.job.attribute_flush |
-| content.proton.documentdb.[ready|notready].attribute.memory_usage. |
-| Metrics | allocated_bytes.average
-      used_bytes.average
-      dead_bytes.average
-      onhold_bytes.average |
-| CPU | Little - one thread flushes to disk |
-| Memory | Little |
-| Disk | Creates a new disk index, size of the memory index. |
-| Run metric | content.proton.documentdb.job.memory_index_flush |
-| Metric prefix | content.proton.documentdb.index.memory_usage. |
-| Metrics | allocated_bytes.average
-      used_bytes.average
-      dead_bytes.average
-      onhold_bytes.average |
-| CPU | Multiple threads merge indices, configured as a function of
-      feeding concurrency -
-      refer to this for details |
-| Memory | Little |
-| Disk | Creates a new index while serving from the current: 2x temporary disk usage for the given index. |
-| Run metric | content.proton.documentdb.job.disk_index_fusion |
-| CPU | Little |
-| Memory | Little |
-| Disk | Little |
-| Run metric | content.proton.documentdb.job.document_store_flush |
-| CPU | Little - one thread reads one file, sorts and writes a new file |
-| Memory | Holds a document store file in memory plus memory for sorting the file.
-      Note: This is important on hosts with little memory!
-      Reduce  maxfilesize to increase the number of files and use less temporary memory for compaction. |
-| Disk | A new file is written while the current is serving, max temporary usage is 2x. |
-| Run metric | content.proton.documentdb.job.document_store_compact |
-| Metric prefix | content.proton.documentdb.[ready|notready|removed].document_store. |
-| Metrics | disk_usage.average
-      disk_bloat.average
-      max_bucket_spread.average
-      memory_usage.allocated_bytes.average
-      memory_usage.used_bytes.average
-      memory_usage.dead_bytes.average
-      memory_usage.onhold_bytes.average |
-| CPU | CPU similar to feeding.
-      Consumes capacity from the write threads, so has feeding impact |
-| Memory | As feeding - e.g., the attribute memory usage and memory index in the ready sub-database will grow |
-| Disk | As feeding |
-| Run metric | content.proton.documentdb.job.bucket_move |
-| CPU | Like feeding - add and remove documents |
-| Memory | Little |
-| Disk | 0 |
-| Run metric | content.proton.documentdb.job.lid_space_compact |
-| Metric prefix | content.proton.documentdb.[ready|notready|removed].lid_space. |
-| Metrics | lid_limit.last
-      lid_bloat_factor.average
-      lid_fragmentation_factor.average |
-| CPU | Little |
-| Memory | Little |
-| Disk | Little |
-| Run metric | content.proton.documentdb.job.removed_documents_prune |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Job</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CPU</td>
+      <td>Little - one thread flushes to disk</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>Little - some temporary use</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>A new file is written too, so 2x the size of an attribute on disk until the old flush file is deleted.</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.attribute_flush</td>
+    </tr>
+    <tr>
+      <td colSpan={2}>content.proton.documentdb.[ready|notready].attribute.memory_usage.</td>
+    </tr>
+    <tr>
+      <td>Metrics</td>
+      <td>allocated_bytes.average <br/> used_bytes.average <br/> dead_bytes.average <br/> onhold_bytes.average</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>Little - one thread flushes to disk</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>Little</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>Creates a new disk index, size of the memory index.</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.memory_index_flush</td>
+    </tr>
+    <tr>
+      <td>Metric prefix</td>
+      <td>content.proton.documentdb.index.memory_usage.</td>
+    </tr>
+    <tr>
+      <td>Metrics</td>
+      <td>allocated_bytes.average <br/> used_bytes.average <br/> dead_bytes.average <br/> onhold_bytes.average</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>Multiple threads merge indices, configured as a function of <br/> feeding concurrency - <br/> refer to this for details</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>Little</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>Creates a new index while serving from the current: 2x temporary disk usage for the given index.</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.disk_index_fusion</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>Little</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>Little</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>Little</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.document_store_flush</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>Little - one thread reads one file, sorts and writes a new file</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>Holds a document store file in memory plus memory for sorting the file. <br/> Note: This is important on hosts with little memory! <br/> Reduce  maxfilesize to increase the number of files and use less temporary memory for compaction.</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>A new file is written while the current is serving, max temporary usage is 2x.</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.document_store_compact</td>
+    </tr>
+    <tr>
+      <td>Metric prefix</td>
+      <td>content.proton.documentdb.[ready|notready|removed].document_store.</td>
+    </tr>
+    <tr>
+      <td>Metrics</td>
+      <td>disk_usage.average <br/> disk_bloat.average <br/> max_bucket_spread.average <br/> memory_usage.allocated_bytes.average <br/> memory_usage.used_bytes.average <br/> memory_usage.dead_bytes.average <br/> memory_usage.onhold_bytes.average</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>CPU similar to feeding. <br/> Consumes capacity from the write threads, so has feeding impact</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>As feeding - e.g., the attribute memory usage and memory index in the ready sub-database will grow</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>As feeding</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.bucket_move</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>Like feeding - add and remove documents</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>Little</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.lid_space_compact</td>
+    </tr>
+    <tr>
+      <td>Metric prefix</td>
+      <td>content.proton.documentdb.[ready|notready|removed].lid_space.</td>
+    </tr>
+    <tr>
+      <td>Metrics</td>
+      <td>lid_limit.last <br/> lid_bloat_factor.average <br/> lid_fragmentation_factor.average</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>Little</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>Little</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>Little</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.removed_documents_prune</td>
+    </tr>
+  </tbody>
+</table>
 
 
 ## Retrieving documents
@@ -284,10 +409,24 @@ Retrieving documents is done by specifying an id to *get*, or use a [selection e
 ![Retrieving documents](/assets/img/elastic-visit-get.svg)
 </Frame>
 
-| | |
-| :--- | :--- |
-| **Get** | When the content node receives a get request, it scans through all the document databases, and for each one, it checks all three sub-databases. Once the document is found, the scan is stopped and the document returned. If the document is found in a Ready sub-database, the document retriever will apply any changes that are stored in the [attributes](/en/content/attributes) before returning the document. |
-| **Visit** | A visit request creates an iterator over each candidate bucket. This iterator will retrieve matching documents from all sub-databases of all document databases. As for get, attribute values are applied to document fields in the Ready sub-database. |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Get&#42;&#42;</td>
+      <td>When the content node receives a get request, it scans through all the document databases, and for each one, it checks all three sub-databases. Once the document is found, the scan is stopped and the document returned. If the document is found in a Ready sub-database, the document retriever will apply any changes that are stored in the <a href="/en/content/attributes" aria-label="attributes">attributes</a> before returning the document.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Visit&#42;&#42;</td>
+      <td>A visit request creates an iterator over each candidate bucket. This iterator will retrieve matching documents from all sub-databases of all document databases. As for get, attribute values are applied to document fields in the Ready sub-database.</td>
+    </tr>
+  </tbody>
+</table>
 
 ## Queries
 
@@ -300,10 +439,24 @@ Queries have a separate pathway through the system. They do not use the distribu
 A query enters the system through the *QR-server (query rewrite server)* in the [Vespa Container](/en/applications/containers). The QR-server issues one query per document type to the search nodes:
 
 
-| | |
-| :--- | :--- |
-| **Container** | The Container knows all the document types and rewrites queries as a collection of queries, one for each type. Queries may have a [restrict](/en/reference/api/query#model.restrict) parameter, in which case the container will send the query only to the specified document types.  It sends the query to content nodes and collects partial results. It pings all content nodes every second to know whether they are alive, and keeps open TCP connections to each one. If a node goes down, the elastic system will make the documents available on other nodes. |
-| **Content node matching** | The *match engine* receives queries and routes them to the right document database based on the document type. The query is passed to the *Ready* sub-database, where the searchable documents are. Based on information stored in the document meta store, the query is augmented with a blocklist that ensures only *active* documents are matched. |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Container&#42;&#42;</td>
+      <td>The Container knows all the document types and rewrites queries as a collection of queries, one for each type. Queries may have a <a href="/en/reference/api/query#model.restrict" aria-label="restrict">restrict</a> parameter, in which case the container will send the query only to the specified document types.  It sends the query to content nodes and collects partial results. It pings all content nodes every second to know whether they are alive, and keeps open TCP connections to each one. If a node goes down, the elastic system will make the documents available on other nodes.</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Content node matching&#42;&#42;</td>
+      <td>The &#42;match engine&#42; receives queries and routes them to the right document database based on the document type. The query is passed to the &#42;Ready&#42; sub-database, where the searchable documents are. Based on information stored in the document meta store, the query is augmented with a blocklist that ensures only &#42;active&#42; documents are matched.</td>
+    </tr>
+  </tbody>
+</table>
 
 ## /state/v1 API
 

@@ -1,0 +1,262 @@
+---
+title: Vespa Cloud への移行
+description: "Vespa アプリケーションの Vespa Cloud への移行は簡単です。Vespa Cloud 上のアプリケーションはセルフホストの Vespa インスタンスと同じ機能をすべてサポートしており、新しい機能が加わり運用作業が不要になるだけです。"
+---
+
+大まかなプロセスは次のとおりです:
+
+<Steps>
+  <Step>
+  [dev](/ja/operations/environments#dev) 環境を使った機能検証(このガイド)。
+  </Step>
+  <Step>
+  [prod](/ja/operations/environments#prod) ゾーンへのデプロイ。
+  </Step>
+</Steps>
+
+このガイドの残りの部分では、デプロイの準備ができた[テナント](/ja/learn/tenant-apps-instances)があることを前提とします:
+
+```bash
+$ export VESPA_TENANT_NAME=mytenant
+```
+
+<Warning>
+**前提条件:**
+
+- x86\_64 または arm64 上の Linux、macOS、または Windows 10 Pro。[Podman Desktop](https://podman.io/) または [Docker Desktop](https://www.docker.com/products/docker-desktop/) がインストールされ、エンジンが実行中であること。
+- あるいは、Podman デーモンを起動:
+  ```bash
+    $ podman machine init --memory 6000
+    $ podman machine start
+    ```
+- システム制限やその他の設定については [Docker コンテナー](/ja/operations/self-managed/docker-containers)を参照してください。
+- Haswell(2013 年)より古い CPU については、[CPU サポート](/ja/operations/self-managed/cpu-support)を参照してください。
+- メモリー: Docker/Podman 専用の最小 RAM。[メモリーの推奨事項](/ja/operations/self-managed/node-setup#memory-settings)。
+- ディスク: `NO_SPACE` を回避してください - vespaengine/vespa コンテナーイメージ + データ用の余裕にはディスク容量が必要です。[詳細](/ja/writing/feed-block)。
+- [Vespa CLI](/ja/clients/vespa-cli) をインストールするための [Homebrew](https://brew.sh/)、または [Github releases](https://github.com/vespa-engine/vespa/releases) から Vespa CLI をダウンロード。
+</Warning>
+
+<Note>
+**注:**
+
+[Vespa Cloud Enclave](/ja/operations/enclave/enclave) のユーザーは、先に Enclave のセットアップ手順を実行してください。
+</Note>
+
+<Steps>
+  <Step title="移行元のアプリケーション・パッケージを確認する">
+    セルフホストシステムの[アプリケーション・パッケージ](/ja/basics/applications)は、わずかな変更で Vespa Cloud の `dev` 環境にデプロイできます。
+
+    アプリケーション・パッケージのルートは次のようになっているでしょう:
+
+        ```txt
+        ├── schemas
+        │   └── doc.sd
+        └── services.xml
+        ```
+
+    多くの場合、ファイルはもっとありますが、上記は最小構成です。ここがアプリケーション・パッケージのルートです - これをカレントの作業ディレクトリにしてください:
+
+    ```bash
+    $ cd /location/of/app/package
+    ```
+  </Step>
+
+  <Step title="Vespa CLI を確認する">
+    [Vespa CLI](/ja/clients/vespa-cli) がインストールされていることを確認します:
+
+    ```bash
+    $ vespa
+    Usage:
+      vespa [flags]
+      vespa [command]
+    ```
+  </Step>
+
+  <Step title="Vespa Cloud へのログイン">
+    ローカル環境を設定し、Vespa Cloud にログインします:
+
+    ```bash
+    $ vespa config set target cloud && \
+      vespa config set application $VESPA_TENANT_NAME.myapp && \
+      vespa auth login
+    ```
+  </Step>
+
+  <Step title="アプリケーション・パッケージに認証情報を追加する">
+    セキュリティ認証情報を作成・取得します:
+
+    ```bash
+    $ vespa auth cert
+    ```
+
+    これにより、アプリケーション・パッケージに `security` ディレクトリが追加され、その中に公開証明書が追加されます:
+
+        ```txt
+        ├── schemas
+        │   └── doc.sd
+        ├── security
+        │   └── clients.pem
+        └── services.xml
+        ```
+
+    このコマンドは、Vespa CLI のホームディレクトリにキー/証明書のペアもインストールします。[vespa auth cert](/ja/reference/clients/vespa-cli/vespa_auth_cert) を参照してください。このペアは、以降のドキュメント操作やクエリー操作のためのデータプレーンへのアクセスに使用されます。
+  </Step>
+
+  <Step title="Vespa Cloud Enclave のみ: アカウントを追加する">
+    <Note>
+    **注:**
+
+    [Vespa Cloud Enclave](/ja/operations/enclave/enclave) を使用していない場合は、このステップをスキップしてください。
+    </Note>
+
+    クラウドプロバイダーのアカウントを指定して [deployment.xml](/ja/reference/applications/deployment#deployment) を追加します - これにより、デプロイメントが正しいアカウントのリソースを使用するようになります - 例:
+
+    ```xml
+    <deployment version="1.0" cloud-account="gcp:project-name">
+       <dev />
+    </deployment>
+    ```
+
+    ```xml
+    <deployment version="1.0" cloud-account="aws:123456789012">
+        <dev />
+    </deployment>
+    ```
+
+    アプリケーション・パッケージは次のようになります:
+
+    ```txt
+    ├── deployment.xml
+    ├── schemas
+    │   └── doc.sd
+    ├── security
+    │   └── clients.pem
+    └── services.xml
+    ```
+  </Step>
+
+  <Step title="hosts.xml を削除する">
+    `hosts.xml` は Vespa Cloud では使用されないため、削除してください。
+  </Step>
+
+  <Step title="services.xml を変更する">
+    `services.xml` の `<nodes>` 設定を編集します - 変更前:
+
+    ```xml
+    <container id="default" version="1.0">
+        <document-api/>
+        <document-processing/>
+        <search/>
+        <nodes>
+            <node hostalias="node4" />
+            <node hostalias="node5" />
+        </nodes>
+    </container>
+    ```
+
+    変更後:
+
+    ```xml
+    <container id="default" version="1.0">
+        <document-api/>
+        <document-processing/>
+        <search/>
+        <nodes count="2">
+             <resources vcpu="2" memory="8Gb" disk="50Gb"/>
+        </nodes>
+    </container>
+    ```
+
+    端的に言えば、これがリソース指定のための Vespa Cloud の構文です。
+
+    例として、`c7i.2xlarge` インスタンスタイプと 200G のディスクを使うクラスターから移行する場合 - AWS の仕様では:
+
+    ```txt
+    c7i.2xlarge  8  16  EBS-Only
+    ```
+
+    同等の Vespa Cloud の設定:
+
+    ```xml
+    <resources vcpu="8" memory="16Gb" disk="200Gb"/>
+    ```
+
+    これを `services.xml` 内のすべてのクラスターに対して繰り返します。注意点:
+
+    1. ここでは `dev` 環境に移行しているため、_実際に_デプロイされるのは最小化されたバージョンです。上記の設定変更は、この環境で簡単にテストできます。
+    2. この時点では `count=2` を使うのがベストプラクティスです。
+    3. リソースは、デプロイ先のクラウドプロバイダーのノードインスタンスタイプと一致している必要があります。[AWS フレーバー](/ja/performance/instance-types/aws-instance-types)、[GCP フレーバー](/ja/performance/instance-types/gcp-instance-types)、[Azure フレーバー](/ja/performance/instance-types/azure-instance-types)を参照してください。
+  </Step>
+
+  <Step title="Vespa Cloud の Dev 環境へデプロイする">
+    この時点で、ローカル環境とアプリケーション・パッケージはデプロイの準備ができています:
+
+    ```bash
+    $ vespa deploy --wait 600
+    ```
+
+    リソースがプロビジョニングされるため、初回のデプロイメントには通常数分かかることに注意してください。
+
+    この時点で、コンソールを開いてデプロイされたアプリケーションを観察することを推奨します。リンクは `https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default` になります(自身の名前に置き換えてください) - これはコンソールのメインページからも簡単に見つけられます:
+
+    <Frame>
+    ![dev ビュー](/assets/img/free-trial.png)
+    </Frame>
+
+    Vespa 7(以前)のバージョンに起因してデプロイメントが失敗する場合のトラブルシューティングについては、[vespa8 リリースノート](/ja/reference/release-notes/vespa8)を参照してください。
+  </Step>
+
+  <Step title="エンドポイントを使用する">
+    エンドポイントはコンソールに表示されますが、次のようにリストすることもできます:
+
+    ```bash
+    $ vespa status query
+    Container default at https://aa1c1234.b225678e.z.vespa-app.cloud/ is ready
+    ```
+
+    クエリーエンドポイントをテストします。`totalCount: 0` が期待されます:
+
+    ```bash
+    $ vespa query 'select * from sources * where true'
+    ```
+
+    ```json
+    {
+        "root": {
+            "id": "toplevel",
+            "relevance": 1.0,
+            "fields": {
+                "totalCount": 0
+            },
+    ```
+
+    このガイド冒頭の `services.xml` の例では、`<search>` と `<document>` の両方が `default` という名前の同じクラスターに設定されています。複数のコンテナー・クラスターがある場合は、`<search>` が設定されたものを選択します:
+
+    ```bash
+    vespa query 'select * from sources * where true' --cluster myquerycluster
+    ```
+
+    最後に、クラスターにドキュメントをフィードします(これは `<document>` が設定されたクラスターです)
+
+    ```bash
+    vespa feed mydoc.jsonl --cluster myfeedcluster
+    ```
+
+    クエリーを再実行し、`totalCount` がゼロでないことを確認します。
+  </Step>
+</Steps>
+
+## 次のステップ
+
+これは機能検証の最終ステップです。次の点に注意してください:
+
+<Note>
+**注:**
+
+`dev` へのデプロイメントは、非アクティブ状態が 7 日間続くと期限切れになります。つまり、最後のデプロイメントから 7 日後です。**これはすべてのプランに適用されます**。Vespa Console を使って有効期限を延長するか、アプリケーションを再デプロイしてさらに 7 日間追加してください。
+
+</Note>
+
+- [dev](/ja/operations/environments#dev) 環境についてさらに読む
+- データ(の一部)をフィードし、クエリーやその他の API アクセスが期待どおりに動作することを検証する。
+- 検証プロセスの最後に、[本番デプロイメント](/ja/operations/production-deployment)に進み、本番ゾーンのセットアップを行う。

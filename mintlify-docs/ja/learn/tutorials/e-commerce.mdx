@@ -1,0 +1,69 @@
+---
+title: "ユースケース - ショッピング"
+---
+
+[e コマース(ショッピング)ユースケース](https://github.com/vespa-engine/sample-apps/tree/master/use-case-shopping)は、サンプルデータと、製品データやレビューを閲覧するための Web フロントエンドを備えた e コマースサイトの例です。アプリケーションをすぐに始めるには、サンプルアプリの [README](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/README.md) の手順に従ってください。
+
+
+<Frame>
+![ショッピング・サンプルアプリのスクリーンショット](/assets/img/shopping-1.png)
+</Frame>
+
+
+アプリケーションを閲覧するには、[localhost:8080/site](http://localhost:8080/site) にアクセスします。このサイトはカスタムの[リクエスト・ハンドラー](/ja/applications/request-handlers)によって実装されており、Vespa バックエンドの前面に配置されるフロントエンド/ミドルウェアを作成するシンプルな例として意図されています。そのため、Vespa の機能からはかなり独立しており、コードは追いやすく、できるだけ「魔法」を使わないように設計されています。Vespa へのクエリーはすべて HTTP リクエストとして送信され、Vespa からの JSON 結果がパースされてレンダリングされます。
+
+このサンプル・アプリケーションは、[https://cseweb.ucsd.edu/~jmcauley/datasets.html](https://cseweb.ucsd.edu/~jmcauley/datasets.html) にある Amazon 製品データセットを基に構築されています。このデータの小さなサンプルがサンプル・アプリケーションに含まれており、完全なデータセットは上記のサイトから入手できます。このサンプル・アプリケーションには、データセットのフォーマットから Vespa のフォーマットに変換するスクリプトが含まれています: [convert_meta.py](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/convert_meta.py) と [convert_reviews.py](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/convert_reviews.py)。使用例は [README](https://github.com/vespa-engine/sample-apps/tree/master/use-case-shopping#readme) を参照してください。
+
+レビューをフィードする際には、ドキュメントの書き込みをインターセプトして親アイテムをレビュー評価で更新するカスタムの[ドキュメント・プロセッサー](/ja/applications/document-processors)があり、集約されたレビュー評価がアイテムと共に保存され続けます - [ReviewProcessor](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/src/main/java/ai/vespa/example/shopping/ReviewProcessor.java) を参照してください。これは推奨される方法というよりはカスタム・ドキュメント・プロセッサーの例です。レビューを複数回フィードすると値が水増しされてしまうためです。正しく行うには、再フィードで予期しない結果が生じないよう、おそらくオフラインで計算するべきでしょう。
+
+
+
+### 注目の機能
+
+* [複数のドキュメント・タイプ](/ja/basics/schemas)
+
+Vespa はデータをドキュメントとしてモデル化します。ドキュメントは、保存、インデックス、ランキング、検索の方法を定義するスキーマで設定されます。Vespa では複数のドキュメント・タイプを持つことができ、それらをコンテント・クラスターにどのように分散させるかを `services.xml` で定義できます。このアプリケーションは、同じコンテント・クラスターに保存される 3 つのドキュメント・タイプ(item、review、query)を使用しています。検索は item に対して行われますが、review は単一の親 item を参照し、item のページにレンダリングされます。query ドキュメント・タイプは、オートサジェスト機能を支えるために使用されます。
+
+* [カスタム・ドキュメント・プロセッサー](/ja/applications/document-processors)
+
+Vespa では、ドキュメントのフィード中に任意の種類の追加処理を実行するカスタム・ドキュメント・プロセッサーを設定できます。一例はドキュメントを追加情報でエンリッチすることであり、もう一つはランキング中の不要な計算を避けるためにフィールドの値を事前計算することです。このアプリケーションでは、ドキュメント・プロセッサーを使用してレビューをインターセプトし、親アイテムのレビュー評価を更新します。
+
+* [カスタム・サーチャー・プロセッサー](/ja/applications/searchers)
+
+Vespa では、クエリー実行中に任意の種類の追加処理を実行するカスタム・サーチャーを設定できます。サンプルアプリには、[ファジー・マッチング](/ja/reference/querying/yql#fuzzy)と[前方一致検索](/ja/querying/text-matching#prefix-match)を組み合わせてオートサジェスト用のクエリーを構築する単一のカスタム・サーチャーがあります。
+
+* [カスタム・ハンドラー](/ja/applications/request-handlers)
+
+Vespa では、任意の種類のリクエストを処理する汎用リクエスト・ハンドラーを設定できます。この例のサイトは、そのようなリクエスト・ハンドラー 1 つで実装されています。[SiteHandler](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/src/main/java/ai/vespa/example/shopping/site/SiteHandler.java) は、[services.xml](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/src/main/application/services.xml) で `/site` にバインドされるように設定されています。このハンドラーは例示目的であり、Vespa から独立するように設計されていることに注意してください。ほとんどのアプリケーションでは、これは専用の構成で提供するでしょう。
+
+* [カスタム設定](/ja/applications/configuring-components)
+
+Vespa でカスタム・コンポーネント(たとえばドキュメント・プロセッサー、サーチャー、ハンドラー)を作成する際、カスタム設定を使用してコンポーネントに設定パラメータをインジェクションできます。これには、コンフィグ定義(`.def` ファイル)を定義することが含まれ、これによりコンフィグ・クラスが作成されます。このクラスを `services.xml` のデータでインスタンス化でき、生成されたオブジェクトは構築時にコンポーネントに依存性注入されます。このアプリケーションでは、ハンドラーのための Vespa ホストの詳細を設定するのにカスタム・コンフィグを使用しています。
+
+* [部分更新](/ja/reference/schemas/document-json-format#update)
+
+Vespa では、ドキュメント全体を送信することなく、既存のドキュメントに変更を加えることができます。例としては、単一フィールドの値の設定、配列への要素の追加、フィールドの値を事前に知ることなく値をインクリメントすることなどがあります。このアプリケーションには、レビューが役に立ったかどうかの投票の中に部分更新の例が含まれています。`SiteHandler` がリクエストを受け取り、`ReviewVote` クラスが部分更新を送信して `up` または `downvotes` フィールドをインクリメントします。
+
+* [YQL による検索](/ja/querying/query-language)
+
+Vespa では、YQL を使用してドキュメントを検索します。このアプリケーションでは、Vespa からデータを取得する責務を持つクラス(`SiteHandler` の下の `data` パッケージ内)が、HTTP 経由で Vespa にクエリーするために使用される YQL クエリーを組み立てます。
+
+* [グルーピング](/ja/querying/grouping)
+
+グルーピングは、クエリー結果のさまざまなフィールドをまとめてグループ化するために使用されます。このアプリケーションでは、Vespa への多くのクエリーにグルーピング・リクエストが含まれています。ホームページでは、保存されたアイテムからカテゴリーの最初の 3 階層を動的に抽出するためにグルーピングを使用しています。検索ページでは、クエリーにマッチした結果をカテゴリー、ブランド、アイテム評価、価格帯にグループ化します。グループがレンダリングされる順序は、カウントとヒットの関連度の両方によって決まります。これにより、クエリーの文脈に応じたナビゲーションが可能になります。
+
+* [Rank profile](/ja/basics/ranking)
+
+Rank profile は、特定のクエリーに対してドキュメントをどのようにスコアリングするかの指示を含むプロファイルです。rank profile の最も重要な部分はランキング式です。item と review のドキュメント・タイプのスキーマには、データをソートまたはスコアリングするための異なる rank profile が含まれています。item のランキングは、キーワード・マッチングとベクトル・マッチングのハイブリッドな組み合わせを使用しています。
+
+* [ネイティブ・エンベッダー](/ja/rag/embedding)
+
+ネイティブ・エンベッダーは、テキストのクエリーおよびドキュメント表現を、セマンティック検索に使用される密な高次元ベクトルにマッピングするために使用されます。このアプリケーションはオープンソースのエンベディング・モデルを使用し、推論はドキュメント処理とクエリー処理の両方で[ステートレス・モデル評価](/ja/ranking/stateless-model-evaluation)を使用して実行されます。
+
+* [ベクトル検索](/ja/querying/nearest-neighbor-search)
+
+デフォルトのリトリーバルは、従来の字句マッチングと組み合わせた近似最近傍検索を使用します。キーワード・マッチングとベクトル・マッチングの両方が、ブランド、価格、カテゴリーなどのフィルターによって制約されます。
+
+* [ランキング関数](/ja/reference/schemas/schemas#function-rank)
+
+ランキング関数は rank profile に含まれ、first-phase、second-phase、global-phase、または他の関数から、任意のランキング式の一部として参照できます。

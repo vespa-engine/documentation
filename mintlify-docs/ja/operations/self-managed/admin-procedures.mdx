@@ -1,0 +1,295 @@
+---
+title: "管理手順"
+sidebarTitle: "管理手順"
+---
+
+## インストール
+
+クラスターのセットアップ方法の入門として、[multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)サンプル・アプリケーションを参照してください - これを出発点として使用してください。[Multinode testing and observability](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode)サンプルアプリを試して、インターフェースと動作に慣れてください。
+
+## Vespaの起動 / 停止 / 再起動
+
+ノード上のすべてのサービスを起動および停止します:
+
+`$ $VESPA_HOME/bin/`[`vespa-start-services`](/ja/reference/operations/self-managed/tools#vespa-start-services)
+`$ $VESPA_HOME/bin/`[`vespa-stop-services`](/ja/reference/operations/self-managed/tools#vespa-stop-services)
+
+同様に、コンフィグサーバーの場合:
+
+`$ $VESPA_HOME/bin/`[`vespa-start-configserver`](/ja/reference/operations/self-managed/tools#vespa-start-configserver)
+`$ $VESPA_HOME/bin/`[`vespa-stop-configserver`](/ja/reference/operations/self-managed/tools#vespa-stop-configserver)
+
+*restart*コマンドはありません。再起動するには*stop*してから*start*を実行します。どのプロセス / サービスが起動されるかについては[Vespaの起動](/ja/operations/self-managed/config-sentinel#start-sequence)を参照し、[起動シーケンス](/ja/operations/self-managed/configuration-server#start-sequence)を読んでください。トレーニングビデオはvespaengineの[YouTubeチャンネル](https://www.youtube.com/@vespaai)にあります。
+
+個々のサービスを停止/起動するには[vespa-sentinel-cmd](/ja/reference/operations/self-managed/tools#vespa-sentinel-cmd)を使用します。
+
+<Warning>
+**重要:** 
+
+コンテント・ノードで*vespa-stop-services*を実行すると、再起動時間を最適化するために[prepareRestart](/ja/reference/operations/self-managed/tools#vespa-proton-cmd)が呼び出されます。これがノード上のVespaを停止する推奨の方法です。
+</Warning>
+
+*systemd* / *systemctl*の例については[multinode](/ja/operations/self-managed/multinode-systems#aws-ec2)を参照してください。[Dockerコンテナー](/ja/operations/self-managed/docker-containers)にも関連する起動/停止の情報があります。
+
+### コンテント・ノードのメンテナンスモード
+
+コンテント・ノードを*一時的に*停止する場合(ソフトウェアのアップグレードなど)は、ノードのダウン中にデータが自動的に再分散されるのを防ぐため、ノードを停止する*前*に手動でノードを[メンテナンスモード](/ja/reference/api/cluster-v2#maintenance)に設定することを検討してください。メンテナンスモードは、ノードがオンラインに復帰した後、手動で解除する必要があります。関連項目: [クラスター状態](#cluster-state)。
+
+[distribution key](/ja/reference/applications/services/content#node)が42のノードを、[vespa-set-node-state](/ja/reference/operations/self-managed/tools#vespa-set-node-state)を使用して`maintenance`モードに設定する例です。さらに、クラスターコントローラーによって記録される理由も指定しています:
+
+```bash
+ $ vespa-set-node-state --type storage --index 42 maintenance "rebooting for software upgrade"
+```
+
+ノードがオンラインに復帰した後、ノードを`up`としてマークしてメンテナンスモードを解除します:
+
+```bash
+ $ vespa-set-node-state --type storage --index 42 up
+```
+
+上記のコマンドをノード42のサービスを実行しているホスト上で*ローカルに*実行する場合は、`--index 42`を省略できます。`--index`が明示的に指定されていない場合、`vespa-set-node-state`はローカルノードのdistribution keyを使用します。
+
+## システムステータス
+
+- [hosts.xml](/ja/reference/applications/hosts)内のノードで[vespa-config-status](/ja/reference/operations/self-managed/tools#vespa-config-status)を使用して、すべてのサービスが更新された設定で実行されていることを確認します
+- [VESPA\_CONFIGSERVERS](/ja/operations/self-managed/files-processes-and-ports#environment-variables)が設定されており、hosts.xml内のすべてのノードで同一であることを確認します
+- *クラスターコントローラー*のステータスページ(下記)を使用して、search/storageノードのステータスを追跡します。
+- [ログ](/ja/reference/operations/log-files)を確認します
+- パフォーマンスグラフ、System Activity Report (*sar*)、または[ステータスページ](#status-pages)を使用して負荷を追跡します
+- [クエリー・トレーシング](/ja/reference/api/query#trace.level)を使用します
+- ディスクやメモリーが枯渇してフィードがブロックされることがあります - [フィードブロック](/ja/writing/feed-block)から回復してください
+
+## ステータスページ
+
+すべてのVespaサービスには、健全性、Vespaバージョン、設定、メトリクスを表示するステータスページがあります。ステータスページは予告なく変更されることがあります - 自動化する際は注意してください。手順:
+
+<Steps>
+<Step>
+**ポートを見つける:** ステータスページは、Vespaによって割り当てられたポートで実行されます。ステータスページのポートを見つけるには、[vespa-model-inspect](/ja/reference/operations/self-managed/tools#vespa-model-inspect)を使用して、アプリケーションで実行されているサービスを一覧表示します。
+
+```bash
+$ vespa-model-inspect services
+```
+
+特定のサービスの特定のノードのステータスページのポートを見つけるには、対象のサービスを選んで次を実行します:
+
+```bash
+$ vespa-model-inspect service [Options] <service-name>
+```
+</Step>
+<Step>
+**ステータスとメトリクスを取得する:** *distributor*、*storagenode*、*searchnode*、*container-clustercontroller*は、ステータスページを持つコンテント・サービスです。これらのポートにはHTTPタグが付いています。クラスターコントローラーにはHTTPタグの付いたポートが複数あり、STATEタグの付いたポートがステータスページを持つポートです。そのポートのルート、または/state/v1/metricsへの接続を試してください。*distributor*と*storagenode*のステータスページは`/`で利用できます:
+
+```bash
+$ vespa-model-inspect service searchnode
+
+  searchnode @ myhost.mydomain.com : search
+  search/search/cluster.search/0
+  tcp/myhost.mydomain.com:19110 (STATUS ADMIN RTC RPC)
+  tcp/myhost.mydomain.com:19111 (FS4)
+  tcp/myhost.mydomain.com:19112 (TEST HACK SRMP)
+  tcp/myhost.mydomain.com:19113 (ENGINES-PROVIDER RPC)
+  tcp/myhost.mydomain.com:19114 (HEALTH JSON HTTP)
+  $ curl http://myhost.mydomain.com:19114/state/v1/metrics
+  ...
+  $ vespa-model-inspect service distributor
+  distributor @ myhost.mydomain.com : content
+  search/distributor/0
+  tcp/myhost.mydomain.com:19116 (MESSAGING)
+  tcp/myhost.mydomain.com:19117 (STATUS RPC)
+  tcp/myhost.mydomain.com:19118 (STATE STATUS HTTP)
+  $ curl http://myhost.mydomain.com:19118/state/v1/metrics
+  ...
+  $ curl http://myhost.mydomain.com:19118/
+  ...
+```
+</Step>
+<Step>
+**クラスターコントローラーのステータスページを使用する**: クラスターコントローラーのステータスページは、ステータスポートの`http://hostname:port/clustercontroller-status/v1/*<clustername>*`で利用できます。*clustername*を指定しない場合、利用可能なクラスターが一覧表示されます。クラスターコントローラーのリーダーのステータスページには、異なるクラスター状態バージョンで動作しているノードがあるかどうかが表示されます。また、欠落または同期外れのためにマージ(ドキュメントセットの整合)待ちになっているデータバケットの数も表示されます。
+
+`$` [`vespa-model-inspect`](/ja/reference/operations/self-managed/tools#vespa-model-inspect) `service container-clustercontroller | grep HTTP`
+
+複数のクラスターコントローラーがある場合は、設定IDに"/0"サフィックスが付いているものを確認してください。それが優先リーダーです。
+
+クラスター状態バージョンは*SSV*テーブル列に表示されます。ここでの不一致は、通常はホストまたはネットワークの問題を示しています。
+</Step>
+</Steps>
+
+## クラスター状態
+
+クラスターとノードの状態情報は、[/cluster/v2 API](/ja/reference/api/cluster-v2)を通じて利用できます。このAPIは、ノードに*ユーザー状態*を設定するためにも使用できます - あるいは以下を使用してください:
+
+<CardGroup>
+  <Card title="vespa-get-cluster-state" icon="chart-bar" href="/ja/reference/operations/self-managed/tools#vespa-get-cluster-state" horizontal />
+  <Card title="vespa-get-node-state" icon="server" href="/ja/reference/operations/self-managed/tools#vespa-get-node-state" horizontal />
+  <Card title="vespa-set-node-state" icon="sliders" href="/ja/reference/operations/self-managed/tools#vespa-set-node-state" horizontal />
+</CardGroup>
+
+クラスターコントローラーの[ステータスページ](#status-pages)も参照してください。
+
+状態はZooKeeperクラスターに永続化され、クラスターコントローラーを再起動/変更しても以下は保持されます:
+
+- 再起動時の新しいクラスターコントローラーへの引き継ぎのための、最後のクラスター状態バージョン番号
+- オペレーターによって設定されたユーザー状態 - つまり、手動でdown / maintenanceに設定されたノード
+
+状態データが失われた場合、クラスター状態はリセットされます - その影響については[クラスターコントローラー](/ja/content/content-nodes#cluster-controller)を参照してください。
+
+## クラスターコントローラーの設定
+
+クラスターコントローラーは、[コンフィグサーバー](/ja/operations/self-managed/configuration-server)と同じホスト上で実行することを推奨します。これらは状態のためにzookeeperクラスターを共有しており、3ノードのデプロイはどちらにとってもベストプラクティスだからです。動作する例については、[multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)サンプルアプリを参照してください。
+
+クラスターコントローラーを設定するには、[services.xml](/ja/reference/applications/services/content#cluster-controller)を使用するか、*services*要素の下に[設定](https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def)を追加します - 例:
+
+```bash
+<services version="1.0">
+    <config name="vespa.config.content.fleetcontroller">
+        <min_time_between_new_systemstates>5000</min_time_between_new_systemstates>
+    </config>
+```
+
+壊れたコンテント・ノードでは、プロセスが絶えず再起動を繰り返す状態に陥ることがあります。破損したファイルへのアクセスによって初期化中に停止することもあれば、ノードローカルのバグを引き起こす特定の種類のリクエストを受信し始めたときに停止することもあります。これはディストリビューター・ノードにとって悪い状況です。これらの再起動により、ディストリビューター間で絶え間ない所有権の移転が発生し、バケットが利用できない時間帯が生じるためです。
+
+クラスターコントローラーには、このようなノードを検出する機能があります。制御されたシャットダウンとして検出されない形でノードが[max\_premature\_crashes](https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/fleetcontroller.def)を超えて再起動した場合、クラスターコントローラーはこのノードのwanted stateをdownに設定します。
+
+制御された再起動の検出は、現在のところ少し難しい問題です。制御された再起動は通常、プロセスにTERMシグナルを送信することで開始されます。他に手がかりがないため、コンテントレイヤーはすべてのTERMシグナルが制御されたシャットダウンによるものと仮定せざるを得ません。したがって、メモリーの使いすぎが原因でプロセスがカーネルによって強制終了され続ける場合、これはコンテントレイヤーには制御されたシャットダウンのように見えます。
+
+## 理想状態からの距離の監視
+
+[分散アルゴリズム](/ja/content/idealstate)を参照してください。ディストリビューターの[ステータスページ](#status-pages)を使用して状態メトリクスを調べます。[メトリクス](/ja/content/content-nodes#metrics)を参照してください。`idealstate.merge_bucket.pending`は追跡に最適なメトリクスで、クラスターがバランスしているときは0になります - ゼロ以外の値は、同期していないバケットがあることを示します。
+
+## クラスター設定
+
+- `vespa prepare`を実行しても、`vespa activate`が実行されるまで提供される設定は変更されません。`vespa prepare`は、再起動が必要なすべての設定変更について警告します。
+- スキーマの追加/変更/削除の方法については[スキーマ](/ja/basics/schemas)を参照してください。
+- Vespaクラスターの容量の追加/削除の方法については[エラスティシティ](/ja/content/elasticity)を参照してください。手順は下記のとおりです。
+- サーチャーやドキュメント・プロセッサーの追加または削除の方法については[チェーン・コンポーネント](/ja/applications/chaining)を参照してください。
+- コンテント・クラスターを*フラット*から*グループ化*構成に変更する方法については[サイジング例](/ja/operations/self-managed/sizing-examples)を参照してください。
+
+## コンテント・ノードの追加または削除
+
+<Steps>
+<Step>
+**ノードのセットアップ:** ソフトウェアをインストールし、ファイルシステム/ディレクトリをセットアップし、[VESPA\_CONFIGSERVERS](/ja/operations/self-managed/files-processes-and-ports#environment-variables)を設定してノードを準備します。ノードを[起動](#vespa-start-stop-restart)します。
+</Step>
+<Step>
+**設定の変更:** *services.xml*と[hosts.xml](/ja/reference/applications/hosts)で[node](/ja/reference/applications/services/content#node)要素を追加/削除します。[マルチノード・インストール](/ja/operations/self-managed/multinode-systems)を参照してください。*distribution-key*が一意であることを確認します。
+</Step>
+<Step>
+**デプロイ**: クラスターがドキュメントを再分散する間、[メトリクスを観察](#monitor-distance-to-ideal-state)して進捗を追跡します。[クラスターコントローラー](/ja/content/content-nodes#cluster-controller)を使用してクラスターの状態を監視します。
+</Step>
+<Step>
+**パフォーマンスのチューニング(オプション):** [maxpendingidealstateoperations](https://github.com/vespa-engine/vespa/blob/master/storage/src/vespa/storage/config/stor-distributormanager.def)を使用して、ディストリビューター・ノードからのバケット・マージ操作の並行性をチューニングします。同様に、[merges](/ja/reference/applications/services/content#merges) - コンテント・ノードごとの同時マージ操作数もチューニングします。トレードオフは、バケット・レプリケーションの速度とリソース使用量のどちらを取るかであり、これはアプリケーションの通常の負荷に影響します。
+</Step>
+<Step>
+**完了:** すべてのディストリビューターで`idealstate.merge_bucket.pending`がゼロになれば、クラスターの再分散は完了です。
+</Step>
+</Steps>
+
+データ損失を避けるため、一度に*redundancy*\-1台を超えるノードを削除しないでください。バケット・レプリカの状態を知るには`idealstate.merge_bucket.pending`を観察します。すべてのディストリビューター・ノードでゼロになったら、さらにノードを削除しても安全です。バケット・レプリカの制御に[グループ化分散](/ja/content/elasticity#grouped-distribution)を使用している場合、冗長性設定によって各グループにレプリカが確保されるのであれば、グループ内のすべてのノードを削除します。
+
+ノードを取り外す前にバケットの冗長性レベルを上げるには、ノードを[リタイア](/ja/content/content-nodes)させます。この場合も、`idealstate.merge_bucket.pending`を追跡して完了を確認します。[/cluster/v2 API](/ja/reference/api/cluster-v2)または[vespa-set-node-state](/ja/reference/operations/self-managed/tools#vespa-set-node-state)を使用して、ノードを*retired*状態に設定します。任意の数のノードを同時にretiredに設定できます。[クラスターコントローラーの](/ja/content/content-nodes#cluster-controller)ステータスページにノードの状態が一覧表示されます。
+
+クラスターサイズを増やす代わりに、新しいクラスターを構築してからドキュメントを移行する方法もあります。これは[visiting](/ja/writing/visiting)を使用してサポートされています。
+
+2つのコンテント・クラスターを*マージ*するには、上記のようにクラスターにノードを追加します。その際、以下を考慮してください:
+- [distribution-keys](/ja/reference/applications/services/content#node)は一意でなければなりません。ノードを追加する前に、*$VESPA\_HOME/var/db/vespa/search/mycluster/n3*のようなパスを変更します。
+- [VESPA\_CONFIGSERVERS](/ja/operations/self-managed/files-processes-and-ports#environment-variables)を設定してから、ノードを起動します。
+
+## トポロジーの変更
+
+まず[トポロジーの変更](/ja/content/elasticity#changing-topology)を読み、手順の順序を計画してください。
+
+*services.xml*内のノードの`distribution-key`を変更しないように注意してください。
+
+このプロセスの一環としてノードを再起動する必要はありません
+
+## ノード上のサービスの追加または削除
+
+同じホスト上で複数のVespaサービスを実行することが可能です。特定のホスト上のサービスを変更する場合は、`vespa activate`を実行する前に、そのホスト上のVespaを停止してください。これは、ホスト上で何が実行されているかに応じて、サービスに動的にポート番号が割り当てられるためです。変更されたサービスの一部が他のホスト上のサービスから使用されているかどうかを検討してください。その場合は、それらのホスト上のサービスも再起動します。手順:
+
+<Steps>
+<Step>
+*services.xml*と*hosts.xml*を編集します
+</Step>
+<Step>
+変更があるノードでVespaを停止します
+</Step>
+<Step>
+`vespa prepare`と`vespa activate`を実行します
+</Step>
+<Step>
+変更があるノードでVespaを起動します
+</Step>
+</Steps>
+
+## トラブルシューティング
+
+[FAQ](/ja/learn/faq)も参照してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;エンドポイントがない&#42;&#42;</td>
+      <td>クイックスタートガイドに関する問題のほとんどは、Dockerのメモリー不足が原因です。少なくとも6GのメモリーがDockerに割り当てられていることを確認してください:<br/><br/>  <code>{`$ docker info | grep "Total Memory"`}</code><br/> <code>{`or`}</code><br/> <code>{`$ podman info | grep "memTotal"`}</code><br/><br/> OOMの症状には以下が含まれますINFO: <br/><br/><code>{`Problem with Handshake localhost:8080 ssl=false: localhost:8080 failed to respond `}</code><br/><br/>ガイドではコンテナーは&#42;vespa&#42;という名前です。シェルを開くには次を実行します:<br/><br/><code>{`$ docker exec -it vespa bash`}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;ログの表示&#42;&#42;</td>
+      <td>vespaログを表示するには<a href="/ja/reference/operations/self-managed/tools#vespa-logfmt" aria-label="vespa-logfmt">vespa-logfmt</a>を使用します - 例:<br/><br/>  <code>{`$ /opt/vespa/bin/vespa-logfmt -l warning,error`}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Json&#42;&#42;</td>
+      <td>jsonをpretty-printするには、jsonを出力するコマンドに <br/><br/> <code>{`| python -m json.tool`}</code><br/><br/> を付け加えるか、<a href="https://stedolan.github.io/jq/" aria-label="jq">jq</a>を使用します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;ルーティング&#42;&#42;</td>
+      <td>Vespaでは、アプリケーションが異なるフィード・エンドポイントを持つカスタムのドキュメント処理 / インデキシングをセットアップできます。&#42;services.xml&#42;でこれを設定する方法については<a href="/ja/writing/indexing" aria-label="indexing">インデキシング</a>を参照してください。<br/><br/>  <a href="https://github.com/vespa-engine/vespa/issues/13193" aria-label="#13193">#13193</a>に問題と解決策の要約があります。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;トレーシング&#42;&#42;</td>
+      <td>書き込み操作のルートとホップをダンプするには<a href="/ja/reference/api/document-v1#request-parameters" aria-label="tracelevel">tracelevel</a>を使用します - 例:<br/><br/>  <code>{`$ curl -H Content-Type:application/json --data-binary @docs.json \\`}</code><br/>  <code>{`$ENDPOINT/document/v1/mynamespace/doc/docid/1?tracelevel=4 \\ jq .`}</code><br/>  <code>{`{`}</code><br/>     <code>{`"pathId": "/document/v1/mynamespace/doc/docid/1",`}</code><br/>     <code>{`"id": "id:mynamespace:doc::1",`}</code><br/>     <code>{`"trace": [`}</code><br/>         <code>{`{ "message": "[1623413878.905] Sending message (version 7.418.23) from client to ..." },`}</code><br/>         <code>{`{ "message": "[1623413878.906] Message (type 100004) received at 'default/container.0' ..." },`}</code><br/>       <code>{`{ "message": "[1623413878.907] Sending message (version 7.418.23) from 'default/container.0' ..." },`}</code><br/>         <code>{`{ "message": "[1623413878.907] Message (type 100004) received at 'default/container.0' ..." },`}</code><br/>         <code>{`{ "message": "[1623413878.909] Selecting route" },`}</code><br/>        <code>{`{ "message": "[1623413878.909] No cluster state cached. Sending to random distributor." }`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+## クリーンスタートモード
+
+まれに、Vespaが内部的に不整合なデータを保存してしまったことがあります。そのような状況のために、ノードを[validate\_and\_sanitize\_docstore](https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/proton.def)モードで起動することが可能です。これは、不整合なデータのクリーンアップを可能な限り行います。ただし、これが必要であることを検出するのは容易ではないため、まずVespaチームに相談してください。このアプローチが機能するためには、この機能を有効にする前にすべてのノードを停止する必要があります - これはデータが再分散されないようにするためです。
+
+## コンテント・クラスターの設定
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;可用性とリソース&#42;&#42;</td>
+      <td>インデックス構造の維持にはリソースがかかります。<a href="/ja/reference/applications/services/content#searchable-copies" aria-label="searchable-copies">searchable-copies</a>で設定しない限り、バケットのすべてのレプリカが必ずしも検索可能であるとは限りません。Vespaはバケットをオンデマンドでインデックスするため、ノード障害時の一時的なカバレッジ低下を許容できるのであれば、最もコスト効率の良い設定は1です。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;データ保持とサイズ&#42;&#42;</td>
+      <td>ドキュメントが削除されても、ドキュメントデータはすぐにはパージされません。代わりに、&#42;remove-entries&#42;(削除されたドキュメントのトゥームストーン)が設定可能な期間保持されます。デフォルトは2週間です。<a href="/ja/reference/applications/services/content#removed-db-prune-age" aria-label="removed-db prune age">removed-db prune age</a>を参照してください。これにより、ノードの状態が変化する分散システムにおいて、削除されたドキュメントが削除されたままであることが保証されます。エントリは有効期限が切れた後、定期的に削除されます。したがって、2週間以上ダウンしていたノードが復帰した場合、そのノード上のデータが先にワイプされていない限り、削除されたドキュメントが再び利用可能になります。&#42;prune age&#42;を大きくすると、ドキュメントとトゥームストーンをより長く保持するため、ストレージサイズが増加します。<br/><br/>  <Note>&#42;&#42;注:&#42;&#42;<br/><br/> バックエンドは、存在しないドキュメントのremove-entriesを保存しません。これは、誤ったドキュメント識別子を送信するクライアントが、無効なremove-entriesでクラスターを埋め尽くすのを防ぐためです。副作用として、何らかの問題によりバケットのすべてのレプリカが利用不可になった場合、少なくとも1つのレプリカが再び利用可能になるまで、このバケット内のドキュメントを削除済みとしてマークできません。他のレプリカがダウンしている間、ドキュメントは新しいバケット・レプリカに書き込まれます - これらが削除されたとしても、最新の変更が優先されるため、古いバージョンが再び現れることはありません。</Note></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;遷移時間&#42;&#42;</td>
+      <td>ノードをどれだけ速くdownに設定するかとシステムの安定性とのトレードオフについては、<a href="/ja/reference/applications/services/content#transition-time" aria-label="transition-time">transition-time</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;不安定なノードの削除&#42;&#42;</td>
+      <td>ノードが自動的に削除されるまでに何回のクラッシュを許容するかを設定できます。クラッシュカウントは、ノードが<a href="/ja/reference/applications/services/content#stable-state-period" aria-label="stable state period">stable state period</a>を超えて継続的にアップまたはダウンしていた場合にリセットされます。クラッシュカウントが<a href="/ja/reference/applications/services/content#max-premature-crashes" aria-label="max premature crashes">max premature crashes</a>を超えると、ノードは無効化されます。<a href="#troubleshooting" aria-label="troubleshooting">トラブルシューティング</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;利用可能である必要のある最小ノード数&#42;&#42;</td>
+      <td>クラスターは通常、所定の負荷を処理できるようにサイジングされます。通常運用にはクラスターリソースの一定割合が必要であり、残りは一部のノードが使用できなくなった場合に利用できる余剰リソースです。クラスターが多くのノードを失うと、過負荷になります: <br/><br/> • 残りのノードがディスクフルの状況を引き起こす可能性があります。これにより多くの書き込み操作が失敗する可能性が高く、ディスクがOSと共有されている場合、ノードの機能が停止することもあります。 <br/>• パーティション・キューが最大サイズまで増大します。キューはFIFO順で処理されるため、操作のレイテンシが長くなる可能性があります。 <br/>• 多くの操作が処理中にタイムアウトし、操作が再送されて、クラスターにさらに負荷がかかる可能性があります。 <br/>• 新しいノードを追加しても、すでに過負荷のノードから新しいノードにデータが移動されるまで、新しいノードはリクエストを処理できません。データの移動は既存のノードにさらに負荷をかけ、また、データの移動は通常高優先度ではないため、実際には永遠に行われない可能性があります。<br/><br/> 最小クラスターサイズを設定するには、<a href="/ja/reference/applications/services/content#min-distributor-up-ratio" aria-label="min-distributor-up-ratio">min-distributor-up-ratio</a>と<a href="/ja/reference/applications/services/content#min-storage-up-ratio" aria-label="min-storage-up-ratio">min-storage-up-ratio</a>を使用します。</td>
+    </tr>
+  </tbody>
+</table>

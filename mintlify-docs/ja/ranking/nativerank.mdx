@@ -1,0 +1,142 @@
+---
+title: "nativeRank ランク・フィーチャー"
+---
+
+*nativeRank* テキストマッチスコアは、Vespa によって許容可能なパフォーマンスで計算される、十分に良好なテキスト・フィーチャー・スコアです。クエリー語(term)が検索対象のインデックス・フィールドのセットにどの程度うまくマッチしたかを捉えようとする、正規化されたランクスコアを計算します。
+
+*nativeRank* フィーチャーは、他の 3 つのマッチング・フィーチャー(*nativeFieldMatch*、*nativeProximity*、*nativeAttributeMatch*)の線形結合として計算されます。詳細は [nativeRank のリファレンス](/ja/reference/ranking/nativerank)を参照してください。
+
+フレッシュネス(クエリー時刻と比較したドキュメントの経過時間)やその他のドキュメントまたはクエリーのフィーチャーなど、有用と思われるランキングシグナルは、*nativeRank* の計算には含まれません。これらは、アプリケーションの詳細に応じて、最終的なランキング関数に追加する必要があります。
+
+### Weight、significance、connectedness
+
+クエリーと共に *weight*、*significance*、*connectedness* を送信することで、クエリーからマッチ・フィーチャーの値を変更できます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>フィーチャーの入力</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Weight</td>
+      <td>クエリー語(term)の <a href="/ja/reference/querying/yql#weight" aria-label="weight">weight</a> を設定します。例: <code>{`... where (title contains ({weight:200}"heads") AND title contains "tails")`}</code> は、最終的なランクスコアにおいて <code>{`heads`}</code> が <code>{`tails`}</code> よりも 2 倍重要であることを指定します(デフォルトの weight は 100)。 <br/><br/> term の weight は、<a href="/ja/reference/ranking/rank-features#fieldMatch(name).weight" aria-label="fieldMatch(*name*).weight">fieldMatch(&#42;name&#42;).weight</a> や <a href="/ja/ranking/nativerank" aria-label="nativeRank">nativeRank</a> を含む、いくつかのテキストスコアリング・フィーチャーで使用されます。term の weight はすべてのテキストスコアリング・フィーチャーに適用されるわけではないことに注意してください。例えば、<a href="/ja/ranking/bm25" aria-label="bm25">bm25</a> は term の weight を使用しません。<br/><br/>  静的なフィールドの weight は<a href="/ja/reference/schemas/schemas#weight" aria-label="スキーマ">スキーマ</a>で設定します。</td>
+    </tr>
+    <tr>
+      <td>Significance</td>
+      <td>Significance は、その語(term)がその言語のコーパス内でどれほど稀であるかを示す指標で、多くのテキストマッチングの<a href="/ja/reference/ranking/rank-features" aria-label="ランク・フィーチャー">ランク・フィーチャー</a>で使用されます。これは<a href="/ja/reference/querying/yql#significance" aria-label="クエリー">クエリー</a>内で各 term に対して明示的に設定するか、<a href="/ja/applications/searchers" aria-label="Searcher">Searcher</a> 内で item.setSignificance() を呼び出すことで設定できます。<br/><br/>  &#42;インデックス検索&#42;では、デフォルトの significance 値はインデックス時に自動的に計算されます。ただし、インデックスされたコーパスがユーザーの言語における単語頻度を代表するものでない限り、代表的なコーパスから導出された significance を渡すことで関連性を向上できます。相対的な significance は、ランキングにおいて <a href="/ja/reference/ranking/rank-features#fieldMatch(name).significance" aria-label="fieldMatch(*name*).significance">fieldMatch(&#42;name&#42;).significance</a> フィーチャーを通じてアクセスできます。weight と significance は、利便性のために <a href="/ja/reference/ranking/rank-features#fieldMatch(name).importance" aria-label="fieldMatch(*name*).importance">fieldMatch(&#42;name&#42;).importance</a> にも平均化されます。<br/><br/>  &#42;ストリーミング検索&#42;は term の significance を計算しないため、クエリーはクエリー語と共にこれを渡す必要があります。<a href="/ja/performance/streaming-search#differences-in-streaming-search" aria-label="詳細を読む">詳細を読む</a>。</td>
+    </tr>
+    <tr>
+      <td>Connectedness</td>
+      <td>クエリー内の隣接する語(term)間の結び付きの度合いを示します - クエリー語の別の term に対する <a href="/ja/reference/querying/yql#connectivity" aria-label="connectivity">connectivity</a> を設定します。 <br/><br/> 例えば、クエリー <code>{`new york newspaper`}</code> では、"new york" をフレーズとして含むドキュメントを上位にランク付けするために、"new" と "york" の間の connectedness を "york" と "newspaper" の間よりも高くするべきです。 <br/><br/> term の connectedness は <a href="/ja/reference/ranking/rank-features#fieldMatch(name).proximity" aria-label="fieldMatch(*name*).proximity">fieldMatch(&#42;name&#42;).proximity</a> によって考慮され、これは <a href="/ja/reference/ranking/rank-features#fieldMatch(name)" aria-label="fieldMatch(*name*)">fieldMatch(&#42;name&#42;)</a> への重要な寄与でもあります。connectedness は正規化された値で、デフォルトは 0.1 です。これはカスタムの Searcher によって、どこかから接続性情報を参照して設定される必要があります - そのためのクエリー構文はありません。</td>
+    </tr>
+  </tbody>
+</table>
+
+## nativeRank の使用
+
+このセクションでは、*nativeRank* を中核的なテキストマッチングのランク・フィーチャーとして使用し、ブログ検索タイプのアプリケーションで重要となり得る他のシグナルと組み合わせたブログ検索アプリケーションについて説明します:
+
+```js
+schema blog {
+  document blog {
+    field title type string {
+      indexing: summary | index
+    }
+    field body type string {
+      indexing: summary | index
+    }
+    #The quality of the source in the range 0 - 1.0
+    field sourcequality type float {
+      indexing: summary | attribute
+    }
+    #seconds since epoch
+    field timestamp type long {
+      indexing: summary | attribute
+    }
+    field url type uri {
+      indexing: summary
+    }
+  }
+  fieldset default {
+    fields: title, body
+  }
+}
+```
+
+中核的なテキストマッチのフィーチャー(*nativeRank*)に加えて、float 型のフィールド *sourcequality* で表される、ドキュメントの品質を示す事前計算されたドキュメントのフィーチャーがあります。*sourcequality* フィールドには [attribute](/ja/reference/schemas/schemas#attribute) プロパティがあり、これはランキング式でそのフィールドを *attribute(name)* として参照するために必要です。sourcequality スコアはウェブマップやその他のソースから計算できますが、このドキュメントの範囲外です。
+
+また、ドキュメントがいつ公開されたか(timestamp)も分かっており、このドキュメント属性はドキュメントの経過時間を計算するために使用できます。まとめると、ブログのランキング関数を構成したい 3 つの主要なランクシグナルがあります:
+
+- クエリーがドキュメントのテキストにどの程度うまくマッチするか。ここでは *nativeRank* フィーチャーのスコアを使用します。
+- ドキュメントがどれだけ新しいか。ここでは組み込みの *age(name)* フィーチャーを使用して独自のフィーチャースコアを構築します。
+- ドキュメントの品質。Vespa の外部で計算され、ランキング式では *attribute(name)* で参照されます。
+
+## 独自のブログ・フレッシュネス・ランキング関数の設計
+
+Vespa には直接使用できる[組み込みのランク・フィーチャー](/ja/reference/ranking/rank-features)がいくつかあります。組み込みのフィーチャーが要件を満たさない場合は、独自に設計することもできます。組み込みの *freshness(name)* ランク・フィーチャーは、経過時間 0(現在)から設定された最大経過時間まで線形に減少します。ブログアプリケーションには異なる形状が理想的なので、望みの特性を持つ次のフィーチャーを定義します:
+
+```js
+function freshness() {
+    expression: exp(-1 * age(timestamp)/(3600*12))
+}
+```
+
+
+timestamp の分解能は秒なので、3600 で割って時間単位の分解能にし、さらに 12 で割ってフレッシュネス関数の傾きを制御します。以下は、比較のために異なる傾きの数値を持つ 2 つのフレッシュネス関数のプロットです:
+
+<Frame>
+![ブログ・フレッシュネス・ランキングのプロット: フレッシュネス・スコア](/assets/img/relevance/blog-freshness.png)
+</Frame>
+
+素晴らしいのは、ドキュメントの経過時間に応じたフレッシュネスのランクスコアを制御して実験できることです。アプリケーションの正確な要件に適合すると考えられる任意の形状を、任意の分解能で定義できます。この例では、ドキュメントの経過時間とフレッシュネス・スコアの間に非線形の関係を持たせたいと考えています。これは指数的な減少関数(exp(-x))で実現します。この関数では、古いブログ記事(24 時間)と比較して、ドキュメントが本当に新しいときに x に対する感度が高くなります。
+
+## フィーチャーをランキング式にまとめる
+
+次に、3 つの主要なランキングシグナルを 1 つのランキング式にまとめる必要があります。各コンポーネントの重みをクエリー時に制御できるようにして、特定のシグナルを他よりも重み付けすべきかどうかをクエリー時に分析して判断できるようにしたいと考えています。ここでは、3 つのシグナルを正規化された加重和として組み合わせることにしました。3 つのシグナルそれぞれの形状は、独自のフレッシュネス・フィーチャーの設計や *nativeRank* のチューニングで見てきたように、個別にチューニングできます。以下は、すべての関連する設定(プロパティ)とランキング式を含む最終的なブログの rank-profile です:
+
+```js expandable
+rank-profile blog inherits default {
+    weight title: 200
+    weight body: 100
+    rank-type body: about
+    rank-properties {
+      nativeFieldMatch.occurrenceCountTable.title: "linear(0,8000)" 
+    }
+
+    # our freshness rank feature
+    function freshness() {
+      expression: exp(-1 * age(timestamp)/(3600*12))
+    }
+
+    # our quality rank feature
+    function quality() {
+      expression: attribute(sourcequality)
+    }
+
+    # normalization factor for the weighted sum
+    function normalization() {
+      expression: query(textMatchWeight) + query(qualityWeight) + query(deservesFreshness)
+    }
+
+    # ranking function that runs over all matched documents, determined by the boolean query logic
+    first-phase {
+      expression: (query(textMatchWeight) * (nativeRank(title,body) + query(qualityWeight) * quality +  query(deservesFreshness) * freshness))/normalization
+    }
+
+    summary-features: nativeRank(title,body) age(timestamp) freshness quality
+  }
+}
+```
+
+[クエリー API](/ja/reference/api/query) を使用して、クエリー時に各シグナルの重みを上書きし、重みを渡すことができます:
+
+```bash
+/search/?query=vespa+ranking&datetime=now&ranking.profile=blog&input.query(textMatchWeight)=0.1&input.query(deservesFreshness)=0.85
+```
+
+カスタムの Searcher プラグインでユーザー定義のランク・フィーチャーを上書きすることも可能です。ドキュメントの経過時間を計算できるように *datetime* パラメーターも使用していることに注意してください。
+
+[summary-features](/ja/reference/schemas/schemas#summary-features) により、ヒットのサマリーフィールドと共に個々のランキングシグナルにアクセスできます。

@@ -1,0 +1,130 @@
+---
+title: "Webサービス・アプリケーションの開発"
+sidebarTitle: "Webサービスの開発"
+description: "このドキュメントでは、コンテナー上で(REST)Webサービス型のアプリケーションを開発する方法 — 設計の選択肢、リクエスト・パスへのアクセス、ステータス・コードの返却など — を説明します。WebサービスAPIには2つのタイプがあります:"
+---
+
+- クローズドなセマンティクスを持つ細粒度のAPI – たとえば *記事のスター数を返す*
+- オープンなセマンティクスを持つ粗粒度のAPI – たとえば *このユーザーとアクションに対して最も関連性の高いコンテンツの組み合わせを含むページを返す*
+
+粗粒度のAPIの場合、コンテナーは、そのようなAPIの実装に伴いがちな複雑さへの対処を支援します。リクエストの処理に関与するコンポーネントを合成・フェデレーションして、返却するデータを提供・変更する仕組みと、大きなレスポンスでのレイテンシーを減らすために、リクエストの処理が完了する前に返却を開始できるようにする仕組みを提供します。これが[processing](/ja/applications/processing)フレームワーク(検索のようなアプリケーションの場合は、その特殊化である[Searcher](/ja/applications/searchers))です。
+
+さらに、[コンテナー](/ja/reference/applications/components#component-types)には、[リクエスト・ハンドラー](/ja/applications/request-handlers)をURIパターンに[バインド](/ja/reference/applications/components#binding)し、そのパターンにマッチするすべてのリクエストの処理のために呼び出せるようにする汎用的な仕組みがあります。これは、レスポンスにおいて複雑さや、さまざまな種類のデータのフェデレーションを扱う必要がない場合に便利です。上記の2つのアプローチは、実際にはどちらも組み込みのリクエスト・ハンドラーとして実装されています。
+
+カスタム・リクエスト・ハンドラーを書いて、URLのパスやメソッドを解析し、適切な処理コンポーネントのチェーンにディスパッチできます。同じことを、他のチェーンへのディスパッチによって行う「メイン」処理チェーンを書くこともできます。特定のプロセッサーのチェーンを呼び出す最も簡単な方法は、リクエスト・プロパティ `chain` に呼び出したいチェーンの名前を設定して、クエリーを `ProcessingHandler` に転送することです:
+
+```java
+import com.yahoo.component.annotation.Inject;
+public class DemoHandler extends com.yahoo.container.jdisc.ThreadedHttpRequestHandler {
+    ...
+    @Inject
+    public DemoHandler(Executor executor, ProcessingHandler processingHandler) {
+        super(executor);
+        this.processingHandler = processingHandler;
+    }
+    ...
+    @Override
+    public HttpResponse handle(HttpRequest request) {
+        HttpRequest processingRequest = new HttpRequest.Builder(request)
+        .put(com.yahoo.processing.Request.CHAIN, "theProcessingChainIWant")
+        .createDirectRequest();
+        HttpResponse r = processingHandler.handle(processingRequest);
+        return r;
+    }
+    ...
+}
+```
+
+## HTTPリクエストへのアクセス
+
+カスタム[リクエスト・ハンドラー](/ja/applications/request-handlers)には [com.yahoo.container.jdisc.HttpRequest](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/container/jdisc/HttpRequest) が渡され、関連するプロパティとリクエスト・データに直接アクセスできます。
+
+[Processing](/ja/applications/processing) では、Processorには、HTTPのURLパラメーターを含む [com.yahoo.processing.Request](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/processing/Request) が渡されます:
+
+```txt
+// url parameters are added to properties
+String urlParameter = request.properties().get("urlParameterName");
+
+// jdisc request context is added with prefix context
+Object contextValue = request.properties().get("context.contextKey");
+```
+
+必要であれば、ProcessorはユーティリティーAPIを介してHTTPリクエスト全体を取得できます:
+
+```java
+import com.yahoo.container.jdisc.HttpRequest; ...
+
+// Retrieve the underlying HTTP request: Optional<HttpRequest> httpRequest = HttpRequest.getHttpRequest(request);
+
+if (httpRequest.isPresent()) { 
+    // The POST data input stream: 
+    InputStream in = httpRequest.get().getData(); 
+    // The HTTP method: 
+    Method method = httpRequest.get().getMethod(); 
+}
+```
+
+### HTTPステータスとHTTPヘッダーの設定
+
+Processingでは、Responseに特別なDataアイテムを追加することで、返却ステータスを設定できます:
+
+```bash
+response.data().add(new com.yahoo.processing.handler.ResponseStatus(404, request));
+```
+
+そのようなdata要素が存在しない場合、ステータスはコンテナーによって決定されます。レンダリング可能なデータが含まれている場合は200になり、それ以外の場合はレスポンス内のErrorMessageによって決定されます。
+
+### ProcessorからのレスポンスHeaderの設定
+
+レスポンス・ヘッダーは、`com.yahoo.processing.handler.ResponseHeaders` のインスタンスをResponseに追加することで、任意のResponseに追加できます(ResponseHeadersはレスポンスDataの一種です)。これらのインスタンスは複数Responseに追加でき、返却されるヘッダーの完全な集合は、そのようなすべてのオブジェクトの和集合になります。Processorの例:
+
+```bash
+processingResponse.data().add(new com.yahoo.processing.handler.ResponseHeaders(myHeaders, request));
+```
+
+リクエスト・ハンドラーは一般に、返却ステータスを設定でき、HttpRequest上で直接ヘッダーを操作できます。
+
+## クエリー
+
+標準のクエリー・フレームワークに、標準以外のパスに対しても応答させるだけで十分な場合もあります。これは、`services.xml` の `<search>` 要素内に追加の[バインディング](/ja/reference/applications/services/search#binding)を追加することで可能です。アプリケーションがスタンドアロンのHTTP APIである場合、特に [Query API](/ja/reference/api/query) のプロパティと同じ名前のプロパティを使用する場合は、カスタム[リクエスト・ハンドラー](/ja/applications/request-handlers)を書くことをお勧めします。リクエスト・ハンドラーは、同じコンテナーで動作している検索コンポーネントに、目立ったオーバーヘッドなしでクエリーできます:
+
+### コンポーネントからVespaクエリーを実行する
+
+コンポーネントからVespaクエリーを実行するには、コンストラクターで [ExecutionFactory](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/searchchain/ExecutionFactory.java) のインスタンスを注入してもらい、そのAPIを使ってクエリーを構築・発行します。これが動作するコンテナーには、ExecutionFactoryを利用可能にするために `<search>` タグが含まれている必要があります。例:
+
+```java expandable
+import com.yahoo.component.annotation.Inject;
+import com.yahoo.component.ComponentId;
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.component.Chain;
+import com.yahoo.search.searchchain.Execution;
+import com.yahoo.search.searchchain.ExecutionFactory;
+
+public class MyComponent {
+
+    private final ExecutionFactory executionFactory;
+
+    @Inject
+    public MyComponent(ExecutionFactory executionFactory) {
+        this.executionFactory = executionFactory;
+    }
+
+    Result executeQuery(Query query, String chainId) {
+        Chain<Search> searchChain = executionFactory.searchChainRegistry().getChain(new ComponentId(chainId));
+        Execution execution = executionFactory.newExecution(searchChain);
+        query.getModel().setExecution(execution);
+        return execution.search(query);
+    }
+
+}
+```
+
+ExecutionFactoryはサーチ・チェーンに依存しているため、サーチ・チェーンの一部であるコンポーネントには注入できません。しかし、Searcherの内部からは不要です。渡されるExecutionが必要なものを提供してくれるからです:
+
+- サーチ・チェーンへのアクセス: execution.context().searchChainRegistry()。
+- 新しいExecutionの作成: new Execution(mySearchChain, execution.context())
+
+これが正しい方法です。なぜなら、そのExecutionを現在実行中のExecutionに結びつけるからです。
+
+したがって、たとえばキャッシュを更新する目的で、サーチ・チェーンのコンポーネントのコンストラクターからサーチ・チェーンを実行することはできません。このコンストラクターが戻るまでサーチ・チェーンを構築できないため、これは不可能です。代替案は、更新処理を別のコンポーネントに切り出し、そこにクライアントとExecutionFactoryの両方を注入することです。

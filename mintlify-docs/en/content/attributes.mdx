@@ -59,11 +59,28 @@ An attribute is an in-memory data structure. Attributes speed up query execution
 
 Configuration overview:
 
-| | ||
-| --- | --- | --- |
-| **fast-search** | Also see the [reference](/en/reference/schemas/schemas#attribute). Add an [index structure](#index-structures) to improve query performance: <CodeBlock> ``` field titles type array<string> {     indexing : summary \| attribute     attribute: fast-search }``` </CodeBlock> |
-| **fast-access** | For high-throughput updates, all nodes with a replica should have the attribute loaded in memory. Depending on replication factor and other configuration, this is not always the case. Use [fast-access](/en/reference/schemas/schemas#attribute) to increase feed rates by having replicas on all nodes in memory - see the [reference](/en/reference/schemas/schemas#attribute) and [sizing feeding](/en/performance/sizing-feeding). <CodeBlock> ``` field titles type array<string> {     indexing : summary \| attribute     attribute: fast-access }``` </CodeBlock> |
-| **distance-metric** | Features like [nearest neighbor search](/en/querying/nearest-neighbor-search) require a [distance-metric](/en/reference/schemas/schemas#distance-metric), and can also have an `hsnw index` to speed up queries. Read more in [approximate nearest neighbor](/en/querying/approximate-nn-hnsw). Pay attention to the field's `index` setting to enable the index: <CodeBlock> ``` field image_sift_encoding type tensor<float>(x\[128\]) {     indexing: summary \| attribute \| index     attribute {         distance-metric: euclidean     }     index {         hnsw {             max-links-per-node: 16             neighbors-to-explore-at-insert: 500         }     } }``` </CodeBlock> |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;fast-search&#42;&#42;</td>
+      <td>Also see the <a href="/en/reference/schemas/schemas#attribute" aria-label="reference">reference</a>. Add an <a href="#index-structures" aria-label="index structure">index structure</a> to improve query performance: <pre><code>{`field titles type array<string> {     indexing : summary | attribute     attribute: fast-search }`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;fast-access&#42;&#42;</td>
+      <td>For high-throughput updates, all nodes with a replica should have the attribute loaded in memory. Depending on replication factor and other configuration, this is not always the case. Use <a href="/en/reference/schemas/schemas#attribute" aria-label="fast-access">fast-access</a> to increase feed rates by having replicas on all nodes in memory - see the <a href="/en/reference/schemas/schemas#attribute" aria-label="reference">reference</a> and <a href="/en/performance/sizing-feeding" aria-label="sizing feeding">sizing feeding</a>. <pre><code>{`field titles type array<string> {     indexing : summary | attribute     attribute: fast-access }`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;distance-metric&#42;&#42;</td>
+      <td>Features like <a href="/en/querying/nearest-neighbor-search" aria-label="nearest neighbor search">nearest neighbor search</a> require a <a href="/en/reference/schemas/schemas#distance-metric" aria-label="distance-metric">distance-metric</a>, and can also have an <code>{`hsnw index`}</code> to speed up queries. Read more in <a href="/en/querying/approximate-nn-hnsw" aria-label="approximate nearest neighbor">approximate nearest neighbor</a>. Pay attention to the field's <code>{`index`}</code> setting to enable the index: <pre><code>{`field image_sift_encoding type tensor<float>(x[128]) {     indexing: summary | attribute | index     attribute {         distance-metric: euclidean     }     index {         hnsw {             max-links-per-node: 16             neighbors-to-explore-at-insert: 500         }     } }`}</code></pre></td>
+    </tr>
+  </tbody>
+</table>
 
 The attribute field's data type decides which data structures are used by the attribute to store values for that field across all documents on a content node. For some data types, a combination of data structures is used:
 
@@ -79,13 +96,42 @@ In the following illustration, a row represents a document, while a named column
 
 Attributes can be:
 
-| Type | Size | Description |
-| :--- | :--- | :--- |
-| Single-valued | Fixed | Like the "A" attribute, example `int`. The element size is the size of the type, like 4 bytes for an integer. A memory buffer (indexed by Local ID) holds all values directly. |
-| Multi-valued | Fixed | Like the "B" attribute, example `array<int>`. A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the *Multivalue Mapping* the arrays are stored. The *Multivalue Mapping* consists of multiple memory buffers, where arrays of the same size are co-located in the same buffer. |
-| Multi-valued | Variable | Like the "B" attribute, example `array<string>`. A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the *Multivalue Mapping* the arrays are stored. The unique strings are stored in the *Enum Store*, and the arrays in the *Multivalue Mapping* stores the references (32 bit) to the strings in the *Enum Store*. The *Enum Store* consists of multiple memory buffers. |
-| Single-valued | Variable | Like the "C" attribute, example `string`. A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the *Enum Store* the strings are stored. |
-| Tensor | Fixed / Variable | Like the "D" attribute, example `tensor<float>(x{},y[64])`. A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the *Tensor Store* the tensor values are stored. The memory layout in the *Tensor Store* depends on the tensor type. |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Size</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Single-valued</td>
+      <td>Fixed</td>
+      <td>Like the "A" attribute, example <code>{`int`}</code>. The element size is the size of the type, like 4 bytes for an integer. A memory buffer (indexed by Local ID) holds all values directly.</td>
+    </tr>
+    <tr>
+      <td>Multi-valued</td>
+      <td>Fixed</td>
+      <td>Like the "B" attribute, example <code>{`array<int>`}</code>. A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the &#42;Multivalue Mapping&#42; the arrays are stored. The &#42;Multivalue Mapping&#42; consists of multiple memory buffers, where arrays of the same size are co-located in the same buffer.</td>
+    </tr>
+    <tr>
+      <td>Multi-valued</td>
+      <td>Variable</td>
+      <td>Like the "B" attribute, example <code>{`array<string>`}</code>. A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the &#42;Multivalue Mapping&#42; the arrays are stored. The unique strings are stored in the &#42;Enum Store&#42;, and the arrays in the &#42;Multivalue Mapping&#42; stores the references (32 bit) to the strings in the &#42;Enum Store&#42;. The &#42;Enum Store&#42; consists of multiple memory buffers.</td>
+    </tr>
+    <tr>
+      <td>Single-valued</td>
+      <td>Variable</td>
+      <td>Like the "C" attribute, example <code>{`string`}</code>. A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the &#42;Enum Store&#42; the strings are stored.</td>
+    </tr>
+    <tr>
+      <td>Tensor</td>
+      <td>Fixed / Variable</td>
+      <td>Like the "D" attribute, example <code>{`tensor<float>(x{},y[64])`}</code>. A memory buffer (indexed by Local ID) is holding references (32 bit) to where in the &#42;Tensor Store&#42; the tensor values are stored. The memory layout in the &#42;Tensor Store&#42; depends on the tensor type.</td>
+    </tr>
+  </tbody>
+</table>
 
 The "A", "B", "C" and "D" attribute memory buffers have attribute values or references in Local ID (LID) order - see [document meta store](#document-meta-store).
 
@@ -173,42 +219,170 @@ The different field types use various data types for storage, see below, a conse
 
 Attribute sizing is not an exact science but rather an  approximation. The reason is that they vary in size. Both the number of documents, number of values, and uniqueness of the values are variable. The components of the attributes that occupy memory are:
 
-| Abbreviation | Concept | Comment |
-| :--- | :--- | :--- |
-| D | Number of documents | Number of documents on the node, or rather the maximum number of local document IDs allocated |
-| V | Average number of values per document | Only applicable for arrays and weighted sets |
-| U | Number of unique values | Only applies for strings or if [fast-search](/en/reference/schemas/schemas#attribute) is set |
-| FW | Fixed data width | sizeof(T) for numerics, 1 byte for strings, 1 bit for boolean |
-| WW | Weight width | Width of the weight in a weighted set, 4 bytes. 0 bytes for arrays. |
-| EIW | Enum index width | Width of the index into the enum store, 4 bytes. Used by all strings and other attributes if [fast-search](/en/reference/schemas/schemas#attribute) is set |
-| VW | Variable data width | strlen(s) for strings, 0 bytes for the rest |
-| PW | Posting entry width | Width of a posting list entry, 4 bytes for singlevalue, 8 bytes for array and weighted sets. Only applies if [fast-search](/en/reference/schemas/schemas#attribute) is set. |
-| PIW | Posting index width | Width of the index into the store of posting lists; 4 bytes |
-| MIW | Multivalue index width | Width of the index into the multivalue mapping; 4 bytes |
-| ROF | Resize overhead factor | Default is 6/5. This is the average overhead in any dynamic vector due to resizing strategy. Resize strategy is 50% indicating that structure is 5/6 full on average. |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Abbreviation</th>
+      <th>Concept</th>
+      <th>Comment</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>D</td>
+      <td>Number of documents</td>
+      <td>Number of documents on the node, or rather the maximum number of local document IDs allocated</td>
+    </tr>
+    <tr>
+      <td>V</td>
+      <td>Average number of values per document</td>
+      <td>Only applicable for arrays and weighted sets</td>
+    </tr>
+    <tr>
+      <td>U</td>
+      <td>Number of unique values</td>
+      <td>Only applies for strings or if <a href="/en/reference/schemas/schemas#attribute" aria-label="fast-search">fast-search</a> is set</td>
+    </tr>
+    <tr>
+      <td>FW</td>
+      <td>Fixed data width</td>
+      <td>sizeof(T) for numerics, 1 byte for strings, 1 bit for boolean</td>
+    </tr>
+    <tr>
+      <td>WW</td>
+      <td>Weight width</td>
+      <td>Width of the weight in a weighted set, 4 bytes. 0 bytes for arrays.</td>
+    </tr>
+    <tr>
+      <td>EIW</td>
+      <td>Enum index width</td>
+      <td>Width of the index into the enum store, 4 bytes. Used by all strings and other attributes if <a href="/en/reference/schemas/schemas#attribute" aria-label="fast-search">fast-search</a> is set</td>
+    </tr>
+    <tr>
+      <td>VW</td>
+      <td>Variable data width</td>
+      <td>strlen(s) for strings, 0 bytes for the rest</td>
+    </tr>
+    <tr>
+      <td>PW</td>
+      <td>Posting entry width</td>
+      <td>Width of a posting list entry, 4 bytes for singlevalue, 8 bytes for array and weighted sets. Only applies if <a href="/en/reference/schemas/schemas#attribute" aria-label="fast-search">fast-search</a> is set.</td>
+    </tr>
+    <tr>
+      <td>PIW</td>
+      <td>Posting index width</td>
+      <td>Width of the index into the store of posting lists; 4 bytes</td>
+    </tr>
+    <tr>
+      <td>MIW</td>
+      <td>Multivalue index width</td>
+      <td>Width of the index into the multivalue mapping; 4 bytes</td>
+    </tr>
+    <tr>
+      <td>ROF</td>
+      <td>Resize overhead factor</td>
+      <td>Default is 6/5. This is the average overhead in any dynamic vector due to resizing strategy. Resize strategy is 50% indicating that structure is 5/6 full on average.</td>
+    </tr>
+  </tbody>
+</table>
 
 ### Components
 
-| Component | Formula | Approx Factor | Applies to |
-| :--- | :--- | :--- | :--- |
-| Document vector | D * ((FW or EIW) or MIW) | ROF | FW for singlevalue numeric attributes and MIW for multivalue attributes. EIW for singlevalue string or if the attribute is singlevalue fast-search |
-| Multivalue mapping | D * V * ((FW or EIW) + WW) | ROF | Applicable only for array or weighted sets. EIW if string or fast-search |
-| Enum store | U * ((FW + VW) + 4 + ((EIW + PIW) or EIW)) | ROF | Applicable for strings or if fast-search is set. (EIW + PIW) if fast-search is set, EIW otherwise. |
-| Posting list | D * V * PW | ROF | Applicable if fast-search is set |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Component</th>
+      <th>Formula</th>
+      <th>Approx Factor</th>
+      <th>Applies to</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Document vector</td>
+      <td>D &#42; ((FW or EIW) or MIW)</td>
+      <td>ROF</td>
+      <td>FW for singlevalue numeric attributes and MIW for multivalue attributes. EIW for singlevalue string or if the attribute is singlevalue fast-search</td>
+    </tr>
+    <tr>
+      <td>Multivalue mapping</td>
+      <td>D &#42; V &#42; ((FW or EIW) + WW)</td>
+      <td>ROF</td>
+      <td>Applicable only for array or weighted sets. EIW if string or fast-search</td>
+    </tr>
+    <tr>
+      <td>Enum store</td>
+      <td>U &#42; ((FW + VW) + 4 + ((EIW + PIW) or EIW))</td>
+      <td>ROF</td>
+      <td>Applicable for strings or if fast-search is set. (EIW + PIW) if fast-search is set, EIW otherwise.</td>
+    </tr>
+    <tr>
+      <td>Posting list</td>
+      <td>D &#42; V &#42; PW</td>
+      <td>ROF</td>
+      <td>Applicable if fast-search is set</td>
+    </tr>
+  </tbody>
+</table>
 
 ### Variants
 
-| Type | Components | Formula |
-| :--- | :--- | :--- |
-| Numeric singlevalue plain | Document vector | D * FW * ROF |
-| Numeric multivalue value plain | Document vector, Multivalue mapping | D * MIW * ROF + D * V * (FW+WW) * ROF |
-| Numeric singlevalue fast-search | Document vector, Enum store, Posting List | D * EIW * ROF + U * (FW+4+EIW+PIW) * ROF + D * PW * ROF |
-| Numeric multivalue value fast-search | Document vector, Multivalue mapping, Enum store, Posting List | D * MIW * ROF + D * V * (EIW+WW) * ROF + U * (FW+4+EIW+PIW) * ROF + D * V * PW * ROF |
-| Singlevalue string plain | Document vector, Enum store | D * EIW * ROF + U * (FW+VW+4+EIW) * ROF |
-| Singlevalue string fast-search | Document vector, Enum store, Posting List | D * EIW * ROF + U * (FW+VW+4+EIW+PIW) * ROF + D * PW * ROF |
-| Multivalue string plain | Document vector, Multivalue mapping, Enum store | D * MIW * ROF + D * V * (EIW+WW) * ROF + U * (FW+VW+4+EIW) * ROF |
-| Multivalue string fast-search | Document vector, Multivalue mapping, Enum store, Posting list | D * MIW * ROF + D * V * (EIW+WW) * ROF + U * (FW+VW+4+EIW+PIW) * ROF + D * V * PW * ROF |
-| Boolean singlevalue | Document vector | D * FW * ROF |
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Type</th>
+      <th>Components</th>
+      <th>Formula</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Numeric singlevalue plain</td>
+      <td>Document vector</td>
+      <td>D &#42; FW &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>Numeric multivalue value plain</td>
+      <td>Document vector, Multivalue mapping</td>
+      <td>D &#42; MIW &#42; ROF + D &#42; V &#42; (FW+WW) &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>Numeric singlevalue fast-search</td>
+      <td>Document vector, Enum store, Posting List</td>
+      <td>D &#42; EIW &#42; ROF + U &#42; (FW+4+EIW+PIW) &#42; ROF + D &#42; PW &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>Numeric multivalue value fast-search</td>
+      <td>Document vector, Multivalue mapping, Enum store, Posting List</td>
+      <td>D &#42; MIW &#42; ROF + D &#42; V &#42; (EIW+WW) &#42; ROF + U &#42; (FW+4+EIW+PIW) &#42; ROF + D &#42; V &#42; PW &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>Singlevalue string plain</td>
+      <td>Document vector, Enum store</td>
+      <td>D &#42; EIW &#42; ROF + U &#42; (FW+VW+4+EIW) &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>Singlevalue string fast-search</td>
+      <td>Document vector, Enum store, Posting List</td>
+      <td>D &#42; EIW &#42; ROF + U &#42; (FW+VW+4+EIW+PIW) &#42; ROF + D &#42; PW &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>Multivalue string plain</td>
+      <td>Document vector, Multivalue mapping, Enum store</td>
+      <td>D &#42; MIW &#42; ROF + D &#42; V &#42; (EIW+WW) &#42; ROF + U &#42; (FW+VW+4+EIW) &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>Multivalue string fast-search</td>
+      <td>Document vector, Multivalue mapping, Enum store, Posting list</td>
+      <td>D &#42; MIW &#42; ROF + D &#42; V &#42; (EIW+WW) &#42; ROF + U &#42; (FW+VW+4+EIW+PIW) &#42; ROF + D &#42; V &#42; PW &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>Boolean singlevalue</td>
+      <td>Document vector</td>
+      <td>D &#42; FW &#42; ROF</td>
+    </tr>
+  </tbody>
+</table>
 
 ## Paged attributes
 

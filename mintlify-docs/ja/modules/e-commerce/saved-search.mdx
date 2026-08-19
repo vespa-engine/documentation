@@ -1,0 +1,465 @@
+---
+title: 保存検索通知
+---
+
+
+<Danger>
+**重要:** **活発に開発中の実験的機能です。** 保存検索通知(Saved Search Notifications)はアーリーアクセス版であり、活発に開発が進められています。スキーマ、設定、Webhookペイロードのフォーマット、その他の公開APIは、予告なく後方互換性のない形で変更される可能性があります。本番環境で重要なワークロードにこの機能を頼らないでください。また、機能の進化に伴う移行を想定しておいてください。フィードバックを歓迎します - [Vespaサポート](https://vespa.ai/support/)までご連絡ください。
+</Danger>
+
+Vespa for e-commerceには、クエリー(「検索」)をVespaに保存し、新規または更新されたドキュメントがいずれかの保存済み検索にマッチしたときに通知を発行するモジュールが含まれています。eコマースにおける典型的なユースケースは、キーワード、価格、場所などのフィルターを使った商品に対するクエリーをユーザーに保存させ、新しい商品がそのクエリーにマッチしたときに通知を送ることです。
+
+## 概要
+
+保存検索通知機能は以下をサポートします:
+
+- **predicateクエリーの保存** - 保存済み検索には、文字列attributeの集合と数値範囲に対する任意のブール式を含めることができます。[Predicateフィールド](/ja/schemas/predicate-fields)を参照してください。
+- **スキーマ・ワイヤリング設定** - 保存済み検索のattributeとドキュメントのフィールドとの間のワイヤリングは、アプリケーションで設定できます。
+- **Webhook通知** - 新規または更新されたドキュメントと保存済み検索の集合とのマッチを、JSONフォーマットでHTTPエンドポイントへ送信できます。
+- **独立したドキュメント処理** - 保存検索コンポーネントへの個別のルーティングにより、通常のフィード操作を妨げることなく保存済み検索を処理できます。
+
+## クイックスタート
+
+このセクションでは、保存検索通知機能をデモンストレーションするための最小限のセットアップを示します。いくつかの保存検索attributeを持つ、小さなショッピング・ユースケースの例を作成していきます。
+
+### スキーマの定義
+
+2つのスキーマを作成します: 1つは商品用、もう1つは保存済み検索の格納用です。
+
+#### 商品スキーマ
+
+販売中の商品を表す最小限のドキュメント型を作成します。3つのフィールドはそれぞれ、保存済み検索における検索可能なattributeに対応します。
+
+```js expandable
+schema product {
+    document product {
+        
+        # Other fields
+
+        field price type int {
+            indexing: attribute
+        }
+
+        field category type string {
+            indexing: attribute
+        }
+
+        field condition type string {
+            indexing: attribute
+        }
+    }
+
+    # rank-profiles etc.
+}
+```
+
+#### 保存検索スキーマ
+
+predicateフィールドには、商品のマッチングに使用される検索式全体が格納されます。
+
+```js expandable
+schema saved_search {
+    document saved_search {
+        field filters type predicate {
+            indexing: attribute
+            index {
+                arity: 2 # Mandatory
+                # Range of values the expressions are expected to operate on. 
+                # Better performance if these are smaller
+                lower-bound: 3
+                upper-bound: 500
+
+                dense-posting-list-threshold: 0.25
+            }
+        }
+    }
+}
+```
+
+### サービスの設定
+
+保存検索コンポーネントを設定する最小限の `services.xml` は次のようになります:
+
+```xml expandable
+<services version="1.0">
+    <container id="default" version="1.0">
+        <search />
+        <document-api />
+
+        <document-processing>
+            <chain id="notification">
+                <documentprocessor id="ai.vespa.ecommerce.savedsearch.SavedSearchDocumentProcessor" 
+                                   bundle="ecommerce-saved-search" />
+                <config name="ai.vespa.ecommerce.common.ecommerce-schema-wiring">
+                    <notification>
+                        <kind>WEBHOOK</kind>
+                        <webhook>
+                            <URL>http://localhost:8000/notification</URL>
+                        </webhook>
+                    </notification>
+
+                    <productDocumentType>product</productDocumentType>
+                    <savedSearchDocumentType>saved_search</savedSearchDocumentType>
+                    <predicateFieldName>filters</predicateFieldName>
+                    <savedSearchNumHits>100</savedSearchNumHits>
+
+                    <regularAttributes>
+                        <item>
+                            <predicateName>category</predicateName>
+                            <fieldPath>category</fieldPath>
+                            <required>true</required>
+                        </item>
+                        <item>
+                            <predicateName>condition</predicateName>
+                            <fieldPath>condition</fieldPath>
+                            <required>false</required>
+                        </item>
+                    </regularAttributes>
+                    <rangeAttributes>
+                        <item>
+                            <predicateName>price</predicateName>
+                            <fieldPath>price</fieldPath>
+                            <required>true</required>
+                        </item>
+                    </rangeAttributes>
+                </config>
+            </chain>
+        </document-processing>
+    </container>
+
+    <content version="1.0" id="content">
+        <min-redundancy>2</min-redundancy>
+        <documents>
+            <document type="saved_search" mode="index" />
+            <document type="product" mode="index" />
+
+            <document-processing />
+        </documents>
+    </content>
+
+    <routing version="1.0">
+        <routingtable protocol="document">
+            <route name="notification-route" hops="forkhop" />
+            <hop name="forkhop" selector="[DocumentRouteSelector]">
+                <recipient session="default/chain.notification" />
+                <recipient session="content" />
+            </hop>
+        </routingtable>
+    </routing>
+</services>
+```
+
+### データのフィード
+
+#### 保存済み検索のフィード
+
+機能をテストするために、2つの保存検索ドキュメントをフィードします:
+
+```json
+[
+  {"put": "id:saved_search:saved_search::search1", "fields": {
+    "filters": "price in [20..100] and category in [Sports, Books]"
+  }},
+  {"put": "id:saved_search:saved_search::search2", "fields": {
+    "filters": "price in [200..487] and category in [Electronics]"
+  }}
+]
+```
+
+#### 通知ルートへ商品をフィードする
+
+次のスキーマを持つ新しい商品が入荷したとします:
+
+```json
+{"put": "id:saved_search:product::product1", "fields":{"category": "Sports", "price": 50}}
+```
+
+この商品のフィード時に通知を有効にするには、`notification-route` へフィードします:
+
+```bash
+$ vespa feed --route notification-route product.jsonl
+```
+
+すべてが正しくセットアップされていれば、`id:saved_search:saved_search::search1` にはマッチし、`search2` にはマッチしないはずです。`webhook` 設定の `URL` パラメーターで指定されたエンドポイントでサーバーがリクエストを受信している場合、マッチしたペアを表すJSONボディを持つリクエストが確認できるはずです。
+
+<Warning>
+ **警告:** `SavedSearchDocumentProcessor` は、受信ドキュメントの**シンク(sink)**として動作します。つまり、そのドキュメント・プロセッサーに送られた `Put` および `Update` 操作はコンテント・ノードへは伝播せず、実質的に操作が破棄されます。これが例で `routingtable` を指定している理由です - ルート `notification-route` へ向かうドキュメントは「フォーク」し、一方のパスはコンテント・クラスターへ、もう一方のパスは保存検索コンポーネントへ向かいます。
+</Warning>
+
+## 通知の種類
+
+### Webhook
+
+Webhook通知は、保存済み検索の集合にマッチした各ドキュメントについて、指定されたURLへリクエストを送信します。そのようなリクエストの処理を提供する外部アプリケーションが必要です。
+
+設定パラメーターが `notification.kind == WEBHOOK` の場合、`notification.webhook` をプレフィックスとするすべての設定パラメーターが有効になります。保存検索アプリケーションからのリクエストは、JSONボディを持つ `POST` リクエストです:
+
+```json highlight= {7}
+{
+  "id": "<product-id>",
+  "timestamp": "<ISO-8601-timestamp>",
+  "matched_documents": [
+    "<saved-search-id-1>",
+    "<saved-search-id-2>",
+    ...
+  ]
+}
+```
+
+#### セキュリティ
+
+ほとんどの場合、通知を処理するWebhookエンドポイントは何らかの方法で保護されています(そして保護されるべきです)。Webhookエンドポイントへ認可済みリクエストを送信する現在サポートされている方法は、[Vespaシークレット・ストア](/ja/security/secret-store)と `notification.webhook.headers[].secret` 設定パラメーターを組み合わせることです。`https://my.webhook.com/notification` へ通知を送信したいとし、そのAPIがすべてのリクエストに次のヘッダー:
+
+```text
+Authorization: Bearer TOKEN
+```
+
+の存在を要求するとします。アプリケーションでこれを使用できるようにするには、まずVespa Cloudでシークレットを作成し、ヘッダーの**完全な**値を格納します: `Bearer TOKEN`(`TOKEN` は実際のトークンに置き換えます)。
+
+次に、`services.xml` でアプリケーションにシークレットを追加します:
+
+```xml expandable
+<container>
+    ...
+    <secrets>
+        <myApiToken vault="my-vault" name="my-token-name" />
+    </secrets>
+```
+
+最後に、このシークレット値を持つヘッダーをすべての通知リクエストに追加するよう、`SavedSearchDocumentProcessor` を設定します:
+
+```xml expandable
+...
+    <documentprocessor id="ai.vespa.ecommerce.savedsearch.SavedSearchDocumentProcessor" 
+                       bundle="ecommerce-saved-search" />
+    <config name="ai.vespa.ecommerce.common.ecommerce-schema-wiring">
+        <notification>
+            <kind>WEBHOOK</kind>
+            <webhook>
+            <headers>
+                <item>
+                    <key>Authorization</key>
+                    <!-- Value of secret will be placed in the value field of the HTTP header. -->
+                    <secret>myApiToken</secret>
+                </item>
+            </headers>
+            </webhook>
+        </notification>
+    </config>
+</container>
+```
+
+Webhook通知は自動リトライなしで一度だけ送信されます。配信失敗はVespaログに記録されます。
+
+### Vespaスキーマ
+
+保存検索通知をより簡単にテストする方法として、Vespaアプリケーション内に通知を保存する方式が提供されています。この方式は、商品と保存済み検索のペア間の各通知を、専用のVespaドキュメント型を使用して表現します。テスト目的のみでの使用を推奨します。
+
+設定パラメーターが `notification.kind == VESPA_SCHEMA` の場合、`notification.vespaSchema` をプレフィックスとするすべての設定パラメーターが有効になります。この通知方式の最小限の動作例を以下に示します。
+
+#### 通知の例
+
+通知を保存するためのドキュメント型を定義します。例えば `notification.sd`:
+
+```js
+schema notification {
+    document notification {
+        field product_id type string {
+            indexing: attribute | summary
+        }
+
+        field saved_search_id type string {
+            indexing: attribute | summary
+        }
+
+        field timestamp type long {
+            indexing: attribute | summary
+        }
+    }
+}
+```
+
+このドキュメント型をアプリケーションに追加します:
+
+```xml
+<content>
+    <documents>
+        ...
+        <document type="notification" mode="index" />
+    </documents>
+</content>
+```
+
+`SavedSearchDocumentProcessor` のスキーマ・ワイヤリングを設定します:
+
+```xml expandable
+
+<container>
+    <documentprocessor id="ai.vespa.ecommerce.savedsearch.SavedSearchDocumentProcessor" 
+                       bundle="ecommerce-saved-search" />
+    <config name="ai.vespa.ecommerce.common.ecommerce-schema-wiring">
+        <notification>
+            <kind>VESPA_SCHEMA</kind>
+            <vespaSchema>
+                <documentType>notification</documentType>
+                <namespace>saved_search</namespace>
+                <fieldPathProductId>product_id</fieldPathProductId>
+                <fieldPathSavedSearchId>saved_search_id</fieldPathSavedSearchId>
+                <fieldPathTimestamp>timestamp</fieldPathTimestamp>
+            </vespaSchema>
+        </notification>
+    </config>
+</container>
+```
+これで、適切なパラメーターを付けた `vespa visit` または `vespa query` を使用して通知を確認できます。
+## 設定リファレンス
+
+このセクションでは、ドキュメント・プロセッサーで使用可能な[設定パラメーター](/ja/applications/configuring-components)について説明します。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>パラメーター</th>
+      <th>説明</th>
+      <th>型</th>
+      <th>デフォルト値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`notification.kind`}</code></td>
+      <td>通知の送信に使用する方式。</td>
+      <td><code>{`enum {WEBHOOK, DUMMY, VESPA_SCHEMA}`}</code></td>
+      <td><code>{`DUMMY`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`notification.webhook.URL`}</code></td>
+      <td>通知リクエストの送信先URL。</td>
+      <td><code>{`string`}</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>{`notification.webhook.connectionPoolSize`}</code></td>
+      <td>コンテナー・クラスターで使用するHTTPクライアント・スレッドの数。</td>
+      <td><code>{`int`}</code></td>
+      <td><code>{`20`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`notification.webhook.headers[].key`}</code></td>
+      <td>すべてのWebhookリクエストに追加するヘッダーのキー。</td>
+      <td><code>{`string`}</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>{`notification.webhook.headers[].value`}</code></td>
+      <td>すべてのWebhookリクエストに追加するヘッダーの値。</td>
+      <td><code>{`string`}</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>{`notification.webhook.headers[].secret`}</code></td>
+      <td><code>{`.value`}</code>で指定された値の代わりに、Vespaシークレット・ストアのシークレットを使用します。ここで指定する値は、<code>{`services.xml`}</code>の<code>{`secrets`}</code>タグで指定されたシークレットの名前と一致している必要があります。</td>
+      <td><code>{`string`}</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>{`notification.vespaSchema.documentType`}</code></td>
+      <td>通知の保存に使用するVespaドキュメント型の名前。このドキュメント型はアプリケーションで定義されている必要があります。</td>
+      <td><code>{`string`}</code></td>
+      <td>saved_search_notification</td>
+    </tr>
+    <tr>
+      <td><code>{`notification.vespaSchema.namespace`}</code></td>
+      <td>通知ドキュメントのドキュメントIDの作成に使用する名前空間。</td>
+      <td><code>{`string`}</code></td>
+      <td>saved_search</td>
+    </tr>
+    <tr>
+      <td><code>{`notification.vespaSchema.fieldPathProductId`}</code></td>
+      <td>通知ドキュメントに商品IDを保存するためのフィールドパス。</td>
+      <td><code>{`string`}</code></td>
+      <td>product_id</td>
+    </tr>
+    <tr>
+      <td><code>{`notification.vespaSchema.fieldPathSavedSearchId`}</code></td>
+      <td>通知ドキュメントに保存済み検索IDを保存するためのフィールドパス。</td>
+      <td><code>{`string`}</code></td>
+      <td>saved_search_id</td>
+    </tr>
+    <tr>
+      <td><code>{`notification.vespaSchema.fieldPathTimestamp`}</code></td>
+      <td>通知ドキュメントにタイムスタンプを保存するためのフィールドパス。</td>
+      <td><code>{`string`}</code></td>
+      <td>timestamp</td>
+    </tr>
+    <tr>
+      <td><code>{`productDocumentType`}</code></td>
+      <td>通知をトリガーできるドキュメント型の名前。例: <code>{`product`}</code>。</td>
+      <td><code>{`string`}</code></td>
+      <td>product</td>
+    </tr>
+    <tr>
+      <td><code>{`savedSearchDocumentType`}</code></td>
+      <td>保存済み検索を格納するドキュメント型の名前。例: <code>{`saved_search`}</code>。</td>
+      <td><code>{`string`}</code></td>
+      <td>saved_search</td>
+    </tr>
+    <tr>
+      <td><code>{`predicateFieldName`}</code></td>
+      <td>predicateクエリーを格納する<code>{`savedSearchDocumentType`}</code>内のフィールドの名前。</td>
+      <td><code>{`string`}</code></td>
+      <td>filters</td>
+    </tr>
+    <tr>
+      <td><code>{`savedSearchNumHits`}</code></td>
+      <td>1回の商品更新あたりにマッチできる保存済み検索の最大数。この制限を超えるマッチは通知なく破棄されます。値を大きくすると、更新ごとの処理量が増えます。</td>
+      <td><code>{`int`}</code></td>
+      <td>100</td>
+    </tr>
+    <tr>
+      <td><code>{`regularAttributes[].predicateName`}</code></td>
+      <td>保存検索のpredicateフィールドで使用される通常(文字列)attributeの名前。</td>
+      <td><code>{`string`}</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>{`regularAttributes[].fieldPath`}</code></td>
+      <td>このattributeとマッチさせる<code>{`productDocumentType`}</code>内のフィールド。このフィールドは<code>{`string`}</code>型である必要があります。</td>
+      <td><code>{`string`}</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>{`regularAttributes[].required`}</code></td>
+      <td>ドキュメントがこのattributeの指定を必須とするかどうか。</td>
+      <td><code>{`bool`}</code></td>
+      <td><code>{`false`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`rangeAttributes[].predicateName`}</code></td>
+      <td>保存検索のpredicateフィールドで使用される数値範囲attributeの名前。</td>
+      <td><code>{`string`}</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>{`rangeAttributes[].fieldPath`}</code></td>
+      <td>このattributeとマッチさせる<code>{`productDocumentType`}</code>内のフィールド。このフィールドは数値型(例: <code>{`int`}</code>)である必要があります。</td>
+      <td><code>{`string`}</code></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td><code>{`rangeAttributes[].required`}</code></td>
+      <td>ドキュメントがこのattributeの指定を必須とするかどうか。</td>
+      <td><code>{`bool`}</code></td>
+      <td><code>{`false`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+## 関連情報
+
+- [Predicateフィールド](/ja/schemas/predicate-fields)
+- [ドキュメント・プロセッサー](/ja/applications/document-processors)
+- [コンポーネントの設定](/ja/applications/configuring-components)
+- [シークレット・ストア](/ja/security/secret-store)
+- [複数通貨の価格設定](/ja/modules/e-commerce/multi-currency-filtering)
+- [機能の組み合わせ利用](/ja/modules/e-commerce/using-features-together)

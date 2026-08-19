@@ -1,0 +1,70 @@
+---
+title: 書き込み
+description: "これは Vespa へのデータの書き込みの入門です。"
+---
+
+## ドキュメント
+
+アプリケーションに 1 つ以上のスキーマを追加し、書き込みを処理させたいコンテナー・クラスターの `services.xml` に `<document-api>` を追加すれば、それらのスキーマに従った書き込みを送信できます。ドキュメントは、各フィールドの値を含む JSON のマップとして書き込まれます:
+
+```json
+{
+    "put": "id:my-namespace:my-documenttype::my-id-string",
+    "fields": {
+        "myTextField": "Hello world!",
+        "myNumericAttribute": 13.8,
+        "myEmbedding": [0.3, 1.45, 1.03]
+    }
+}
+```
+
+各ドキュメントには id があり、id は自由に決められる 2 つの部分で構成されます:
+
+    - **namespace**: id を決定する複数種類のクライアントが存在する場合に名前の衝突を避けるためだけに使用される文字列で、それ以外の目的には使用されません
+    - **id 文字列**: 任意の文字列を使用できます。例えば商品 ID や URL など
+
+フィールドは空のままにできます。ドキュメントタイプに定義されたすべてのフィールドに値を設定する必要はありません。
+
+ドキュメント形式の完全な情報は、[ドキュメント JSON 形式のリファレンス](/ja/reference/schemas/document-json-format)を参照してください。
+
+## ドキュメントの書き込み
+
+ドキュメントは、[document/v1](/ja/writing/document-v1-api-guide) HTTP API を使用して、アプリケーション・インスタンスの*書き込みエンドポイント*に書き込まれます。API を直接使用することも、Vespa が提供するクライアントのいずれかを使用することもできます:
+
+- **コマンドライン、[Vespa CLI](/ja/clients/vespa-cli) を使用**: [`vespa feed`](/ja/clients/vespa-cli#documents) で 1 つまたは複数のドキュメントを Vespa にフィードします。
+- **Python、[PyVespa](https://vespa-engine.github.io/pyvespa/) を使用**: [`application.feed_iterable(...)`](https://vespa-engine.github.io/pyvespa/reads-writes.html#feeding-operations-from-a-file)
+- **Java、[Java Feed Client](/ja/clients/vespa-feed-client) を使用**: [`myFeedClient.put(id, json, params)`](/ja/clients/vespa-feed-client#example-java)
+
+同じ API とクライアントを使用して、ドキュメントの削除、取得、更新も行えます。
+
+## ドキュメントの更新
+
+ドキュメントは、再度書き込むことで新しいバージョンに完全に置き換えられますが、既存のドキュメントの個々のフィールドだけを更新することもできます。これは、他のフィールドやインデックスに影響を与えることなく、例えば行動シグナルや価格などのアトリビュート・フィールドを高スループットで更新するのに特に便利です。
+
+更新はドキュメントの put と同じ方法で送信されます。異なるのは形式だけです:
+
+```json
+{
+    "update": "id:my-namespace:my-documenttype::my-id-string",
+    "fields": {
+        "myTextField": {
+            "assign": "Some new value"
+        }
+    }
+}
+```
+
+更新では、数値のインクリメントや、配列・テンソルへの追加なども可能です。詳細は[部分更新ガイド](/ja/writing/partial-updates)を参照してください。
+
+## 書き込みはストリーミングかつリアルタイム
+
+Vespa への書き込み操作は（HTTP/2 を使用して）ストリーミングされ、非同期に処理されます。システムが処理できる最大スループットでフィードするために、別途バッチ API は必要ありません。サーバーは飽和に近づくと応答を遅くすることでプッシュバックし、クライアントはこのシグナルを利用して送信を抑制することで、システムが処理できる最大スループットに動的に収束できます。
+
+Vespa への書き込み操作は常にリアルタイムで適用されます。書き込み操作が非同期に確認応答された時点で、その書き込み操作は永続化され、完全に処理されており、結果は以降のすべてのクエリーで参照可能になります。Vespa は、メモリ上のミュータブルな構造と（全文検索用の）ディスクベースのポスティングリストを組み合わせた、独自のインデックス設計によってこれを実現しています。
+
+詳細は[フィードのサイジングに関するドキュメント](/ja/performance/sizing-feeding)を参照してください。
+
+## document API はドキュメントを返すこともできる
+
+書き込みのサポートに加えて、document/v1 HTTP API は、id を指定して単一のドキュメントを返すこと（get）や、ドキュメントコーパスの任意の選択範囲をストリーミングすること（visit）もできます。visit は、バックアップや、オフライン機械学習のためのコンテンツのスクレイピングなど、バックグラウンドや一度きりのジョブに使用されます。これは低レイテンシーで結果を返すことよりも、稼働中のシステムへの影響を最小限に抑えるように設計されています。詳細は [document/v1 ガイド](/ja/writing/document-v1-api-guide#data-dump)を参照してください。
+

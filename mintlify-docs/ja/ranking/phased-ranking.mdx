@@ -1,0 +1,341 @@
+---
+title: "フェーズドランキング"
+---
+
+Vespa では、ドキュメントの多段階の取得(リトリーバル)とランキングを表現できます。取得フェーズはコンテントノード内のデータの近くで実行され、ランキングフェーズはコンテントノード内、またはコンテントノードからの scatter-and-gather の後にステートレスコンテナー内で実行できます。フェーズドパイプラインの取得部分は [query API](/ja/querying/query-api) を使用して表現し、ランキング部分はスキーマ内の [rank-profile](/ja/reference/schemas/schemas#rank-profile) を使用して表現します。
+
+- **取得 (Retrieval):** [weakAnd/wand](/ja/ranking/wand) や[最近傍検索](/ja/querying/nearest-neighbor-search)などの [_Top-k_ クエリーオペレーター](#top-k-query-operators)により、サブリニアな計算量での取得が可能になります。これらのクエリーオペレーターは、Vespa のインデックス上で評価する計算コストが低い、シンプルなスコアリング関数を使用します。Vespa クエリー言語の表現力を使用して、開発者はクエリー内で複数のリトリーバーを組み合わせ、取得されたドキュメントの和集合を Vespa のランキングフェーズに公開できます。
+- **ノードごとのランキング:** クエリー仕様がドキュメントを取得し、[コンテントノード](#two-phase-ranking-on-content-nodes)内で評価される宣言的なフェーズを使用してランキングします: 
+  - [first-phase 式](#first-phase-ranking-on-content-nodes); [rank-profile](/ja/reference/schemas/schemas#rank-profile) で設定します。このフェーズは、クエリーロジックによって取得された_すべての_ヒットに対して評価されます。このフェーズでは、[rank-score-drop-limit](/ja/reference/schemas/schemas#rank-score-drop-limit) を使用して、取得されたドキュメントを除外することもできます。 
+  - [second-phase ランキング](#two-phase-ranking-on-content-nodes); [rank-profile](/ja/reference/schemas/schemas#rank-profile) で設定します。オプションで、first-phase ランキングの上位スコアのヒットを、より複雑な式を使用して再ランキングします。[total-rerank-count](/ja/reference/schemas/schemas#secondphase-total-rerank-count) は、全ノード合計で再ランキングされるドキュメント数に厳密な上限を設定します。 
+
+- **グローバルランキング:** コンテントノードごとのローカルなランキングフェーズに続いて、コンテントノードがマージされた上位スコアのヒットをステートレスコンテナーに返した後に、再ランキングを行うことができます。このフェーズは、[rank-profile](/ja/reference/schemas/schemas#rank-profile) 内の [global-phase](#using-a-global-phase-expression) 式を使用して指定します。さらに、global-phase では、無関係なスコアリング手法を組み合わせるために[ヒット間の正規化](#cross-hit-normalization-including-reciprocal-rank-fusion)を実施できます。 
+- 最後に、宣言的なフェーズでは表現しにくいカスタマイズされたランキングについては、[サーチャーでの再ランキング](/ja/ranking/reranking-in-searcher)を使用して再ランキングを実装できます。 
+
+<Frame>
+ ![3 つのフェーズでのランキング](/assets/img/phased-ranking.png)
+</Frame>
+
+## コンテントノードでの first-phase ランキング
+
+通常は、まずコンテントノード上で評価されるランキング式を 1 つ用意することから始めます。これは、[スキーマ](/ja/reference/schemas/schemas#rank-profile)の `rank-profile` セクションで `first-phase` 式として設定します。この式では、マッチングフェーズ中に抽出された情報を持つさまざまな[ランクフィーチャー](/ja/ranking/ranking-expressions-features)を使用して、各ドキュメントの関連性を評価できます。first-phase 式は、クエリーによって取得されたすべてのドキュメントに対して計算されます。計算コストは、各コンテントノードでランキングフェーズに公開されるドキュメント数と first-phase 式の複雑さの積によって決まります。したがって、大量の取得ドキュメントに対応できるよう、この式はシンプルで低コストである必要があります。あるいは、上位 k 件のヒットのみを first-phase 式に公開する取得オペレーターを使用してください。
+
+## コンテントノードでの 2 フェーズランキング
+
+ユースケースによっては(シンプルな)first-phase ランキング式が 1 つあれば十分ですが、より高度なユースケースでは、スキーマ内の [rank-profile](/ja/reference/schemas/schemas#rank-profile) に `second-phase` ランキング式を追加できます。これにより、first-phase の計算として実行するには現実的でないような、より高コストな計算が、予測可能なコスト上限とともに可能になります。
+
+デフォルトでは、second-phase ランキング(指定されている場合)は、コンテントノードごとに first-phase ランキングの上位 100 件のヒットに対して評価されます。全ノード合計で再ランキングされる数は、[total-rerank-count](/ja/reference/schemas/schemas#secondphase-total-rerank-count) で設定できます。
+
+```js
+schema myapp {
+    â€¦
+    rank-profile title-freshness inherits default {
+        first-phase {
+            expression {
+                bm25(title) + 3*freshness(timestamp)
+            }
+        }
+        second-phase {
+            expression {
+                xgboost("my-model.json")
+            }
+            total-rerank-count: 50
+        }
+    }
+}
+```
+
+この例では、first phase は、_title_ フィールドにスコープを限定したテキストマッチングフィーチャー [bm25](/ja/ranking/bm25) と、秒単位のエポックタイムを保存する _timestamp_ フィールドに対する、_freshness_ という名前の組み込みドキュメント[ランクフィーチャー](/ja/reference/ranking/rank-features)の 1 つを使用しています。各コンテントノードでは、first phase の関数による上位 50 件のヒットが、トレーニング済みの [xgboost](/ja/ranking/xgboost) モデルを使用して再ランキングされます。
+
+## global-phase 式の使用
+
+スキーマの `rank-profile` セクションで [global-phase](/ja/reference/schemas/schemas#globalphase-rank) として設定されたランク式を使用すると、コンテントノードのフェーズから最良のヒットを集めた後に、ステートレスコンテナー内で実行されるランキングフェーズを追加できます。これは、[second-phase](#two-phase-ranking-on-content-nodes) ランキングの代わりに、またはそれに加えて使用できます。global-phase では、無関係なスコアリング手法を組み合わせるために[ヒット間の正規化](#cross-hit-normalization-including-reciprocal-rank-fusion)を実行することもできます。
+
+デフォルトでは、global-phase ランキングは、スキーマごとにグローバルで最良の 100 件のヒットに対して実行されます。これは、rank-profile 内で [`rerank-count`](/ja/reference/schemas/schemas#globalphase-rank) を使用するか、クエリーごとに [`ranking.globalPhase.rerankCount`](/ja/reference/api/query#ranking.globalphase.rerankcount) クエリープロパティーを使用して調整できます。
+
+このフェーズは、[ONNX](/ja/ranking/onnx) モデルによる推論のために最適化されており、ドキュメントとクエリーの両方から入力データを受け取って、それらがどれだけよくマッチするかのスコアを求めます。典型的なユースケースは、[クロスエンコーダー](/ja/ranking/cross-encoders)を使用した再ランキングです。
+
+_gpu-device_ を指定して、モデルの計算を GPU で高速化することもできます。必要に応じて、関数内で ONNX モデルへの入力を計算または再整形 (re-shape) し、その出力をさらなる計算に使用して最終スコアを算出できます。
+
+ONNX モデルではなく、大きくて複雑な式([xgboost](/ja/ranking/xgboost)、[lightgbm](/ja/ranking/lightgbm) を含む)を使用する場合は、コンテントノード上で高度に最適化された [second-phase](#two-phase-ranking-on-content-nodes) の計算を使用する方が効率的です。これは、大量のベクトルデータを必要とするサブ式にも当てはまります。ベクトルデータをネットワーク越しに移動するのは高コストです。
+
+<Info>
+ **注:** サブ式を関数にして match-features に追加することで、そのサブ式を強制的にコンテントノード上で計算させることができます
+</Info>
+
+ランキングプロファイルの [match-features](/ja/reference/schemas/schemas#match-features) にフィーチャーを追加することで、global-phase 式は、ネットワーク越しにデータを転送して(最適化の度合いが低い)ステートレスコンテナー内で推論を実行するという複雑さなしに、関数の出力を再利用できます。
+
+```js expandable
+schema myapp {
+    document myapp {
+        field per_doc_vector type tensor<float>(x[784]) {
+            indexing: attribute
+        }
+        â€¦
+    }
+    â€¦
+    rank-profile with-global-model inherits default {
+        inputs {
+          query(per_query_vector) tensor<float>(d0[32])
+        }
+        first-phase {
+            expression: bm25(title)
+        }
+
+        function my_expensive_function() {
+            expression: # some expensive computation better done on content nodes
+        }
+        
+        function per_doc_input() {
+            # simple reshaping: ONNX input wants the dimension name "d0"
+            expression: rename(attribute(per_doc_vector), x, d0)
+        }
+        onnx-model my_ranking_model {
+            file: files/my_ranking_model.onnx
+            input "model_input_1": per_doc_input
+            input "model_input_2": query(per_query_vector)
+            output "model_output_1": out
+        }
+        global-phase {
+            expression {
+                my_expensive_function + sum(onnx(my_ranking_model).out)
+            }
+            rerank-count: 50
+        }
+        match-features {
+            my_expensive_function
+        }
+    }
+}
+```
+
+上の例では、_my\_expensive\_function_ は first-phase の上位 50 件のドキュメントに対してコンテントノード上で評価されるため、global-phase で再評価する必要がありません。
+
+## Reciprocal rank fusion を含むヒット間の正規化
+
+global-phase 用に設定されたランキング式では、入力のランクフィーチャーや関数に対してヒット間の正規化を実行できます。これは、無関係なスコアリング手法を 1 つの最終的な関連性スコアに簡単に組み合わせられるように設計されています。構文は、特別な疑似関数呼び出しのようになります:
+
+- `normalize_linear(my_function_or_feature)` 
+- `reciprocal_rank(my_function_or_feature)` 
+- `reciprocal_rank(my_function_or_feature, k)` 
+- `reciprocal_rank_fusion(score_1, score_2 ...)` 
+
+正規化は、global-phase が再ランキングするヒット全体にわたって実行されます(上記の[設定](#globalphase-rerank-count)を参照)。つまり、まず、global-phase が再ランキングする各ヒットから入力(_my\_function\_or\_feature_)が計算または抽出されます。次に正規化ステップが適用されます。その後、実際の global-phase 式を計算する際に、正規化された出力が使用されます。例として、bm25 が有効になっているいくつかのテキストフィールド、(前のセクションの[例](#myapp-with-global-model)の)ONNX モデル、および「popularity」という数値アトリビュートがあると仮定します:
+
+```js expandable
+rank-profile with-normalizers inherits with-global-model {
+        function my_bm25_sum() {
+            expression: bm25(title) + bm25(abstract)
+        }
+        function my_model_out() {
+            expression: sum(onnx(my_ranking_model).out)
+        }
+        global-phase {
+            expression {
+                normalize_linear(my_bm25_sum) + normalize_linear(my_model_out) + normalize_linear(attribute(popularity))
+            }
+            rerank-count: 200
+        }
+    }
+```
+
+`normalize_linear` ノーマライザーは単一の引数を取ります。この引数はランクフィーチャーまたは関数の名前でなければなりません。その入力の最大値と最小値を計算し、[0, 1] の範囲に線形にスケーリングします。基本的には `output = (input - min) / (max - min)` という式を使用します
+
+`reciprocal_rank` ノーマライザーは 1 つまたは 2 つの引数を取ります。最初の引数はランクフィーチャーまたは関数の名前でなければならず、2 番目の引数(存在する場合)は `k` と呼ばれる数値定数で、デフォルト値は 60.0 です。入力値をソートしてその_順位 (rank)_ を求めます(つまり最高スコアが順位 1、次が 2、というようになります)。reciprocal\_rank の出力は ` output = 1.0 / (k + rank) ` という式で計算されます。したがって、デフォルトの k では、最良の入力でも出力は `1.0 / 61 = 0.016393` にしかならないことに注意してください。
+
+`reciprocal_rank_fusion` 疑似関数は少なくとも 2 つの引数を取り、それらの `reciprocal_rank` の合計に展開されます。これは、たとえば
+
+```js
+reciprocal_rank(a) + reciprocal_rank(b) + reciprocal_rank(c)
+```
+
+を
+
+```js
+reciprocal_rank_fusion(a,b,c)
+```
+
+と書くための便利な記法にすぎません。
+
+Reciprocal rank fusion を使用する実践的な例については、[Simple Hybrid Search with ColBERT](https://github.com/vespa-engine/sample-apps/tree/master/colbert) サンプルアプリケーションを参照してください。
+
+## ステートレスな再ランキング
+
+必要なロジックが上記の [global-phase](#using-a-global-phase-expression) に適していない場合は、任意のカスタムスコアリング関数やモデルを使用してヒットを再ランキングできる[ステートレスサーチャー](/ja/applications/searchers)を書くことができます。サーチャーは、コンテントソースの[フェデレーション](/ja/querying/federation)を使用している場合、複数のソースからのヒットをブレンドして並べ替えることもできます。
+
+サーチャーは、[summary-features](/ja/applications/inspecting-structured-data) を使用して、コンテントノードで計算されたランクフィーチャーをヒットのフィールドとともに返すようリクエストできます。返されるフィーチャーは、_rank-profile_ 内で [summary-features](/ja/reference/schemas/schemas#summary-features) として設定できます。
+
+_ヒット_の数は、query api の [hits](/ja/reference/api/query#hits) パラメーターと [maxHits](/ja/reference/api/query#queryprofile) 設定によって制限されます。コンテナーレベルの再ランキングに利用できるヒットは、コンテントノードがヒットを取得してランキングし、コンテントノードからのレスポンスをマージすることによってグローバルの上位ランキングヒットが見つかった後の、グローバルの上位ランキングヒットです。
+
+## Top-K クエリーオペレーター
+
+first-phase ランキング関数がシンプルな線形関数として近似でき、クエリーモードが _weakAnd_ である場合、Vespa の [Weak And/WAND](/ja/ranking/wand) 実装により、クエリーにマッチするすべてのドキュメントを _first-phase_ 関数で完全に評価することを回避できます。代わりに、内部の wand スコアリングによる上位 K 件のヒットのみが _first-phase_ ランキング式に公開されます。
+
+[最近傍検索](/ja/querying/nearest-neighbor-search)オペレーターも top-k 取得オペレーターであり、この 2 つのオペレーターは同じクエリー内で組み合わせることができます。
+
+## フェーズドランキング関数の選択
+
+高品質なランキング式は、ほとんどのアプリケーションにおいて、取得またはマッチしたすべてのドキュメントに対してレイテンシーの予算/SLA 内で実行するには CPU を消費しすぎます。したがって、アプリケーションのランキング関数は、ほとんどの場合 second-phase の関数にすべきです。そうなると課題は、second-phase の関数と十分に相関する first-phase の関数を見つけることになります。
+
+## ランクフェーズの統計
+
+[match-features](/ja/reference/schemas/schemas#match-features) と [summary-features](/ja/reference/schemas/schemas#summary-features) を使用して、クエリーごとの詳細なマッチ情報とランク情報をエクスポートします。これには、分析のために外部システムでの後処理と集計が必要です。
+
+ドキュメントコーパスがクエリーにどれだけよくマッチしているかを評価するには、[ミュータブルアトリビュート](/ja/reference/schemas/schemas#mutate)を使用して、各ドキュメントが各マッチフェーズ・ランキングフェーズをどのくらいの頻度で通過するかを追跡します。これはドキュメントごとに集計され、Vespa のクエリー API とグルーピング API を使用して簡単に分析できます - それ以外の処理/ストレージは必要ありません。
+
+ミュータブルアトリビュートは数値であり、4 つのフェーズで操作を実行できます:
+
+1. on-match
+2. on-first-phase
+3. on-second-phase
+4. on-summary
+
+よくあるユースケースは、実行のたびに値を 1 ずつ増やすことです。これにより、クエリーに対するドキュメントのパフォーマンスを簡単に評価できます。たとえば、最も多くのクエリーに登場するドキュメントや、一度もマッチしなかったドキュメントを見つけるには、クエリーを実行してミュータブルアトリビュートで並べ替えます。
+
+<Info>
+ **注:** ミュータブルアトリビュートは単なるカウンターであり、メモリー上の操作のみです - 値はコンテントノードの再起動後に残ることも残らないこともあります。値をノード間で比較することはできません。値は、Vespa の起動以降のドキュメントの相対的なマッチングおよびランキングのパフォーマンスを評価するために使用してください
+</Info>
+
+この例は album-recommendation サンプルアプリケーションに基づいています([アプリケーションのデプロイ](/ja/basics/deploy-an-application)を参照)。ここでは、ドキュメントが 4 つのフェーズのそれぞれに参加した回数を個別に追跡する 4 つのアトリビュートを使用します。これは、クエリーで rank-profile `rank_albums_track` を使用した場合にのみ追跡されます:
+
+```js expandable
+schema music {
+
+    document music {
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field album type string {
+            indexing: summary | index
+        }
+
+        field year type int {
+            indexing: summary | attribute
+        }
+
+        field category_scores type tensor<float>(cat{}) {
+            indexing: summary | attribute
+        }
+
+    }
+
+    field match_count type long {
+        indexing: attribute | summary
+        attribute: mutable
+    }
+    field first_phase_count type long {
+        indexing: attribute | summary
+        attribute: mutable
+    }
+    field second_phase_count type long {
+        indexing: attribute | summary
+        attribute: mutable
+    }
+    field summary_count type long {
+        indexing: attribute | summary
+        attribute: mutable
+    }
+
+    fieldset default {
+        fields: artist, album
+    }
+
+    rank-profile rank_albums inherits default {
+        first-phase {
+            expression: sum(query(user_profile) * attribute(category_scores))
+        }
+        second-phase {
+            expression: attribute(year)
+            rerank-count: 1
+        }
+        summary-features: attribute(year)
+    }
+
+    rank-profile rank_albums_track inherits rank_albums {
+        mutate {
+            on-match { match_count += 1 }
+            on-first-phase { first_phase_count += 1 }
+            on-second-phase { second_phase_count += 1 }
+            on-summary { summary_count += 1 } # this only happens when summary-features are present!
+        }
+    }
+
+    rank-profile rank_albums_reset_on_match inherits rank_albums {
+        mutate {
+            on-match { match_count = 0 }
+        }
+    }
+    rank-profile rank_albums_reset_on_first_phase inherits rank_albums {
+        mutate {
+            on-match { first_phase_count = 0 }
+        }
+    }
+    rank-profile rank_albums_reset_on_second_phase inherits rank_albums {
+        mutate {
+            on-match { second_phase_count = 0 }
+        }
+    }
+    rank-profile rank_albums_reset_on_summary inherits rank_albums {
+        mutate {
+            on-match { summary_count = 0 }
+        }
+    }
+}
+```
+
+```bash
+$ vespa query \
+  "select * from music where album contains 'head'" \
+  "ranking=rank_albums_track"
+```
+
+### 使い方
+
+このフレームワークの使い方は柔軟です。通常のユースケースは次のとおりです:
+
+1. すべてのコンテントノードでミュータブルアトリビュートをリセットします - 値をリセットする rank profile を使用したクエリーを送信し、[searchPath](/ja/reference/api/query#model.searchpath) を使用して、すべてのノードが確実にリセットされるようにします。各フェーズについて、すべてのドキュメントに_マッチする_クエリーを実行し、アトリビュートをリセットします - 例:
+```bash
+$ for phase in match first_phase second_phase summary; do \
+      for node in {0..3}; do vespa query \
+          "select * from music where true" \
+          "ranking=rank_albums_reset_on_$phase" \
+          "model.searchPath=$node/0"; \
+      done \
+  done
+```
+ あるいは、グループに対してクエリーを実行し、[coverage](/ja/reference/querying/default-result-format) が 100% であることを確認します。 
+2. 上記の `rank_albums_track` のような追跡用の rank-profile を使用して、クエリー負荷をかけます 
+3. ミュータブルアトリビュートに対して[ソート](/ja/reference/querying/sorting-language)や[グルーピング](/ja/querying/grouping)を使用したクエリーを実行します。 
+
+<Info>
+**注:** 追跡用のランキングプロファイルを使用するのは、対象となるクエリー負荷だけにしてください。たとえば、監視クエリーや自動化には別のランキングプロファイルを使用して除外します。
+</Info>
+
+ドキュメントの PUT 時にミュータブルアトリビュートを 0 以外の値で初期化するには、次のようにします:
+
+```js
+field match_count type long {
+    indexing: 7 | to_long | attribute | summary # Initialized to 7 for a new document. The default is 0.
+    attribute: mutable
+}
+```
+
+(スキーマに `id` フィールドがあると仮定して)メモリーのみから値を高速にダンプするには:
+
+```js
+document-summary rank_phase_statistics {
+    summary id {}
+    summary match_count {}
+    summary first_phase_count {}
+    summary second_phase_count {}
+    summary summary_count {}
+}
+```
+
+```bash
+$ vespa query \
+  "select * from music where true" \
+  "presentation.summary=rank_phase_statistics"
+```

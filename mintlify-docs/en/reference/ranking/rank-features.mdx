@@ -49,6 +49,25 @@ See also [the overview of the ranking framework](/en/basics/ranking), and [rank 
 	Default: 1000000
 
 	The number of terms in this field if one or more query term matched the field, 1000000 if no query term matched the field.
+- **queryTermDocumentFrequency(name)**<br/>
+	Default: empty tensor
+
+	A `tensor<double>(term{})` holding the document frequency that [BM25](/en/ranking/bm25) would use for each query term that searches the [index](/en/reference/schemas/schemas#indexing-index) field *name*. The document frequency is the number of documents that contain the term; it is the input to the inverse document frequency (IDF) component of BM25. This feature is exposed for debugging and for use in custom text ranking formulas such as [BM25F](https://github.com/vespa-engine/sample-apps/tree/master/examples/bm25f) or [Bayesian BM25](https://github.com/vespa-engine/sample-apps/tree/master/examples/bayesian_bm25).
+
+	The tensor has one cell per query term that searches *name*; terms that do not search the field are not included. Each cell is labeled with the index of the term in the query (as a string, starting at 0), and the labels keep their original query-term index rather than being renumbered. For a term that searches several fields, the cell holds the frequency for the specific field (here, `name`).
+
+	Example: for a query where term 0 and term 2 search the `content` field (term 1 searches a different field), `queryTermDocumentFrequency(content)` is:
+
+  ```bash
+	tensor<double>(term{}):{ {term:0}:1200.0, {term:2}:57.0 }
+  ```
+	Each value is a query-provided override from the [significance model](/en/ranking/significance) if one is present, otherwise the local content node index statistic - the same value BM25 uses. See also [term(n).significance](/en/reference/ranking/rank-features#term(n).significance), which is derived from this document frequency.
+
+	*name* must be a configured index field; referencing an unknown or non-index field is a configuration error, and the tensor is empty when no query term searches the field.
+  <Info>
+	**Note:** The value is a per-content-node statistic unless overridden by the significance model, so it may differ between nodes. In [streaming search](/en/performance/streaming-search), non-overridden values are 0.
+  </Info>
+
 - **attribute(name)**<br/>
 
 	Default: null
@@ -677,6 +696,14 @@ fieldMatch features provide a good measure of the degree to which a query matche
 	Default: n/a
 
 	Time at which the query is executed in unix-time (seconds since epoch)
+- **num_docs_indexed**<br/>
+	Default: n/a
+
+	The local document count used as [BM25](/en/ranking/bm25)'s total document count when no per-term document-frequency override is present. This is the *N* term used by the BM25 inverse document frequency calculation.
+  <Info>
+	**Note:** The value is a per-content-node statistic computed locally; it is *not* cluster-wide and may differ between nodes. For [streaming search](/en/performance/streaming-search), this feature returns 1.
+  </Info>
+
 - **random**<br/>
 	Default: n/a
 

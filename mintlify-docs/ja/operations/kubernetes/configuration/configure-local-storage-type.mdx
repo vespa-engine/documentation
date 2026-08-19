@@ -1,0 +1,183 @@
+---
+title: "ローカルストレージタイプの設定"
+---
+データパス上のネットワーク I/O を回避してパフォーマンスを最大化するために、[コンテント・クラスター](/ja/content/proton)(つまり検索コア)にはノードローカルのストレージを設定することを推奨します。標準的な Vespa のデプロイでは、これは[アプリケーション・パッケージ](/ja/basics/applications)内の [resources](/ja/reference/applications/services/services#resources) タグの下にある `storage-type` 属性で制御されます。しかし、Kubernetes 上で Vespa を実行する場合、この属性は効果を持ちません。代わりに、ローカルストレージは `VespaSet` の `spec.application.storageClass` フィールドで設定する必要があります。Kubernetes 上の Vespa はストレージの概念を抽象化しており、参照されたストレージクラスから提供されるものをそのまま利用します。
+
+ConfigServer の Pod では、ストレージのパフォーマンスはそれほど重要ではありません。したがって、Amazon EKS の `gp3` EBS ボリュームのような、よりコスト効率の高いネットワークアタッチトストレージクラスを選択することは、一般的に適切なトレードオフです。
+
+ノードローカルのストレージをプロビジョニングするには、Kubernetes の [Local Persistent Volumes](https://kubernetes.io/blog/2019/04/04/kubernetes-1.14-local-persistent-volumes-ga/) の使用を推奨します。これらのボリュームは Kubernetes スケジューラーに `NodeAffinity` 制約を公開し、それらを利用する Pod が、基盤となるストレージが利用可能なノードにスケジュールされることを保証します。これにより、Pod ごとに NodeAffinity ルールを手動で管理する必要がなくなります。
+
+さらに、Kubernetes Special Interest Groups (SIGs) は、外部の [Local Persistent Volume](https://kubernetes.io/blog/2019/04/04/kubernetes-1.14-local-persistent-volumes-ga/) 静的プロビジョナーを提供しています。このプロビジョナーは、各ノードにマウントされたローカルディスクを自動的に検出し、対応する `PersistentVolumes` を作成すると同時に、Pod の削除に伴うクリーンアップや再利用を含むライフサイクルを管理します。本番環境のデプロイでは、このコンポーネントの使用を推奨します。
+
+このガイドでは、[Kubernetes Local Volume Static Provisioner](https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner) を使用して、EKS ノード上にローカル NVMe インスタンスストレージをセットアップする手順を説明します。これにより、インスタンス上で利用可能な物理 NVMe ディスクが `local-nvme` StorageClass として公開され、アプリケーションの Pod がそれを要求できるようになります。このガイドは特に Amazon EKS のセットアップを対象としていますが、この概念は他の環境でも同様です - 他のいくつかの例については[プロジェクト](https://github.com/kubernetes-sigs/sig-storage-local-static-provisioner/tree/master/helm/examples)を参照してください。
+
+## Amazon EKS でのローカルストレージのセットアップ
+
+このガイドは、EKS クラスターに `m7gd.xlarge` のようなローカル NVMe インスタンスストレージをサポートするインスタンスタイプで構成された Node Group があることを前提としています。これらのインスタンスタイプは通常、ローカルインスタンスストレージを必要とするワークロードに特化していることを示す `d` サフィックスを含んでいます。Node Group の設定に関する詳細は [AWS EKS Node Groups](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html) のドキュメントを参照してください。
+
+このガイドは特に Bottlerocket ベースの EKS ノードを対象としています。これらのノードは、NVMe インスタンスストレージを準備する役割を持つ標準の EKS ブートストラップスクリプトを実行しません。そのため、ディスクのフォーマットとマウントは init コンテナーによって処理され、その後、静的プロビジョナーが利用可能なボリュームをスキャンし、それらを `PersistentVolumes` として登録します。
+
+Local Volume Static Provisioner の Helm リポジトリを追加します。
+
+```text
+$ helm repo add sig-storage-local-static-provisioner https://kubernetes-sigs.github.io/sig-storage-local-static-provisioner
+$ helm repo update
+```
+
+EKS NVMe インスタンスストレージの設定を作成します。以下の例では、[initContainer](https://kubernetes.io/docs/concepts/workloads/pods/init-containers/) を実行し、NVMe インスタンスストアのディスクをスキャンして `/mnt/disks` 配下に `ext4` としてフォーマットし、静的プロビジョナーがこれを検出します。
+
+```bash expandable
+cat <<'EOF' > local-nvme-values.yaml
+# EKS Bottlerocket NVMe instance storage configuration.
+classes:
+  - name: local-nvme
+    hostDir: /mnt/disks
+    mountDir: /mnt/disks
+    volumeMode: Filesystem
+    fsType: ext4
+    accessMode: ReadWriteOnce
+    storageClass:
+      reclaimPolicy: Delete
+      isDefaultClass: false
+
+nodeSelector:
+  eks.amazonaws.com/nodegroup: test-node-group
+
+priorityClassName: system-node-critical
+mountDevVolume: true
+
+initContainers:
+  - name: nvme-disk-setup
+    image: registry.k8s.io/sig-storage/local-volume-provisioner:v2.8.0
+    securityContext:
+      privileged: true
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+
+        DISKS_PATH=/mnt/disks
+
+        disks=$(ls /dev/nvme*n1 2>/dev/null | grep -v '/dev/nvme0n1' || true)
+
+        if [ -z "${disks}" ]; then
+          echo "No NVMe instance-store disks found, nothing to do"
+          exit 0
+        fi
+
+        for disk in ${disks}; do
+          echo "Processing ${disk}..."
+
+          model=$(cat /sys/block/$(basename ${disk})/device/model 2>/dev/null || true)
+          if ! echo "${model}" | grep -q "Amazon EC2 NVMe Instance Storage"; then
+            echo "${disk} is not an instance store disk (model: ${model}), skipping"
+            continue
+          fi
+
+          if grep -q "^${disk} " /proc/mounts; then
+            echo "${disk} is already mounted, skipping"
+            continue
+          fi
+
+          if ! blkid "${disk}" >/dev/null 2>&1; then
+            echo "No filesystem on ${disk}, formatting as ext4..."
+            mkfs.ext4 -F "${disk}"
+          fi
+
+          uuid=$(blkid -s UUID -o value "${disk}")
+          if [ -z "${uuid}" ]; then
+            echo "Could not determine UUID for ${disk}, skipping"
+            continue
+          fi
+
+          mount_point="${DISKS_PATH}/${uuid}"
+          mkdir -p "${mount_point}"
+          echo "Mounting ${disk} (UUID=${uuid}) at ${mount_point}"
+          mount "${disk}" "${mount_point}"
+        done
+
+        echo "Setup complete. Disks mounted under ${DISKS_PATH}:"
+        grep "${DISKS_PATH}" /proc/mounts || echo "  (none found)"
+    volumeMounts:
+      - name: provisioner-dev
+        mountPath: /dev
+      - name: local-nvme
+        mountPath: /mnt/disks
+        mountPropagation: Bidirectional
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+EOF
+
+$ helm install local-volume-provisioner \
+  sig-storage-local-static-provisioner/local-static-provisioner \
+  --namespace kube-system \
+  --values local-nvme-values.yaml
+```
+
+`mountPropagation: Bidirectional` により、ボリュームのマウントがホストに伝播されることが保証され、`priorityClassName: system-node-critical` により、ノードに負荷がかかった場合でもプロビジョナーの Pod が退避されないことが保証されます。
+
+静的プロビジョナーをインストールすると、`local-nvme` タイプの `StorageClass` が作成されます。これを `VespaSet` の `spec.application.storageClass` 属性で使用します。
+
+```text
+$ kubectl get storageclasses
+NAME         PROVISIONER                    RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+local-nvme   kubernetes.io/no-provisioner   Delete          WaitForFirstConsumer   false                  12h
+```
+
+`VolumeBindingMode` が `WaitForFirstConsumer` であることを確認してください。これにより、Pod がスケジュールされるまで `PersistentVolume` のバインドが遅延され、スケジューラーがストレージの物理的に存在するノードに Pod を配置できるようになります。
+
+`initContainer` が完了すると、静的プロビジョナーが `PersistentVolumes` をプロビジョニングします。
+
+```text expandable
+$ kubectl get persistentvolumes
+NAME                                       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+local-pv-201c66f3                          216Gi      RWO            Delete           Available           local-nvme     <unset>                          12h
+local-pv-2942e993                          216Gi      RWO            Delete           Available           local-nvme     <unset>                          12h
+local-pv-2fea7934                          216Gi      RWO            Delete           Available           local-nvme     <unset>                          12h
+local-pv-335a2831                          216Gi      RWO            Delete           Available           local-nvme     <unset>                          12h
+local-pv-3499cebf                          216Gi      RWO            Delete           Available           local-nvme     <unset>                          12h
+local-pv-36dc72b5                          216Gi      RWO            Delete           Available           local-nvme     <unset>                          12h
+local-pv-37928b3d                          216Gi      RWO            Delete           Available           local-nvme     <unset>                          12h
+local-pv-5e09d438                          216Gi      RWO            Delete           Available           local-nvme     <unset>                          12h
+local-pv-6e9849a9                          216Gi      RWO            Delete           Available           local-nvme     <unset>                          12h
+```
+
+新しく作成された `StorageClass` を使用するように `VespaSet` を設定します。例:
+
+```bash expandable
+# vespaset sample for EKS with local storage configured
+$ cat > vespaset.yaml <<EOF
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: vespaset-sample
+  namespace: ${NAMESPACE}
+spec:
+  version: "${VESPA_VERSION}"
+
+  configServer:
+    image: "${VESPA_OPERATOR_IMAGE}"
+    storageClass: "gp3"
+    generateRbac: false
+
+  application:
+    image: "${VESPA_IMAGE}"
+    storageClass: "local-nvme"
+
+  ingress:
+    endpointType: "LOAD_BALANCER"
+EOF
+
+$ kubectl apply -f vespaset.yaml
+```
+
+## その他のプロビジョナー
+
+[OpenEBS Dynamic LocalPV Provisioner](https://github.com/openebs/dynamic-localpv-provisioner) や [TopoLVM](https://github.com/topolvm/topolvm) など、他のいくつかのローカルストレージ・プロビジョナーも代替として使用できます。これらのプロビジョナーは動的ボリュームプロビジョニングを提供し、事前にプロビジョニングするのではなくオンデマンドで PersistentVolume を作成するため、ディスクの可用性が頻繁に変化する環境では望ましい場合があります。ただし、一部のプロビジョナーでは、ストレージが物理的に存在するノードに Pod がスケジュールされることを保証するために、`NodeAffinity` ルールの手動設定が必要になる場合があります。そのような場合は、ConfigServer とアプリケーションの Pod にカスタムの `NodeAffinity` ルールを設定する方法について、[PodTemplates](/ja/operations/kubernetes/custom-overrides-podtemplate) のセクションを参照してください。

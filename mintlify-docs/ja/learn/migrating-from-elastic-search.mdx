@@ -1,0 +1,239 @@
+---
+title: Elasticsearchからの移行
+description: "これは、ElasticsearchからVespaへデータを移行する方法についてのガイドです。このガイドを終える頃には、Elasticsearchからドキュメントをエクスポートし、デプロイ可能なVespaアプリケーション・パッケージを生成し、ドキュメントとクエリーを使ってこれをテストできているはずです。"
+---
+
+<Warning>
+**前提条件:**
+
+- x86\_64またはarm64上のLinux、macOS、またはWindows 10 Proで、[Podman Desktop](https://podman.io/) または [Docker Desktop](https://www.docker.com/products/docker-desktop/) がインストールされ、エンジンが実行されていること。
+	- あるいは、Podmanデーモンを起動します:
+
+  ```bash
+  $ podman machine init --memory 6000
+  $ podman machine start
+  ```
+		- システム制限やその他の設定については [Dockerコンテナー](/ja/operations/self-managed/docker-containers)を参照してください。
+- Haswell (2013) より古いCPUについては、[CPUサポート](/ja/operations/self-managed/cpu-support)を参照してください。
+- メモリー: Docker/Podman専用の最低限のRAM。[メモリーの推奨事項](/ja/operations/self-managed/node-setup#memory-settings)。
+- ディスク: `NO_SPACE` を避けてください - vespaengine/vespaコンテナー・イメージとデータ用の余裕分にはディスク容量が必要です。[詳細はこちら](/ja/writing/feed-block)。
+- [Vespa CLI](/ja/clients/vespa-cli) をインストールするための [Homebrew](https://brew.sh/)。または [Githubリリース](https://github.com/vespa-engine/vespa/releases)からVespa CLIをダウンロードします。
+- x86\_64またはarm64上のLinux、macOS、またはWindows 10 Proで、Podmanまたは [Docker](https://docs.docker.com/engine/install/) がインストールされていること。システム制限やその他の設定については [Dockerコンテナー](../operations/self-managed/docker-containers)を参照してください。
+</Warning>
+
+始めるには、[サインアップ](https://vespa.ai/free-trial/)してデプロイ先のエンドポイントを取得します。サインアップで取得した *テナント名* を設定します:
+
+```bash
+$ export TENANT_NAME=vespa-team    # Replace with your tenant name
+```
+
+あるいは、[ローカル・デプロイメントでテスト](#test-with-local-deployment)します。
+
+## サンプルのElasticsearchインデックスをフィードする
+
+このセクションでは、[getting-started-index](https://www.elastic.co/guide/en/elasticsearch/reference/7.9/getting-started-index) を使用して1000件のサンプル・ドキュメントを持つインデックスをセットアップします。すでにインデックスがある場合は、この部分をスキップしてください。Elasticsearchが起動するのを待ちます:
+
+```bash
+$ docker network create --driver bridge esnet
+
+$ docker run -d --rm --name esnode --network esnet -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" \
+  docker.elastic.co/elasticsearch/elasticsearch:7.10.2
+
+$ while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' localhost:9200)" != "200" ]]; do sleep 1; echo 'waiting ...'; done
+```
+
+テスト・データをダウンロードし、Elasticsearchインスタンスにフィードします:
+
+```bash
+$ curl 'https://raw.githubusercontent.com/elastic/elasticsearch/7.10/docs/src/test/resources/accounts.json' \
+  > accounts.json
+
+$ curl -H "Content-Type:application/json" --data-binary @accounts.json 'localhost:9200/bank/_bulk?pretty&refresh'
+```
+
+インデックスに1000件のドキュメントがあることを確認します:
+
+```bash
+$ curl 'localhost:9200/_cat/indices?v'
+```
+
+## Elasticsearchからドキュメントをエクスポートする
+
+このガイドでは、インデックスの内容とインデックス・マッピングをエクスポートするために [ElasticDump](https://github.com/elasticsearch-dump/elasticsearch-dump) を使用します。ドキュメントとマッピングをエクスポートしたら、DockerネットワークとElasticsearchコンテナーを削除します:
+
+```bash
+$ docker run --rm --name esdump --network esnet -v "$PWD":/dump -w /dump elasticdump/elasticsearch-dump \
+  --input=http://esnode:9200/bank --output=bank_data.json --type=data
+
+$ docker run --rm --name esdump --network esnet -v "$PWD":/dump -w /dump elasticdump/elasticsearch-dump \
+  --input=http://esnode:9200/bank --output=bank_mapping.json --type=mapping
+
+$ docker rm -f esnode && docker network remove esnet
+```
+
+## Vespaドキュメントとアプリケーション・パッケージを生成する
+
+Elasticsearchのデータとインデックス・マッピングをVespaのデータと設定に変換するために、[ES_Vespa_parser.py](https://github.com/vespa-engine/vespa/tree/master/config-model/src/main/python/ES_Vespa_parser.py) が提供されています。これはエラー・チェックが最小限の基本的なスクリプトで、シンプルなエクスポート向けに設計されています。アプリケーションのニーズに応じて必要に応じて変更してください。Vespaのドキュメントと設定を生成します:
+
+```bash
+$ curl 'https://raw.githubusercontent.com/vespa-engine/vespa/master/config-model/src/main/python/ES_Vespa_parser.py' \
+  > ES_Vespa_parser.py
+
+$ python3 ./ES_Vespa_parser.py --application_name bank bank_data.json bank_mapping.json
+```
+
+これにより、*documents.json* にドキュメントが生成され([JSONフォーマット](/ja/reference/schemas/document-json-format)を参照)、各ドキュメントには `id:bank:_doc::1` のようなIDが付きます。また、[アプリケーション・パッケージ](/ja/basics/applications)を含む *bank* フォルダーも生成されます:
+
+```txt
+/bank
+      │
+      ├── documents.json
+      ├── hosts.xml
+      ├── services.xml
+      └── /schemas
+            └── _doc.sd
+```
+
+アプリケーション・パッケージのディレクトリーに移動します:
+
+```bash
+$ cd bank
+```
+
+## デプロイ
+
+[Vespa CLI](/ja/clients/vespa-cli) をインストールします。この例では [Homebrew](https://brew.sh/) を使用しますが、[GitHub](https://github.com/vespa-engine/vespa/releases) からダウンロードすることもできます:
+
+```bash
+$ brew install vespa-cli
+```
+
+Vespa Cloudデプロイメント用に設定し、ログインして認証情報を追加します:
+
+```bash
+$ vespa config set target cloud
+$ vespa config set application $TENANT_NAME.myapp.default
+```
+
+```bash
+$ vespa auth login
+```
+
+```bash
+$ vespa auth cert
+```
+
+[はじめに](/ja/basics/deploy-an-application)のガイドも参照してください。アプリケーション・パッケージをデプロイします:
+
+```bash
+$ vespa deploy --wait 300
+```
+
+Elasticsearchからエクスポートしたドキュメントをインデックスします:
+
+```bash
+$ vespa feed documents.json
+```
+
+## Vespaとのやり取り
+
+すべてのドキュメントをエクスポートします:
+
+```bash
+$ vespa visit
+```
+
+ドキュメントを取得します:
+
+```bash
+$ vespa document get id:bank:_doc::1
+```
+
+ドキュメント数をカウントします。出力の中に `"totalCount":1000` があることを確認してください:
+
+```bash
+$ vespa query 'select * from _doc where true'
+```
+
+*firstname* フィールドに対してシンプルなクエリーを実行します:
+
+```bash
+$ vespa query 'select firstname,lastname from _doc where firstname contains "amber"'
+```
+
+## 次のステップ
+
+ドキュメント・レコードの違いを確認します。Vespaが下側です:
+
+Elasticsearch:
+
+```json
+{
+    "_index": "bank",
+    "_type": "_doc",
+    "_id": "1",
+    "_score": 1,
+    "_source": {
+      "account_number": 1,
+      "balance": 39225,
+      "firstname": "Amber",
+      "lastname": "Duke",
+      "age": 32,
+      "gender": "M",
+      "address": "880 Holmes Lane",
+      "employer": "Pyrami",
+      "email": "amberduke@pyrami.com",
+      "city": "Brogan",
+      "state": "IL"
+    }
+}
+```
+
+Vespa:
+
+```json
+{
+    "put": "id:bank:_doc::1",
+    "fields": {
+      "account_number": 1,
+      "balance": 39225,
+      "firstname": "Amber",
+      "lastname": "Duke",
+      "age": 32,
+      "gender": "M",
+      "address": "880 Holmes Lane",
+      "employer": "Pyrami",
+      "email": "amberduke@pyrami.com",
+      "city": "Brogan",
+      "state": "IL"
+    }
+}
+```
+
+[id](/ja/schemas/documents#document-ids) フィールド `id:bank:_doc::1` は次の要素で構成されます:
+
+- namespace: `bank`
+- schema: `_doc`
+- id: `1`
+
+詳細は[ドキュメント](/ja/schemas/documents)と[スキーマ](/ja/basics/schemas)を参照してください。スキーマは、フィールドの型と[ランキング](/ja/basics/ranking)を設定する、Vespaの中核となる設定ファイルです。スキーマ(`schemas/_doc.sd` にあります)には[インデキシング](/ja/basics/schemas#document-fields)の設定もあります。例:
+
+```txt
+search _doc {
+    document _doc {
+        field account_number type long {
+            indexing: summary | attribute
+        }
+        field address type string {
+            indexing: summary | index
+        }
+        ...
+    }
+}
+```
+
+これらの設定は、パフォーマンスとフィールドのマッチング方法の両方に影響します。たとえば、上記の *account_number* は *attribute* キーワードを使用しており、これによりフィールドは[ソート](/ja/reference/querying/sorting-language)、[ランキング](/ja/basics/ranking)、[グルーピング](/ja/querying/grouping)で利用可能になりますが、デフォルトでは高速検索用のデータ構造を持ちません。詳細は[アトリビュート](/ja/content/attributes)と[実践的な検索パフォーマンス・ガイド](/ja/performance/practical-search-performance-guide)を参照してください。
+
+## ローカル・デプロイメントでテスト
+
+上記のステップをローカル・デプロイメントで実行するには、[クイックスタート](/ja/basics/deploy-an-application-local)の手順に従って、Vespaを実行するローカル・コンテナーを起動します。その後、*bank* フォルダーからアプリケーション・パッケージをデプロイします。
