@@ -525,7 +525,7 @@ Its fingerprint is:
 91:1f:de:e3:9f:d3:21:28:1b:1b:05:40:52:72:81:4f
 
 To use this key in Vespa Cloud click 'Add custom key' at
-https://console.vespa-cloud.com/tenant/scoober/keys
+https://console.vespa-cloud.com/tenant/scoober/security/keys
 and paste the entire public key including the BEGIN and END lines.
 ```
 
