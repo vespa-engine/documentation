@@ -300,9 +300,9 @@ where field contains near("sql", "database", !"nosql")
       </p>
       <p>
 	Features below <code>near()</code> and <code>onear()</code> are filtered based on the spans for the operator match before they are exposed to the ranking features. Given the query
-	<pre>text contains ({distance:1}near("a","b"))</pre>
-	and two documents.
       </p>
+	<pre>text contains ({distance:1}near("a","b"))</pre>
+      <p>and two documents.</p>
       <p>
 	The text field in the first document is	<code>"a a a a a a b b b b b b"</code>. The spans for the near match are <code>[[5,6]]</code>. Only the last occurrence of <code>"a"</code> and the first occurrence of <code>"b"</code> are kept.
       </p>
@@ -446,6 +446,44 @@ where my_numbers[2] = 42
       Use the <a href="#elementfilter"><code>elementFilter</code></a> annotation to match multiple indices.</p>
     </td>
   </tr>
+
+  <tr><th>alternatives</th>
+  <td>
+    <p id="alternatives">
+      Use <code>alternatives</code> to provide alternative terms, with an exactness score, to improve recall.
+      Think of it like a special case of the <code>or</code> operator.
+    </p>
+<pre>
+where fieldName contains alternatives({"sneakers":1.0, "shoes":0.7})
+</pre>
+    <p>
+      In <code>alternatives({"sneakers":1.0, "shoes":0.7})</code>, each number is an exactness score for that specific word form,
+      not a term weight in the usual boosting sense:
+    </p>
+    <ul>
+      <li>
+        Semantically it means: <em>match any of these alternatives, but treat some as more "exact" than others.</em>
+      </li>
+      <li>
+        It has no effect on whether a document matches,
+        all alternatives are equally valid for retrieval (they're combined via an OR/equiv construct).
+      </li>
+      <li>
+        It only affects ranking: the exactness value flows into <em>TermFieldMatchDataPosition::setMatchExactness()</em>
+        and feeds rank features like fieldMatch(field).exactness, <!-- ToDo: There is no exactness at en/reference/ranking/rank-features.html - fix this and add link -->
+        so a match via a high-exactness alternative scores better than a match via a low-exactness one.
+      </li>
+    </ul>
+    <p>
+      Typical use case: query rewriting/stemming,
+      where you search for both the literal user term and a stemmed/synonym form,
+      but want the literal form to rank higher.
+      E.g. <code>alternatives({"sneakers":1.0, "shoes":0.7})</code>‚ either matches,
+      but a document matching "sneakers" literally ranks above one that only matched via the stem "shoes".
+    </p>
+  </td>
+  </tr>
+<!-- ToDo: for later, link to some resource explaining where to use equiv and alternatives -->
 
   <tr><th>equiv</th><td>
     <p id="equiv">
