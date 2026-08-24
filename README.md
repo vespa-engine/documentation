@@ -6,69 +6,55 @@
   <img alt="#Vespa" width="200" src="https://assets.vespa.ai/logos/Vespa-logo-dark-RGB.svg" style="margin-bottom: 25px;">
 </picture>
 
-[![Vespa Documentation Search Feed](https://github.com/vespa-engine/documentation/actions/workflows/feed.yml/badge.svg)](https://github.com/vespa-engine/documentation/actions/workflows/feed.yml)
-[![/documentation link checker](https://cd.screwdriver.cd/pipelines/7021/link-checker-documentation/badge)](https://cd.screwdriver.cd/pipelines/7021/)
-
 # Creating Vespa documentation
 
 All Vespa features must be documented - this document explains how to add to the documentation.
 
 ## Practical information
 
-Vespa documentation is served using [AWS Amplify](https://aws.amazon.com/amplify/) with [Jekyll](https://jekyllrb.com/).
+Vespa documentation is served using [Mintlify](https://mintlify.com/docs).
 To edit documentation, check out and work off the master branch in this repository.
 
-Documentation is written in HTML or Markdown.
-Use a single Jekyll template [_layouts/default.html](_layouts/default.html) to add header, footer and layout.
+Documentation is written in [MDX](https://mintlify.com/docs/text) and lives under `en/` (and `ja/`).
+Navigation is defined in [docs.json](docs.json).
 
-You probably need to get the right Ruby version first, with
+### Local development
 
-    $ brew install rbenv
-    $ rbenv init
-    $ source ~/.zprofile
-    $ rbenv install 3.3.7
-    $ rbenv local 3.3.7
+Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview documentation changes locally:
 
-Prepend /opt/homebrew/opt/ruby/bin to your $PATH, e.g. in your .zshrc.
+    $ npm i -g mint
 
-Then you should be able to run:
+Run the following command at the root of the repository, where `docs.json` is located:
 
-    $ bundle install
-    $ bundle exec jekyll serve --incremental --drafts --trace
+    $ mint dev
 
-to set up a local server at localhost:4000 to see the pages as they will look when served.
-
+View the local preview at `http://localhost:3000`.
 The output will highlight rendering/other problems when starting serving.
 
-Alternatively, use the docker image `jekyll/jekyll` to run the local server on
-Mac
+Troubleshooting:
 
-    $ docker run -ti --rm --name doc \
-      --publish 4000:4000 -e JEKYLL_UID=$UID -v $(pwd):/srv/jekyll \
-      jekyll/jekyll jekyll serve --incremental --force_polling
+- If the dev environment isn't running: Run `mint update` to ensure you have the most recent version of the CLI.
+- If a page loads as a 404: Make sure you are running in a folder with a valid `docs.json`.
 
-or RHEL 8
+### Publishing changes
 
-    $ podman run -it --rm --name doc -p 4000:4000 -e JEKYLL_ROOTLESS=true \
-      -v "$PWD":/srv/jekyll:Z docker.io/jekyll/jekyll jekyll serve --incremental --force_polling
+Changes are deployed to production automatically after pushing to the default branch,
+via the [Mintlify GitHub app](https://dashboard.mintlify.com/settings/organization/github-app).
 
-The Jekyll server should normally rebuild HTML files automatically
-when a source files changes. If this does not happen, you can use
-`jekyll serve --force-polling` as a workaround.
+### Migration scripts
 
-The layout is written in [denali.design](https://denali.design/),
-see [_layouts/default.html](_layouts/default.html) for usage.
-Please do not add custom style sheets, as it is harder to maintain.
+[scripts/](scripts/) contains the helper scripts used to convert the Jekyll HTML/Markdown
+sources to MDX during the Mintlify migration, e.g. [scripts/html_to_mdx.py](scripts/html_to_mdx.py).
 
 ## Writing documentation
 
 This explains the style and considerations to follow before contributing documentation.
-See [contribute](https://docs.vespa.ai/en/learn/contributing.html) on the practicalities of
+See [contribute](https://docs.vespa.ai/en/learn/contributing) on the practicalities of
 submitting changes.
 
 ### Table of contents
 
-All documents must be listed in_data/sidebar.yml.
+All documents must be listed in the navigation in [docs.json](docs.json).
 
 ### Guides and references
 
@@ -84,25 +70,26 @@ Reference documents are those that are placed in reference/ subdirectory.
 
 The documents are categorized in a set of categories which are mostly the same for guides and references.
 
-The subdirectory and category used in the TOC (sidebar.yml) must always be the same.
+The subdirectory and the navigation group used in docs.json must always be the same.
 
 Place new documents in the most suitable category. Most times they can fit multiple ones; such is life.
 
 Be conscious of the category a document is in when editing it. If you're adding off-category information,
-maybe it should be split into another document? 
+maybe it should be split into another document?
 
 Be extra careful about what is added to the "basics" documents: They should be a clean, easy to understand
 introduction to only the most important concepts of Vespa.
 
-If you need to move a document, you can; just make sure to add a redirect header from the old location.
+If you need to move a document, you can; just make sure to add an entry in the `redirects`
+array in [docs.json](docs.json) from the old location.
 
 ### Applicability
 
-Some documentation only applies to Vespa Cloud ("cloud"), self-managed instances ("self-managed"), 
+Some documentation only applies to Vespa Cloud ("cloud"), self-managed instances ("self-managed"),
 and/or is only available commercially ("enterprise").
-Such documents *must* be marked by setting the appropriate applies_to tags in the document header. 
-See https://docs.vespa.ai/en/learn/about-documentation.html for more a more detailed description of the three applicability
-types.
+Make this clear in the document when applicable.
+See https://docs.vespa.ai/en/learn/about-documentation for a more detailed description of the three
+applicability types.
 
 ### Maintainability
 
@@ -129,50 +116,13 @@ Make the text as short, clear, and easy to read as possible:
 
 ### Linking
 
-Use relative internal links. All internal links will work with and without ".html" suffix, ".md" suffix does not work.
-Use the ".html" suffix when linking to pages where the source is html, and no suffix when linking to Markdown sources.
-That convention is helpful to determine whether a link marked as non-existing in your editor is due to it being a
-Markdown file (with suffix .md, which can't be used in the link), or due to it actually not existing.
+Use root-relative internal links without a file suffix, e.g. `/en/querying/query-api`.
 
-Add an *id* attribute to each heading such that it can be linked to: Use the exact same text as the heading as id, 
-lowercased and with spaces replaced by dashes such that references can be made without checking the source.
-Don't change headings/ids unless completely necessary as that breaks links.
+Don't change headings unless completely necessary, as heading anchors are derived from
+the heading text and changing them breaks links.
 
 ### Link to Javadoc
 
 * Link to javadoc for an artifact: https://javadoc.io/doc/com.yahoo.vespa/container-search
 * Link to javadoc for a package: https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/federation/vespa/package-summary.html
 * Link to javadoc for a class: https://javadoc.io/doc/com.yahoo.vespa/vespa-feed-client-api/latest/ai/vespa/feed/client/JsonFeeder.html
-
-## Appendix: Vespa Documentation Search
-
-See the [Vespa Documentation Search](https://github.com/vespa-cloud/vespa-documentation-search)
-sample application for architecture.
-
-Below is a description of the job for indexing this repository's documentation.
-File locations below refer to this repo's root.
-
-1. Build a Vespa feed from the source in this repo:
-    1. Use Jekyll to generate HTML from the content
-      (some files are in [Markdown](https://daringfireball.net/projects/markdown/))
-    1. Use [Nokogiri](https://nokogiri.org/) to extract text from HTML
-    1. Implement HTML-to-text in a Vespa feed file by using a
-      [Jekyll Generator](https://jekyllrb.com/docs/plugins/generators/),
-      see [_plugins-vespafeed/vespa_index_generator.rb](/_plugins-vespafeed/vespa_index_generator.rb)
-    1. The generated _open_index.json_ can then be
-      [fed to Vespa](https://docs.vespa.ai/en/reference/document-json-format.html)
-
-1. Feed changes to https://console.vespa-cloud.com/tenant/vespa-team/application/vespacloud-docsearch
-   using [feed_to_vespa.py](feed_to_vespa.py):
-    1. Visit all content on the Vespa instance to list all IDs
-    1. Determine whether or not to remove documents
-    1. Feed all content
-    
-1. Automate these steps using GitHub Actions
-    1. Store the keys required to feed data as secrets in Github
-    1. Find workflow at [.github/workflows/feed.yml](/.github/workflows/feed.yml)
-
-Local development:
-
-    $ bundle exec jekyll build
-    $ ./feed_to_vespa.py   # put data-plane-private/public-key.pem in this dir in advance
