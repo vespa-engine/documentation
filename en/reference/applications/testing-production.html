@@ -1,0 +1,271 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Production tests
+---
+
+<p>
+  This is the Vespa Testing reference for <a href="../../applications/testing.html">production tests</a>.
+</p>
+<p>
+  Production tests verify domain specific metrics for a production deployment, such as query latency
+  or error rate. Unlike <a href="testing.html">system</a> and <a href="testing-java.html">staging</a>
+  tests, production tests check a named <a href="#metric-presets">metric preset</a> against expected
+  bounds, using Grafana metrics for a canary production deployment.
+</p>
+<p>
+  A production test is placed after a canary deployment zone in <a href="deployment.html">deployment.xml</a>.
+  It acts as a gate for the rollout, as described in
+  <a href="../../operations/automated-deployments.html#production-tests">production tests</a>.
+</p>
+
+
+
+<h2 id="normal-flow">Production test setup</h2>
+<p>
+  To use production tests, first deploy to a single zone, use
+  <a href="deployment.html#delay">&lt;delay&gt;</a> for some time, and then
+  run the production tests against that zone. In the following example, the canary
+  deployment runs for 10 minutes before the tests run against it:
+</p>
+<pre>{% highlight xml %}
+<prod>
+  <region>aws-us-east-1c</region>
+  <delay minutes="10" />
+  <test>aws-us-east-1c</test>
+  <!-- Deploy to the rest of the zones... -->
+</prod>
+{% endhighlight %}</pre>
+<p>
+  The <code>time</code> field should not be longer than the delay before the test:
+</p>
+<pre>{% highlight yaml %}
+name: cpu check
+metric: cpu-utilization-container
+time: 10
+max: 85
+{% endhighlight %}</pre>
+<p>
+  This matters because the production test only starts once the preceding <code>&lt;delay&gt;</code>
+  has elapsed. If the test's time window reaches further back than that, it averages in metrics from
+  <em>before</em> the the canary zone was deployed, which dilutes the result and defeats the purpose of the gate. 
+</p>
+
+
+<h2 id="test-suites">Test suites</h2>
+<p>
+  Production tests are placed under <code>tests/production-test/</code> in the application package,
+  as one or more <code>.yaml</code> or <code>.json</code> files:
+</p>
+<pre>
+$ ls tests/production-test/
+
+tests/production-test/metrics-test.yaml
+</pre>
+<p>
+  Each file describes one or more tests. A file may contain:
+</p>
+<ul>
+  <li>a single test, as one YAML or JSON object; or</li>
+  <li>multiple tests, as a YAML or JSON object with a <code>tests</code> field containing a list of test objects.</li>
+</ul>
+
+
+
+<h2 id="test-file-structure">Test file structure</h2>
+<p>
+  Each test checks a named <a href="#metric-presets">metric preset</a>, over a time window, against a
+  <code>min</code> and/or <code>max</code> bound. A simple example:
+</p>
+<pre>{% highlight yaml %}
+name: cpu check
+metric: cpu-utilization-container
+time: 5
+max: 85
+{% endhighlight %}</pre>
+<p>
+  This test fails the production test step if the average CPU utilization of the container cluster,
+  over the last 5 minutes, exceeds 85%.
+</p>
+<p>
+  To place multiple tests in one file, wrap them in a top-level <code>tests</code> field, containing a
+  list of test objects. This works the same way for both YAML and JSON:
+</p>
+<pre>{% highlight yaml %}
+tests:
+  - name: container cpu check
+    metric: cpu-utilization-container
+    time: 5
+    max: 35
+
+  - name: content cpu check
+    metric: cpu-utilization-content
+    time: 5
+    max: 85
+{% endhighlight %}</pre>
+
+<h3 id="test-yaml-and-json-specification">Test specification</h3>
+<p>A full list of fields, with description:</p>
+<table class="table">
+  <thead>
+    <tr>
+      <th style="width:120px;font-weight:bold">Name</th>
+      <th style="width:100px">Type</th>
+      <th style="width:150px">Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="font-weight:bold">name</td>
+      <td>string</td>
+      <td>"&lt;unnamed test&gt;"</td>
+      <td>Name used for display purposes in logs and failure messages.</td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold">metric</td>
+      <td>string</td>
+      <td></td>
+      <td>Required. The name of one of the <a href="#metric-presets">metric presets</a>.
+      </td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold">time</td>
+      <td>number</td>
+      <td></td>
+      <td>Required. The size, in minutes, of the time window the metric is averaged, or otherwise
+        aggregated, over. Must be a positive whole number.</td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold">min</td>
+      <td>number</td>
+      <td></td>
+      <td>The inclusive lower bound the query result must satisfy. At least one of <code>min</code> and
+        <code>max</code> is required. The unit depends on the <a href="#metric-presets">metric preset</a>
+        used, see its Unit column.
+      </td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold">max</td>
+      <td>number</td>
+      <td></td>
+      <td>The inclusive upper bound the query result must satisfy. At least one of <code>min</code> and
+        <code>max</code> is required. The unit depends on the <a href="#metric-presets">metric preset</a>
+        used, see its Unit column.
+      </td>
+    </tr>
+  </tbody>
+</table>
+<p>
+  A test that is outside its <code>min</code>/<code>max</code> bounds fails the production test step
+  immediately — production tests are not retried.
+</p>
+
+
+
+<h2 id="metric-presets">Metric presets</h2>
+<p>
+  Every test checks one of the following named presets, in its <code>metric</code> field. Each preset
+  queries the same metrics that back the application's overview dashboard, reduced to a single number
+  for the given production deployment:
+</p>
+<table class="table">
+  <thead>
+    <tr>
+      <th style="width:220px;font-weight:bold">Preset</th>
+      <th style="width:160px">Unit</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="font-weight:bold">query-latency-p95</td>
+      <td>milliseconds</td>
+      <td>Average 95th percentile query latency.</td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold">query-latency-p99</td>
+      <td>milliseconds</td>
+      <td>Average 99th percentile query latency.</td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold">error-rate-pct</td>
+      <td>percentage (0-100)</td>
+      <td>Percentage of HTTP requests returning a 5xx response, of all HTTP requests.</td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold">feed-latency-avg-ms</td>
+      <td>milliseconds</td>
+      <td>Average feed latency, in milliseconds, for successful feed operations.</td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold">cpu-utilization-container</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum CPU utilization across the nodes of the container cluster.</td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold">cpu-utilization-content</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum CPU utilization across the nodes of the content cluster.</td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold">memory-utilization-content</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum memory utilization of the content cluster's cluster controller.</td>
+    </tr>
+  </tbody>
+</table>
+
+
+
+<h2 id="examples">Examples</h2>
+<p>A single test, in YAML:</p>
+<pre>{% highlight yaml %}
+name: cpu check
+metric: cpu-utilization-container
+time: 5
+max: 10
+{% endhighlight %}</pre>
+
+<p>Multiple tests in a single YAML file:</p>
+<pre>{% highlight yaml %}
+tests:
+  - name: container cpu check
+    metric: cpu-utilization-container
+    time: 5
+    max: 10
+
+  - name: content cpu check
+    metric: cpu-utilization-content
+    time: 5
+    max: 10
+{% endhighlight %}</pre>
+
+<p>A single test, in JSON:</p>
+<pre>{% highlight json %}
+{
+    "name": "cpu check",
+    "metric": "cpu-utilization-container",
+    "time": 5,
+    "max": 10
+}
+{% endhighlight %}</pre>
+
+<p>Multiple tests in a single JSON file:</p>
+<pre>{% highlight json %}
+{
+    "tests": [
+        {
+            "name": "container cpu check",
+            "metric": "cpu-utilization-container",
+            "time": 5,
+            "max": 10
+        },
+        {
+            "name": "content cpu check",
+            "metric": "cpu-utilization-content",
+            "time": 5,
+            "max": 10
+        }
+    ]
+}
+{% endhighlight %}</pre>
