@@ -165,93 +165,36 @@ tests:
   immediately — production tests are not retried.
 </p>
 
-
-
-<h2 id="metric-presets">Metric presets</h2>
-<p>
-  Every test checks one of the following named presets, in its <code>metric</code> field. Each preset
-  queries the same metrics that back the application's overview dashboard, reduced to a single number
-  for the given production deployment:
-</p>
-<table class="table">
-  <thead>
-    <tr>
-      <th style="width:220px;font-weight:bold">Preset</th>
-      <th style="width:160px">Unit</th>
-      <th>Description</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="font-weight:bold">query-latency-p95</td>
-      <td>milliseconds</td>
-      <td>Average 95th percentile query latency.</td>
-    </tr>
-    <tr>
-      <td style="font-weight:bold">query-latency-p99</td>
-      <td>milliseconds</td>
-      <td>Average 99th percentile query latency.</td>
-    </tr>
-    <tr>
-      <td style="font-weight:bold">error-rate-pct</td>
-      <td>percentage (0-100)</td>
-      <td>Percentage of HTTP requests returning a 5xx response, of all HTTP requests.</td>
-    </tr>
-    <tr>
-      <td style="font-weight:bold">feed-latency-avg-ms</td>
-      <td>milliseconds</td>
-      <td>Average feed latency, in milliseconds, for successful feed operations.</td>
-    </tr>
-    <tr>
-      <td style="font-weight:bold">cpu-utilization-container</td>
-      <td>percentage (0-100)</td>
-      <td>Maximum CPU utilization across the nodes of the container cluster.</td>
-    </tr>
-    <tr>
-      <td style="font-weight:bold">cpu-utilization-content</td>
-      <td>percentage (0-100)</td>
-      <td>Maximum CPU utilization across the nodes of the content cluster.</td>
-    </tr>
-    <tr>
-      <td style="font-weight:bold">memory-utilization-content</td>
-      <td>percentage (0-100)</td>
-      <td>Maximum memory utilization of the content cluster's cluster controller.</td>
-    </tr>
-  </tbody>
-</table>
-
-
-
 <h2 id="examples">Examples</h2>
 <p>A single test, in YAML:</p>
 <pre>{% highlight yaml %}
-name: cpu check
-metric: cpu-utilization-container
+name: error rate check
+metric: error-rate-pct
 time: 5
-max: 10
+max: 1
 {% endhighlight %}</pre>
 
 <p>Multiple tests in a single YAML file:</p>
 <pre>{% highlight yaml %}
 tests:
-  - name: container cpu check
-    metric: cpu-utilization-container
+  - name: node count check
+    metric: node-count-max
     time: 5
     max: 10
 
-  - name: content cpu check
-    metric: cpu-utilization-content
+  - name: documents count check
+    metric: documents-count-active
     time: 5
-    max: 10
+    min: 1
 {% endhighlight %}</pre>
 
 <p>A single test, in JSON:</p>
 <pre>{% highlight json %}
 {
-    "name": "cpu check",
-    "metric": "cpu-utilization-container",
+    "name": "query latency check",
+    "metric": "query-latency-p95",
     "time": 5,
-    "max": 10
+    "max": 200
 }
 {% endhighlight %}</pre>
 
@@ -260,17 +203,60 @@ tests:
 {
     "tests": [
         {
-            "name": "container cpu check",
-            "metric": "cpu-utilization-container",
+            "name": "container feed latency check",
+            "metric": "container-feed-latency-max",
             "time": 5,
-            "max": 10
+            "max": 100
         },
         {
-            "name": "content cpu check",
-            "metric": "cpu-utilization-content",
+            "name": "content commit latency check",
+            "metric": "content-commit-latency-avg",
             "time": 5,
-            "max": 10
+            "max": 50
         }
     ]
 }
 {% endhighlight %}</pre>
+
+
+<h2 id="metric-presets">Metric presets</h2>
+<p>
+  Every test checks one of the following named presets, in its <code>metric</code> field. Each preset
+  queries the same metrics that back the application's overview dashboard, reduced to a single number
+  for the given production deployment. Presets are grouped below by the dashboard tab they come from.
+  Where a preset comes in several variants of the same underlying metric - e.g. an average and a p95 -
+  they're listed once, as a <b>family</b> name plus its available <b>suffixes</b>: append a suffix to the
+  family name to get the actual <code>metric</code> value, e.g. the family <code>query-latency</code> with
+  suffix <code>-p95</code> is used as <code>metric: query-latency-p95</code>. A family with no suffixes
+  listed is used as-is, e.g. <code>metric: error-rate-pct</code>.
+</p>
+
+{% assign metric_categories = "Overview,Query,Feed,Nearest Neighbor Search,Content Node,Resources,Health,Autoscaling: Content,Autoscaling: Container" | split: "," %}
+{% assign metric_category_slugs = "overview,query,feed,nearest-neighbor-search,content-node,resources,health,autoscaling-content,autoscaling-container" | split: "," %}
+{% for category in metric_categories %}
+  {% assign slug = metric_category_slugs[forloop.index0] %}
+  {% assign rows = site.data.production-test-metrics[slug] %}
+  <h3 id="metric-presets-{{ slug }}">{{ category }}</h3>
+  <table class="table">
+    <thead>
+      <tr>
+        <th style="width:220px;font-weight:bold">Family</th>
+        <th style="width:120px">Unit</th>
+        <th>Description</th>
+        <th style="width:160px">Suffixes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr>
+          <td style="font-weight:bold">{{ row.family }}</td>
+          <td>{{ row.unit }}</td>
+          <td>{{ row.description }}</td>
+          <td>{{ row.suffixes }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endfor %}
+
+
