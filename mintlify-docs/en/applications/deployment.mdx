@@ -1,0 +1,116 @@
+---
+title: "Deployment"
+description: "In this document we explain various aspects of application deployment in detail. Refer to [application deployment](/en/basics/applications#deploying-applications) for an introduction."
+---
+
+## Convergence
+
+After the deployment command has succeeded, the application package will take effect, but this does not complete immediately in the distributed system that is your running application; it happens through a distributed *convergence* process that you can track from the command line or console.  Refer to the [deploy reference](/en/reference/applications/application-packages#deploy) for detailed steps run when deploying an application.
+
+You can get the status of the last deployment by using the status command:
+
+```shell
+$ vespa status deployment
+```
+
+## Rollback
+
+Hover over the instance square to the left, click pin, give a reason - this will start the downgrade process:
+
+<Frame>
+![](/assets/img/pin-version.png)
+</Frame>
+
+The pinning to a new version starts a new deployment, and can be rolled out as a normal rollout. To speed it up, cancel system and staging test jobs by clicking abort.
+
+<Frame>
+![](/assets/img/skip-tests.png)
+</Frame>
+
+Skipping tests is at the application owners own discretion and risk:
+
+- A system test on this version has already been run on an earlier deployment. Skipping this can be considered safe, for that reason.
+- A staging test has never been run before when rolling back, this path is untested.
+
+Of the two, the staging test takes longer to run. The user decides whether to skip testing phases or not. With this, a user can control whether to immediately roll back a version including test phases or not, as well as rolling out to production zones in parallel or not.
+
+After the pin to rollback, make sure to update the code repository so the next deployments is in sync, and remove the pin for later deployments.
+
+### Follow-up steps
+
+Generally, to roll back an application package change, deploy again with the previous version to roll back to. The above section describes the fast-track rollback. The alternatives are:
+
+1. With automation: Revert the code in the source code repository, and let the automation roll out the new version. You can speed up the deployment by skipping tests and clicking "deploy now" in the deployment graph in the console.
+2. If you have trouble rebuilding a good package, you can download a previous package from Vespa Cloud: Use the [console](/en/operations/automated-deployments#source-code-repository-integration) to pick the good version, download it and deploy again. Hover of the [instance](/en/operations/automated-deployments#block-windows) (normally called "default") to skip the system and staging test to speed up the deployment, if needed.
+3. On self-managed instances, regenerate the good version from source for new deployment, see also the [deploy API](/en/reference/api/deploy-v2#rollback)
+
+## File distribution
+
+The application package can have components and other large files. When an app is deployed, these files are distributed to the nodes:
+
+- Components (i.e bundles)
+- Files with type *path* and *url* in config, see [Adding files to the component configuration](/en/applications/configuring-components#adding-files-to-the-component-configuration)
+- Machine learned models
+- [Constant tensors](/en/reference/schemas/schemas#constant)
+
+When new components or files specified in config are distributed, the container gets a new file reference, waits for it to be available and switches to new config when all files are available.
+
+<Frame>
+![](/assets/img/config-delivery.svg)
+</Frame>
+
+## Deploying remote models
+
+Most application packages are stored as source code in a code repository. However, some resources are generated or too large to store in a code repository, like models or an [FSA](/en/reference/operations/tools#vespa-makefsa).
+
+Machine learned models in Vespa, are stored in the application package under the *models* directory. This might be inconvenient for some applications, for instance for models that are frequently retrained on some remote system. Also, models might be too large to fit within the constraints of the version control system.
+
+The solution is to download the models from the remote location during the application package build. This is simply implemented by adding a step in *pom.xml* (see [example](https://github.com/vespa-cloud/cord-19-search/blob/main/pom.xml)):
+
+```xml expandable
+<build>
+    <plugins>
+        <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>1.4.0</version>
+        <executions>
+            <execution>
+            <id>download-model</id>
+            <phase>generate-resources</phase>
+            <goals>
+            <goal>exec</goal>
+            </goals>
+            <configuration>
+                <executable>bin/download_models.sh</executable>
+                    <arguments>
+                        <argument>target/application/models</argument>
+                        <argument>MODEL-URL</argument>
+                    </arguments>
+                </configuration>
+            </execution>
+        </executions>
+        </plugin>
+    </plugins>
+</build>
+```
+
+*bin/download_model.sh* example:
+
+```txt
+#!/bin/bash
+
+DIR="$1"
+URL="$2"
+
+echo "[INFO] Downloading $URL into $DIR"
+
+mkdir -p $DIR
+pushd $DIR
+curl -O $URL
+popd
+```
+
+Any necessary credentials for authentication and authorization should be added to this script, as well as any unpacking of archives (for TensorFlow models for instance).
+
+Also see the [model](/en/reference/applications/config-files#model) config type to specify resources that should be downloaded by container nodes during convergence.
