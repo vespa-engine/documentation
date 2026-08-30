@@ -754,19 +754,111 @@ $ vespa query 'select * from sources * where vendor contains "brick and mortar" 
       The first, and only the first, argument of the <em>rank()</em> function
       determines whether a document is a match,
       but all arguments are used for calculating rank features. The <code>rank</code> operator
-      is useful for boosting documents based on the presence of certain terms without impacting matching or retrieval logic.
+      is useful for boosting documents based on the presence of certain conditions without impacting matching or retrieval logic.
       </p>
 <pre>
 where rank(a contains "A", b contains "B", c contains "C")
 </pre>
       <p>
-      It's also useful in hybrid search use cases. See <a href="https://blog.vespa.ai/redefining-hybrid-search-possibilities-with-vespa/">blog post</a>
-      for usage examples. For example, retrieve using the <a href="#nearestneighbor">nearestNeighbor</a> query operator
-      as the first argument and have matching features calculated for the other arguments.
+      <em>rank()</em> takes any number of arguments.
+      Arguments after the first never affect which documents match:
+      they can neither exclude documents from, nor add documents to, the result set.
+      Any query operator can be used in these arguments, including
+      <a href="#in">in</a>, numeric ranges and grouped conditions:
       </p>
 <pre>
-where rank(nearestNeighbor(field, queryVector), a contains "A", b contains "B", c contains "C")
+where rank(userQuery(),
+           country in ("italy", "france"),
+           range(price, 0, 1000),
+           (is_new = true and range(rating, 4, 5)))
 </pre>
+      <p>
+      <strong>Observing the ranking-only arguments:</strong>
+      terms in arguments after the first expose match information to
+      <a href="../ranking/rank-features.html">rank features</a> like ordinary query terms:
+      use <code>matches(field)</code> for a match indicator.
+      In the example above, <code>matches(country)</code> is 1 for documents with
+      country italy or france, and <code>matches(price)</code> is 1 for documents
+      priced 1000 or less, so a rank profile can boost with e.g.
+      <code>nativeRank + 3.0 * matches(country) + 1.0 * matches(price)</code>.
+      Text features like <code>bm25</code> and
+      <code>fieldMatch</code> require index fields with position data;
+      operators such as <a href="#in">in</a> and numeric ranges are visible to
+      <code>matches()</code> but do not contribute to text features.
+      </p>
+      <p>
+      <strong>Several conditions using the same field:</strong>
+      <code>matches(field)</code> is 1 if <em>any</em> query term on the field
+      matched, so it cannot distinguish between multiple conditions on the same
+      field. Use <code>matches(field, n)</code> to test the n'th query term instead,
+      where n counts the query's terms in order, starting from 0:
+      </p>
+<pre>
+where rank(title contains "vacation package",
+           country in ("italy"),
+           country in ("norway"))
+</pre>
+      <p>
+      Here, term 0 is the title term, term 1 the italy condition and term 2 the
+      norway condition, so this rank profile boosts italy documents by 3
+      and norway documents by 1:
+      </p>
+<pre>
+first-phase {
+    expression: nativeRank + 3.0 * matches(country, 1) + 1.0 * matches(country, 2)
+}
+</pre>
+      <p>
+      Note that the term numbering follows the query structure:
+      adding, removing or reordering query terms changes the indexes,
+      so rank profiles using <code>matches(field, n)</code> must be kept in sync
+      with the queries sent.
+      </p>
+      <p>
+      <strong>Grouped conditions are evaluated as a unit:</strong>
+      terms inside a grouped ranking-only argument expose match information
+      only for documents where the <em>whole</em> condition is true.
+      This makes a grouped condition usable as a single boost rule,
+      observable through any of its fields not used elsewhere in the query:
+      </p>
+<pre>
+where rank(userQuery(),
+           (country in ("italy") and range(price, 0, 1000)))
+</pre>
+      <p>
+      Here, <code>matches(price)</code> is 1 only for documents that are both
+      from italy <em>and</em> priced 1000 or less - a document satisfying only
+      one of the two conditions gets no match information from this argument.
+      This rank profile hence boosts documents satisfying the full rule:
+      </p>
+<pre>
+first-phase {
+    expression: nativeRank + 3.0 * matches(price)
+}
+</pre>
+      <p>
+      <strong>Negations are not observable:</strong>
+      only positively matching terms expose match information.
+      A ranking-only argument consisting of only a negation, such as
+      <code>rank(userQuery(), !(country in ("norway")))</code>, matches correctly
+      but cannot be observed by any rank feature - the negated term does not
+      match precisely the documents where the condition is true.
+      To boost on a negative condition, state it positively in the query
+      and invert it in the ranking expression:
+      </p>
+<pre>
+where rank(userQuery(), country in ("norway"))
+</pre>
+<pre>
+first-phase {
+    expression: nativeRank + 100 * (1 - matches(country))
+}
+</pre>
+      {% include note.html content='A ranking-only argument only affects ranking
+      if the selected rank profile reads it, using a rank feature such as
+      <code>matches(field)</code> over one of its fields.
+      Arguments not read by any rank feature are removed from query execution:
+      they have no cost, but also no effect.' %}
     </td>
   </tr>
 
