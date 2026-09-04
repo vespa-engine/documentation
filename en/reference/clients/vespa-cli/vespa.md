@@ -56,6 +56,7 @@ vespa [flags]
 * [vespa prepare](vespa_prepare.html)	 - Prepare an application package for activation
 * [vespa prod](vespa_prod.html)	 - Deploy an application package to production in Vespa Cloud
 * [vespa query](vespa_query.html)	 - Issue a query to Vespa
+* [vespa skills](vespa_skills.html)	 - Manage Vespa AI-assistant skills
 * [vespa status](vespa_status.html)	 - Show Vespa endpoints and status
 * [vespa test](vespa_test.html)	 - Run a test suite, or a single test
 * [vespa version](vespa_version.html)	 - Show current CLI version and check for updates
