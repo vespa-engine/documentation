@@ -30,7 +30,8 @@ applies_to: cloud
   <a href="deployment.html#delay">&lt;delay&gt;</a> for some time, and then
   run the production tests against that zone. This pattern can be repeated for each zone in the
   pipeline, to validate it before the rollout proceeds to the next. In the following example, 
-  the zone deployment runs for 10 minutes before the tests run against it:
+  the zone is deployed, then the delay waits 10 minutes, and lastly the production test waits
+  for an additional 10 minutes before aggregating the last 10 minutes of metrics data:
 </p>
 <pre>{% highlight xml %}
 <prod>
@@ -41,22 +42,18 @@ applies_to: cloud
 </prod>
 {% endhighlight %}</pre>
 <p>
-  The <code>time</code> field should not be longer than the delay before the test:
+  The declared production test:
 </p>
 <pre>{% highlight yaml %}
 name: cpu check
 metric: cpu-utilization-container
-time: 10
+duration: 10m
 max: 85
 {% endhighlight %}</pre>
-<p>
-  This matters because the production test only starts once the preceding <code>&lt;delay&gt;</code>
-  has elapsed. If the test's time window reaches further back than that, it averages in metrics from
-  <em>before</em> the zone was deployed, which dilutes the result and defeats the purpose of the gate.
-</p>
+
 {% include note.html content="Tests based on traffic metrics, such as query or feed latency, need
 real queries or feeding against the zone during the test window, since without traffic there are no
-metrics to evaluate and the test may fail or be inconclusive." %}
+metrics to evaluate and the test will fail." %}
 
 <h2 id="test-suites">Test suites</h2>
 <p>
@@ -80,13 +77,13 @@ tests/production-test/metrics-test.yaml
 
 <h2 id="test-file-structure">Test file structure</h2>
 <p>
-  Each test checks a named <a href="#metric-presets">metric preset</a>, over a time window, against a
+  Each test checks a named <a href="#metric-presets">metric preset</a>, over a <code>duration</code> window, against a
   <code>min</code> and/or <code>max</code> bound. A simple example:
 </p>
 <pre>{% highlight yaml %}
 name: cpu check
 metric: cpu-utilization-container
-time: 5
+duration: 5m
 max: 85
 {% endhighlight %}</pre>
 <p>
@@ -101,12 +98,12 @@ max: 85
 tests:
   - name: container cpu check
     metric: cpu-utilization-container
-    time: 5
+    duration: 5m
     max: 35
 
   - name: content cpu check
     metric: cpu-utilization-content
-    time: 5
+    duration: 5m
     max: 85
 {% endhighlight %}</pre>
 
@@ -136,11 +133,14 @@ tests:
       </td>
     </tr>
     <tr>
-      <td style="font-weight:bold">time</td>
-      <td>number</td>
+      <td style="font-weight:bold">duration</td>
+      <td>number + granularity suffix</td>
       <td></td>
-      <td>Required. The size, in minutes, of the time window the metric is averaged, or otherwise
-        aggregated, over. Must be a positive whole number.</td>
+      <td>Required. The duration of the metrics aggregation. Suffix is one of <code>s|m|h|d</code>. For example,
+        <code>duration: 10m</code> means: first wait 10 minutes, then aggregate the last 10 minutes of
+        data. Tests can have different durations. Since tests run concurrently, the total waiting time
+        is determined by the highest <code>duration</code> value, not the sum.
+      </td>
     </tr>
     <tr>
       <td style="font-weight:bold">min</td>
@@ -172,7 +172,7 @@ tests:
 <pre>{% highlight yaml %}
 name: error rate check
 metric: error-rate-pct
-time: 5
+duration: 5m
 max: 1
 {% endhighlight %}</pre>
 
@@ -181,12 +181,12 @@ max: 1
 tests:
   - name: node count check
     metric: node-count-max
-    time: 5
+    duration: 5m
     max: 10
 
   - name: documents count check
     metric: documents-count-active
-    time: 5
+    duration: 5m
     min: 1
 {% endhighlight %}</pre>
 
@@ -195,7 +195,7 @@ tests:
 {
     "name": "query latency check",
     "metric": "query-latency-p95",
-    "time": 5,
+    "duration": "5m",
     "max": 200
 }
 {% endhighlight %}</pre>
@@ -207,13 +207,13 @@ tests:
         {
             "name": "container feed latency check",
             "metric": "container-feed-latency-max",
-            "time": 5,
+            "duration": "5m",
             "max": 100
         },
         {
             "name": "content commit latency check",
             "metric": "content-commit-latency-avg",
-            "time": 5,
+            "duration": "5m",
             "max": 50
         }
     ]
@@ -224,13 +224,14 @@ tests:
 <h2 id="metric-presets">Metric presets</h2>
 <p>
   Every test checks one of the following named presets, in its <code>metric</code> field. Each preset
-  queries the same metrics that back the application's overview dashboard, reduced to a single number
-  for the given production deployment. Presets are grouped below by the dashboard tab they come from.
-  Where a preset comes in several variants of the same underlying metric - e.g. an average and a p95 -
-  they're listed once, as a <b>family</b> name plus its available <b>suffixes</b>: append a suffix to the
-  family name to get the actual <code>metric</code> value, e.g. the family <code>query-latency</code> with
-  suffix <code>-p95</code> is used as <code>metric: query-latency-p95</code>. A family with no suffixes
-  listed is used as-is, e.g. <code>metric: error-rate-pct</code>.
+  queries the same metrics that back the application's overview dashboard, reduced to a single number.
+  Presets are grouped below by the dashboard tab they come from.
+</p>
+<p>
+  The <b>Console name</b> column is a direct match to the graph title shown in that tab in the
+  <a target="_blank" href="https://console.vespa-cloud.com/">Vespa Console</a>'s metrics view. Use it to
+  find the preset for a graph you're looking at there. The <b>Metric</b> column is the exact value to use
+  in the <code>metric</code> field, e.g. <code>metric: query-latency-p95</code>.
 </p>
 
 {% assign metric_categories = "Overview,Query,Feed,Nearest Neighbor Search,Content Node,Resources,Health,Autoscaling: Content,Autoscaling: Container" | split: "," %}
@@ -242,19 +243,19 @@ tests:
   <table class="table">
     <thead>
       <tr>
-        <th style="width:220px;font-weight:bold">Family</th>
-        <th style="width:120px">Unit</th>
+        <th style="width:260px;font-weight:bold">Console name</th>
+        <th style="width:200px"><code>metric</code></th>
+        <th style="width:157px">Unit</th>
         <th>Description</th>
-        <th style="width:160px">Suffixes</th>
       </tr>
     </thead>
     <tbody>
       {% for row in rows %}
         <tr>
-          <td style="font-weight:bold">{{ row.family }}</td>
+          <td style="font-weight:bold">{{ row.console_name }}</td>
+          <td><code>{{ row.metric }}</code></td>
           <td>{{ row.unit }}</td>
           <td>{{ row.description }}</td>
-          <td>{{ row.suffixes }}</td>
         </tr>
       {% endfor %}
     </tbody>
