@@ -8,7 +8,7 @@ redirect_from:
 <p id="sortspec">
 A sorting specification in a query consists of one or more
 sorting expressions. Each sorting expression is an optional sort order
-followed by an attribute name or a function over an attribute.
+followed by an attribute name, a function over an attribute, or a <a href="#sorting-by-rank-feature">rank feature</a>.
 Multiple expressions are separated by a single SPACE character.
 </p><p>
 Using more than one sort expression will give you multilevel
@@ -18,7 +18,8 @@ of equal values for the previous expression.
 </p>
 <pre>
 Sorting       ::= SortExpr ( ' ' SortExpr )*
-SortExpr      ::= [SortOrder] ( SortObject | MissingExpr )
+SortExpr      ::= [SortOrder] ( SortObject | MissingExpr | FeatureExpr )
+FeatureExpr   ::= FEATURE '(' FeatureName ')'
 MissingExpr   ::= MISSING '(' SortObject ',' MissingPolicy ')'
 MissingPolicy ::= FIRST |
                   LAST |
@@ -34,6 +35,8 @@ AS            ::= 'as'
 LOWERCASE     ::= 'lowercase'
 UCA           ::= 'uca'
 RAW           ::= 'raw'
+FEATURE       ::= 'feature'
+FeatureName   ::= [A-Za-z_][A-Za-z0-9_]*             /* A name listed in the rank profile's sort-features */
 Locale        ::= An identifier following <a href="https://www.unicode.org/reports/tr35/#Unicode_Language_and_Locale_Identifiers">unicode locale identifiers,</a> fx 'en_US'.
 Strength      :: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | 'QUATERNARY' | 'IDENTICAL'
 SortOrder     ::= '+' | '-'
@@ -75,6 +78,7 @@ or any override in <a href="../schemas/schemas.html#sorting">schema</a>.
 Default sort order is <code>+</code> or ascending,
 except for <code>[rank]</code> or the special builtin <code>[relevance]</code>,
 which has <code>-</code> or descending.
+<code>feature(name)</code> defaults to ascending, independent of attribute sorting settings in the schema.
 </p>
 
 
@@ -88,7 +92,7 @@ indicated by the indexing language fragment for a field having
 an <a href="../schemas/schemas.html#attribute">attribute</a>
 statement.
 </p><p>
-When sorting on attributes, it is recommended to use the built-in <em>unranked</em> rank-profile.
+When sorting only on attributes, it is recommended to use the built-in <em>unranked</em> rank-profile.
 This allows the search kernel to execute the query significantly faster than execution the ranking framework for many hits
 and then finally ignore this score and sort by the specified sorting specification.
 </p>
@@ -106,6 +110,103 @@ sort order uses the highest value. See the <a href="#missing">missing policies</
 <h2 id="sort-function">Sort function</h2>
 <p>
   Refer to <a href="yql.html#function">function</a>.
+</p>
+
+
+<h2 id="sorting-by-rank-feature">Sorting by rank feature</h2>
+<p>
+  Use <code>feature(name)</code> to sort by a numeric
+  <a href="../ranking/rank-features.html">rank feature</a> or a rank-profile function without arguments.
+  The name must be listed in <a href="../schemas/schemas.html#sort-features">sort-features</a>
+  in the rank profile selected by the query's <a href="../api/query.html#ranking.profile">ranking</a> parameter.
+  Features with arguments or named outputs must be wrapped in a function, as shown for <code>bm25(title)</code> below.
+</p>
+<p>
+  This example assumes an indexed <code>title</code> field with
+  <a href="../schemas/schemas.html#index">enable-bm25</a>, and numeric <code>year</code> and <code>price</code> attributes:
+</p>
+<pre>
+rank-profile sorting {
+    function decade() {
+        expression: floor(attribute(year) / 10)
+    }
+    function title_bm25() {
+        expression: bm25(title)
+    }
+    first-phase {
+        expression: title_bm25
+    }
+    sort-features {
+        decade
+        title_bm25
+        nativeRank
+    }
+}
+</pre>
+<p>
+  Sort by decade ascending, then by BM25 score descending, then by price ascending:
+</p>
+<pre>
+vespa query \
+  'yql=select * from sources * where title contains "alpha"' \
+  'ranking=sorting' \
+  'sorting=+feature(decade) -feature(title_bm25) +price'
+</pre>
+<p>
+  The equivalent <a href="yql.html#order-by">YQL order by</a> clause uses the <code>function</code> annotation
+  on each feature name:
+</p>
+<pre>
+select * from sources * where title contains "alpha"
+order by {function: "feature"}decade asc, {function: "feature"}title_bm25 desc, price asc
+</pre>
+<p>
+  Set <code>ranking=sorting</code> for this query as well.
+  Feature sort keys can appear at any level, mixed with attributes and
+  <a href="#special-sorting-attributes">special sorting attributes</a>.
+</p>
+
+<h3 id="feature-sorting-and-ranking">Feature sorting and ranking</h3>
+<p>
+  Selecting a sort feature does not itself activate first- or second-phase ranking.
+  If the query does not otherwise require ranking, hits have <code>relevance: 0</code>,
+  even when sorting by a feature such as <code>title_bm25</code>.
+  Include <code>[relevance]</code> (or its alias <code>[rank]</code>) to compute relevance scores
+  and use them in sorting. For example:
+</p>
+<pre>+feature(decade) -[relevance]</pre>
+<p>
+  Sort features are computed during matching on the content nodes for each hit considered for sorting.
+  Only features selected by the query are evaluated for sorting; unused <code>sort-features</code> entries
+  only add deployment-time compilation cost but don't add to query time.
+  For sorting directly by an attribute value, use attribute sorting to avoid feature evaluation overhead.
+</p>
+<p>
+  Declaring a sort feature does not return its value in the response. To return feature values, also list them in
+  <a href="../schemas/schemas.html#match-features">match-features</a> or
+  <a href="../schemas/schemas.html#summary-features">summary-features</a>.
+</p>
+
+<h3 id="feature-sorting-restrictions">Feature sorting restrictions</h3>
+<ul>
+  <li>All schemas searched must use indexed mode, and the selected rank profile in each schema must allow the requested features.
+    Streaming search does not support feature sorting.</li>
+  <li>Each feature must produce a numeric scalar, represented as a double.
+    Reduce tensor expressions to a scalar before using them as sort features.</li>
+  <li><code>feature(name)</code> requires a bare identifier matching <code>[A-Za-z_][A-Za-z0-9_]*</code>.
+    Expressions such as <code>feature(bm25(title))</code> and <code>feature(foo.output)</code> are invalid.</li>
+  <li><a href="#missing">Missing policies</a> cannot be applied to feature sorting.
+    A feature produces a value for each hit; handle missing inputs in its ranking expression.
+    <code>NaN</code> and infinite values are converted to negative infinity, sorting before finite values in ascending order
+    and after them in descending order.</li>
+  <li>Queries using feature sorting are rejected when <a href="../schemas/schemas.html#globalphase-rank">global-phase</a>
+    reranking is enabled. To use a profile that declares global-phase, set
+    <a href="../api/query.html#ranking.globalphase.rerankcount"><code>ranking.globalPhase.rerankCount=0</code></a>
+    to disable global-phase reranking for the query.</li>
+</ul>
+<p>
+  Invalid or disallowed feature names cause a query error.
+  If a content node cannot obtain the requested sort-feature values, it fails the query on that node.
 </p>
 
 
@@ -202,31 +303,35 @@ Without this additional sort expression, the order within each equal group is no
   </tbody>
 </table>
 
-Note that missing policies can be combined with other functions ,e.g.
+Note that missing policies can be combined with attribute sort functions, e.g.
 <code>+missing(lowercase(attr),as,"nothing here")</code>.
+They cannot be combined with <code>feature(...)</code>.
 
 <h2 id="limitations">Limitations</h2>
 
 <h3 id="attribute-only">Attribute only</h3>
 <p>
-  It is only possible to sort on <a href="../../content/attributes.html">attributes</a>.
-  Trying to sort on an <a href="../../basics/schemas.html#document-fields">index or summary field</a>,
-  without an associated attribute, will not work.
+  Sorting directly by a field value requires an <a href="../../content/attributes.html">attribute</a>.
+  An <a href="../../basics/schemas.html#document-fields">index or summary field</a> without an associated attribute
+  cannot be used as an attribute sort key.
+  To sort by a computed value, use <a href="#sorting-by-rank-feature">feature sorting</a>.
 </p>
 <p><!-- ToDo: Isn't this the same as the "Optimization" section right below? -->
-  Also note that <a href="../schemas/schemas.html#match-phase">match-phase</a> is enabled when sorting.
+  Also note that <a href="../schemas/schemas.html#match-phase">match-phase</a> can be enabled automatically when sorting on attributes.
+  It is not enabled automatically when the primary sort key is <code>feature(...)</code>.
 </p>
 
 
 <h3 id="optimization-causing-incorrect-total-hit-count">Optimization causing incorrect total hit count</h3>
 <p>
-  When sorting on a single-value numeric attribute with <a href="../../content/attributes.html#fast-search">fast-search</a>
+  When the primary sort key is a single-value numeric attribute with <a href="../../content/attributes.html#fast-search">fast-search</a>
   Vespa will by default activate an optimization which makes delivering sorted results much faster,
   but with inaccurate total-hit count.
   To disable this optimization,
   set the query parameter <code>sorting.degrading</code> to false
   (in the request or a <a href="../../querying/query-profiles.html">query profile</a>).
   See the <a href="../api/query.html#sorting.degrading">reference</a> for details.
+  This optimization is not activated when the primary sort key is <code>feature(...)</code>.
 </p>
 
 
