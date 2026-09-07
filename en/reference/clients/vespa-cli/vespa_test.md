@@ -13,7 +13,12 @@ Run a test suite, or a single test
 
 Runs all JSON test files in the specified directory, or the single JSON test file specified.
 
-See [https://docs.vespa.ai/en/reference/applications/testing.html](https://docs.vespa.ai/en/reference/applications/testing.html) for details.
+Production tests, found in tests/production-test, may also be YAML files. These check named
+metric presets rather than making requests, and are only validated locally: the actual pass/fail
+result is evaluated by Vespa Cloud against live metrics after deployment.
+
+See [https://docs.vespa.ai/en/reference/applications/testing.html](https://docs.vespa.ai/en/reference/applications/testing.html) and
+[https://docs.vespa.ai/en/reference/applications/testing-production.html](https://docs.vespa.ai/en/reference/applications/testing-production.html) for details.
 
 ```
 vespa test test-directory-or-file [flags]
