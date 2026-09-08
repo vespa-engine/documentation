@@ -1,0 +1,105 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Production Serving
+applies_to: enterprise
+---
+
+<p>
+    This page describes how to harden a Vespa on Kubernetes deployment for production serving:
+    reducing the impact of involuntary failures and keeping the cluster available through node outages
+    and maintenance.
+</p>
+
+<h2 id="distinct-nodes">Spread Pods Across Distinct Nodes</h2>
+
+<p>
+    In production, the ConfigServer Pods and Content Pods, especially if they are using a local storage type, should be
+    scheduled on distinct Kubernetes Nodes, so that a single Node failure takes down at most one Pod
+    of each kind. Node spreading is configured with a <code>podAntiAffinity</code> rule with
+    <code>topologyKey: kubernetes.io/hostname</code> in the <code>podTemplate</code> —
+    see <a href="../configuration/custom-overrides-podtemplate.html">Configure Custom Overrides</a>.
+</p>
+
+<h3 id="configserver-pods">ConfigServer Pods</h3>
+
+<p>
+    The ConfigServers are backed by ZooKeeper, thus the quorum requires a
+    majority to remain available. If two of the three ConfigServer Pods share a Node and that Node goes down,
+    a split-brain scenario can occur. Placing each ConfigServer Pod on its own node
+    ensures that no two ConfigServers go down at the same time.
+</p>
+
+<pre>
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+spec:
+  configServer:
+    podTemplate:
+      spec:
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/component: configserver
+                topologyKey: kubernetes.io/hostname
+</pre>
+
+<h3 id="content-pods">Content Pods</h3>
+
+<p>
+    For Content Pods, spreading across nodes ensures data integrity. Vespa maintains multiple copies of each
+    document across content nodes, and colocating those Pods on the same node would allow a single node failure
+    to take out multiple data copies at once.
+</p>
+
+<p>
+    Node spreading for Application Pods is configured per profile — the example below spreads the Content Pods
+    of the <code>music</code> cluster:
+</p>
+
+<pre>
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+spec:
+  profiles:
+    music:
+      podTemplate:
+        spec:
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      vespa.ai/cluster-id: music
+                  topologyKey: kubernetes.io/hostname
+</pre>
+
+<h2 id="data-redundancy">Data Redundancy</h2>
+
+<p>
+    Beyond Node placement, data integrity for content clusters is configured in the application package:
+</p>
+
+<ul>
+    <li>
+        <a href="https://docs.vespa.ai/en/reference/applications/services/content.html#min-redundancy"><code>min-redundancy</code></a>
+        sets the minimum total number of data copies the content cluster will maintain, ensuring a minimum
+        number of copies regardless of other configuration.
+    </li>
+    <li>
+        <a href="https://docs.vespa.ai/en/content/elasticity.html#grouped-distribution">Grouped distribution</a>
+        places content nodes in groups, where each group holds a full copy of the data. Combined with node
+        spreading, this allows entire groups to fail — or be taken down for maintenance — while the remaining
+        groups keep serving queries.
+    </li>
+</ul>
+
+<p>
+    The <a href="https://docs.vespa.ai/en/performance/sizing-search.html">Vespa serving scaling guide</a>
+    also has good recommendations for sizing and topology of production content clusters.
+</p>
