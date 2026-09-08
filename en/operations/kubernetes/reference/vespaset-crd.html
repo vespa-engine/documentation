@@ -1,0 +1,227 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: VespaSet CRD
+applies_to: enterprise
+---
+
+<p>
+    The <code>VespaSet</code> is the Custom Resource Definition (CRD) used to declare a Vespa deployment on Kubernetes.
+    The Vespa Kubernetes Operator watches <code>VespaSet</code> resources and reconciles the cluster state to match the
+    declared specification. This page is a reference for the fields available under <code>spec</code>.
+</p>
+
+<p>
+    Pod-level customization is done through <code>podTemplate</code> overrides, which accept a standard Kubernetes
+    <a href="https://kubernetes.io/docs/reference/kubernetes-api/core/pod-template-v1/#PodTemplateSpec"><code>PodTemplateSpec</code></a>.
+    For the full details on override targets and merge policies, see
+    <a href="/en/operations/kubernetes/configuration/custom-overrides-podtemplate.html">Configure Custom Overrides</a>.
+</p>
+
+<pre>
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+  namespace: vespa
+spec:
+  version: 8.752.24
+  configServer:
+    image: "images.example.com/vespa/configserver"
+    storageClass: "standard"
+    generateRbac: true
+  application:
+    image: "images.example.com/vespa/application"
+  ingress:
+    endpointType: "LOAD_BALANCER"
+  profiles:
+    default:
+      storageClass: "local-storage"
+</pre>
+
+<h2 id="version">version</h2>
+
+<table class="table">
+    <thead>
+        <tr><th>Type</th><th>Required</th></tr>
+    </thead>
+    <tbody>
+        <tr><td>string</td><td>No</td></tr>
+    </tbody>
+</table>
+
+<p>
+    The Vespa version to deploy, e.g. <code>8.752.24</code>.
+    The version is used as the image tag for the images provided in
+    <a href="#configserver"><code>configServer.image</code></a> and <a href="#application"><code>application.image</code></a> —
+    e.g. an image of <code>images.example.com/vespa/configserver</code> with version <code>8.752.24</code> resolves to
+    <code>images.example.com/vespa/configserver:8.752.24</code>.
+    Changing this field triggers a rolling upgrade of the deployment —
+    see <a href="/en/operations/kubernetes/operations/upgrades.html">Upgrade Vespa on Kubernetes</a>.
+</p>
+
+<h2 id="configserver">configServer</h2>
+
+<p>
+    Configuration that applies to the ConfigServer pods.
+</p>
+
+<table class="table">
+    <thead>
+        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>image</code></td>
+            <td>string</td>
+            <td>
+                The container image to use for ConfigServer pods.
+                The <a href="#version"><code>version</code></a> field is appended as the image tag.
+            </td>
+        </tr>
+        <tr>
+            <td><code>storageClass</code></td>
+            <td>string</td>
+            <td>
+                A string matching the name of a <a href="https://kubernetes.io/docs/concepts/storage/storage-classes/">StorageClass</a>
+                resource in your cluster, used for the ConfigServer persistent volumes. Storage performance is less critical for ConfigServers,
+                so a cost-efficient network-attached storage class is generally an appropriate tradeoff —
+                see <a href="/en/operations/kubernetes/configuration/configure-local-storage-type.html">Configure Local Storage Type</a>.
+            </td>
+        </tr>
+        <tr>
+            <td><code>serviceAccount</code></td>
+            <td>string</td>
+            <td>
+                The name of an existing Kubernetes ServiceAccount to run the ConfigServer pods as.
+                Use this when RBAC resources are managed externally instead of by the operator.
+            </td>
+        </tr>
+        <tr>
+            <td><code>generateRbac</code></td>
+            <td>boolean</td>
+            <td>
+                When <code>true</code>, the operator automatically generates the RBAC resources
+                (ServiceAccount, Role, and RoleBinding) required by the ConfigServer pods —
+                see <a href="/en/operations/kubernetes/deployment/permissions.html">Permissions</a>.
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="application">application</h2>
+
+<p>
+    Configuration that applies to the application (container and content) pods.
+</p>
+
+<table class="table">
+    <thead>
+        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>image</code></td>
+            <td>string</td>
+            <td>
+                The container image to use for application pods.
+                The <a href="#version"><code>version</code></a> field is appended as the image tag.
+            </td>
+        </tr>
+        <tr>
+            <td><code>storageClass</code></td>
+            <td>string</td>
+            <td>
+                A string matching the name of a <a href="https://kubernetes.io/docs/concepts/storage/storage-classes/">StorageClass</a>
+                resource in your cluster, used for the persistent volumes of the application pods.
+                For content clusters, we recommend node-local storage to maximize performance —
+                see <a href="/en/operations/kubernetes/configuration/configure-local-storage-type.html">Configure Local Storage Type</a>.
+            </td>
+        </tr>
+        <tr>
+            <td><code>podTemplate</code></td>
+            <td>object</td>
+            <td>
+                A standard Kubernetes
+                <a href="https://kubernetes.io/docs/reference/kubernetes-api/core/pod-template-v1/#PodTemplateSpec"><code>PodTemplateSpec</code></a>
+                overlay applied to application pods by default. If a cluster names a profile,
+                the <a href="#profiles"><code>profiles</code></a> <code>podTemplate</code> takes precedence
+                for the pods of that cluster —
+                see <a href="/en/operations/kubernetes/configuration/custom-overrides-podtemplate.html">Configure Custom Overrides</a>.
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="ingress">ingress</h2>
+
+<p>
+    Configuration for the external access layer —
+    see <a href="/en/operations/kubernetes/configuration/ingress.html">Configure External Access Layer</a>.
+</p>
+
+<table class="table">
+    <thead>
+        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>endpointType</code></td>
+            <td>string</td>
+            <td>
+                The type of Kubernetes Service endpoint to expose for Vespa traffic. One of:
+                <ul>
+                    <li><code>NONE</code> — no load balancer endpoint is created.</li>
+                    <li><code>CLUSTER_IP</code> — a <code>ClusterIP</code> Service, reachable only from within the cluster.</li>
+                    <li><code>LOAD_BALANCER</code> — a <code>LoadBalancer</code> Service, provisioning an external load balancer.</li>
+                </ul>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<h2 id="profiles">profiles</h2>
+
+<p>
+    A map of profile names to per-cluster configuration. A profile maps a cluster <code>id</code> as defined in
+    <a href="https://docs.vespa.ai/en/reference/applications/services/services.html"><code>services.xml</code></a>
+    to configuration for the pods of that Vespa cluster, allowing different settings
+    for different cluster types within the same <code>VespaSet</code>. An arbitrary number of profiles can be defined —
+    see <a href="/en/operations/kubernetes/configuration/custom-overrides-podtemplate.html">Configure Custom Overrides</a>.
+</p>
+
+<table class="table">
+    <thead>
+        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>&lt;name&gt;.storageClass</code></td>
+            <td>string</td>
+            <td>
+                A string matching the name of a <a href="https://kubernetes.io/docs/concepts/storage/storage-classes/">StorageClass</a>
+                resource in your cluster, used for the persistent volumes of the pods in this profile.
+                For content clusters, we recommend node-local storage to maximize performance —
+                see <a href="/en/operations/kubernetes/configuration/configure-local-storage-type.html">Configure Local Storage Type</a>.
+            </td>
+        </tr>
+        <tr>
+            <td><code>&lt;name&gt;.podTemplate</code></td>
+            <td>object</td>
+            <td>
+                A standard Kubernetes
+                <a href="https://kubernetes.io/docs/reference/kubernetes-api/core/pod-template-v1/#PodTemplateSpec"><code>PodTemplateSpec</code></a>
+                overlay applied to the pods in this profile —
+                see <a href="/en/operations/kubernetes/configuration/custom-overrides-podtemplate.html">Configure Custom Overrides</a>.
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+<pre>
+spec:
+  profiles:
+    default:
+      storageClass: "standard"
+    music:
+      storageClass: "local-storage"
+</pre>
