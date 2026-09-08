@@ -1,0 +1,84 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: Pod Lifecycle
+applies_to: enterprise
+---
+
+<p>
+    This page describes the lifecycle of the Pods in a Vespa on Kubernetes deployment: how they are
+    reconciled to the desired state, and how failures are handled. The ConfigServer and Application Pods
+    have built-in resilience and recovery capabilities, and are gracefully rotated during maintenance
+    to preserve availability and data integrity.
+</p>
+
+<h2>Reconciliation</h2>
+
+<p>
+    The ConfigServer Pods, their PersistentVolumeClaims, and their dependent networking resources are provisioned
+    by the Operator and bootstrapped when a <code>VespaSet</code> resource is detected. From then on, the Operator
+    is responsible for reconciling the ConfigServer resources to the desired state — including during
+    <a href="upgrades.html">upgrades</a>, changes to the
+    <a href="../configuration/custom-overrides-podtemplate.html"><code>podTemplate</code></a>,
+    changes to the <code>storageClass</code>, and various other maintenance.
+</p>
+
+<p>
+    The ConfigServers are responsible for deploying the Application Pods when an
+    <a href="https://docs.vespa.ai/en/basics/applications.html">application package</a> arrives.
+    From then on, they are responsible for reconciling the Application Pods to the desired state — likewise
+    during upgrades, changes to the <code>podTemplate</code>, changes to the <code>storageClass</code>,
+    and various other maintenance.
+</p>
+
+<p>
+    During a reconciliation task, each Pod goes through the following flow. This is performed in an orchestrated
+    fashion, depending on the topology configured, which is encoded into both the Operator and the ConfigServer:
+</p>
+
+<ol>
+    <li>The Pod is disabled as a backend.</li>
+    <li>The Pod is drained of traffic.</li>
+    <li>The Pod is deleted.</li>
+    <li>A new Pod with the updated spec is created.</li>
+    <li>The Pod waits until healthy.</li>
+    <li>The Pod is enabled as a backend.</li>
+</ol>
+
+<p>
+    During this process, the volume may be recreated, depending on what is being reconciled —
+    refer to <a href="../configuration/custom-overrides-podtemplate.html">Configure Custom Overrides</a>.
+</p>
+
+<p>
+    If a Pod is <a href="https://kubernetes.io/docs/concepts/workloads/pods/disruptions/">voluntarily</a> deleted
+    by force, the reconciler sees the missing Pod as having no <code>podTemplate</code>, detects a diff against
+    the desired state, and reconciles towards the target by recreating the Pod.
+</p>
+
+<h2>Failure Handling</h2>
+
+<p>
+    Failures are detected and recovered from automatically, without requiring administrator intervention.
+    This applies to Application Pods and ConfigServer Pods alike — Application Pods are failed out by the
+    ConfigServers, and ConfigServer Pods by the Operator:
+</p>
+
+<ol>
+    <li>A Pod encounters a failure — for example, a hardware failure — and becomes unresponsive.</li>
+    <li>The unresponsive Pod is detected and marked as failed: the ConfigServers fail out Application Pods,
+        and the Operator fails out ConfigServer Pods.</li>
+    <li>The failed Pod and its Persistent Volume are cleaned up and removed from the cluster.</li>
+    <li>A replacement Pod is automatically provisioned to restore capacity — data is redistributed to a
+        replacement Application Pod, while a replacement ConfigServer Pod rejoins the ConfigServer quorum.</li>
+</ol>
+
+<p>
+    Throughout this process, the cluster keeps serving traffic: queries and feeding continue on the remaining Pods,
+    the remaining ConfigServers continue serving configuration, and Vespa's data replication ensures no data is lost
+    while the replacement is brought up.
+</p>
+
+<p>
+    Refer to <a href="production-serving.html">Production Serving</a> for how to reduce the impact of
+    involuntary failures.
+</p>

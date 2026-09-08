@@ -1,22 +1,27 @@
 ---
 # Copyright Vespa.ai. All rights reserved.
-title: Upgrade Vespa on Kubernetes
+title: Vespa Upgrades
 applies_to: enterprise
 ---
 
+{% include note.html content="
+Upgrades are only supported when the target version is at most 30 minor versions ahead of the
+currently deployed version — roughly two months of Vespa releases. If your deployment is further behind,
+upgrade in increments of at most 30 minor versions until you reach the target version.
+"%}
+
 <p>
-    Vespa on Kubernetes supports zero-downtime rolling upgrades. An upgrade involves upgrading the
-    <code>vespa-operator</code> via the Helm chart and the ConfigServer and Application (Container and Content) Pods through
+    The Operator supports zero-downtime rolling upgrades. An upgrade involves upgrading the
+    <code>vespa-operator</code> and the ConfigServer and Application (Container, Content, and Cluser Controller) Pods through
     the <code>VespaSet</code> resource.
 </p>
 
 <p>
     We do not support version drift between the <code>vespa-operator</code> and the <code>VespaSet</code>. Accordingly,
-    upgrades should be planned so that all components are updated together. To ensure availability, they should be performed
-    in the order as shown in this guide.
+    upgrades should be planned so that all components are upgraded together.
 </p>
 
-<h2>Update the CRD</h2>
+<h2>Step 1: Upgrade the CRD</h2>
 
 <p>
     Some upgrades may introduce changes to the <code>VespaSet</code> CRD definition. These changes should be
@@ -35,11 +40,11 @@ $ helm show crds $HELM_CHART_REF --version $VESPA_VERSION > vespaset-crd.yaml
 $ kubectl apply -f vespaset-crd.yaml
 </pre>
 
-<h2>Upgrade the Vespa Operator</h2>
+<h2>Step 2: Upgrade the Vespa Operator</h2>
 
 <p>
-    The operator can be upgraded through helm by running <code>helm upgrade</code> with the new <code>VESPA_VERSION</code>.
-    Replace <code>$NAMESPACE</code> with the namespace where Vespa is installed. Refer to <a href="https://factory.vespa.ai/">Factory</a> for the latest <code>VESPA_VERSION</code>.
+    The Operator can be upgraded through helm by running <code>helm upgrade</code> with the new <code>VESPA_VERSION</code>.
+    Replace <code>$NAMESPACE</code> with the namespace where Vespa is installed.
     Note that upgrading the operator does not affect the ConfigServer and Application Pods. Their upgrade will be performed in a subsequent step.
 </p>
 
@@ -51,14 +56,14 @@ $ helm upgrade vespa-operator vespa/vespa-operator \
 </pre>
 
 <p>
-    Wait for the operator to finish rolling out before proceeding.
+    Wait for the Operator to finish rolling out before proceeding.
 </p>
 
 <pre>
 $ kubectl rollout status deployment/vespa-operator -n $NAMESPACE
 </pre>
 
-<h2>Upgrade the VespaSet</h2>
+<h2>Step 3: Upgrade the VespaSet</h2>
 
 <p>
     To upgrade the ConfigServer and application Pods, patch the <code>spec.version</code> field in the
@@ -75,7 +80,7 @@ metadata:
   name: vespaset-sample
   namespace: ${NAMESPACE}
 spec:
-  <b>version: 8.566.7 # Specify the version to upgrade to.</b>
+  <b>version: 8.566.7</b>
 
   configServer:
     image: "${VESPA_OPERATOR_IMAGE}"
@@ -98,7 +103,7 @@ $ kubectl apply -f vespaset.yaml
     themselves and the Application Pods.
 </p>
 
-<h2>Upgrade Sequence</h2>
+<h2>Sequence</h2>
 
 <p>
     The upgrade always proceeds in two phases: ConfigServer Pods are upgraded first, followed by Application Pods.
@@ -119,16 +124,22 @@ $ kubectl apply -f vespaset.yaml
 
 <ol>
     <li>Drains the Pod of traffic and flushes any in-memory state to disk.</li>
+    <li>Disables it as a backend for Load Balancers</li>
     <li>Deletes the Pod, and recreates it with the new image</li>
     <li>Waits for the Pod to become healthy and report its <code>Converged Version</code> as a status on the VespaSet</li>
+    <li>Enables the new Pod as a backend for Load Balancers</li>
     <li>Proceeds to the next Pod.</li>
 </ol>
 
 <p>
     The cluster remains operational throughout this procedure. The remaining ConfigServer Pods continue serving
     configuration to Application Pods while each node is upgraded in turn, and the Dataplane layer will continue to serve
-    traffic as normal. For Content Pods, the operator waits for data  redistribution to complete before moving to the next Pod, ensuring no data loss during the rollout.
+    traffic as normal. For Content Pods, the operator waits for data redistribution to complete before moving to the next Pod, ensuring no data loss during the rollout.
+</p>
 
+<p>
+    Moreover, upgrades of Application Pods are orchestrated by the Operator. Entire groups, or a sequence of Container and Content Pods, can be upgraded
+    in parallel, depending on the topology of your setup.
 </p>
 
 <p>
