@@ -819,6 +819,96 @@ all(
   The default precision may not achieve the required correctness for your use case.
 </p>
 
+<h2 id="aggregating-over-large-result-sets">Aggregating over large result sets</h2>
+<p>
+  Grouping is evaluated on every content node, over every document matching the query.
+  A query like
+</p>
+<pre class="no-transform">select * from product where true | all(group(category) each(output(count())))</pre>
+<p>
+  matches every document and feeds every match through the grouping engine, on every query.
+  The cost is proportional to the number of matched documents,
+  not to the number of groups returned.
+  Category counts for navigation in an e-commerce application is a typical example.
+</p>
+
+<h3 id="reduce-the-work-per-query">Reduce the work per query</h3>
+<ul>
+  <li>
+    Set <a href="../reference/api/query.html#hits">hits=0</a> (<code>limit 0</code> in YQL)
+    when only the aggregates are needed, so no document summaries are fetched.
+  </li>
+  <li>
+    Use the built-in <a href="../basics/ranking.html">unranked</a> rank profile
+    (<code>ranking.profile=unranked</code>) when the grouping does not use relevance,
+    so no rank score is computed for the matched documents.
+  </li>
+  <li>
+    Use <a href="#ordering-and-limiting-groups">max</a> on every grouping level and set
+    <a href="#global-limit">globalMaxGroups</a>.
+    This bounds the result size and the merge cost,
+    but does not reduce the number of documents evaluated.
+  </li>
+</ul>
+
+<h3 id="approximate-counts-from-a-corpus-sample">Approximate counts from a corpus sample</h3>
+<p>
+  When approximate counts are acceptable, aggregate over a random sample of the documents and scale the result.
+  Assign each document to one of 100 sample buckets in a synthetic field, using
+  <a href="../reference/writing/indexing-language.html#random">random</a>:
+</p>
+<pre class="no-transform">
+schema product {
+    document product {
+        field category type string {
+            indexing: attribute | summary
+        }
+    }
+    field sample_bucket type int {
+        indexing: random 100 | attribute
+        attribute: fast-search
+        rank: filter
+    }
+}
+</pre>
+<p>
+  <code>random 100</code> draws a uniformly distributed integer in the range [0, 100) when the document is put,
+  independent of the document content.
+  A partial update of other fields keeps the value; a new put of the document draws a new value.
+  Add the bucket as a filter to the query:
+</p>
+<pre class="no-transform">select * from product where sample_bucket = 0 limit 0 | all(group(category) each(output(count())))</pre>
+<p>
+  Multiply each count by 100 to estimate the count over the full corpus.
+  With <code>fast-search</code>, the filter is evaluated using the attribute's index instead of scanning all documents,
+  so both matching and grouping process only the sampled 1% of the corpus.
+  The filter combines with any other query terms, e.g. <code>where userQuery() and sample_bucket = 0</code>;
+  since the bucket is independent of the query, the matched set is sampled at the same rate.
+</p>
+<p>
+  The estimate for a group with <em>k</em> sampled documents is 100<em>k</em>,
+  with a relative standard error of approximately 1/&radic;<em>k</em>.
+  A group with 1000 sampled documents has a standard error of about 3%,
+  a group with 100 sampled documents about 10%.
+  Choose the sampling fraction from the smallest group that must be estimated with acceptable precision,
+  and use an exact query for groups with too few sampled documents.
+</p>
+<p>
+  Hits and grouping are computed over the same matched set,
+  so the sample filter also applies to the returned hits and to <code>totalCount</code>.
+  Use a separate query without the filter for the hits shown to the user.
+</p>
+
+<h3 id="caching-aggregates">Caching aggregates</h3>
+<p>
+  If the same aggregation is requested frequently and the result does not depend on the user,
+  such as category counts for a navigation menu, compute it once and serve it from a cache in a
+  <a href="../applications/searchers.html">Searcher</a>.
+  The FAQ has an example of a
+  <a href="../learn/faq.html#how-to-create-a-cache-that-refreshes-itself-regularly">component that refreshes a cache on a schedule</a>
+  by issuing the query itself, so the cost is paid at a fixed rate instead of per user query.
+</p>
+
 <h2 id="nested-groups">Nested Groups</h2>
 <p>
 Groups can be nested. This offers great drilling capabilities,
