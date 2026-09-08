@@ -31,6 +31,10 @@ All overrides accept a standard Kubernetes <a href="https://kubernetes.io/docs/r
     </thead>
     <tbody>
     <tr>
+        <td><code>storageClass</code></td>
+        <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+    <tr>
         <td><code>labels</code></td>
         <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
     </tr>
@@ -118,6 +122,7 @@ metadata:
   name: my-vespa-cluster
 spec:
   configServer:
+    storageClass: standard
     podTemplate:
       spec:
         affinity:
@@ -132,6 +137,49 @@ spec:
 <p>
 The VespaSet appends this anti-affinity term to the base template rather than replacing it,
 so any operator-managed affinity rules remain in effect.
+</p>
+
+<h3>Example: tuning resources and adding volume mounts</h3>
+
+<p>
+Unlike application Pods, the ConfigServer override policy allows overriding CPU and memory resources
+and adding volume mounts on the main <code>vespa</code> container.
+The following example raises the resource requests and limits, and mounts an additional volume.
+</p>
+
+<pre>
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+spec:
+  configServer:
+    storageClass: standard
+    podTemplate:
+      spec:
+        containers:
+          - name: vespa
+            resources:
+              requests:
+                cpu: "2"
+                memory: 8Gi
+              limits:
+                cpu: "4"
+                memory: 8Gi
+            volumeMounts:
+              - name: extra-config
+                mountPath: /opt/vespa/var/extra-config
+                readOnly: true
+        volumes:
+          - name: extra-config
+            configMap:
+              name: my-extra-config
+</pre>
+
+<p>
+The overrides are merged into the operator-managed container: the resource settings replace the defaults,
+while the volume mount and volume are appended alongside the operator-managed ones.
+On application Pods, both of these fields are rejected at admission time.
 </p>
 
 
@@ -172,11 +220,13 @@ metadata:
 spec:
   profiles:
     default:
+      storageClass: standard
       podTemplate:
         spec:
           nodeSelector:
             node-pool: vespa-container
     music:
+      storageClass: local-storage
       podTemplate:
         spec:
           nodeSelector:
@@ -186,6 +236,15 @@ spec:
 <p>
 The VespaSet resolves the profile for each cluster at reconciliation time and overlays the corresponding
 <code>podTemplate</code> onto the base <code>PodSpec</code>. Pods belonging to clusters with no matching profile entry receive no overlay.
+</p>
+
+<p>
+A profile can also set <code>storageClass</code> to select the
+<a href="https://kubernetes.io/docs/concepts/storage/storage-classes/">StorageClass</a> used for the persistent
+volumes of the pods in that profile, as in the example above —
+see <a href="configure-local-storage-type.html">Configure Local Storage Type</a>.
+It is resolved the same way as <code>podTemplate</code>: if the cluster names a profile, the profile's
+<code>storageClass</code> is used; otherwise it falls back to <code>spec.application.storageClass</code>.
 </p>
 
 <h2>ClusterController Overrides</h2>
@@ -205,6 +264,7 @@ metadata:
 spec:
   profiles:
     clusterControllers:
+      storageClass: standard
       podTemplate:
         spec:
           nodeSelector:
@@ -226,9 +286,23 @@ can be placed on a new node and its data redistributed accordingly.
 Redistributing data across content nodes after a Pod and Volume recreation may take time, depending on the size of the dataset.
 </p>
 
+<h3 id="action-precedence">Action Precedence</h3>
+
 <p>
-When multiple fields change simultaneously, the most disruptive action takes precedence: if any change requires a Pod and Volume
-recreation, that action is applied regardless of whether other changes would have required only a Pod restart.
+Each detected change resolves to one of three actions, ordered from most to least disruptive:
+</p>
+
+<ol>
+    <li><code>RECREATE_POD_AND_VOLUME</code> — drift was detected, and data redistribution is necessary. The Pod and its Persistent Volume are recreated.</li>
+    <li><code>RECREATE_POD</code> — drift was detected, but data redistribution is not necessary. Only the Pod is recreated; its Persistent Volume is left intact.</li>
+    <li><code>UNCHANGED</code> — no drift was detected.</li>
+</ol>
+
+<p>
+When multiple fields change simultaneously, the most disruptive action takes precedence:
+<code>RECREATE_POD_AND_VOLUME</code> takes precedence over <code>RECREATE_POD</code>, which takes precedence
+over <code>UNCHANGED</code>. If any change requires a Pod and Volume recreation, that action is applied
+regardless of whether other changes would have required only a Pod restart.
 </p>
 
 <table class="table">
@@ -266,6 +340,10 @@ recreation, that action is applied regardless of whether other changes would hav
     </tr>
     <tr>
         <td><code>tolerations</code></td>
+        <td></td><td>✅</td>
+    </tr>
+    <tr>
+        <td><code>storageClass</code></td>
         <td></td><td>✅</td>
     </tr>
     </tbody>
