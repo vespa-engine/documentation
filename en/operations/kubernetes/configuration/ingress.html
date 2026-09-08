@@ -15,11 +15,35 @@ applies_to: enterprise
     <code>spec.ingress.endpointType</code> field in the <code>VespaSet</code>.
 </p>
 
+<h2>Routing Policies</h2>
+
+<p>
+    To ensure zero-downtime deployments, traffic routing is managed dynamically using Kubernetes labels.
+    The created Services select backend Pods with the selector <code>vespa.ai/tenant-lb: backend</code>.
+    The operator automatically adds this label to Container Pods depending on whether the Pod is available
+    to serve as a backend, and removes it when the Pod is not.
+</p>
+
+<p>
+    Through its own orchestration policy, the operator ensures high availability by rotating Pods in and out of
+    the backend set accordingly. During a rolling upgrade, the label is removed from the terminating Pod(s) before
+    they are shut down, providing a window for the remaining traffic to drain before the Pod is upgraded.
+</p>
+
+<p>
+    <b>Note</b>: The Service exposes port <strong>80</strong> (plaintext) and <strong>443</strong> (TLS) externally, mapping them to the container's port 4443.
+</p>
+
 <h2>Supported Endpoint Types</h2>
 
 <p>
-    The operator supports four endpoint types to cover different infrastructure requirements.
+    The endpoint type is configured through <code>spec.ingress.endpointType</code> in the <code>VespaSet</code>:
 </p>
+
+<pre>
+ingress:
+  endpointType: LOAD_BALANCER
+</pre>
 
 <table class="table">
     <thead>
@@ -33,89 +57,145 @@ applies_to: enterprise
     <tr>
         <td><code>LOAD_BALANCER</code></td>
         <td><code>LoadBalancer</code></td>
-        <td>Provision the cloud-native (AWS, GCP, Azure) load-balancer.</td>
+        <td>
+            Provision a cloud-native load balancer. Only the AWS variant — the Network Load Balancer (NLB) —
+            is supported, making this the recommended configuration for production deployments on AWS (EKS).
+            The ConfigServer automatically applies the annotation
+            <code>service.beta.kubernetes.io/aws-load-balancer-internal: "true"</code>, provisioning an
+            <strong>internal</strong> NLB accessible only within the VPC where the EKS cluster nodes reside.
+        </td>
     </tr>
     <tr>
         <td><code>CLUSTER_IP</code></td>
         <td><code>ClusterIP</code></td>
-        <td>Each Container Pod will expose an internal IP address. Should not be used for production use-cases.</td>
+        <td>
+            A stable internal endpoint fronting the Container Pods, restricted to within the Kubernetes cluster.
+            It provides an internal IP and DNS name (e.g., <code>lb-default.vespa.svc.cluster.local</code>)
+            for feeding and querying, but assigns no external IP. Ideal when the clients (e.g., front-end
+            applications or ingestion services) run inside the same Kubernetes cluster as Vespa.
+        </td>
     </tr>
     <tr>
         <td><code>NONE</code></td>
         <td>N/A</td>
-        <td>An external access layer will not be provisioned. Custom networking setups (Istio, Ingress Controllers) where no automatic service is desired.</td>
+        <td>
+            No external access layer is provisioned. Use this if you intend to manually define
+            <code>Ingress</code> resources, use a Service Mesh (like Istio or Linkerd), or have complex
+            networking requirements not covered by the standard types.
+        </td>
     </tr>
     </tbody>
 </table>
 
-<h2>LOAD_BALANCER</h2>
+<h2>Reconciling EndpointType</h2>
 
 <p>
-    This is the recommended configuration for production deployments on cloud providers (EKS, GKE, AKS).
-    The operator creates a standard Kubernetes <code>LoadBalancer</code> service, triggering the cloud provider to provision
-    a managed load balancer (e.g., AWS NLB).
+    The <code>endpointType</code> can be changed on a running deployment. When it changes, the operator reconciles
+    the external access layer by deleting the Service of the old type and creating a Service of the new type.
+    Expect a brief window during the switch where the endpoint is unavailable, and note that the endpoint's
+    IP address and, for <code>LOAD_BALANCER</code>, its external hostname will change.
+</p>
+
+<h2>ConfigServer</h2>
+
+<p>
+    The operator always provisions an internal
+    ingress Service for the ConfigServers: a <code>ClusterIP</code> Service named <code>cfg-internal</code>,
+    exposing the ConfigServer HTTP port (19071). It is not affected by <code>spec.ingress.endpointType</code>.
 </p>
 
 <p>
-    <strong>Configuration:</strong>
-</p>
-<pre>
-ingress:
-  endpointType: LOAD_BALANCER
-</pre>
-
-<p>
-    On AWS, the ConfigServer automatically applies the annotation <code>service.beta.kubernetes.io/aws-load-balancer-internal: "true"</code> to all Container pods.
-    This provisions an <strong>internal</strong> Network Load Balancer (NLB) accessible only within the VPC where the EKS cluster nodes reside.
-</p>
-
-<h2>CLUSTER_IP</h2>
-
-<p>
-    This type restricts access to within the Kubernetes cluster. It provides a stable internal IP and DNS name
-    (e.g., <code>lb-default.vespa.svc.cluster.local</code>) but assigns no external IP.
+    A <code>ClusterIP</code> Service assigns a virtual IP address and cluster-internal DNS name that is only
+    reachable from within the Kubernetes cluster. Traffic sent to this IP is transparently distributed
+    across the Pods matching the Service's selector, either randomly or via round-robin.
 </p>
 
 <p>
-    <strong>Configuration:</strong>
+    The Service selects all ConfigServer Pods by label, providing a single stable endpoint that load-balances
+    HTTP API requests across the ConfigServer quorum. Clients make requests through this endpoint instead of targeting individual Pods, so requests
+    keep working when a ConfigServer Pod is restarted or recreated. This provides high availability and load
+    distribution for the ConfigServer HTTP APIs, e.g. for deploying application packages.
 </p>
-<pre>
-ingress:
-  endpointType: CLUSTER_IP
-</pre>
+
+<h2>Ports</h2>
 
 <p>
-    The <code>CLUSTER_IP</code> service is ideal for architectures where the clients (e.g., front-end applications or ingestion services) run inside the same Kubernetes cluster as Vespa.
+    The following ports are exposed on the Vespa Pods, per Pod type.
 </p>
 
-<h2>NONE</h2>
+<table class="table">
+    <thead>
+    <tr>
+        <th>Type</th>
+        <th>Name</th>
+        <th>Port</th>
+        <th>Purpose</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+        <td>ConfigServer</td>
+        <td><code>config</code></td>
+        <td>19071</td>
+        <td>The ConfigServer HTTP API, e.g. for deploying application packages. Targeted by the <code>cfg-internal</code> Service.</td>
+    </tr>
+    <tr>
+        <td>ConfigServer</td>
+        <td><code>config-rpc</code></td>
+        <td>19070</td>
+        <td>The ConfigServer RPC port, used to distribute configuration to the Vespa services.</td>
+    </tr>
+    <tr>
+        <td>Container</td>
+        <td><code>status</code></td>
+        <td>4444</td>
+        <td>Status endpoint used by the readiness probe.</td>
+    </tr>
+    <tr>
+        <td>Container</td>
+        <td><code>http-internal</code></td>
+        <td>8080</td>
+        <td>The internal data plane for queries and feeding from within the Kubernetes cluster.</td>
+    </tr>
+    <tr>
+        <td>Container</td>
+        <td><code>http-external</code></td>
+        <td>4443</td>
+        <td>The external data plane (TLS). The external access layer maps ports 80 and 443 to this port.</td>
+    </tr>
+    <tr>
+        <td>Container</td>
+        <td><code>metrics</code></td>
+        <td>19092</td>
+        <td>
+            The state and metrics API, e.g. for Prometheus scraping —
+            see <a href="../operations/monitoring.html">Configure Monitoring</a>.
+        </td>
+    </tr>
+    <tr>
+        <td>Content</td>
+        <td><code>http-internal</code></td>
+        <td>19102</td>
+        <td>The state and health API, used by the readiness probe.</td>
+    </tr>
+    <tr>
+        <td>Content</td>
+        <td><code>metrics</code></td>
+        <td>19092</td>
+        <td>The state and metrics API, e.g. for Prometheus scraping.</td>
+    </tr>
+    <tr>
+        <td>ClusterControllers</td>
+        <td><code>http-internal</code></td>
+        <td>19050</td>
+        <td>The cluster-controller state API, used by the readiness probe.</td>
+    </tr>
+    <tr>
+        <td>ClusterControllers</td>
+        <td><code>metrics</code></td>
+        <td>19092</td>
+        <td>The state and metrics API, e.g. for Prometheus scraping.</td>
+    </tr>
+    </tbody>
+</table>
 
-<p>
-    This option disables automatic Service provisioning. Use this if you intend to manually define <code>Ingress</code> resources,
-    use a Service Mesh (like Istio or Linkerd), or have complex networking requirements not covered by the standard types.
-</p>
-
-<p>
-    <strong>Configuration:</strong>
-</p>
-<pre>
-ingress:
-  endpointType: NONE
-</pre>
-
-<h2>Traffic Routing & Labeling</h2>
-
-<p>
-    To ensure zero-downtime deployments, the ConfigServer manages traffic routing dynamically using Kubernetes labels.
-    The created Services use the selector <code>vespa.ai/tenant-lb: backend</code>. When the Pod is provisioned, these labels
-    are automatically attached.
-</p>
-
-<p>
-    During a rolling upgrade, the label is removed from the terminating Pod(s) before they are shut down. This provides a window
-    for the remaining traffic to drain before the Pod is upgraded.
-</p>
-
-<p>
-    <b>Note</b>: The Service exposes port <strong>80</strong> (plaintext) and <strong>443</strong> (TLS) externally, mapping them to the container's port 4443.
-</p>
