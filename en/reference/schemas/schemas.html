@@ -3723,15 +3723,99 @@ So searches in this field will not search the contents in the <a href="#attribut
 
 
 <h2 id="linguistics">linguistics</h2>
-<p>Sets a linguistics 'profile' deciding how content and searches against this field should be linguistically processed.
-The profile value is propagated to the <a href="../../linguistics/linguistics.html">linguistics component</a>
-which can be configured to do profile-specific processing.</p>
+<p>Contained in <a href="#field">field</a>.
+Sets how the content of this field, and searches against it, should be linguistically processed.
+Read more in <a href="../../linguistics/linguistics.html#linguistics-profiles">linguistics profiles</a>.
+</p>
+<pre>
+linguistics {
+    [setting]
+    [setting]
+    &hellip;
+}
+</pre>
+<p>
+A setting given directly in the block applies both when indexing and when searching.
+To make a setting differ between the two, give it in an <code>index</code> and/or a <code>search</code> block,
+which takes precedence over the same setting given directly in the block for that side:
+</p>
+<pre>
+linguistics {
+    index {
+        [setting]
+        &hellip;
+    }
+    search {
+        [setting]
+        &hellip;
+    }
+}
+</pre>
+<table class="table">
+<thead>
+<tr><th>Setting</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td>profile: [name]</td>
+<td><p>
+  Names a linguistics <em>profile</em> deciding how the text is processed.
+  The profile name is propagated to the <a href="../../linguistics/linguistics.html">linguistics component</a>,
+  which can be configured to do profile-specific processing.
+  There is no default: without a profile, the linguistics component processes the text as it does for
+  fields without a linguistics block.
+  </p><p>
+  Different profiles for indexing and searching can also be given in the older form
+  <code>profile { index: [name] search: [name] }</code>, in which the search profile defaults to the index profile.
+  This form cannot be combined with <code>profile:</code> directly in the block.
+</p></td>
+</tr>
+<tr><td>tokens: [tokens-type]</td>
+<td><p>
+  Decides which of the tokens the linguistics processing produces for each word are used,
+  see <a href="../../linguistics/linguistics.html#choosing-which-tokens-to-use">choosing which tokens to use</a>.
+  Each type is equivalent to a <a href="#stemming">stemming</a> type, and <code>tokens</code> takes precedence
+  over any stemming setting which applies to the field, whether in the field, the schema or an <a href="#index">index</a>.
+  Deployment warns when a stemming setting is overridden by a different value.
+  </p>
+  <table class="table">
+  <thead>
+  <tr><th>Type</th><th>Description</th></tr>
+  </thead><tbody>
+  <tr><td>original</td><td>Use the original word only. Equivalent to stemming: none</td></tr>
+  <tr><td>first-alternative</td><td>Use the one alternative the linguistics implementation considers best,
+  usually the first one produced. This is the default, equivalent to stemming: best</td></tr>
+  <tr><td>alternatives</td><td>Use all the alternatives produced for the word, but not the original word</td></tr>
+  <tr><td>original-and-alternatives</td><td>Use the original word and all the alternatives produced for it.
+  Equivalent to stemming: multiple</td></tr>
+  </tbody>
+  </table>
+  <p>
+  <code>tokens</code> only applies to string fields with <code>index</code> and <code>text</code> <a href="#match">matching</a>.
+  It is ignored, with a warning, for fields with <code>word</code>, <code>exact</code> or <code>gram</code> matching,
+  for uri fields and for fields of other types, as these produce a single token per word regardless.
+  Setting it for indexing or searching only makes the other side follow the stemming setting, which is warned about.
+</p></td>
+</tr>
+</tbody>
+</table>
+<p>Examples:</p>
 <pre>
 linguistics {
     profile: myIndexAndSearchProfile
+    tokens: original-and-alternatives
 }
 </pre>
-or
+<pre>
+linguistics {
+    index {
+        profile: myIndexProfile
+        tokens: original
+    }
+    search {
+        profile: mySearchProfile
+        tokens: original-and-alternatives
+    }
+}
+</pre>
 <pre>
 linguistics {
     profile {
@@ -3740,6 +3824,10 @@ linguistics {
     }
 }
 </pre>
+{% include note.html content="When combining multiple fields in a <a href='#fieldset'>fieldset</a>,
+all fields must use the same tokens when searching, whether that follows from <code>tokens</code> or
+from <a href='#stemming'>stemming</a>. A fieldset where they differ, and at least one field sets
+<code>tokens</code>, fails deployment."%}
 
 
 

@@ -294,10 +294,13 @@ so that proximity ranking does not become broken by this approach.
 <h2 id="linguistics-profiles">Linguistics profiles</h2>
 
 <p>
-  <a href="../reference/schemas/schemas.html#linguistics"></a>Linguistics profiles</a> are used
-  to configure linguistics processing for a field in the schema. They are typically used with
-  the <a href="lucene-linguistics.html">Lucene linguistics implementation</a>, but can be used
-  in e.g., <a href="linguistics-custom.html">custom linguistics implementations</a> as well.
+  The <a href="../reference/schemas/schemas.html#linguistics">linguistics</a> block of a field in the schema
+  configures the linguistics processing of that field. It has two settings:
+  a <em>profile</em>, which names how the linguistics implementation should process the text,
+  and <a href="#choosing-which-tokens-to-use"><em>tokens</em></a>, which decides which of the tokens
+  that processing produces for each word are used.
+  Profiles are typically used with the <a href="lucene-linguistics.html">Lucene linguistics implementation</a>,
+  but can be used in e.g., <a href="linguistics-custom.html">custom linguistics implementations</a> as well.
 </p>
 
 <h3 id="symmetrical-processing">Symmetrical processing</h3>
@@ -390,6 +393,119 @@ field title type string {
 <p>
   At this point, <code>where synonyms_test contains 'dog'</code> will match a document containing <code>puppy</code>.
 </p>
+
+<p>
+  The same can be written with an <code>index</code> and a <code>search</code> block, each holding the
+  settings for that side. This form is needed when the <a href="#choosing-which-tokens-to-use">tokens</a>
+  setting should also differ between indexing and searching:
+</p>
+
+<pre>
+  field title type string {
+    indexing: summary | index
+    linguistics {
+        index {
+            profile: whitespaceLowercase
+        }
+        search {
+            profile: whitespaceLowercaseSynonyms
+        }
+    }
+}
+</pre>
+
+<h3 id="choosing-which-tokens-to-use">Choosing which tokens to use</h3>
+
+<p>
+  Linguistics processing often produces more than one token for a word: the stems of it, the parts
+  of a compound, its n-grams, or synonyms like in the example above. By default, Vespa only uses one of
+  them per word, both when indexing and when searching. The <code>tokens</code> setting of the linguistics
+  block controls which tokens are used:
+</p>
+
+<table class="table">
+<thead>
+<tr><th>tokens</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td>original</td>
+<td>Use the original word only, disregarding any alternatives produced for it.
+Equivalent to <a href="../reference/schemas/schemas.html#stemming">stemming</a>: none.</td></tr>
+<tr><td>first-alternative</td>
+<td>Use the one alternative the linguistics implementation considers best for each word, which is the
+first one it produces for most implementations. This is the default, equivalent to stemming: best.</td></tr>
+<tr><td>alternatives</td>
+<td>Use all the alternatives produced for each word, but not the original word itself.</td></tr>
+<tr><td>original-and-alternatives</td>
+<td>Use the original word and all the alternatives produced for it.
+Equivalent to stemming: multiple.</td></tr>
+</tbody>
+</table>
+
+<p>
+  For example, with the n-gram profile from <a href="lucene-linguistics.html#indexing-all-stemmed-words">Indexing all stems</a>,
+  this indexes <code>dog</code> as <code>dog</code>, <code>do</code> and <code>og</code>, so that a
+  search for <code>og</code> matches it:
+</p>
+
+<pre>
+field title_grams type string {
+  indexing: summary | index
+  linguistics {
+      profile: ngram
+      tokens: original-and-alternatives
+  }
+}
+</pre>
+
+<p>
+  As with the profile, <code>tokens</code> given directly in the linguistics block applies both when
+  indexing and when searching, while <code>tokens</code> in an <code>index</code> or <code>search</code>
+  block applies to that side only. This indexes the original words, and expands each query term to the
+  term itself and all its synonyms:
+</p>
+
+<pre>
+field title type string {
+  indexing: summary | index
+  linguistics {
+      index {
+          profile: whitespaceLowercase
+          tokens: original
+      }
+      search {
+          profile: whitespaceLowercaseSynonyms
+          tokens: original-and-alternatives
+      }
+  }
+}
+</pre>
+
+<p>
+  Rules for the <code>tokens</code> setting:
+</p>
+<ul>
+  <li>
+    It takes precedence over any <a href="../reference/schemas/schemas.html#stemming">stemming</a> setting
+    which applies to the field: in the field, in the schema, or in an <code>index</code> block.
+    Deployment warns when such a setting is overridden by a different value.
+  </li>
+  <li>
+    It only applies to string fields with <code>indexing: index</code> and the default text matching.
+    Fields with <code>word</code>, <code>exact</code> or <code>gram</code> matching, uri fields and
+    fields of other types produce a single token per word regardless, so <code>tokens</code> is ignored
+    for them, with a warning.
+  </li>
+  <li>
+    All fields of a <a href="../reference/schemas/schemas.html#fieldset">fieldset</a> are searched as one,
+    so they must use the same tokens when searching, whether that follows from <code>tokens</code> or
+    from <code>stemming</code>. A fieldset where they differ, and at least one field sets <code>tokens</code>,
+    fails deployment.
+  </li>
+  <li>
+    Setting it for one side only makes the other side follow the <code>stemming</code> setting, which is
+    warned about: the index and the query normally need to produce the same tokens to match.
+  </li>
+</ul>
 
 <h3 id="overriding-profile-for-query-strings">Overriding profile for query strings</h3>
 
