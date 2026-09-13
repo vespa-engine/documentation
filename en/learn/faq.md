@@ -298,6 +298,16 @@ Pass [ranking.profile=unranked](../reference/api/query.html#ranking.profile)
 to make the query less expensive to run.
 If an _estimate_ is good enough, use [hitcountestimate=true](../reference/api/query.html#hitcountestimate).
 
+### How to make grouping over many documents, like category counts, less expensive?
+Grouping is evaluated over every matched document on every content node,
+so a query like `where true | all(group(category) each(output(count())))` touches the full corpus on every query.
+Request no hits, use the `unranked` rank profile and set `max` on the grouping to reduce the work.
+
+If approximate counts are acceptable, group over a random 1% sample of the documents and scale the counts.
+
+If the same counts are requested by many users, compute them once and cache them in a Searcher.
+See [aggregating over large result sets](../querying/grouping.html#aggregating-over-large-result-sets).
+
 ### Must all fields in a fieldset have compatible type and matching settings?
 Yes - a deployment warning with _This may lead to recall and ranking issues_ is emitted
 when fields with conflicting tokenization are put in the same
