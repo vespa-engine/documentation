@@ -439,3 +439,13 @@ reduce serving latency (but not cost).
 
 See the [Billion Scale Vector Search with Vespa](https://blog.vespa.ai/billion-scale-knn-part-two/)
 blog post for a detailed introduction to using binary vectors with hamming distance.
+
+
+## Nearest Neighbor and empty fields
+Distance computations to fields without a fed value are skipped:
+internally in exact search, _infinity_ is used for the resulting distance to a non-fed value,
+while the distance threshold defaults to the maximum double value.
+This then ensures that a document with such a distance will not be returned.
+This ensures that the behavior is consistent across exact and approximate search:
+for a field with an HNSW index, if no value is fed, no node will be added to the graph.
+Hence, a document cannot be returned there.
