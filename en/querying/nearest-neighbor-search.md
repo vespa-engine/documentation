@@ -442,10 +442,14 @@ blog post for a detailed introduction to using binary vectors with hamming dista
 
 
 ## Nearest Neighbor and empty fields
-Distance computations to fields without a fed value are skipped:
-internally in exact search, _infinity_ is used for the resulting distance to a non-fed value,
-while the distance threshold defaults to the maximum double value.
-This then ensures that a document with such a distance will not be returned.
-This ensures that the behavior is consistent across exact and approximate search:
-for a field with an HNSW index, if no value is fed, no node will be added to the graph.
-Hence, a document cannot be returned there.
+The nearestNeighbor operator will not find documents
+that do not have a value fed for the searched tensor field:
+In exact search, distance computations to unfed values are skipped
+and simply result in a distance of _infinity_.
+Since the internally used distance threshold defaults to
+the largest representable finite number,
+this means that unfed tensor values cannot produce a match for the document.
+Handling unfed tensor values this way ensures that
+the behavior is consistent across exact and approximate search:
+for a field with an HNSW index, an unfed tensor value means that no node for this value is added to the HNSW graph.
+Hence, also in approximate search, an unfed tensor value cannot result in a match for the document.
