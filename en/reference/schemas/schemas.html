@@ -87,6 +87,7 @@ Names are <em>identifiers</em>, they must match <code>["a"-"z","A"-"Z", "_"]["a"
                 <a href="#index-hnsw">hnsw</a>
             <a href="#indexing">indexing</a>
             <a href="#linguistics">linguistics</a>
+            <a href="#field-map">map</a>
             <a href="#match">match</a>
             <a href="#normalizing">normalizing</a>
             <a href="#query-command">query-command</a>
@@ -684,8 +685,35 @@ field identities type map&lt;string, person&gt; {
         to reduce the amount of data in the document summary.
         </p>
       <p>
-        <a href="/en/performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields">fast-search</a>
-        is used to make query access faster by creating an index structure for lookups.
+        The <a href="/en/performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields">fast-search</a>
+        setting is used to make query access faster by creating an index structure for lookups.
+        However, using the <a href="/en/reference/querying/yql.html#sameelement">sameElement</a> operator
+        to require matches in the same map entry can still be slow since this effectively translates
+        to searching two arrays and taking the intersection of the matching indices.
+        For supported types,
+        one can specify fast-search in the <a href="#field-map">map</a> section
+        of the field to create a synthetic fast-search attribute that stores
+        the key-value pairs of the map as concatenated strings:
+      </p>
+<pre>
+field my_fast_map type map&lt;string, int&gt; {
+    indexing: summary
+    map: fast-search
+}
+</pre>
+      <p>
+        Then, uses of the <a href="/en/reference/querying/yql.html#sameelement">sameElement</a> operator
+        to match a key and a value in the same map entry are translated to
+        a single lookup in the synthetic attribute. This generally leads to a drastic reduction in search time
+        at the cost of having to store the synthetic string attribute and its index structure in memory.
+        {% include important.html content="
+        Only supported uses of the sameElement operator are translated to a lookup in the synthetic attribute.
+        Stick to the <a href='/en/reference/querying/yql.html#shorthand-forms-for-map-fields'>shorthand forms for map fields</a> to make sure that your query will be translated.
+        "%}
+      </p>
+      <p>
+        Use <a href="#matched-elements-only">matched-elements-only</a>
+        to reduce the amount of data in the document summary.
       </p>
       <p>
         As an alternative to a map,
@@ -3006,7 +3034,6 @@ Both <em>index</em> and <em>attribute</em> can be set on a field.
 </p>
 
 
-
 <h2 id="sorting">sorting</h2>
 <p>
 Contained in <a href="#attribute">attribute</a> or
@@ -3788,6 +3815,29 @@ linguistics {
 }
 </pre>
 
+
+<h2 id="field-map">map</h2>
+<p>Contained in <a href="#field">field</a> of type <a href="#map">map</a>.
+Specifies a property of a map:
+<pre>
+map: [property]
+</pre>
+or
+<pre>
+map {
+    [property]
+    [property]
+    &hellip;
+}
+</pre>
+Actions required when <a href="#modifying-schemas">adding or modifying attributes</a>. Properties:
+<table class="table">
+<thead>
+<tr><th style="width:150px">Property</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td>fast-search</td><td>Create a synthetic attribute from the map that allows for faster search. Supported for map&lt;string, string&gt;, map&lt;string, int&gt;, and map&lt;string, long&gt;. See the field type <a href="#map">map</a> for more information.</td></tr>
+</tbody>
+</table>
 
 
 <h2 id="match">match</h2>
