@@ -379,7 +379,10 @@ where field contains onear("java", "tutorial", !"script")
       <p>By default, sameElement uses <code>AND</code> to combine the conditions: <i>All</i> the conditions
       must match in the same element to produce a match.</p>
 
-      <p>For example, given this <b>struct</b>:</p>
+      <p>Usage examples for the <code>sameElement()</code> operator:</p>
+      <ul>
+        <li><b>array-of-struct</b> fields</li>
+          <p>For example, given the struct and array of this struct</p>
 <pre>
 struct person {
     field first_name    type string {}
@@ -394,15 +397,16 @@ field persons type array&lt;person&gt; {
     struct-field year_of_birth { indexing: attribute }
 }
 </pre>
-      <p>We can use this query:</p>
+      <p>we can use the query</p>
 <pre>
 where persons contains sameElement(first_name contains 'Joe', last_name contains 'Smith', year_of_birth < 1940)
 </pre>
-      <p>to return all documents containing a Joe Smith born before 1940 in the <code>persons</code> array.</p>
+          <p>to return all documents containing a Joe Smith born before 1940 in the <code>persons</code> array.</p>
 
-      <p>Searching a <b>map</b> is done by treating it as an array of a struct with the field members <code>key</code> and <code>value</code>.
-        For example, given this map:
-      </p>
+        <li>Search <b>map</b> fields</li>
+          <p>Searching a map is done by treating it as an array of a struct with the field members <code>key</code> and <code>value</code>.
+            For example, given the map
+          </p>
 <pre>
 field identities type map&lt;string, person&gt; {
     indexing: summary
@@ -412,24 +416,61 @@ field identities type map&lt;string, person&gt; {
     struct-field value.year_of_birth { indexing: attribute }
 }
 </pre>
-      <p>We can use this query:</p>
-      <pre>
+          <p>we can use the query</p>
+<pre>
 where identities contains sameElement(key contains 'father', value.first_name contains 'Joe', value.last_name contains 'Smith', value.year_of_birth < 1940)
 </pre>
-      <p>to return all documents that have a Joe Smith born before 1940 keyed as a 'father'.</p>
+          <p>to return all documents that have a Joe Smith born before 1940 keyed as a 'father'.</p>
 
-      <p><code>sameElement()</code> may also be used to search <b>array of string</b> fields. Supported query operators
-      inside sameElement() are <code>and</code>, <code>equiv</code>,
-      <code>near</code>, <code>onear</code>, <code>or</code>, <code>rank</code> and <code>phrase</code>.
-      <code>and</code> can be used with <code>!</code>.</p>
-      <p>For example given this field:
-      <pre>
+        <li id="shorthand-forms-for-map-fields">Shorthand forms for <b>map</b> fields</li>
+          <ul>
+           <li>
+             For a field <code>my_string_map</code> of type <code>map&lt;string, string&gt;</code>, the query
+           </li>
+<pre>
+where my_string_map contains sameElement(key contains 'foo', value contains 'bar')
+</pre>
+              <p>can alternatively be written as
+              </p>
+<pre>
+where my_string_map{'foo'} contains 'bar'
+</pre>
+
+           <li>For a field <code>my_int_map</code> of type <code>map&lt;string, int&gt;</code>, the query
+           </li>
+<pre>
+where my_int_map contains sameElement(key contains 'foo', value = 42)
+</pre>
+              <p>can alternatively be written as
+              </p>
+<pre>
+where my_int_map{'foo'} = 42
+</pre>
+           <li>For a field <code>my_int_map</code> of type <code>map&lt;string, int&gt;</code>, the query
+           </li>
+<pre>
+where my_int_map contains sameElement(key contains 'foo', range(value, 10, 42))
+</pre>
+              <p>can alternatively be written as
+              </p>
+<pre>
+where range(my_int_map{'foo'}, 10, 42)
+</pre>
+          </ul>
+
+        <li><b>array-of-string</b> fields</li>
+          <p><code>sameElement()</code> may also be used to search array of string fields. Supported query operators
+          inside sameElement() are <code>and</code>, <code>equiv</code>,
+          <code>near</code>, <code>onear</code>, <code>or</code>, <code>rank</code> and <code>phrase</code>.
+          <code>and</code> can be used with <code>!</code>.</p>
+          <p>For example given the field
+<pre>
 field chunks type array&lt;string&gt; {
     indexing: index | summary
 }
 </pre>
 
-      <p>We can use these queries:</p>
+          <p>we can use the following queries:</p>
 
 <pre>
 where chunks contains sameElement("one" and "two")
@@ -440,27 +481,30 @@ where chunks contains sameElement("one" and !"two")
 where chunks contains sameElement("one" or "two")
 where chunks contains sameElement(rank("one" and "two", "three"))
 </pre>
-      <p>
-	Features inside sameElement() for indexed fields are filtered based on the matching elements, e.g.
-	<a href="../ranking/rank-features.html#elementwise-bm25">elementwise(bm25(descriptions),x,double)</a> will only
-	contain tensor cells based on the matching elements.
-      </p>
+          <p>
+        Features inside sameElement() for indexed fields are filtered based on the matching elements, e.g.,
+        <a href="../ranking/rank-features.html#elementwise-bm25">elementwise(bm25(descriptions),x,double)</a> will only
+        contain tensor cells based on the matching elements.
+          </p>
 
-      <p>Use the <a href="#elementfilter"><code>elementFilter</code></a> annotation
-      to restrict matching to specific element indices.
-      For example, given a field <code>my_numbers type array&lt;int&gt;</code>:</p>
+        <li><b>array fields</b> at <b>specific indices</b></li>
+          <p>Use the <a href="#elementfilter"><code>elementFilter</code></a> annotation
+          to restrict matching to specific element indices.
+          For example, given a field <code>my_numbers type array&lt;int&gt;</code>:</p>
 <pre>
 where my_numbers contains ({elementFilter:[2]}sameElement("42"))
 </pre>
-      <p>This only matches the element at index 2 in the array field.
-      Multiple indices can be given: <code>{elementFilter:[0, 2, 5]}</code>.</p>
+          <p>This only matches the element at index 2 in the array field.
+          Multiple indices can be given: <code>{elementFilter:[0, 2, 5]}</code>.</p>
 
-      <p>A shorthand form is also available:</p>
+          <p>A shorthand form is also available:</p>
 <pre>
 where my_numbers[2] = 42
 </pre>
-      <p>The shorthand form only supports a single index.
-      Use the <a href="#elementfilter"><code>elementFilter</code></a> annotation to match multiple indices.</p>
+          <p>The shorthand form only supports a single index.
+          Use the <a href="#elementfilter"><code>elementFilter</code></a> annotation to match multiple indices.
+          </p>
+      </ul>
     </td>
   </tr>
 
