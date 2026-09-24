@@ -182,7 +182,9 @@ queries.
         so on its own it is not a filter. Add
         <a href="../reference/querying/yql.html#distancethreshold">distanceThreshold</a> and a
         <code>targetHits</code> high enough to cover every document within that distance.
-        The count is still capped at <code>targetHits</code> per node.
+        With HNSW, the count is still capped at <code>targetHits</code> per node. With
+        <code>approximate:false</code>, the count can exceed <code>targetHits</code>, but is
+        exact only when <code>targetHits</code> covers every document within the distance.
       </td>
     </tr>
     <tr>
@@ -206,13 +208,22 @@ and <code>text()</code>, for example <code>{grammar: "all"}userInput(@q)</code>,
 ### Differences from your query's totalCount
 
 Combinations use your query's [rank profile](../ranking/ranking-intro.html),
-so its query inputs and [match-phase](../reference/schemas/schemas.html#match-phase)
-limits apply to combinations too. One exception: a first-phase
-[rank-score-drop-limit](../reference/schemas/schemas.html#rank-score-drop-limit)
+so its query inputs apply to combinations too.
+
+A first-phase [rank-score-drop-limit](../reference/schemas/schemas.html#rank-score-drop-limit)
 reduces your query's `totalCount` but not a combination's count. A combination asks for
 zero hits, so there is nothing to order and Vespa skips ranking, and without a score
-there is nothing for the limit to drop. This does not apply if the query contains
-`nearestNeighbor`, `weakAnd` or `wand`, which need scores to match and are always ranked.
+there is nothing for the limit to drop. The same holds for your query when it also
+asks for zero hits, so with `hits=0` neither count is reduced. This does not apply if
+the query contains `nearestNeighbor`, `weakAnd` or `wand`, which need scores to match
+and are always ranked.
+
+{% include important.html content='If the rank profile has
+<a href="../reference/schemas/schemas.html#match-phase">match-phase</a> and it limits
+matching, the count of a combination is only an estimate. Such a combination is omitted from
+<code>buckets</code>, and an error naming it is added to <code>root.errors</code>, so
+typically no counts are returned. Use a rank profile without match-phase for queries
+with filter intersections.' %}
 
 ### Computational cost
 
@@ -238,6 +249,10 @@ combinations or a busy container, some may not finish in time. A count is never 
 wrong silently: a combination that fails or has degraded coverage is omitted from `buckets`,
 and an error naming the combination is added to `root.errors`. Invalid filters or parameters
 reject the whole request. See the [errors reference](../reference/querying/filter-intersections.html#errors).
+
+Your query runs in the same thread pool as its combinations, so with a short `timeout`
+and many combinations, your query itself can time out. The whole request then fails
+with a timeout error, and no counts are returned.
 
 ### Counts only
 

@@ -63,8 +63,8 @@ lower-bound counts, see the [caveats](../../querying/filter-intersections.html#c
 
 ## Result format
 
-Added to the result as the field `filterIntersections` under `root.fields`,
-only when the searcher processed filters:
+Added to the result as the field `filterIntersections` under `root.fields`
+when the request has filters. A rejected request also gets the field, with no buckets:
 
 <table class="table">
   <thead>
@@ -147,10 +147,14 @@ A request producing more than `filterIntersections.maxCells` cells is rejected w
   together with the original query. Latency is roughly that of the slowest cell
   while threads are free. On a saturated container, cells may run one after another and
   miss the deadline.
+* The original query runs in the same thread pool, so with a short `timeout` and many cells,
+  it can time out too. The whole request then fails with a timeout error and no buckets.
 * Each cell may use up to the remaining time of the request's `timeout`.
 * Content node load grows linearly with the number of cells.
 * Since soft timeout is off, a cell either covers the full corpus or is reported as
   degraded. Degraded cells are omitted, never returned with a partial count.
+  This includes cells limited by the rank profile's
+  [match-phase](../schemas/schemas.html#match-phase), whose counts are estimates.
 
 ## Errors
 
@@ -166,12 +170,17 @@ A request producing more than `filterIntersections.maxCells` cells is rejected w
           for example <code>Filter 'broken': invalid YQL: ...</code>. Nothing is sent to the content nodes.</td>
     </tr>
     <tr>
+      <td><code>dimensions</code> or <code>maxCells</code> not an integer</td>
+      <td>Whole request fails with HTTP status 400, <code>Bad request</code>, naming the value,
+          for example <code>'abc' is not a valid integer</code>. Nothing is sent to the content nodes.</td>
+    </tr>
+    <tr>
       <td>A cell's query returns an error from the content nodes</td>
       <td>That bucket is omitted. The error is added to <code>root.errors</code>, prefixed with <code>Intersection cell '&lt;key&gt;':</code>.
           Other buckets and the main result are unaffected.</td>
     </tr>
     <tr>
-      <td>A cell's query has degraded coverage (timeout, node down)</td>
+      <td>A cell's query has degraded coverage (timeout, node down, match-phase)</td>
       <td>That bucket is omitted. An error with the coverage reached is added to <code>root.errors</code>, for example
           <code>Intersection cell 'brand&amp;instock': degraded coverage (50%), count not exact</code>.</td>
     </tr>
