@@ -325,6 +325,7 @@ that belong to that group (using the <code>output</code> operation):
   <li>The count of documents in a group</li>
   <li>The sum, average, min, max, xor or standard deviation of an expression</li>
   <li>Multiple quantiles of an expressions value</li>
+  <li>The value of an expression for the document with the smallest or largest value of another expression (argmin, argmax)</li>
 </ul>
 <p>
 When all arguments are numeric, the result type is resolved by looking at the argument types.
@@ -344,6 +345,16 @@ Compute quantiles by listing the desired quantile values (comma-separated) in br
 to compute the median, or
 <pre>all( group(city) each(output(quantiles([0.5, 0.9], delivery_days))) )</pre>
 This computes the median (p50) and 90th percentile (p90) time to delivery in days per city. Note that quantiles are computed using <a href="https://datasketches.apache.org/docs/KLL/KLLSketch.html">KLL Sketch</a>, so they are approximate.
+</p><p>
+Use <code>argmin(key, value)</code> and <code>argmax(key, value)</code> to get the value of one expression
+for the document that has the smallest or largest value of another expression:
+<pre>all( group(artist) each(output(argmin(price, title))) )</pre>
+This outputs the title of the cheapest track per artist, where <code>min(price)</code> would only output the price.
+The key must be numeric, while the value can be of any type, including multivalue.
+Documents where the key is not set are skipped, and the output is <code>null</code> if no document in the group has a key.
+If several documents share the smallest or largest key, one of them is selected.
+Both can be used in <code>order</code>, e.g. <code>order(-argmin(price, title))</code>.
+Available since {% include version.html version="8.761.27" %}.
 </p><p>
 Multivalue fields, such as maps and arrays, can be used for grouping.
 However, using aggregation functions such as sum() on such fields can give misleading results.
@@ -381,6 +392,8 @@ for more examples.
   <tr><td>xor</td><td>XOR the values (their least significant 64 bits) of all selected documents</td><td>Any</td><td>Long</td></tr>
   <tr><td>stddev</td><td>Computes the population standard deviation over all selected documents</td><td>Numeric</td><td>Double</td></tr>
   <tr><td>quantiles</td><td>Computes one or multiple quantiles of the values of an expression. Quantiles must be a number between 0 and 1 inclusive.</td><td>[Numeric+], Expr</td><td>[{"quantile":Double,"value":Double}+]</td></tr>
+  <tr><td>argmin</td><td>Keeps the value of the second argument for the document with the smallest value of the first argument</td><td>Numeric, Any</td><td>Any</td></tr>
+  <tr><td>argmax</td><td>Keeps the value of the second argument for the document with the largest value of the first argument</td><td>Numeric, Any</td><td>Any</td></tr>
 
   <tr><td colspan="4"><h3 id="hit-aggregators">Hit aggregators</h3></td></tr>
   <tr class="trx"><th class="thx">Name</th><th class="thx">Description</th><th class="thx">Arguments</th><th class="thx">Result</th></tr>
@@ -638,6 +651,8 @@ aggr       ::= ( ( "count" "(" ")" ) |
                  ( "xor" "(" exp ")" ) |
                  ( "stddev" "(" exp ")" ) |
                  ( "quantiles" "(" "[" number ( "," number )* "]" "," exp ")" ) |
+                 ( "argmin" "(" exp "," exp ")" ) |
+                 ( "argmax" "(" exp "," exp ")" ) |
                  ( "summary" "(" [ identifier ] ")" ) )
                [ "as" "(" identifier ")" ]
 expList    ::= exp ( "," exp )*
