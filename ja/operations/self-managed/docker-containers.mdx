@@ -1,0 +1,246 @@
+---
+title: "Docker コンテナー"
+---
+
+このドキュメントでは、ラップトップ上での開発者向けの利用と本番環境の両方における、Vespa の Docker コンテナー実行のためのチューニングと調整について説明します。
+
+## 永続ボリュームのマウント
+
+[クイックスタート](/ja/basics/deploy-an-application-local)と [AWS ECS マルチノード](/ja/operations/self-managed/multinode-systems#aws-ecs)のガイドでは、Docker コンテナーで Vespa を実行する方法を示しています。これらの例では、すべてのデータはコンテナー内に格納されます。コンテナーが削除されるとデータは失われます。本番環境で Docker コンテナー内の Vespa を実行する場合は、データとログを永続化するために、親ホストへのボリュームマッピングを追加すべきです。
+
+- /opt/vespa/var
+- /opt/vespa/logs
+
+```bash
+$ mkdir -p /tmp/vespa/var;  export VESPA_VAR_STORAGE=/tmp/vespa/var
+$ mkdir -p /tmp/vespa/logs; export VESPA_LOG_STORAGE=/tmp/vespa/logs
+$ docker run --detach --name vespa --hostname vespa-container \
+  --volume $VESPA_VAR_STORAGE:/opt/vespa/var \
+  --volume $VESPA_LOG_STORAGE:/opt/vespa/logs \
+  --publish 8080:8080 \
+  vespaengine/vespa
+```
+
+## Vespa ユーザーで Vespa コンテナーを起動する
+
+コンテナーを直接 *vespa* ユーザーとして起動できます。コンテナー内の *vespa* ユーザーとグループは、ユーザー ID *1000*、グループ ID *1000* で設定されています。Vespa を起動するには、コンテナーにマウントされる */opt/vespa/var* および */opt/vespa/logs* ボリュームの所有者が vespa ユーザーとグループである必要があります。これは、Vespa が必要なディレクトリと、それらのディレクトリ内のファイルを作成するために必要です。
+
+起動スクリプトは、正しい所有者の uid と gid が設定されていることを確認し、誤ったユーザーまたはグループが所有者として設定されている場合は失敗します。
+
+Vespa コンテナーに分離されたユーザー名前空間を使用する場合、マッピングに応じて、ホスト上のディレクトリの uid と gid を従属的な(subordinate)uid と gid に設定する必要があります。詳細は [Docker のドキュメント](https://docs.docker.com/engine/security/userns-remap/)を参照してください。
+
+```bash
+$ mkdir -p /tmp/vespa/var;  export VESPA_VAR_STORAGE=/tmp/vespa/var
+$ mkdir -p /tmp/vespa/logs; export VESPA_LOG_STORAGE=/tmp/vespa/logs
+$ sudo chown -R 1000:1000 $VESPA_VAR_STORAGE $VESPA_LOG_STORAGE
+$ docker run --detach --name vespa --user vespa:vespa --hostname vespa-container \
+  --volume $VESPA_VAR_STORAGE:/opt/vespa/var \
+  --volume $VESPA_LOG_STORAGE:/opt/vespa/logs \
+  --publish 8080:8080 \
+  vespaengine/vespa
+```
+
+## システム制限
+
+Vespa が Docker コンテナー内で起動すると、起動スクリプトが[システム制限](/ja/operations/self-managed/files-processes-and-ports#vespa-system-limits)を設定します。Docker エンジンを起動する環境が、これらの制限をコンテナー内で設定できるようにセットアップされていることを確認してください。
+
+CentOS/RHEL ベースのホストでは、Docker は通常 [systemd](https://www.freedesktop.org/software/systemd/man/systemd.exec.html) によって起動されます。この場合、[システム制限](/ja/operations/self-managed/files-processes-and-ports#vespa-system-limits)の最小要件を満たすように、`LimitNOFILE`、`LimitNPROC`、`LimitCORE` を設定すべきです。
+
+一般に、Docker または Podman を使用して Vespa を実行する場合は、`--ulimit` オプションを使用して、[システム制限](/ja/operations/self-managed/files-processes-and-ports#vespa-system-limits)に従った制限を設定すべきです。`--pids-limit` は無制限(Docker では `-1`、Podman では `0`)に設定すべきです。
+
+## Transparent Huge Pages
+
+[Transparent Huge Pages (THP)](https://www.kernel.org/doc/html/latest/admin-guide/mm/transhuge.html) を有効にすると、Vespa のパフォーマンスは大きく向上します。特に、クエリーと書き込みのワークロードが同時に発生する、大きな密テンソルを持つメモリ集約型のアプリケーションで効果的です。
+
+あるアプリケーションでは、THP を有効にすることで、クエリーと書き込みの同時実行時のクエリー p99 レイテンシーが 950 ms から 150 ms に改善しました。AWS や GCP のような仮想化環境で実行する場合は、ネストされたページテーブルのため、THP の使用はさらに重要になります。
+
+コンテナーイメージを使用して Vespa を実行する場合、*THP* の設定はベースホストの OS(Linux)で行う必要があります。推奨される設定は次のとおりです。
+
+```bash
+$ echo 1 >      /sys/kernel/mm/transparent_hugepage/khugepaged/defrag
+$ echo always > /sys/kernel/mm/transparent_hugepage/enabled
+$ echo never >  /sys/kernel/mm/transparent_hugepage/defrag
+```
+
+設定が有効になっていることを確認するには、*AnonHugePages* がゼロ以外であることを確認します。この例では、AnonHugePages を使用して 75 GB が割り当てられています。
+
+```bash
+$ cat /proc/meminfo |grep AnonHuge
+
+  AnonHugePages:  75986944 kB
+```
+
+ベースホスト OS の設定を変更した後、変更を有効にするには Vespa コンテナーを再起動する必要があることに注意してください。Vespa は、[コンテント・ノードのプロセス (proton)](/ja/content/proton) が行うメモリ割り当てに `MADV_HUGEPAGE` を使用します。
+
+## 起動するサービスの制御
+
+Docker イメージ *vespaengine/vespa* の[起動スクリプト](https://github.com/vespa-engine/docker-image/blob/master/include/start-container.sh)は、コンテナー内で起動するサービスを制御するパラメーターを受け取ります。
+
+*configserver* コンテナーの起動:
+
+```bash
+$ docker run <other arguments> \
+  --env VESPA_CONFIGSERVERS=<comma separated list of config servers> \
+  vespaengine/vespa configserver
+```
+
+*services* コンテナーの起動(configserver は起動されません):
+
+```bash
+$ docker run <other arguments> \
+  --env VESPA_CONFIGSERVERS=<comma separated list of config servers> \
+  vespaengine/vespa services
+```
+
+*configserver と services の両方*を持つコンテナーの起動:
+
+```bash
+$ docker run <other arguments> \
+  --env VESPA_CONFIGSERVERS=<comma separated list of config servers> \
+  vespaengine/vespa configserver,services
+```
+
+これは、configserver コンテナーが adminserver や logserver のような他のサービスを実行する必要がある場合に必要です([services.html](/ja/reference/applications/services/services) を参照)
+
+環境変数 [VESPA\_CONFIGSERVERS](/ja/operations/self-managed/files-processes-and-ports#environment-variables) が指定されていない場合、コンテナーのホスト名が設定されます。[ノードのセットアップ](/ja/operations/self-managed/node-setup#hostname)も参照してください。
+
+config サーバーとサービスのセットアップ方法の設計図として、[multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) サンプルアプリケーションを活用してください。
+
+## グレースフルストップ
+
+実行中の *vespaengine/vespa* コンテナーを停止するとグレースフルシャットダウンがトリガーされ、コンテナーを再度起動する際の時間を節約できます(データ構造がフラッシュされるためです)。コンテナーが強制的にシャットダウンされた場合、コンテント・ノードはトランザクションログから状態を復元する必要があり、時間がかかることがあります。データは常に永続ストレージに書き込まれ同期されているため、データの損失や破損の可能性はありません。
+
+Docker デーモンがシャットダウンを待つデフォルトのタイムアウトは、ノードあたりのドキュメント数が多い場合には短すぎることがあります。以下の stop は、実行中のコンテナーを強制終了するまでに少なくとも 120 秒待ちます。タイムアウトが経過する前に停止が正常に行われた場合、コマンドの所要時間はタイムアウトより短くなります。
+
+```bash
+$ docker stop name -t 120
+```
+
+Docker デーモンのデフォルトタイムアウトを設定することも可能です。[\--shutdown-timeout](https://docs.docker.com/reference/cli/dockerd/) を参照してください。
+
+クリーンなコンテント・ノードのシャットダウンは次のようになります。
+
+```bash
+[2025-05-02 10:07:52.052] EVENT   searchnode       proton.node.server   stopping/1 name="storagenode" why="Stopped"
+[2025-05-02 10:07:52.056] EVENT   searchnode       proton       stopping/1 name="servicelayer" why="clean shutdown"
+[2025-05-02 10:07:52.056] INFO    searchnode       proton.proton.server.rtchooks        shutting down monitoring interface
+[2025-05-02 10:07:52.058] INFO    searchnode       proton.searchlib.docstore.logdatastore      Flushing. Disk bloat is now at 0 of 8832 at 0.00 percent
+[2025-05-02 10:07:52.059] INFO    searchnode       proton.searchlib.docstore.logdatastore      Flushing. Disk bloat is now at 0 of 8832 at 0.00 percent
+[2025-05-02 10:07:52.060] INFO    searchnode       proton.searchlib.docstore.logdatastore      Flushing. Disk bloat is now at 0 of 8840 at 0.00 percent
+[2025-05-02 10:07:52.066] INFO    searchnode       proton.transactionlog.server Stopping TLS
+[2025-05-02 10:07:52.066] INFO    searchnode       proton.transactionlog.server TLS Stopped
+[2025-05-02 10:07:52.071] EVENT   searchnode       proton       stopping/1 name="proton" why="clean shutdown"
+[2025-05-02 10:07:52.078] EVENT   config-sentinel  sentinel.sentinel.service    stopped/1 name="searchnode" pid=354 exitcode=0
+```
+
+## メモリ
+
+[サンプルアプリケーション](https://github.com/vespa-engine/sample-apps)と[ローカルでのアプリケーションのデプロイガイド](/ja/basics/deploy-an-application-local)には、Docker コンテナーの最小メモリ要件が示されています。
+
+<Note>
+**注:** 
+
+Docker コンテナーで Vespa をテストする際、メモリ不足は非常によくある問題です。サポートに問い合わせる前に、以下を使用してトラブルシューティングを行ってください。[FAQ](/ja/learn/faq) も参照してください。
+</Note>
+
+目安として、単一ノードの Vespa アプリケーションには、Docker コンテナーに最低 4 GB が必要です。メモリ使用量の追跡には `docker stats` が便利です。
+
+```bash
+$ docker stats
+
+CONTAINER ID   NAME      CPU %     MEM USAGE / LIMIT    MEM %     NET I/O           BLOCK I/O        PIDS
+589bf5801b22   node0     213.25%   697.3MiB / 3.84GiB   17.73%    14.2kB / 11.5kB   617MB / 976MB    253
+e108dde84679   node1     213.52%   492.7MiB / 3.84GiB   12.53%    15.7kB / 12.7kB   74.3MB / 924MB   252
+be43aacd0bbb   node2     191.22%   497.8MiB / 3.84GiB   12.66%    19.6kB / 21.6kB   64MB / 949MB     261
+```
+
+Vespa がすべてのサービスを正常に起動したことを確認するのは、必ずしも簡単ではありません。メモリ不足によるエラーの症状は、どこで失敗するかによって異なります。例: 2G のみで[クイックスタート](/ja/basics/deploy-an-application-local)を実行している、*vespa* という名前のコンテナーの再起動ログを調べます。
+
+```bash
+$ docker exec -it vespa sh -c "/opt/vespa/bin/vespa-logfmt -S config-sentinel -c sentinel.sentinel.service"
+
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 2.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 6.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 14.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 30.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: will delay start by 25.173 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 62.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 126.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: will delay start by 119.515 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 254.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 510.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: will delay start by 501.026 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 1022.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: incremented restart penalty to 1800.000 seconds
+INFO    : config-sentinel  sentinel.sentinel.service	container: will delay start by 1793.142 seconds
+```
+
+*container* サービスが、休止時間を増やしながらループで再起動していることが観察できます。
+
+よくある問題は、メモリ不足により [config サーバー](/ja/operations/self-managed/configuration-server)が起動しない、または正常に動作しないことです。これは、19071 で何もリッスンしていない、あるいはデプロイの失敗として現れます。
+
+ガイドやサンプルアプリケーションの中には、リソース使用量を最小限に抑えるための特別な設定を持つものがあります。[multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) の例:
+
+```bash
+$ docker run --detach --name node0 --hostname node0.vespanet \
+    -e VESPA_CONFIGSERVERS=node0.vespanet,node1.vespanet,node2.vespanet \
+    -e VESPA_CONFIGSERVER_JVMARGS="-Xms32M -Xmx128M"  \
+    -e VESPA_CONFIGPROXY_JVMARGS="-Xms32M -Xmx32M" \
+    --network vespanet \
+    --publish 19071:19071 --publish 19100:19100 --publish 19050:19050 --publish 20092:19092 \
+    vespaengine/vespa
+```
+
+ここでは、[VESPA\_CONFIGSERVER\_JVMARGS](/ja/operations/self-managed/files-processes-and-ports#environment-variables) と [VESPA\_CONFIGPROXY\_JVMARGS](/ja/operations/self-managed/files-processes-and-ports#environment-variables) が、機能テストのためだけに最小限に調整されています。
+
+<Warning>
+**重要:** 
+
+本番環境での使用では、十分に理解している場合を除き、`VESPA_CONFIGSERVER_JVMARGS` と `VESPA_CONFIGPROXY_JVMARGS` のメモリ設定を減らさないでください。Vespa のデフォルトは通常の本番利用向けに設定されており、変更が必要になることはほとんどありません。
+</Warning>
+
+コンテナーのメモリ設定は *services.xml* で行います。[multinode-HA](https://github.com/vespa-engine/sample-apps/blob/master/examples/operations/multinode-HA/services.xml) の例:
+
+```xml
+<container id="query" version="1.0">
+    <nodes>
+        <jvm options="-Xms32M -Xmx128M"/>
+        <node hostalias="node6" />
+        <node hostalias="node7" />
+```
+
+この設定が、Vespa を実行している Docker コンテナーと一致していることを確認してください。
+
+その他の設定については、[ノードのメモリ設定](/ja/operations/self-managed/node-setup#memory-settings)も参照してください。
+
+## ネットワーク
+
+Vespa のプロセスは、固定ポートとエフェメラルポートの両方で通信します。一般に、すべてのポートにアクセスできる必要があります。[エフェメラルポート使用の例](/ja/writing/visiting#handshake-failed)を参照してください。
+
+Docker ネットワークを使用したアプリケーションの例は [multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) にあります。
+
+## リソース使用量
+
+ドキュメントがゼロでクエリーがゼロであっても、CPU 使用率はゼロにはならないことに注意してください。*vespaengine/vespa* コンテナーイメージを起動すると、[configuration サーバー](/ja/operations/self-managed/configuration-server)と [configuration sentinel](/ja/operations/self-managed/config-sentinel) が起動します。アプリケーションをデプロイすると、sentinel が設定されたサービスプロセスを起動し、それらはすべて、処理すべき作業や設定の変更などを待ち受けます。
+
+そのため、「アイドル状態」のコンテナーインスタンスでも CPU とメモリを消費します。
+
+## トラブルシューティング
+
+Vespa のドキュメントの例では `docker` を使用しています。Vespa チームは `podman` の使用でも良い経験を得ています。例の中の `docker` を `podman` に変更するだけです。Podman v5 の使用をお勧めします。[リリースノート](https://github.com/containers/podman/blob/main/RELEASE_NOTES.md)を参照してください。[emulating-docker-cli-with-podman](https://podman-desktop.io/docs/migrating-from-docker/emulating-docker-cli-with-podman) は有用なリソースです。
+
+起動失敗の多くは、設定エラーまたはダウンロードエラーによる Vespa コンテナーの起動失敗が原因です。ログを表示するには `docker logs vespa` を使用してください(この例では `vespa` という名前の Docker コンテナーを想定しています。コンテナーの一覧表示には `docker ps` を使用してください)。
+
+### Docker イメージ
+
+最新の Vespa リリースを使用していることを確認し([リリース](https://factory.vespa.ai/releases)を確認)、ダウンロードしたイメージを検証してください。
+
+```bash
+$ docker images
+REPOSITORY                   TAG         IMAGE ID      CREATED       SIZE
+docker.io/vespaengine/vespa  latest      8cfb0da22c01  35 hours ago  1.2 GB
+```
+
+### モデルのダウンロード失敗
+
+アプリケーション・パッケージがダウンロードされるモデルに依存している場合は、`RuntimeException: Not able to create config builder for payload` を探してください - [詳細](/ja/applications/components#component-load)。

@@ -1,0 +1,445 @@
+---
+title: "10億スケールの画像検索"
+---
+
+このサンプルアプリケーションは、2 つのサンプルアプリケーション、
+[text-image-search](https://github.com/vespa-engine/sample-apps/tree/master/text-image-search) と
+[billion-scale-vector-search](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-vector-search) を組み合わせて、
+マルチモーダル AI によるベクトル表現に対する、コスト効率の高い大規模画像検索を実装します。
+
+## ベクトルデータセット
+このサンプルアプリは、世界最大のオープンアクセス可能な画像テキストデータセットである
+[LAION-5B](https://laion.ai/blog/laion-5b/) データセットを使用します。
+
+> ALIGN、BASIC、Turing Bletchly、FLORENCE、GLIDE のような大規模な画像テキストモデルは、
+> CLIP や DALL-E といった以前のフラッグシップモデルと比較して、ますます優れたパフォーマンスを示してきました。
+> それらのほとんどは数十億の画像テキストペアでトレーニングされていましたが、残念ながら、この規模のデータセットはこれまで公開されていませんでした。
+> この問題に対処するため、私たちは研究目的の大規模データセットである LAION 5B を公開します。
+> これは 58.5 億件の CLIP でフィルタリングされた画像テキストペアで構成されます。23 億件は英語を含み、
+> 22 億件は 100 以上の他の言語からのサンプル、10 億件は特定の言語への割り当てができないテキスト(例: 名前)のサンプルです。
+
+LAION-5B データセットは、人気のあるテキストから画像を生成する StableDiffusion モデルのトレーニングに使用されました。
+
+<Note>
+LAION 5B データセットについては、次の点に注意してください:
+
+> この大規模データセットはキュレーションされていないことに注意してください。
+> データセットがキュレーションされていないという性質上、収集されたリンクは、
+> 人間の閲覧者にとって強い不快感や動揺を与えるコンテンツにつながる可能性があることに留意してください。
+</Note>
+
+
+公開されたデータセットには画像データそのものは含まれておらず、
+[CLIP](https://openai.com/research/clip) でエンコードされた画像のベクトル表現と、
+`url` や `caption` などのメタデータが含まれています。
+
+## ユースケース
+
+このアプリは、LAION データセットに対するいくつかのユースケースの実装に使用できるほか、皆さん自身の大規模ベクトルデータセットに適用することもできます:
+
+- Vespa の標準的なテキストマッチング機能を使用して、LAION データセットの `caption` または `url` フィールドに対してフリーテキストプロンプトで検索する。
+- CLIP retrieval。ベクトル検索を使用し、テキストプロンプトを与えて画像のベクトル表現 (CLIP ViT-L/14) を検索する。たとえば「french cat」など。
+- 画像のベクトル表現を与えて、データセット内の類似画像を検索する。これはたとえば、
+StableDiffusion の出力画像を使って、トレーニングデータセット内の類似画像を見つけるために使用できます。
+
+これらすべてを [Vespa のクエリー言語](/ja/querying/query-language)を使用して組み合わせ、
+さらにフィルターとも組み合わせられます。
+
+## このサンプルで示す Vespa のプリミティブ
+
+このサンプルアプリケーションは、Vespa の多くのプリミティブを示しています:
+
+- [Vespa のステートレス](/ja/learn/overview)コンテナーでの[高速化された推論](https://blog.vespa.ai/stateful-model-serving-how-we-accelerate-inference-using-onnx-runtime/)のための、
+[CLIP ViT-L/14](https://github.com/openai/CLIP) の [ONNX](https://onnx.ai/) エクスポート版のインポート。
+エクスポートされた CLIP モデルは、フリーテキストのプロンプトを、768 次元の画像・テキスト共同エンベディング空間にエンコードします。
+- データセットから抽出したベクトルのセントロイドの [HNSW](/ja/querying/approximate-nn-hnsw) インデックス化と、
+[Billion-scale vector search using hybrid HNSW-IF](https://blog.vespa.ai/vespa-hybrid-billion-scale-vector-search/)
+で説明されている古典的な転置ファイル (Inverted File) との組み合わせ。
+- ベクトルストレージとベクトル類似度計算の分離。ステートレスレイヤーは、完全精度のベクトルに対して
+ベクトル類似度計算を実行します。
+[onnxruntime](https://onnxruntime.ai/) による高速化された推論という Vespa のサポートを使用して、
+ベクトル計算の大部分をステートレスレイヤーに移すことで、
+日々のクエリー量の変化に合わせたより高速なオートスケーリングが可能になります。
+完全精度のベクトルは、ロスレス圧縮 (zstd) を使用して Vespa のサマリーログストアに保存されます。
+- PCA による次元削減 - セントロイドベクトルは 768 次元から 128 次元に圧縮されます。メモリーフットプリントの削減により、
+同じインスタンスタイプで 6 倍のセントロイドをインデックス化できます。Vespa の分散検索のサポートと、強力な
+大容量メモリーインスタンスを組み合わせることで、Vespa は 1 兆規模のベクトルデータセットにもコスト効率よくスケールできます。
+- 768 次元のベクトルを 128 次元に射影する、トレーニング済みの PCA 行列と行列乗算は、
+インデックス時とクエリー時の両方で、高速化された推論を使用して Vespa 内で評価されます。PCA の重みも ONNX を使用して表現されます。
+- フェーズドランキング。
+画像のエンベディングベクトルも 128 次元に射影され、
+メモリーマップされた [paged アトリビュートテンソル](/ja/content/attributes#paged-attributes)を使用して保存されます。
+完全精度のベクトルは、Vespa のサマリーストアのディスク上に保存されます。
+first-phase の粗い検索は、ノードごとに、削減されたベクトル空間でベクトルをランキングし、結果はすべてのノードからマージされた後、
+ステートレスレイヤーでの最終ランキングフェーズに進みます。
+最終ランキングフェーズは、[高速化された推論](https://blog.vespa.ai/stateful-model-serving-how-we-accelerate-inference-using-onnx-runtime/)を使用して、ステートレスコンテナーレイヤーに実装されています。
+- 近似最近傍検索と[フィルター](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/)の組み合わせ。フィルタリングは、
+url、キャプション、画像の高さ、幅、safety の確率、NSFW ラベルなどに対して行えます。
+- ハイブリッドランキング。画像のランキングには、テキストのスパースマッチングフィーチャーと CLIP 類似度の両方を使用できます。
+- テンソルセルの精度の削減。元の LAION-5B データセットは `float16` を使用しています。このアプリは Vespa の `bfloat16` テンソルのサポートを使用し、
+  完全な `float` 表現と比較してストレージを 50% 節約します。
+- キャッシング。削減されたベクトル (128) は OS のバッファーキャッシュによってキャッシュされ、完全版の 768 次元は Vespa のサマリーキャッシュを使用してキャッシュされます。
+- クエリー時のベクトルの重複排除と、クエリー対ドキュメントの類似度ではなくドキュメント対ドキュメントの類似度を使用した、検索結果ページの多様化。これも
+ステートレスなモデル推論によって高速化されます。
+- スケール。単一ノードのデプロイメントから、マネージドの [Vespa Cloud](/) を使用したマルチノードデプロイメント、
+またはセルフホストのオンプレミスまで。
+
+
+## ステートレスコンポーネント
+このアプリには、いくつかの[コンテナーコンポーネント](/ja/applications/components)が含まれています:
+
+- [RankingSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/searcher/RankingSearcher.java) は、高速化された推論のための ONNX モデルを使用し、
+完全精度のベクトルを使用した最終ステージのランキングを実装します。
+- [DedupingSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/searcher/DeDupingSearcher.java) は、高速化された推論のための ONNX モデルを使用し、
+ドキュメント対ドキュメントの類似度行列を使用した、ランキング後の実行時重複排除を実装します。
+- [DimensionReducer](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/DimensionReducer.java) は、ベクトルを 768 次元から 128 次元に PCA で次元削減します。
+- [AssignCentroidsDocProc](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/docproc/AssignCentroidsDocProc.java) は、取り込み時に HNSW グラフのコンテント・クラスターを検索して、
+入力ベクトルに最も近いセントロイドを見つけます。
+- [SPANNSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/searcher/SPANNSearcher.java)
+
+## このアプリのデプロイ
+以下の再現手順では、ラップトップ上でこのアプリを試すのに適した、LAION-5B ベクトルデータセットの小さなサブセットを使用してアプリをデモンストレーションします。
+
+**必要要件:**
+
+- [Docker](https://www.docker.com/) Desktop がインストールされ、実行されていること。Docker に 6GB の利用可能なメモリーを推奨します。
+  詳細とトラブルシューティングについては、[Docker のメモリー](/ja/operations/self-managed/docker-containers#memory)
+  を参照してください
+- あるいは、[Vespa Cloud](#deployment-note) を使用してデプロイします
+- オペレーティングシステム: Linux、macOS、または Windows 10 Pro(Docker の要件)
+- アーキテクチャー: x86_64 または arm64
+- [Vespa CLI](/ja/clients/vespa-cli) をインストールするための [Homebrew](https://brew.sh/)、または
+  [GitHub releases](https://github.com/vespa-engine/vespa/releases) から vespa cli のリリースをダウンロード。
+- <a href="https://openjdk.org/projects/jdk/17/" data-proofer-ignore>Java 17</a> がインストールされていること。
+- ベクトルデータセットを処理するための Python3 と numpy
+- [Apache Maven](https://maven.apache.org/install.html) - このサンプルアプリはカスタム Java コンポーネントを使用しており、アプリケーションのビルドに Maven を使用します。
+
+Docker のメモリー制限を確認します:
+
+
+```bash
+$ docker info | grep "Total Memory"
+or
+$ podman info | grep "memTotal"
+```
+
+
+[Vespa CLI](/ja/clients/vespa-cli) をインストールします:
+
+```bash
+$ brew install vespa-cli
+```
+
+
+docker イメージを使用したローカルデプロイメントの場合:
+
+```bash
+$ vespa config set target local
+```
+
+
+マルチノードのオンプレミスデプロイメントについては、[multi-node high availability](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA)
+テンプレートを参考にしてください。
+
+vespa docker コンテナーイメージをプルして起動します:
+
+```bash
+$ docker pull vespaengine/vespa
+$ docker run --detach --name vespa --hostname vespa-container \
+  --publish 127.0.0.1:8080:8080 --publish 127.0.0.1:19071:19071 \
+  vespaengine/vespa
+```
+
+
+設定サービス (deploy api) の準備ができていることを確認します:
+
+```bash
+$ vespa status deploy --wait 300 ./app
+```
+
+
+このサンプルアプリケーションをダウンロードします:
+
+```bash
+$ vespa clone billion-scale-image-search myapp && cd myapp
+```
+
+セットアップ:
+
+<Steps>
+<Step>
+**Vespa Cloud に[テナント](/ja/learn/tenant-apps-instances)を作成します:**
+
+	[console.vespa-cloud.com](https://console.vespa-cloud.com/) にアクセスし、テナントを作成します(すでに持っている場合を除く)。
+</Step>
+<Step>
+**[Homebrew](https://brew.sh/) を使用して [Vespa CLI](/ja/clients/vespa-cli) をインストールします:**
+```bash
+$ brew install vespa-cli
+```
+	Windows を使用している、または Homebrew がない場合は、[Vespa CLI のページ](/ja/clients/vespa-cli)を参照して直接ダウンロードしてください。
+</Step>
+<Step>
+**Vespa クライアントを設定します:**
+```bash
+$ vespa config set target cloud
+$ vespa config set application vespa-team.autotest
+```
+	「vespa-team」の代わりにステップ 1 のテナント名を使用してください。このガイドの他のステップでも同様に置き換えてください。
+</Step>
+<Step>
+**Vespa Cloud のコントロールプレーンへのアクセス権を取得します:**
+```bash
+$ vespa auth login
+```
+	コマンドの指示に従って認証を行ってください。
+</Step>
+<Step>
+**サンプル[アプリケーション](/ja/basics/applications)をクローンします:**
+```bash
+$ vespa clone billion-scale-image-search myapp && cd myapp
+```
+	クローンできる他のサンプルアプリについては、[sample-apps](https://github.com/vespa-engine/sample-apps) を参照してください。
+</Step>
+<Step>
+**アプリケーションに[データプレーンアクセス](/ja/security/guide#data-plane)用の証明書を追加します:**
+```bash
+$ vespa auth cert app
+```
+	ここで書き込まれる `.pem` ファイルのパスをメモしておくとよいでしょう。
+</Step>
+</Steps>
+
+## ベクトルとメタデータのダウンロード
+
+この手順では、LAION2B-en スプリットの合計 2314 ファイルのうち、最初のスプリットファイル (0000) を使用します。
+ベクトルデータファイルをダウンロードします:
+
+
+```bash
+$ curl --http1.1 -L -o img_emb_0000.npy \
+  https://the-eye.eu/public/AI/cah/laion5b/embeddings/laion2B-en/img_emb/img_emb_0000.npy
+```
+
+
+メタデータファイルをダウンロードします:
+
+
+```bash
+$ curl -L -o metadata_0000.parquet \
+  https://the-eye.eu/public/AI/cah/laion5b/embeddings/laion2B-en/laion2B-en-metadata/metadata_0000.parquet
+```
+
+
+ファイルを処理するための python 依存関係をインストールします:
+
+
+```bash
+$ python3 -m pip install pandas numpy requests mmh3 pyarrow
+```
+
+
+セントロイドを生成します。このプロセスは、セントロイドを表すベクトルをデータセットからランダムに選択します。
+インクリメンタルなクラスタリングを実行すれば、ベクトル検索のリコールを改善し、
+インデックス化するセントロイドを減らすことができます。簡単のため、このチュートリアルではランダムサンプリングを使用します。
+
+
+```bash
+$ python3 app/src/main/python/create-centroid-feed.py img_emb_0000.npy > centroids.jsonl
+```
+
+
+画像フィードを生成します。これはエンベディングデータをメタデータとマージし、1 行につき 1 つの json 操作を持つ、
+Vespa の jsonl フィードファイルを作成します。
+
+
+```bash
+$ python3 app/src/main/python/create-joined-feed.py metadata_0000.parquet img_emb_0000.npy > feed.jsonl
+```
+
+
+データセット全体を処理するには、処理の実装がシングルスレッドであるため、それぞれ別のスプリットファイルを処理する
+複数のプロセスを起動することをお勧めします。
+
+
+## Vespa アプリのビルドとデプロイ
+
+`src/main/application/models` には 3 つの小さな ONNX モデルがあります:
+
+- `vespa_innerproduct_ranker.onnx` - ステートレスコンテナー内での、クエリーとベクトルの間のベクトル類似度(内積)用。
+- `vespa_pairwise_similarity.onnx` - 取得された上位ベクトル間の行列乗算用。
+- `pca_transformer.onnx` - 次元削減用。768 次元のベクトル空間を 128 次元の空間に射影します。
+
+これらの `ONNX` モデルファイルは、[pytorch](https://pytorch.org/) を使用して計算処理を記述し、モデルを [ONNX](https://onnx.ai/)
+フォーマットにエクスポートする `torch` の機能を使用して生成されています:
+
+- [ranker_export.py](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/python/ranker_export.py)
+- [similarity_export.py](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/python/similarity_export.py)
+- [pca_transformer_export.py](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/python/pca_transformer_export.py)
+
+サンプルアプリをビルドします(JDK 17 があることを `mvn -v` で確認してください): - このステップでは、
+プロンプトテキストを CLIP ベクトルエンベディング空間にマッピングするための、事前にエクスポートされた ONNX モデルもダウンロードします。
+
+
+```bash
+$ mvn clean package -U -f app
+```
+
+
+アプリケーションをデプロイします。このステップでは、前のステップでビルドしたアプリケーション・パッケージをデプロイします:
+
+
+```bash
+$ vespa deploy --wait 300 ./app
+```
+
+
+#### デプロイメントに関する注記
+このアプリは
+[Vespa Cloud](/ja/basics/deploy-an-application-java) にデプロイすることも可能です。
+[dev 環境](/ja/operations/zones)への Vespa cloud デプロイメントの場合は、
+[src/main/application/services.xml](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/application/services.xml) を
+[src/main/application/services-cloud.xml](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/application/services-cloud.xml) に置き換えてください -
+クラウドデプロイメントでは、`feed` と `query` に専用のクラスターを使用します。
+
+アプリケーションのエンドポイントが利用可能になるのを待ちます:
+
+
+```bash
+$ vespa status --wait 300
+```
+
+
+[Vespa システムテスト](/ja/reference/applications/testing)を実行します。
+これは、アプリケーションが期待どおりに動作していることを確認する一連の基本的なテストを実行します:
+
+```bash
+$ vespa test app/src/test/application/tests/system-test/feed-and-search-test.json
+```
+
+
+_centroid_ ベクトルを**必ず**最初にインデックス化する必要があります:
+
+
+```bash
+$ vespa feed centroids.jsonl
+$ vespa feed feed.jsonl
+```
+
+
+フィード中にドキュメント数を追跡します:
+
+
+```bash
+$ vespa query 'yql=select * from image where true' \
+  hits=0 \
+  ranking=unranked
+```
+
+
+
+## データの取得
+
+[document api](/ja/reference/api/document-v1) を使用して単一のドキュメントを取得します:
+
+
+```bash
+$ vespa document get \
+ id:laion:image::5775990047751962856
+```
+
+
+レスポンスには、完全なベクトル表現と削減されたベクトル、さらにすべてのメタデータを含む、すべてのフィールドが含まれます。すべてが同じ
+[スキーマ](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/application/schemas/image.sd)で表現されています。
+
+
+## データのクエリー
+以下にいくつかのクエリー例を示します。
+`prompt` は実行時のクエリーパラメーターであり、
+[CLIPEmbeddingSearcher](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/searcher/CLIPEmbeddingSearcher.java)
+によって使用されます。このサーチャーは、組み込まれた CLIP モデルを使用して、プロンプトテキストを CLIP のベクトル表現にエンコードします:
+
+
+```bash
+$ vespa query \
+ 'yql=select documentid, caption, url, height, width from image where nsfw contains "unlikely"'\
+ 'hits=10' \
+ 'prompt=two dogs running on a sandy beach'
+```
+
+
+結果は、`nsfw` フィールドに対する制約でフィルタリングされます。画像が `unlikely` と分類されていても、
+NSFW 分類器は 100% 正確ではないため、画像の内容が露骨なものである可能性は残ることに注意してください。
+
+返される画像は CLIP 類似度でランキングされます(スコアは各ヒットの `relevance` フィールドにあります)。
+
+次のクエリーは別のフィルターを追加し、`shutterstock.com` の url からクロールされた画像のみが
+取得されるように検索を制限します。
+
+
+```bash
+$ vespa query \
+ 'yql=select documentid, caption, url, height, width from image where nsfw contains "unlikely" and url contains "shutterstock.com"'\
+ 'hits=10' \
+ 'prompt=two dogs running on a sandy beach'
+```
+
+
+さらに検索を絞り込むもう 1 つの例として、フレーズ制約 `caption contains phrase("sandy", "beach")` を追加します:
+
+
+```bash
+$ vespa query \
+ 'yql=select documentid, caption, url, height, width from image where nsfw contains "unlikely" and url contains "shutterstock.com" and caption contains phrase("sandy", "beach")'\
+ 'hits=10' \
+ 'prompt=two dogs running on a sandy beach'
+```
+
+
+通常のクエリーは、`default` フィールドセットに対してマッチングを行い、`caption` フィールドと `url` フィールドを検索し、
+`text` ランキングプロファイルでランキングします:
+
+
+```bash
+$ vespa query \
+ 'yql=select documentid, caption, url from image where nsfw contains "unlikely" and userQuery()'\
+ 'hits=10' \
+ 'query=two dogs running on a sandy beach' \
+ 'ranking=text'
+```
+
+
+`text` [ランク](/ja/basics/ranking)プロファイルは、
+Vespa の数多くのテキストマッチング・ランクフィーチャーの 1 つである
+[nativeRank](/ja/ranking/nativerank) を使用します。
+
+## 非ネイティブのハイパーパラメーター
+ベクトル検索の精度とパフォーマンスのトレードオフを制御する、いくつかの非ネイティブのクエリーリクエストパラメーターが
+あります。これらはリクエストで設定できます。例: `/search/&spann.clusters=12`。
+
+- `spann.clusters`、デフォルト `64`。画像検索を制限するために使用される、削減されたベクトル空間内のセントロイドの数。
+数値を大きくするとリコールが向上しますが、計算の複雑さとディスク読み取りが増加します。
+- `rank-count`、デフォルト `1000`。完全なベクトル表現を使用してコンテナー内で完全に再ランキングされるベクトルの数。
+数値を大きくするとリコールが向上しますが、計算の複雑さとネットワークが増加します。
+- `collapse.enable`、デフォルト `true`。画像対画像の類似度を使用した、上位ランキング結果の重複排除を制御します。
+- `collapse.similarity.max-hits`、デフォルト `1000`。重複排除を実行する上位ランキングヒットの数。`rank-count` より小さくなければなりません。
+- `collapse.similarity.threshold`、デフォルト `0.95`。ある画像が別の画像とどれだけ類似していれば重複と見なされるか。
+
+## 改善の余地がある領域
+改善できる領域がいくつかあります。
+
+- CLIP モデル。エクスポートされたテキストトランスフォーマーモデルは固定シーケンス長 (77) を使用しており、これは計算を無駄にし、
+短いシーケンス長に対して本来必要とされるよりもモデルをはるかに遅くしています。動的なシーケンス長にすれば、
+短いクエリーのエンコードを現在のモデルよりずっと高速にできるでしょう。
+また、テキストエンコーダーを教師として使用し、別のアーキテクチャー(たとえば、より小さな MiniLM モデルに基づくもの)を使用した、より小さな蒸留モデルをトレーニングするのも興味深いでしょう。
+- CLIP クエリーエンベディングのキャッシング。CLIP モデルは固定されており、テキスト入力のみを使用します。テキストから
+エンベディングへのマッピングをキャッシュすれば、リソースを節約できます。
+
+## コンテナーのシャットダウンと削除:
+
+
+```bash
+$ vespa destroy --force
+```
+
+

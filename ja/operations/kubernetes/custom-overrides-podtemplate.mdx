@@ -1,0 +1,219 @@
+---
+title: "カスタム・オーバーライドの設定"
+description: "services.xmlはVespaアプリケーションの仕様を定義しますが、基盤となるKubernetesインフラストラクチャは抽象化されています。上級ユーザーは、より広範なプラットフォーム・エコシステム内にVespaを統合するために、Vespa PodにKubernetes固有の設定を行う必要があることがよくあります。"
+---
+
+VespaSetは3つのオーバーライド・ターゲット — ConfigServer、プロファイル(コンテナー・クラスターとコンテント・クラスター)、ClusterControllers — をサポートしており、それぞれに、どのフィールドを追加・変更できるかを制御する型付きマージ・ポリシーがあります。すべてのオーバーライドは、標準のKubernetes [PodTemplateSpec](https://kubernetes.io/docs/reference/kubernetes-api/core/pod-template-v1/#PodTemplateSpec) を受け付けます。
+
+`vespa` コンテナーは、すべてのPodタイプにおけるメイン・コンテナーです。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>フィールド</th>
+      <th>ConfigServer</th>
+      <th>Container</th>
+      <th>Content</th>
+      <th>ClusterControllers</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`labels`}</code></td>
+      <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`annotations`}</code></td>
+      <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`volumes`}</code></td>
+      <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`nodeSelector`}</code></td>
+      <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`imagePullSecrets`}</code></td>
+      <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`tolerations`}</code></td>
+      <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`podAffinity`}</code></td>
+      <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`podAntiAffinity`}</code></td>
+      <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`nodeAffinity`}</code></td>
+      <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`containers[vespa].env`}</code></td>
+      <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`containers[vespa].volumeMounts`}</code></td>
+      <td>✅</td><td>❌</td><td>❌</td><td>❌</td>
+    </tr>
+    <tr>
+      <td><code>{`containers[vespa].resources`}</code></td>
+      <td>✅</td><td>❌</td><td>❌</td><td>❌</td>
+    </tr>
+    <tr>
+      <td><code>{`containers[]`}</code></td>
+      <td>✅</td><td>✅</td><td>✅</td><td>✅</td>
+    </tr>
+  </tbody>
+</table>
+
+❌ が付いているオーバーレイ・フィールドは、アドミッション時に明示的に拒否されます。
+
+`containers[vespa]` へのオーバーライドは、オペレーターが管理する設定の破損を防ぐため、意図的に制限されています。アプリケーションPod(container、content、ClusterControllers)では、これらのフィールドの設定は拒否されます。これは、実行中のVespaプロセスの整合性を保護し、`services.xml` との競合を防ぐためです。
+
+## ConfigServerのオーバーライド
+
+ConfigServerのオーバーライドは、`VespaSet` リソースの `spec.configServer.podTemplate` の下に定義します。このオーバーライド・ポリシーでは、ボリューム・マウントの追加と、メインの `vespa` コンテナーのCPUおよびメモリー・リソースのオーバーライドが明示的に許可されています。
+
+### 例: ConfigServer Podをホスト間に分散させる
+
+本番環境のVespaクラスターは、通常3つのConfigServer Podを実行します。2つのConfigServer Podが同じKubernetesノードを共有しないこと — したがって単一ノードの障害に耐えられること — を保証するには、`topologyKey: kubernetes.io/hostname` を指定した `podAntiAffinity` ルールを追加します。
+
+```yaml
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+spec:
+  configServer:
+    podTemplate:
+      spec:
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/component: configserver
+                topologyKey: kubernetes.io/hostname
+```
+
+VespaSetは、このanti-affinityの条件をベース・テンプレートに置き換えるのではなく追加するため、オペレーターが管理するaffinityルールは引き続き有効です。
+
+## プロファイルのオーバーライド
+
+プロファイルのオーバーライドを使うと、同じ `VespaSet` 内で、クラスター・タイプごとに異なるPod設定を行えます。プロファイルは、`services.xml` で定義された `id` を `PodTemplateSpec` のオーバーレイにマッピングします。このマッピングは、任意の数のVespaクラスターに対して設定できます。
+
+### 例: クラスターを専用ノード・プールにルーティングする
+
+よくあるパターンは、各Vespaクラスター・タイプを専用のノード・プールに分離することです — ステートレスなクエリー処理用のコンテナー・ノードと、ストレージおよび検索用のコンテント・ノードです。次の例では、各プロファイルで `nodeSelector` を使用しています。
+
+`services.xml` で、各クラスターにプロファイルを宣言します:
+
+```xml
+<container id="default" version="1.0" profile="default">
+  <!-- ... -->
+</container>
+
+<content id="music" version="1.0" profile="music">
+  <!-- ... -->
+</content>
+```
+
+`VespaSet` で、各名前に対応するプロファイルを定義します:
+
+```yaml
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+spec:
+  profiles:
+    default:
+      podTemplate:
+        spec:
+          nodeSelector:
+            node-pool: vespa-container
+    music:
+      podTemplate:
+        spec:
+          nodeSelector:
+            node-pool: vespa-content
+```
+
+VespaSetは、リコンサイル時に各クラスターのプロファイルを解決し、対応する `podTemplate` をベースの `PodSpec` にオーバーレイします。一致するプロファイル・エントリーがないクラスターに属するPodには、オーバーレイは適用されません。
+
+## ClusterControllerのオーバーライド
+
+`clusterControllers` は予約済みのプロファイル名です。VespaSetは、このプロファイルをすべてのcluster-controller Podに自動的に適用します。`clusterControllers` プロファイルが定義されていない場合、cluster-controller Podにはオーバーレイは適用されません。
+
+### 例: cluster-controller Podを専用のadminノード・プールに固定する
+
+```yaml
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+spec:
+  profiles:
+    clusterControllers:
+      podTemplate:
+        spec:
+          nodeSelector:
+            node-pool: vespa-admin
+```
+
+## リコンサイル
+
+`VespaSet` が更新されると、VespaSetは各Podについて現在の `PodTemplateSpec` と望ましい `PodTemplateSpec` の差分を評価し、必要となる最小限のアクションを決定します。ラベルの更新など、スケジューリングに影響しない変更は、Podの再作成だけで済み、Persistent Volumeはそのまま維持されます。`nodeSelector` やaffinityルールなど、スケジューリング制約の変更では、Podを新しいノードに配置してデータを再分散できるようにするため、PodとそのPersistent Volumeの両方の再作成が必要になります。
+
+PodとVolumeの再作成後にコンテント・ノード間でデータを再分散するのは、データセットのサイズによっては時間がかかることがあります。
+
+複数のフィールドが同時に変更された場合は、最も影響の大きいアクションが優先されます。いずれかの変更がPodとVolumeの再作成を必要とする場合、他の変更がPodの再起動だけで済むかどうかにかかわらず、そのアクションが適用されます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>フィールド</th>
+      <th>Podの再作成</th>
+      <th>PodとVolumeの再作成</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`labels`}</code></td>
+      <td>✅</td><td></td>
+    </tr>
+    <tr>
+      <td><code>{`annotations`}</code></td>
+      <td>✅</td><td></td>
+    </tr>
+    <tr>
+      <td><code>{`nodeSelector`}</code></td>
+      <td></td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`nodeAffinity`}</code></td>
+      <td></td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`podAffinity`}</code></td>
+      <td></td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`podAntiAffinity`}</code></td>
+      <td></td><td>✅</td>
+    </tr>
+    <tr>
+      <td><code>{`tolerations`}</code></td>
+      <td></td><td>✅</td>
+    </tr>
+  </tbody>
+</table>
+
+この一覧は代表的なものです。表に記載されていないスペックについては、自動リコンサイルは行われません。その場合は、Podを手動で削除し、Operatorに再作成させてください。

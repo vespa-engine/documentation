@@ -1,0 +1,615 @@
+---
+title: "Vespa 7 リリースノート"
+sidebarTitle: "Vespa 7"
+---
+
+このノートでは、Vespa メジャーバージョン 6 と 7 の間の変更点を記載します。[Vespa のバージョン](/ja/learn/releases#versions)に記載されているとおり、メジャーバージョンは互換性の破壊を示すために使用されるものであり、重要な新機能のリリースのためではありません(新機能はマイナーバージョンでリリースされます)。ただし、メジャーバージョンにおいても、互換性が破壊されるのは 2 つの特定の方法に限られます。**デフォルトの変更**とは、以前の動作を維持するためにアプリケーションで一部のオプションを明示的に設定する必要がある可能性があることを意味し、**非推奨機能の削除**とは、*以前に非推奨とされた機能を使用しているアプリケーション*が動作し続けるために変更を必要とすることを意味します。
+
+ほとんどの非推奨機能は、コンパイル時(Java API の非推奨)またはデプロイ時(アプリケーション・パッケージの非推奨)に警告を発生させます。ただし、Web サービス API については非推奨警告を出す方法がないため、ドキュメント内で非推奨としてマークすることに頼らざるを得ません。
+
+このことから、アプリケーションの所有者は Vespa 7 との互換性を保つために次の 3 つのタスクを行う必要があります:
+
+- [デフォルトの変更](#changed-defaults)によってアプリケーションで追加の設定が必要になるかどうかを確認します(トークナイゼーションとステミングの変更により、6 から 7 への変更では**その可能性が高い**ことに注意してください)。
+- Vespa 6 でのコンパイルおよびデプロイ時に非推奨警告が出ていないことを確認します。
+- 削除された Web サービス API および API パラメーターのリストを確認し、アプリケーションのクライアントがこれらを使用していないことを確認します。
+
+Vespa 7 は新機能を導入しないため、その直前の Vespa 6 の各バージョンと同程度に安全かつ成熟しています。Vespa 7 のリリース以降、いかなる理由でも Vespa 6 のリリースは行われません。
+
+## 変更点
+
+以下のセクションでは、Vespa 6 から Vespa 7 への移行にあたってアプリケーションで確認が必要な変更点を列挙します。
+
+### デフォルトの変更
+
+次のデフォルトが変更されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>変更</th>
+      <th>Vespa 7 での変更を回避するために必要な設定</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`stemming: shortest`}</code> が <code>{`stemming: best`}</code> に変更</td>
+      <td>すべてのスキーマの <code>{`schema`}</code> ブロックに <a href="/ja/reference/schemas/schemas#stemming" aria-label="stemming: shortest">stemming: shortest</a> を追加します。</td>
+    </tr>
+    <tr>
+      <td>デフォルトの linguistics コンポーネントが SimpleLinguistics から OpenNlpLinguistics に変更され、Optimaize を使用した言語検出がデフォルトで有効になりました。</td>
+      <td><a href="/ja/linguistics/linguistics" aria-label="linguistics in Vespa">Vespa の linguistics</a> の説明に従って、services.xml で <code>{`com.yahoo.language.simple.SimpleLinguistics`}</code> をコンポーネントとして設定します</td>
+    </tr>
+    <tr>
+      <td>Java HTTP クライアントが受け付けるデフォルトのフォーマットが XML から <a href="/ja/reference/schemas/document-json-format" aria-label="JSON">JSON</a> に変更されました</td>
+      <td>XML を使い続けるには: <br/><br/>• &#42;&#42;Java API&#42;&#42;: <code>{`FeedClientFactory.create(sessionParams, ...)`}</code> を呼び出す際に、<code>{`dataFormat`}</code> を <code>{`FeedParams.DataFormat.XML_UTF8`}</code> に設定した <code>{`FeedParams`}</code> インスタンスを持つ <code>{`SessionParams`}</code> インスタンスを渡します <br/>• &#42;&#42;コマンドライン&#42;&#42;: <code>{`--xmloutput`}</code> オプションを渡します。</td>
+    </tr>
+    <tr>
+      <td>クエリーのタイムアウトが 5000 ms から 500 ms に変更されました。</td>
+      <td>リクエストまたはクエリープロファイルで <a href="/ja/reference/api/query#timeout" aria-label="timeout">timeout</a> パラメーターを明示的に設定します。</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/reference/api/query#ranking.softtimeout.enable" aria-label="ranking.softtimeout.enable">ranking.softtimeout.enable</a> のデフォルトが true に変更</td>
+      <td>リクエストまたはクエリープロファイルで <code>{`false`}</code> に設定します。</td>
+    </tr>
+    <tr>
+      <td>デフォルトのアクセスログのフォーマットが <a href="/ja/operations/access-logging" aria-label="JSON">JSON</a> に変更されました。</td>
+      <td>従来の独自フォーマットを維持するには、<a href="/ja/reference/applications/services/container#accesslog" aria-label="the accesslog reference">accesslog リファレンス</a>の説明に従って、services.xml で accesslog type=vespa を設定します。</td>
+    </tr>
+    <tr>
+      <td>vespa-visit および vespa-get のデフォルトの返却フォーマットが JSON に変更されました</td>
+      <td>XML 出力を得るには --xmloutput メソッドを指定します</td>
+    </tr>
+  </tbody>
+</table>
+
+### JDK バージョン
+
+Vespa bundle-plugin が OSGi バンドルに対して正しいインポートパッケージのセットを生成するためには、Java コンポーネントを JDK 11 で再ビルドする必要があります。
+
+### 削除された Java API
+
+Vespa 6 で非推奨としてマークされていたクラスとメソッドは削除されました。アプリケーションのビルド時に Vespa API の非推奨警告が出る場合は、Vespa 7 に移行する前に修正しなければなりません。
+
+### コンテナーのランタイム環境
+
+次の maven アーティファクトはランタイムで提供されなくなりました:
+
+- commons-codec:commons-codec
+- org.apache.httpcomponents:httpclient
+- org.apache.httpcomponents:httpcore
+
+これらの依存関係のいずれかが必要な場合は、pom.xml でスコープ 'compile' として追加し、バンドルに組み込む必要があります。
+
+### 削除された HTTP API
+
+次の HTTP API は削除されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>代替</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ドキュメントフィード用のレガシー HTTP API:<br/>• /feed<br/>• /remove<br/>• /removelocation<br/>• /get<br/>• /visit<br/>• /document</td>
+      <td><a href="/ja/reference/api/document-v1" aria-label="/document/v1/">/document/v1/</a> Web サービス API、または(高スループット用途では)vespa-http-client。</td>
+    </tr>
+  </tbody>
+</table>
+
+### 削除された HTTP API パラメーター
+
+次の HTTP API パラメーターは削除されました
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>代替</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>search API の <code>{`defidx`}</code> パラメーター</td>
+      <td>この機能が必要な場合はカスタム searcher を使用してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+### 削除されたコマンドラインツール
+
+次のコマンドラインツールは削除されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>代替</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Vespa spooler</td>
+      <td>Java HTTP クライアントを使用したカスタムクライアント</td>
+    </tr>
+  </tbody>
+</table>
+
+### スキーマから削除された設定
+
+次の設定は[スキーマ](/ja/reference/schemas/schemas)から削除されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>代替</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>header</td>
+      <td>なし。この設定は何の効果もありません</td>
+    </tr>
+    <tr>
+      <td>body</td>
+      <td>なし。この設定は何の効果もありません</td>
+    </tr>
+  </tbody>
+</table>
+
+### services.xml から削除された構成要素
+
+次のタグと属性は services.xml から削除されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>代替</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`<container><accesslog>`}</code> の 'rotationScheme' 属性</td>
+      <td>なし。ローテーションスキームは常に 'date' が使用されます</td>
+    </tr>
+    <tr>
+      <td><code>{`<container><filter>`}</code> タグ</td>
+      <td><code>{`<container><http><filtering>`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+### 削除されたメトリクス
+
+次のメトリクスは削除されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>代替</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>free/used/totalMemoryBytes</td>
+      <td>mem.heap.free/used/total</td>
+    </tr>
+    <tr>
+      <td>http.in.bytes</td>
+      <td>serverBytesReceived</td>
+    </tr>
+    <tr>
+      <td>http.out.bytes</td>
+      <td>serverBytesSent</td>
+    </tr>
+    <tr>
+      <td>http.requests</td>
+      <td>serverNumRequests</td>
+    </tr>
+    <tr>
+      <td>http.latency</td>
+      <td>serverTotalSuccessfulResponseLatency</td>
+    </tr>
+    <tr>
+      <td>http.out.firstbytetime</td>
+      <td>serverTimeToFirstByte</td>
+    </tr>
+    <tr>
+      <td>proc.uptime</td>
+      <td>serverStartedMillis</td>
+    </tr>
+    <tr>
+      <td>proton.&#42;</td>
+      <td>content.proton.&#42;(新しい名前空間ではメトリクスの構造や名前が異なる場合があることに注意してください)</td>
+    </tr>
+    <tr>
+      <td>vds.filestor.spi.&#42;</td>
+      <td>vds.filestor.alldisks.allthreads.&#42;</td>
+    </tr>
+  </tbody>
+</table>
+
+### 空のフィールド
+
+値を含まないフィールドは、Vespa 7 のレスポンスには含まれません。
+
+### リクエスト URI で許可される文字
+
+Vespa 6 では、リクエスト URI のクエリー部分において一部の特殊文字を生の形式で使用できました。Vespa 7 では、これらの文字を適切にパーセントエンコード(RFC 2396)する必要があります。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>文字</th>
+      <th>パーセントエンコーディング</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`\\`}</code></td>
+      <td><code>{`%5C`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`^`}</code></td>
+      <td><code>{`%5E`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`\\`}</code></td>
+      <td><code>{`%60`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`{`}</code></td>
+      <td><code>{`%7B`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`|`}</code></td>
+      <td><code>{`%7C`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`}`}</code></td>
+      <td><code>{`%7D`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+### デフォルト JSON 結果フォーマットの変更
+
+デフォルトの JSON クエリー結果フォーマットにおける **position** 型フィールドの内容は、Vespa 6 では XML としてレンダリングされていましたが、JSON としてレンダリングされるようになりました。
+
+具体的には、position フィールドの内容は次のような文字列としてレンダリングされていました
+
+`  <position x="-121996000" y="37401000" latlong="N37.401000;W121.996000"/>  `
+
+しかし現在は、代わりに JSON マップとしてレンダリングされます:
+
+```json
+{
+  "y": 37401000,
+  "x": -121996000,
+  "latlong": "N37.401000;W121.996000"
+}
+```
+
+### 名称が変更されたメトリクス
+
+次のメトリクスは名称が変更されました:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>旧名称</th>
+      <th>新名称</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>95p_query_latency</td>
+      <td>query_latency.95percentile</td>
+    </tr>
+    <tr>
+      <td>99p_query_latency</td>
+      <td>query_latency.99percentile</td>
+    </tr>
+    <tr>
+      <td>active_queries</td>
+      <td>active_queries.average</td>
+    </tr>
+    <tr>
+      <td>athenz-tenant-cert.expiry.seconds</td>
+      <td>athenz-tenant-cert.expiry.seconds.last</td>
+    </tr>
+    <tr>
+      <td>bytes</td>
+      <td>vds.datastored.alldisks.bytes.average</td>
+    </tr>
+    <tr>
+      <td>configserver.cacheChecksumElems</td>
+      <td>configserver.cacheChecksumElems.last</td>
+    </tr>
+    <tr>
+      <td>configserver.cacheConfigElems</td>
+      <td>configserver.cacheConfigElems.last</td>
+    </tr>
+    <tr>
+      <td>configserver.delayedResponses</td>
+      <td>configserver.delayedResponses.count</td>
+    </tr>
+    <tr>
+      <td>configserver.failedRequests</td>
+      <td>configserver.failedRequests.count</td>
+    </tr>
+    <tr>
+      <td>configserver.hosts</td>
+      <td>configserver.hosts.last</td>
+    </tr>
+    <tr>
+      <td>configserver.latency</td>
+      <td>configserver.latency.average</td>
+    </tr>
+    <tr>
+      <td>configserver.requests</td>
+      <td>configserver.requests.count</td>
+    </tr>
+    <tr>
+      <td>configserver.sessionChangeErrors</td>
+      <td>configserver.sessionChangeErrors.count</td>
+    </tr>
+    <tr>
+      <td>configserver.zkAvgLatency</td>
+      <td>configserver.zkAvgLatency.last</td>
+    </tr>
+    <tr>
+      <td>configserver.zkConnections</td>
+      <td>configserver.zkConnections.last</td>
+    </tr>
+    <tr>
+      <td>configserver.zkMaxLatency</td>
+      <td>configserver.zkMaxLatency.last</td>
+    </tr>
+    <tr>
+      <td>configserver.zkOutstandingRequests</td>
+      <td>configserver.zkOutstandingRequests.last</td>
+    </tr>
+    <tr>
+      <td>configserver.zkZNodes</td>
+      <td>configserver.zkZNodes.last</td>
+    </tr>
+    <tr>
+      <td>content.cluster-controller.cluster-state-change.count</td>
+      <td>cluster-controller.cluster-state-change.count</td>
+    </tr>
+    <tr>
+      <td>content.proton.memoryusage.max</td>
+      <td>content.proton.documentdb.memory_usage.allocated_bytes.max</td>
+    </tr>
+    <tr>
+      <td>content.proton.transport.docsum.latency.average</td>
+      <td>content.proton.docsum.latency.average</td>
+    </tr>
+    <tr>
+      <td>degraded_queries</td>
+      <td>degraded_queries.rate</td>
+    </tr>
+    <tr>
+      <td>deletefailed</td>
+      <td>vds.idealstate.delete_bucket.done_failed.rate</td>
+    </tr>
+    <tr>
+      <td>deleteok</td>
+      <td>vds.idealstate.delete_bucket.done_ok.rate</td>
+    </tr>
+    <tr>
+      <td>deletepending</td>
+      <td>vds.idealstate.delete_bucket.pending.average</td>
+    </tr>
+    <tr>
+      <td>diskqueuesize</td>
+      <td>vds.filestor.alldisks.queuesize.average</td>
+    </tr>
+    <tr>
+      <td>diskqueuewait</td>
+      <td>vds.filestor.alldisks.averagequeuewait.sum.average</td>
+    </tr>
+    <tr>
+      <td>diskusage</td>
+      <td>content.proton.documentdb.disk_usage.last</td>
+    </tr>
+    <tr>
+      <td>docs</td>
+      <td>vds.datastored.alldisks.docs.average</td>
+    </tr>
+    <tr>
+      <td>document_requests</td>
+      <td>content.proton.docsum.docs.rate</td>
+    </tr>
+    <tr>
+      <td>documents_active</td>
+      <td>content.proton.documentdb.documents.active.last</td>
+    </tr>
+    <tr>
+      <td>documents_inmemory</td>
+      <td>content.proton.documentdb.index.docs_in_memory.last</td>
+    </tr>
+    <tr>
+      <td>documents_processed</td>
+      <td>documents_processed.rate</td>
+    </tr>
+    <tr>
+      <td>documents_ready</td>
+      <td>content.proton.documentdb.documents.ready.last</td>
+    </tr>
+    <tr>
+      <td>documents_removed</td>
+      <td>content.proton.documentdb.documents.removed.last</td>
+    </tr>
+    <tr>
+      <td>documents_total</td>
+      <td>content.proton.documentdb.documents.total.last</td>
+    </tr>
+    <tr>
+      <td>empty_results</td>
+      <td>empty_results.rate</td>
+    </tr>
+    <tr>
+      <td>error.backend_communication_error</td>
+      <td>error.backend_communication_error.rate</td>
+    </tr>
+    <tr>
+      <td>error.backends_oos</td>
+      <td>error.backends_oos.rate</td>
+    </tr>
+    <tr>
+      <td>error.empty_document_summaries</td>
+      <td>error.empty_document_summaries.rate</td>
+    </tr>
+    <tr>
+      <td>error.internal_server_error</td>
+      <td>error.internal_server_error.rate</td>
+    </tr>
+    <tr>
+      <td>error.invalid_query_parameter</td>
+      <td>error.invalid_query_parameter.rate</td>
+    </tr>
+    <tr>
+      <td>error.invalid_query_transformation</td>
+      <td>error.invalid_query_transformation.rate</td>
+    </tr>
+    <tr>
+      <td>error.misconfigured_server</td>
+      <td>error.misconfigured_server.rate</td>
+    </tr>
+    <tr>
+      <td>error.plugin_failure</td>
+      <td>error.plugin_failure.rate</td>
+    </tr>
+    <tr>
+      <td>error.result_with_errors</td>
+      <td>error.result_with_errors.rate</td>
+    </tr>
+    <tr>
+      <td>error.timeout</td>
+      <td>error.timeout.rate</td>
+    </tr>
+    <tr>
+      <td>error.unhandled_exception</td>
+      <td>error.unhandled_exception.rate</td>
+    </tr>
+    <tr>
+      <td>error.unspecified</td>
+      <td>error.unspecified.rate</td>
+    </tr>
+    <tr>
+      <td>failed_queries</td>
+      <td>failed_queries.rate</td>
+    </tr>
+    <tr>
+      <td>handled.requests</td>
+      <td>handled.requests.count</td>
+    </tr>
+    <tr>
+      <td>hits_per_query</td>
+      <td>hits_per_query.average</td>
+    </tr>
+    <tr>
+      <td>joinfailed</td>
+      <td>vds.idealstate.join_bucket.done_failed.rate</td>
+    </tr>
+    <tr>
+      <td>joinok</td>
+      <td>vds.idealstate.join_bucket.done_ok.rate</td>
+    </tr>
+    <tr>
+      <td>joinpending</td>
+      <td>vds.idealstate.join_bucket.pending.average</td>
+    </tr>
+    <tr>
+      <td>logd.processed.lines</td>
+      <td>logd.processed.lines.count</td>
+    </tr>
+    <tr>
+      <td>max_query_latency</td>
+      <td>query_latency.max</td>
+    </tr>
+    <tr>
+      <td>mean_query_latency</td>
+      <td>query_latency.average</td>
+    </tr>
+    <tr>
+      <td>mergefailed</td>
+      <td>vds.idealstate.merge_bucket.done_failed.rate</td>
+    </tr>
+    <tr>
+      <td>mergeok</td>
+      <td>vds.idealstate.merge_bucket.done_ok.rate</td>
+    </tr>
+    <tr>
+      <td>mergepending</td>
+      <td>vds.idealstate.merge_bucket.pending.average</td>
+    </tr>
+    <tr>
+      <td>peak_qps</td>
+      <td>peak_qps.max</td>
+    </tr>
+    <tr>
+      <td>queries</td>
+      <td>queries.rate</td>
+    </tr>
+    <tr>
+      <td>query_latency</td>
+      <td>content.proton.transport.query.latency.average</td>
+    </tr>
+    <tr>
+      <td>query_requests</td>
+      <td>content.proton.transport.query.count.rate</td>
+    </tr>
+    <tr>
+      <td>search_connections</td>
+      <td>search_connections.average</td>
+    </tr>
+    <tr>
+      <td>sentinel.uptime</td>
+      <td>sentinel.uptime.last</td>
+    </tr>
+    <tr>
+      <td>slobrok.heartbeats.failed</td>
+      <td>slobrok.heartbeats.failed.count</td>
+    </tr>
+    <tr>
+      <td>splitfailed</td>
+      <td>vds.idealstate.split_bucket.done_failed.rate</td>
+    </tr>
+    <tr>
+      <td>splitok</td>
+      <td>vds.idealstate.split_bucket.done_ok.rate</td>
+    </tr>
+    <tr>
+      <td>splitpending</td>
+      <td>vds.idealstate.split_bucket.pending.average</td>
+    </tr>
+    <tr>
+      <td>totalhits_per_query</td>
+      <td>totalhits_per_query.average</td>
+    </tr>
+    <tr>
+      <td>visit</td>
+      <td>vds.visitor.allthreads.created.sum.rate</td>
+    </tr>
+    <tr>
+      <td>visitorlifetime</td>
+      <td>vds.visitor.allthreads.averagevisitorlifetime.sum.average</td>
+    </tr>
+    <tr>
+      <td>visitorqueuewait</td>
+      <td>vds.visitor.allthreads.averagequeuewait.sum.average</td>
+    </tr>
+  </tbody>
+</table>
+
+### その他の変更
+
+Vespa は、"document-api" コンポーネントをロードするコンテナーにおいて、"search" コンポーネントを暗黙的にロードすることはなくなりました。アプリケーションが、services.xml で `<document-api>` タグを指定しているコンテナー内の "search" 機能に依存している場合は、そのコンテナーで `<search>` タグも指定するようにしてください。

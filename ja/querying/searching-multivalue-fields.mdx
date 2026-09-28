@@ -1,0 +1,588 @@
+---
+title: "マルチバリューフィールドの検索とランキング"
+---
+
+このガイドでは、構造化されたマルチバリューフィールドに対する検索とランキングの方法を説明します。このガイドの例では、[weightedset](../reference/schemas/schemas#weightedset) [フィールド型](../reference/schemas/schemas#field)を使用します。汎用的な [map](../reference/schemas/schemas#map) フィールド型は現在ランキングをサポートしておらず、マッチングとフィルタリングにのみ使用できます。
+
+検索アプリケーションを構築するときは、次のことを考える必要があります:
+
+- Vespa の[クエリー言語](/ja/querying/query-language)を使用して、ユーザーが指定したクエリーを[ドキュメントスキーマ](../basics/schemas)に対してどのように[マッチ](/ja/querying/query-language)させるか。
+- クエリーにマッチしたドキュメントをどのように[ランキング](../basics/ranking)するか。
+
+## ドキュメントのマッチング
+
+ドキュメントモデルを設計して Vespa のドキュメントスキーマにマッピングする際には、考慮すべきテキストマッチングのオプションが数多くあります:
+
+- 文字列フィールドについては、テキストスタイルのマッチングを使用するか、データベーススタイルの完全一致マッチングを使用するかを考える必要があります。
+- 文字列フィールドには、[トークナイゼーション](../linguistics/linguistics-opennlp#tokenization)、正規化、言語依存の[ステミング](../linguistics/linguistics-opennlp#stemming)など、いくつかの[言語処理](../linguistics/linguistics)オプションもあります。
+- 同じ [match](../reference/schemas/schemas#match) 設定と言語処理設定を共有する文字列フィールドは、[fieldsets](../reference/schemas/schemas#fieldset) を使用して組み合わせることができます。 
+
+クエリー時には、ユーザークエリーを受け取り、設計したドキュメントスキーマに対するマッチングと検索の戦略を実装した、有効な Vespa クエリーリクエストに変換できます。
+
+## ドキュメントのランキング
+
+クエリーにマッチし、クエリーによって取得されたドキュメントは、ランキングモデルを使用してスコア付けされます。クエリーロジックによってドキュメントが取得されると、そのドキュメントは Vespa の[ランキング](../basics/ranking)フレームワークの完全な柔軟性を使ってスコア付けできます。
+
+## 最小限の Vespa アプリケーション
+
+以降のセクションでは、マルチバリューの文字列フィールドに対するマッチングとランキングを探っていきます。
+
+<Info>
+**前提条件:**
+
+- x86\_64 または arm64 上の Linux、macOS、または Windows 10 Pro で、[Podman Desktop](https://podman.io/) または [Docker Desktop](https://www.docker.com/products/docker-desktop/) がインストールされ、エンジンが実行されていること。
+	- あるいは、Podman デーモンを起動します:
+        ```
+        $ podman machine init --memory 6000
+		$ podman machine start
+        ```
+	- システム制限やその他の設定については、[Docker コンテナー](/ja/operations/self-managed/docker-containers.html)を参照してください。
+- Haswell (2013) より古い CPU については、[CPU サポート](/ja/operations/self-managed/cpu-support)を参照してください。
+- メモリー: Docker/Podman 専用に最低 4 GB の RAM。[メモリーに関する推奨事項](/ja/operations/self-managed/node-setup#memory-settings)。
+- ディスク: `NO_SPACE` を避けてください - vespaengine/vespa コンテナーイメージとデータ用の余裕分にはディスク容量が必要です。[詳細を読む](/ja/writing/feed-block.html)。
+- [Vespa CLI](/ja/clients/vespa-cli.html) をインストールするための [Homebrew](https://brew.sh/)、または [Github releases](https://github.com/vespa-engine/vespa/releases) から Vespa CLI をダウンロード。
+</Info>
+
+次のようなサンプルデータのドキュメントがあると仮定します。ここには、各要素に重みが関連付けられた、構造化されたタグのようなフィールドがあります。 
+
+```json
+{
+    "put": "id:photos:photo::0",
+    "fields": {
+        "title": "Mira in the sunset",
+        "description": "A sunny afternoon with our dogs",
+        "tags": {
+            "no filter":1,
+            "light": 3,
+            "black and white": 3,
+            "clear sky": 2,
+            "sunset dogs": 4
+        }
+    }
+}
+```
+
+`上記をファイル doc.json に貼り付けてください`
+
+`tags` のような、マッチングとランキングの両方を行いたい構造化データは、[weightedset](../reference/schemas/schemas#weightedset) [フィールド型](../reference/schemas/schemas#field)を使用して表現するのが最適です。Vespa の weightedset フィールド型は、次のようなものを表現するために使用できます:
+
+- 上の例のようなドキュメント側のタグ。
+- [クエリー予測によるドキュメント拡張](https://github.com/castorini/docTTTTTquery)。
+- 編集によるランキングのオーバーライド。たとえばスポンサード検索のリスティング。
+
+Vespa スキーマをどのように設計し、エンドユーザーのフリーテキストクエリーに対してこのデータモデルをどのようにマッチング・検索すべきでしょうか?
+
+- title と description を検索するときはテキストマッチングを使用したい。
+- 自由形式の tags フィールドにもマッチさせたい。これらのタグはリコールを高める可能性があり、マッチした要素の重みは、マッチしたドキュメントのランキングに影響を与えられるからです - スキーマ:
+
+```js expandable
+schema photo {
+
+    stemming: none
+  
+    document photo {
+
+        field title type string {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+
+        field description type string {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+
+        field interestingness type float {
+            indexing: summary | attribute
+        }
+
+        field tags type weightedset {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+
+    }
+
+    fieldset default {
+        fields: title, description, tags
+    }
+
+    rank-profile default {
+        first-phase {
+            expression: nativeRank
+        }
+    }
+}
+```
+
+`上記をファイル my-app/schemas/photo.sd に貼り付けてください`
+
+このスキーマでは、[ステミング](../reference/schemas/schemas#stemming)を無効にし、すべての文字列フィールドで [bm25](../ranking/bm25) テキストランキングフィーチャーも有効にしています。
+
+すべての文字列フィールドが同じ [match](../reference/schemas/schemas#match) 設定を共有しているため、[fieldset](../reference/schemas/schemas#fieldset) を使用でき、クエリーで 3 つのフィールドすべてに言及する必要がなくなります。
+
+また、Vespa の [nativeRank](../ranking/nativerank) テキストマッチング・ランクフィーチャーを使用するデフォルトの rank profile(これは暗黙のデフォルト rank profile です)も含めています。 
+
+スキーマに加えて、Vespa の[アプリケーション・パッケージ](../reference/applications/application-packages)を構成するために [services.xml](../reference/applications/services/services) ファイルも必要です:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
+
+    <container id="default" version="1.0">
+        <search />
+        <document-api />
+        <nodes>
+            <node hostalias="node1"></node>
+        </nodes>
+    </container>
+
+    <content id="photos" version="1.0">
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="photo" mode="index"/>
+        </documents>
+        <nodes>
+            <node hostalias="node1" distribution-key="0" />
+        </nodes>
+    </content>
+
+</services>
+```
+
+`上記をファイル my-app/services.xml に貼り付けてください`
+
+## Vespa の起動
+
+この例では vespa コンテナーイメージを使用します:
+
+
+```bash
+$ docker pull vespaengine/vespa
+$ docker run --detach --name vespa --hostname vespa-container \
+  --publish 8080:8080 --publish 19071:19071 \
+  vespaengine/vespa
+```
+
+Homebrew を使用して [Vespa-cli](../clients/vespa-cli) をインストールします:
+
+```bash
+$ brew install vespa-cli
+```
+
+アプリケーションをデプロイします:
+
+  
+
+```bash
+$ vespa deploy --wait 300 my-app
+```
+
+## Vespa へのフィーディング
+サンプルドキュメントをフィードします:
+
+  
+
+```bash
+$ vespa document -v doc.json
+```
+
+## データのクエリー
+
+*sunset photos featuring dogs* というフリーテキストクエリーを想定し、YQL を使用してユーザークエリーを Vespa クエリーリクエストに変換します:
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=sunset photos featuring dogs' \
+  'type=all'
+```
+
+上記のクエリーは 0 件のヒットを返します。このクエリーは、*すべての*クエリー用語がドキュメントにマッチすることを要求しているためです。クエリーリクエストに [trace.level](../reference/api/query#trace.level) を追加すると、クエリーがどのように解析され、コンテントノードに対して実行されるかを確認できます:
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=sunset photos featuring dogs' \
+  'type=all' \
+  'trace.level=3'
+```
+
+トレースの中に、コンテントノードにディスパッチされるクエリーが確認できます: `query=[AND sunshot photos featuring dogs]`
+
+トレースの使用は、ドキュメントがなぜマッチするのか、あるいはマッチしないのかをデバッグする際に非常に役立ちます。 
+
+サンプルドキュメントには *featuring* や *photos* という用語が含まれていないため、このクエリーはサンプルドキュメントを取得できません。**すべての**用語がマッチすることを要求する代わりに、**いずれか**の用語がマッチすればよいようにクエリーマッチングを緩和します。サポートされているクエリータイプについては、[model.type](../reference/api/query#model.type) クエリー API リファレンスを参照してください:
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=sunset photos featuring dogs' \
+  'type=any'
+```
+
+タイプを `any` に変更すると、すべてのクエリー用語がマッチしなければならないという要求がなくなるため、サンプルドキュメントがリコールされます。`type` を使うと、`+` を使用して個々のクエリー用語のマッチを必須にすることもできます:
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=+sunset photos featuring +dogs' \
+  'type=any'
+```
+
+この例では、`sunset` と `dogs` は必ずマッチしなければなりません。ステミングを無効にしているため、`dogs` で検索しても `dog` を含むドキュメントはリコールされないことに注意してください。これがステミングを無効にした理由の 1 つで、ステミングがリコールに影響を与えることを示すためです。`dog` を必須にすると、このクエリーはサンプルドキュメントをリコールしなくなります。
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=+sunset photos featuring +dog' \
+  'type=any'
+```
+
+次に、[weightedset](../reference/schemas/schemas#weightedset) 型のマルチバリューの tags フィールドを Vespa がどのようにマッチさせるかを探ってみましょう。`type=all` に戻していることに注意してください。この例では、[default-index](../reference/api/query#model.defaultindex) クエリーパラメーターも使用して、マッチングを `tags` フィールドに限定しています。
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=clear sky' \
+  'type=all' \
+  'default-index=tags'
+```
+
+このクエリーはドキュメントにマッチしますが、タグに `clear sky` という正確な内容が含まれているので当然です。代わりに `clear` だけで検索してみましょう:
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=clear' \
+  'type=all' \
+  'default-index=tags'
+```
+
+これもドキュメントにマッチします。これは、マッチングが部分的であり、セットの要素と正確に一致する必要がないことを示しています。`clear` は `clear sky` にマッチし、`sky` も `clear sky` にマッチします。  
+
+では、`black sky` はどうでしょうか:
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=black sky' \
+  'type=all' \
+  'default-index=tags'
+```
+
+これもドキュメントにマッチします。これは要素をまたいだマッチング (cross-element matching) の例です。weightedset で `indexing:index` を `match:text` とともに使用すると、複数用語のクエリーは要素をまたいでマッチします。
+
+リコールが増えるため、これは良い判断かもしれません。しかし、場合によっては、ランキングの際に完全一致と部分一致を区別し、完全一致が部分一致より上位にランキングされるようにしたいことがあります。
+
+## ランキング
+
+これまでクエリーとマッチングを探ってきました。次は、マッチしたドキュメントをどのようにランキングするかに焦点を当てます。気付いていないかもしれませんが、上記の例では、各クエリーはヒットごとに `relevance` スコアを生成していました。これまでの例では、このスコアは `default` rank profile を使用して計算されており、この場合は [nativeRank](../ranking/nativerank) を使用していました。
+
+まずは、Vespa に他の[ランクフィーチャー](../reference/ranking/rank-features)を生成してもらい、それらを分析することから始められます。[match-features](../reference/schemas/schemas#match-features) を使用して、取得したドキュメントとともにランクフィーチャーを返します。計算して返してほしいランキングフィーチャーを明示的に指定します。実際のスコアリングは変更しておらず、スコアリング関数として引き続き `nativeRank` を使用していることに注意してください:
+
+```js expandable
+schema photo {
+
+    stemming: none
+
+    document photo {
+
+        field title type string {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+
+        field description type string {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+
+        field interestingness type float {
+            indexing: summary | attribute
+        }
+
+        field tags type weightedset {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+
+    }
+
+    fieldset default {
+        fields: title, description, tags
+    }
+
+    rank-profile default {
+        first-phase {
+            expression: nativeRank
+        }
+
+        match-features {
+            bm25(title)
+            bm25(description)
+            bm25(tags)
+
+            nativeRank
+            nativeRank(title)
+            nativeRank(description)
+
+            elementSimilarity(tags)
+            elementCompleteness(tags).elementWeight
+            elementCompleteness(tags).fieldCompleteness
+            elementCompleteness(tags).queryCompleteness
+            elementCompleteness(tags).completeness
+        }
+    }
+}
+```
+
+`上記をファイル my-app/schemas/photo.sd に貼り付けてください`
+
+変更した rank profile で再デプロイします:
+
+
+```bash
+$ vespa deploy --wait 300 my-app
+```
+
+これで、レスポンスにフィーチャーの一覧が表示されるようになります:
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=clear sky' \
+  'type=any'
+```
+
+出力には [matchfeatures](../reference/querying/default-result-format#matchfeatures) が含まれており、各フィーチャーのさまざまなスコアを確認できます:
+
+特に `elementCompleteness` と `elementSimilarity` のランクフィーチャーに注目してください。これらは[インデックス化されたマルチバリュー文字列フィールド用のフィーチャー](../reference/ranking/rank-features#features-for-indexed-multivalue-string-fields)の例です。
+
+また、`elementCompleteness(tags).fieldCompleteness` が 1.0 であることが分かります。これはタグが完全にマッチしたことを意味し、`"elementCompleteness(tags).elementWeight` は最もよくマッチした要素の重みを出力します。 
+
+`elementSimilarity(tags)` ランキングフィーチャーは非常に柔軟で、[計算をオーバーライドして新しいフィーチャーを出力する](../reference/ranking/rank-feature-configuration#elementSimilarity)ことさえできます。 
+
+この例では、2 つの新しいランキングフィーチャーを定義しました:
+
+- `elementSimilarity(tags).sumWeight` - フィールド完全度 x 重みを使用した、マッチした要素の合計を使用します。
+- `elementSimilarity(tags).maxWeight` - フィールド完全度 x 重みを使用した、マッチした要素の最大値を使用します。
+
+```js expandable
+schema photo {
+
+    stemming: none
+
+    document photo {
+
+        field title type string {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+
+        field description type string {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+
+        field interestingness type float {
+            indexing: summary | attribute
+        }
+
+        field tags type weightedset {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+
+    }
+
+    fieldset default {
+        fields: title, description, tags
+    }
+
+    rank-profile default {
+        rank-properties {
+            elementSimilarity(tags).output.sumWeight: "sum(f*w)"
+            elementSimilarity(tags).output.maxWeight: "max(f*w)"
+        }
+   
+        first-phase {
+            expression: nativeRank
+        }
+
+        match-features {
+            bm25(title)
+            bm25(description)
+            bm25(tags)
+
+            nativeRank
+            nativeRank(title)
+            nativeRank(description)
+
+            elementSimilarity(tags)
+            elementSimilarity(tags).sumWeight
+            elementSimilarity(tags).maxWeight
+
+            elementCompleteness(tags).elementWeight
+            elementCompleteness(tags).fieldCompleteness
+            elementCompleteness(tags).queryCompleteness
+            elementCompleteness(tags).completeness
+        }
+    }
+}
+```
+
+`上記をファイル my-app/schemas/photo.sd に貼り付けてください`
+
+変更した rank profile で再デプロイします:
+
+```bash
+$ vespa deploy --wait 300 my-app
+```
+
+これで、レスポンスにフィーチャーの一覧が表示されるようになります:
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=clear sky' 'type=any'
+```
+
+返される各ヒットには [matchfeatures](../reference/querying/default-result-format#matchfeatures) フィールドが含まれており、各フィーチャーのさまざまなスコアを確認できます。
+
+これで、これらのフィーチャーを `first-phase` で使用されるランキング式に含めて、実際にランキングを変更できます。実際に_最良の_スコアリング関数はデータに依存します。機械学習を使用してトレーニングされた関数が、圧倒的に簡単な方法です。
+
+バッグ・オブ・ワーズの [bm25](../ranking/bm25) ランキングフィーチャーは正規化されていないため、フィーチャーのスコア範囲に上限がなく、線形関数に組み込むのは困難です。これを克服し、rank profile を変更せずに簡単に探索できるようにするには、次のようにして関数内のパラメーターをクエリーごとにオーバーライド可能にします:
+
+```js
+first-phase {
+    expression {
+        query(titleWeight)*bm25(title) +
+        query(descriptionWeight)*bm25(description) +
+        query(tagWeight)*elementSimilarity(tags).maxWeight
+    }
+}
+```
+
+[クエリー変数の使用](../ranking/ranking-expressions-features#using-query-variables)を参照してください。 
+
+```js expandable
+schema photo {
+
+    stemming: none
+
+    document photo {
+
+        field title type string {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+
+        field description type string {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+
+        field interestingness type float {
+            indexing: summary | attribute
+        }
+
+        field tags type weightedset {
+            indexing: summary | index
+            match:text
+            index: enable-bm25
+        }
+    }
+
+    fieldset default {
+        fields: title, description, tags
+    }
+
+    rank-profile tunable inherits default {
+        inputs {
+            query(titleWeight): 2
+            query(descriptionWeight): 1
+            query(tagWeight): 2
+        }
+
+        rank-properties {
+            elementSimilarity(tags).output.sumWeight: "sum(f*w)"
+            elementSimilarity(tags).output.maxWeight: "max(f*w)"
+        }
+   
+        first-phase {
+            expression {
+                query(titleWeight)*bm25(title) + query(descriptionWeight)*bm25(description) +
+                query(tagWeight)*elementSimilarity(tags).maxWeight
+            }
+        }
+
+        match-features {
+            bm25(title)
+            bm25(description)
+            bm25(tags)
+            elementSimilarity(tags).maxWeight
+            firstPhase
+        }
+    }
+}
+```
+
+`上記をファイル my-app/schemas/photo.sd に貼り付けてください`
+
+再デプロイします:
+
+```bash
+$ vespa deploy --wait 300 my-app
+```
+
+新しい rank profile でクエリーを実行します:
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=clear sky' 'type=any' 'ranking=tunable'
+```
+
+上記の関数では、'clear sky' は title フィールドにも description フィールドにもマッチしないため、bm25 フィーチャーはゼロになります。
+
+`elementSimilarity(tags).maxWeight` フィーチャーは 2.0 で、first phase の式は 4 になり、これがヒットの relevance スコアに反映されます。
+
+クエリーリクエストで `query(tagWeight)` を変更すると、relevance が 6.0 になることが確認できます:
+
+```bash
+$ vespa query 'yql=select * from photos where userQuery()' \
+  'query=clear sky' \
+  'type=any' \
+  'ranking=tunable' \
+  'input.query(tagWeight)=3'
+```
+
+同様に、次のようにして、ドキュメントのみのシグナルをランキング関数に含めることもできます:
+
+```js expandable
+inputs {
+    query(titleWeight): 2
+    query(descriptionWeight): 1
+    query(tagWeight): 2
+    query(staticWeight): 1
+}
+
+rank-properties {
+    elementSimilarity(tags).output.sumWeight: "sum(f*w)"
+    elementSimilarity(tags).output.maxWeight: "max(f*w)"
+}
+
+first-phase {
+    expression {
+        query(titleWeight)*bm25(title) + query(descriptionWeight)*bm25(description) +
+        query(tagWeight)*elementSimilarity(tags).maxWeight + query(staticWeight)*attribute(interestingness)
+    }
+}
+```
+
+これで、マッチングとランキングの実験は終わりです。コンテナーをシャットダウンするには:
+
+```bash
+$ docker rm -f vespa
+```

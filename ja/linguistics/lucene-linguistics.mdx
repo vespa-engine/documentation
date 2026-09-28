@@ -1,0 +1,214 @@
+---
+title: "Lucene Linguistics"
+---
+
+Lucene Linguistics は、[Apache Lucene](https://lucene.apache.org) ライブラリーを使用したカスタムの [linguistics](/ja/linguistics/linguistics) 実装です。ある言語のテキスト処理を扱う Lucene のアナライザーを提供し、[ステミングモード](https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/process/StemMode.java)ごとにオプションのバリエーションも提供します。
+
+始めるには[サンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/examples/lucene-linguistics)を確認してください。
+
+## Lucene テキスト解析の速習コース
+
+Lucene の[テキスト解析](https://lucene.apache.org/core/9_8_0/core/org/apache/lucene/analysis/package-summary.html)は、テキストを検索可能なトークンに変換するプロセスです。このテキスト解析は、テキストに順番に適用される一連のコンポーネントで構成されます:
+
+- [CharFilters](https://lucene.apache.org/core/9_8_0/core/org/apache/lucene/analysis/CharFilter.html): トークン化の前にテキストを変換し、その変更を考慮した補正済みの文字オフセットを提供します。 
+- [Tokenizers](https://lucene.apache.org/core/9_8_0/core/org/apache/lucene/analysis/Tokenizer.html): 入力テキストをトークンに分割する役割を担います。 
+- [TokenFilters](https://lucene.apache.org/core/9_8_0/core/org/apache/lucene/analysis/TokenFilter.html): Tokenizer によって作成されたトークンを変更する役割を担います。 
+
+上記のコンポーネントの特定の構成は、[Analyzer](https://lucene.apache.org/core/9_8_0/core/org/apache/lucene/analysis/Analyzer.html) オブジェクトにラップされます。
+
+テキスト解析は次のように動作します:
+1. すべての char filter が、指定された順序でテキスト文字列全体に適用されます
+2. 指定された順序の token filter が、各トークンに適用されます。
+
+## デフォルトの言語解析
+
+Lucene Linguistics は、[lucene-core](https://lucene.apache.org/core/9_8_0/core/index.html) と [lucene-analysis-common](https://lucene.apache.org/core/9_8_0/analysis/common/index.html) ライブラリーが提供する解析コンポーネントを標準で公開しています。Lucene のテキスト解析コンポーネントを含む他のライブラリー(例: [analysis-kuromoji](https://lucene.apache.org/core/9_8_0/analysis/kuromoji/index.html))は、Maven の依存関係としてアプリケーション・パッケージに追加できます。
+
+Lucene Linguistics は標準で 40 言語のアナライザーを提供します:
+
+- アラビア語
+- アルメニア語
+- バスク語
+- ベンガル語
+- ブルガリア語
+- カタルーニャ語
+- 中国語
+- チェコ語
+- デンマーク語
+- オランダ語
+- 英語
+- エストニア語
+- フィンランド語
+- フランス語
+- ガリシア語
+- ドイツ語
+- ギリシャ語
+- ヒンディー語
+- ハンガリー語
+- インドネシア語
+- アイルランド語
+- イタリア語
+- 日本語
+- 韓国語
+- クルド語
+- ラトビア語
+- リトアニア語
+- ネパール語
+- ノルウェー語
+- ペルシャ語
+- ポルトガル語
+- ルーマニア語
+- ロシア語
+- セルビア語
+- スペイン語
+- スウェーデン語
+- タミル語
+- テルグ語
+- タイ語
+- トルコ語
+
+カスタムのアナライザーもデフォルトのアナライザーも持たない言語には、Lucene の [StandardAnalyzer](https://lucene.apache.org/core/9_8_0/core/org/apache/lucene/analysis/standard/StandardAnalyzer.html) が使用されます。
+
+## Linguistics キー
+
+Linguistics キーは、テキスト解析の構成を識別します。セミコロンで区切られた 2 つの部分で構成できますが、どちらか一方を省略することもできます。2 つの部分は次のとおりです:
+
+- [linguistics プロファイル](/ja/linguistics/linguistics#linguistics-profiles)。 
+- 言語キー。 
+
+言語キーはさらに 2 つの部分で構成されます: 必須の[言語コード](https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/Language.java)と、オプションのステミングモードです。フォーマットは `LANGUAGE_CODE[/STEM_MODE]` です。ステミングモードは 5 種類あります: `NONE, DEFAULT, ALL, SHORTEST, BEST`([フィールドのスキーマ](/ja/reference/schemas/schemas#stemming)で指定できます)。
+
+linguistics キーの例:
+
+- `profile=whitespaceLowercase`: すべての言語に適用されるプロファイル。スキーマ内でフィールドの [linguistics プロファイル](/ja/linguistics/linguistics#linguistics-profiles)を指定することで、さまざまなフィールドにバインドできます。 
+- `profile=whitespaceLowercase;language=en`: 英語に適用されるプロファイル。同様にスキーマ内の [linguistics プロファイル](/ja/linguistics/linguistics#linguistics-profiles)を介してフィールドにバインドしますが、英語のテキストにのみ適用されます(インデックス時またはクエリー時)。 
+- `en`: 英語: (スキーマまたは[クエリー内で](/ja/linguistics/linguistics#overriding-profile-for-query-strings))プロファイルが指定されていないすべての英語テキストに適用されます。 
+- `en/BEST`: `BEST` ステミングモードの英語。前の例と同様ですが、[ステミング](/ja/reference/schemas/schemas#stemming)が `BEST` に設定されている場合にのみ適用されます。 
+
+<Note>
+ **注:** ドキュメントのフィールドとクエリー文字列で異なるプロファイルを使用できます。詳細は[クエリー文字列に対する異なる処理](/ja/linguistics/linguistics#different-processing-for-query-strings)と [multiple-profiles サンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/examples/lucene-linguistics/multiple-profiles)を参照してください。
+</Note>
+
+## テキスト解析のカスタマイズ
+
+Lucene linguistics は、言語ごとにテキスト解析をカスタマイズする複数の方法を提供します:
+
+- `services.xml` での `LuceneLinguistics` コンポーネントの設定
+- `ComponentsRegistry`
+
+### LuceneLinguistics コンポーネントの設定
+
+`services.xml` では、`LuceneLinguistics` コンポーネントの[設定を提供する](https://github.com/vespa-engine/vespa/blob/master/lucene-linguistics/src/main/resources/configdefinitions/lucene-analysis.def)ことで、(クラスパス上で利用可能なすべてのテキスト解析コンポーネントから)アナライザーを構築できます。英語の例:
+
+```xml
+<component id="linguistics"
+             class="com.yahoo.language.lucene.LuceneLinguistics"
+             bundle="your-bundle-name">
+    <config name="com.yahoo.language.lucene.lucene-analysis">
+      <configDir>lucene-linguistics</configDir>
+      <analysis>
+        <item key="profile=standardStopStem;language=en">
+          <tokenizer>
+            <name>standard</name>
+          </tokenizer>
+          <tokenFilters>
+            <item>
+              <name>stop</name>
+              <conf>
+                <item key="words">en/stopwords.txt</item>
+                <item key="ignoreCase">true</item>
+              </conf>
+            </item>
+            <item>
+              <name>englishMinimalStem</name>
+            </item>
+          </tokenFilters>
+        </item>
+      </analysis>
+    </config>
+  </component>
+```
+
+注記:
+
+- `item key="profile=standardStopStem;language=en"` の値は [linguistics キー](#linguistics-キー)です。 
+- `name` の値は、テキスト解析コンポーネントの [SPI 名](https://docs.oracle.com/en/java/javase/17/docs/api/java.naming/javax/naming/spi/package-summary.html)です。通常は [Lucene analysis の JavaDoc](https://lucene.apache.org/core/9_11_1/analysis/common/allclasses-index.html) で見つけられます。例えば、`stop` という名前と他のオプションは [StopFilterFactory の JavaDoc](https://lucene.apache.org/core/9_11_1/analysis/common/org/apache/lucene/analysis/core/StopFilterFactory.html) で確認できます。 
+- `en/stopwords.txt` ファイルは、アプリケーション・パッケージ内の `lucene-linguistics` ディレクトリの下に配置する必要があります。このディレクトリは `configDir` オプションで参照されます。 
+- `configDir` が指定されていない場合、ファイルはクラスパス上に存在する必要があります。 
+
+### コンポーネント・レジストリ
+
+[ComponentsRegistry](/ja/applications/dependency-injection#depending-on-all-components-of-a-specific-type) の仕組みを使用して、言語に対して Lucene の Analyzer を設定できます。
+
+```xml
+<component
+    id="en"
+    class="org.apache.lucene.analysis.core.SimpleAnalyzer"
+    bundle="your-bundle-name" />
+```
+
+ここで:
+
+- `id` は [linguistics キー](#linguistics-キー)でなければなりません; 
+- `class` は `Analyzer` クラスを拡張する実装クラスです; 
+- `bundle` は `pom.xml` で指定されたアプリケーション・パッケージの名前です(または、そのクラスを含む `components` ディレクトリに追加された任意のバンドルでも構いません)。 
+
+これが機能するには、クラスは引数なしのコンストラクターを **唯一の** コンストラクターとして提供しなければなりません。
+
+アナライザークラスに何らかの初期化が必要な場合は、`Provider<Analyzer>` クラスを実装するクラスでアナライザーをラップする必要があります。
+
+### カスタムのテキスト解析コンポーネント
+
+テキスト解析コンポーネントは、Java の Service provider interface ([SPI](https://www.baeldung.com/java-spi)) を介して読み込まれます。
+
+適切に準備された外部ライブラリーを使用するには、そのライブラリーを Maven の依存関係としてアプリケーション・パッケージに追加するだけで十分です。
+
+カスタムのコンポーネントを作成する必要がある場合の手順は次のとおりです:
+
+1. Java クラスでコンポーネントを実装する
+2. クラスパス上にある(例: カスタムのトークンフィルターの場合)`META-INF/services/org.apache.lucene.analysis.TokenFilterFactory` ファイルにコンポーネントクラスを登録する。 
+
+## 言語検出
+
+Lucene Linguistics は言語検出を提供しません。つまり、フィードと検索の両方で[言語パラメーター](/ja/reference/api/query#model.language)を指定する必要があります。
+
+## すべてのステムのインデックス
+
+一部のアナライザーは、入力テキストを同じ位置にある複数のトークンに展開します。例えば、[NGramTokenFilter](https://lucene.apache.org/core/9_11_1/analysis/common/org/apache/lucene/analysis/ngram/NGramTokenFilter.html) に基づくものです。以下はアナライザー設定のサンプルです:
+
+```xml
+<item key="profile=ngram;language=en">
+  <tokenizer>
+    <name>whitespace</name>
+  </tokenizer>
+  <tokenFilters>
+    <item>
+      <name>nGram</name>
+      <conf>
+        <item key="minGramSize">2</item>
+        <item key="maxGramSize">2</item>
+      </conf>
+    </item>
+  </tokenFilters>
+</item>
+```
+
+これは `dog` のようなテキストを受け取り、トークンとして `do` と `og`、さらに(デフォルトで)元の `dog` を生成します。しかし、Vespa は最初のトークン(`do`)のみを取得してインデックスに書き込み、他の「ステム」を無視します。その結果、`og` の検索は `dog` を含むドキュメントにマッチしません。これでは文字 n-gram を使う意味がなくなってしまいます。
+
+すべてのステムをインデックスするには、フィールドのスキーマ定義で [stemming](/ja/reference/schemas/schemas#stemming) パラメーターを使用します:
+
+```yaml
+field title_grams type string {
+  indexing: summary | index
+  linguistics {
+      profile: ngram
+  }
+  stemming: multiple
+}
+```
+
+これで、Vespa はすべてのステムをインデックスし、`og` の検索は `dog` を含むドキュメントにマッチするようになります。
+
+<Note>
+ **注:** クエリーは(スキーマの設定にかかわらず)デフォルトですべてのステムを検索します。例えば、`dog` の検索は `do` と `og` にも展開され、3 つの語すべてを検索します。
+</Note>

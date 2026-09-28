@@ -1,0 +1,91 @@
+---
+title: クエリー
+description: "Vespa でのクエリーの入門です。"
+---
+
+## クエリー
+
+Vespa のクエリーは YQL 文字列として表現されます。これは、構造化データに対しては SQL と同一で、ベクトル検索と全文検索のための拡張が加えられたクエリー言語です。例:
+
+```sql
+select * from mySchema where myTextField contains 'someWord' and myNumber > 10.0
+```
+
+スキーマで [fieldset](/ja/reference/schemas/schemas#fieldset) を定義すれば、（"contains" のような）1 つのクエリー項目で複数のフィールドを検索することもできます。
+
+and/or などの任意のネストされた組み合わせがサポートされています。完全な構文は[クエリー言語のリファレンス](/ja/reference/querying/yql)を参照してください。
+
+## クエリー・リクエスト
+
+クエリーは HTTP リクエストとして、`services.xml` に `<search>` を持つコンテナー・クラスターのエンドポイントに送信されます。YQL のクエリーは `yql` パラメーターとして（HTTP エンコードされて）送信されます:
+
+```text
+endpoint-url/search/?yql=select+%2A+from+sources+%2A+where+true
+```
+
+Vespa CLI がこれを代行できます:
+
+```bash
+vespa query "select * from sources * where true"
+```
+
+`-v` オプションを追加すると、これがどのような HTTP リクエストになるかを確認できます。
+
+Vespa Cloud では、アプリケーションはデフォルトで、リクエストの実行に使用する mTLS 証明書を取得します。アクセストークンを使用したい場合は、[コンソールで追加](/ja/security/guide#configuring-tokens)できます。
+
+## クエリー・リクエストのパラメーター
+
+YQL パラメーターに加えて、ユーザー／LLM のクエリーテキスト、ベクトルなどのデータや、クエリー実行を制御するパラメーターを、他のクエリー・リクエスト・パラメーターとして送信できます。これらは通常の方法で HTTP リクエストに追加され、Vespa CLI には複数の引数を追加することで渡せます:
+
+```bash
+vespa query -v "select * from sources * where true" "timeout=100ms"
+```
+
+クエリー・パラメーターは、リクエストパラメーターとしてではなく、[JSON ペイロードとして](/ja/querying/query-api#http)送信することもできます:
+
+```bash
+curl -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where true"}' \
+  endpoint-url/search/
+```
+
+受け付けられるすべてのパラメーターについては、[クエリー API のリファレンス](/ja/reference/api/query)を参照してください。
+
+クエリーで多くのクエリー・パラメーターを設定したくなることがあるかもしれません。リクエストで渡す代わりに、すべてのパラメーターを含むクエリー・プロファイルをアプリケーション・パッケージに作成し、リクエストではプロファイルを指定するだけにできます。[クエリー・プロファイル](/ja/querying/query-profiles)を参照してください。
+
+## テキストによるクエリー
+
+`text` YQL 演算子を使用すると、生のテキストで検索やランキングを行えます。これはテキストを処理し、（デフォルトでは）[WeakAnd](/ja/ranking/wand#weakand) テキスト検索演算子で検索します。
+
+テキストは直接渡すことも、（`@parameter` を使用して）別のリクエストパラメーターを参照することもできます:
+
+```bash
+vespa query "select * from sources * where title contains text(@query)" \
+  "query=Any text, from a human/llm"
+```
+
+テキストの解析方法とマッチング方法を制御するオプションを設定できます。[text() のリファレンスドキュメント](/ja/reference/querying/yql#text)を参照してください。
+
+## ベクトルによるクエリー
+
+ベクトルによるクエリーは、ドキュメントのベクトルとクエリーのベクトルを受け取る `nearestNeighbor` YQL 演算子を使用して行います:
+
+```bash
+vespa query 'select * from sources * where {targetHits: 100}nearestNeighbor(my_vector_field, my_query_vector)' \
+  ranking=my_rank_profile \
+  'input.query(my_query_vector)'='[1,2,3]'
+```
+
+詳細は[最近傍検索](/ja/querying/nearest-neighbor-search)を参照してください。
+
+複数の `nearestNeighbor`、`text`、その他の演算子は自由に組み合わせられます:
+
+```bash
+vespa query "select * from sources * where (({targetHits: 300}nearestNeighbor(my_title_embedding, my_query_vector)) \
+                                              or ({targetHits: 150}nearestNeighbor(my_body_embeddings, my_query_vector)) \
+                                              or title contains text(@query) or body contains text(@query)) \
+                                             and range(title, 0.0, 500.0) and category in ('c1', 'c2') \
+                                             and !(blacklisted=true)" \
+  "input.query(my_query_vector)=embed(@query)" \
+  "query=Hello, world! "
+```

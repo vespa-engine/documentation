@@ -1,0 +1,187 @@
+---
+title: "バッチ削除"
+---
+
+ドキュメントをバッチ削除するためのオプション:
+
+<Steps>
+<Step>
+[vespa feed](/ja/clients/vespa-cli#documents) を使用します:
+
+```sh
+$ vespa feed -t my-endpoint deletes.json
+```
+
+</Step>
+<Step>
+クエリーでドキュメントを検索し、削除し、これを繰り返します。擬似コード:
+
+```sh
+while True; do
+   query and read document IDs, if empty exit
+   delete document IDs using [/document/v1](/en/reference/api/document-v1#delete)
+   wait a sec # optional, add wait to reduce load while deleting
+```
+</Step>
+<Step>
+[document selection](/ja/schemas/documents#document-expiry) を使用してドキュメントを失効させます。これは式に一致*しない*すべてのドキュメントを削除します。親ドキュメントとインポートされたフィールドを使用して、ドキュメント・セットを失効させることも可能です。コンテント・ノードはコーパスを反復処理してドキュメントを削除します(削除されたドキュメントは後でコンパクションによって除去されます):
+
+```xml
+<documents garbage-collection="true">
+    <document type="mytype"
+              mode="index"
+              selection="mytype.version > 4" />
+</documents>
+```
+</Step>
+<Step>
+[/document/v1](/ja/reference/api/document-v1#delete) を使用して、[document selection](/ja/reference/writing/document-selector-language) で識別されるドキュメントを削除します — 以下は *my_doctype* スキーマからすべてのドキュメントを削除する例です。*cluster* の値は *services.xml* 内のコンテント・クラスターの ID です。例: `<content id="my_cluster" version="1.0">`:
+
+```sh
+$ curl -X DELETE \
+  "$ENDPOINT/document/v1/my_namespace/my_doctype/docid?selection=true&cluster=my_cluster"
+```
+
+</Step>
+<Step>
+コンテント・クラスターへのマッピングを削除することで、スキーマをそのすべてのコンテンツごと削除することが可能です。何が起こるかを理解するために、手順実行前の状態を示します:
+
+```sh
+# ls $VESPA_HOME/var/db/vespa/search/cluster.music/n0/documents
+
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 16:59 books
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 12:47 music
+```
+
+設定からスキーマを削除します:
+
+```xml
+<documents>
+    <document type="music" mode="index" />
+    {/* document type="books" mode="index" / */}
+</documents>
+```
+
+スキーマ・ファイル自体を削除する必要はありません。ただし、[validation-overrides.xml](/ja/reference/applications/validation-overrides) に `schema-removal` エントリーを追加する必要があります:
+
+```xml
+<validation-overrides>
+    <allow until="2022-10-31">schema-removal</allow>
+</validation-overrides>
+```
+
+<Note>
+**注:**
+
+Vespa 8.73 より前のバージョンでは、バリデーション・オーバーライド名 `content-type-removal` を使用してください。
+</Note>
+
+アプリケーション・パッケージをデプロイします。これによりコンテント・ノードのプロセスが再設定され、スキーマ・データのあるディレクトリが削除されます:
+
+```sh
+# ls $VESPA_HOME/var/db/vespa/search/cluster.music/n0/documents
+
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 12:47 music
+```
+
+マッピングを元に戻して再デプロイすると、クラスターにはドキュメント数ゼロの `books` スキーマが存在する状態になります。
+
+```sh
+# ls $VESPA_HOME/var/db/vespa/search/cluster.music/n0/documents
+
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 17:06 books
+drwxr-xr-x 6 vespa vespa 4096 Oct 25 12:47 music
+```
+
+スキーマごとのドキュメント数を確認するには、[Custom Component State API](/ja/content/proton#custom-component-state-api) を使用します。
+
+スキーマありとスキーマなしでデプロイするこの手順は、すべてのドキュメントを削除する効率的な方法です。手順の完了後は、後の偶発的なデータ損失を避けるため、*validation-overrides.xml* またはその中の `schema-removal` 要素を削除しておくことが良いプラクティスです。上記のディレクトリ一覧は説明のための例示です。
+</Step>
+</Steps>
+
+## 例
+
+これは、ドキュメント数を追跡し、[selection 文字列](/ja/reference/writing/document-selector-language)を使用してサブセットを削除する方法のエンドツーエンドの例です。
+
+### サンプル・ドキュメントのフィード
+
+ドキュメントのバッチをフィードします。例として [vector-search](https://github.com/vespa-cloud/vector-search) サンプル・アプリケーションを使用します:
+
+```sh
+$ vespa feed <(python3 feed.py 100000 3)
+```
+
+[content.proton.documentdb.documents.total](/ja/reference/operations/metrics/searchnode#content_proton_documentdb_documents_total) メトリクスを使用して、ノードのドキュメント数を確認します(ここでは 100,000):
+
+```sh
+$ docker exec vespa curl -s http://localhost:19092/prometheus/v1/values | grep ^content.proton.documentdb.documents.total
+
+  content_proton_documentdb_documents_total_max{metrictype="standard",instance="searchnode",documenttype="vector",clustername="vectors",vespa_service="vespa_searchnode",} 100000.0 1695383025000
+
+  content_proton_documentdb_documents_total_last{metrictype="standard",instance="searchnode",documenttype="vector",clustername="vectors",vespa_service="vespa_searchnode",} 100000.0 1695383025000
+```
+
+上記のメトリクスは、この例でフィードを行う際に役立ちます。別の方法として、すべてのドキュメントを[ビジット](/ja/writing/visiting)して ID を出力する方法もあります:
+
+```sh
+$ vespa visit --field-set "[id]" | wc -l
+  100000
+```
+
+この時点で、インデックスには 100,000 件のドキュメントがあります。
+
+### selection の定義
+
+削除するドキュメントのサブセットを定義します — 例えば経過時間やその他の条件によって定義します。この例では、ランダムに 1% を選択します。テスト実行を行います:
+
+```sh
+$ vespa visit --field-set "[id]" --selection 'id.hash().abs() % 100 == 0' | wc -l
+    1016
+```
+
+したがって、selection 文字列 `id.hash().abs() % 100 == 0` は 1,016 件のドキュメントにヒットします。
+
+### ドキュメントの削除
+
+ドキュメントを削除します。削除されたドキュメント数はレスポンスで確認できます:
+
+```sh
+$ curl -X DELETE \
+  "http://localhost:8080/document/v1/mynamespace/vector/docid?selection=id.hash%28%29.abs%28%29+%25+100+%3D%3D+0&cluster=vectors"
+
+  {
+      "pathId":"/document/v1/mynamespace/vector/docid",
+      "documentCount":1016
+  }
+```
+
+結果セットが大きい場合、レスポンスに `continuation` トークンが返されます。トークンが返されなくなるまでループします:
+
+```sh
+$ ENDPOINT="http://localhost:8080"
+$ URI="/document/v1/mynamespace/vector/docid?selection=id.hash%28%29.abs%28%29+%25+100+%3D%3D+0&cluster=vectors"
+$ CONTINUATION=""
+$ while true; do
+    RESPONSE=$(curl -s -X DELETE "${ENDPOINT}${URI}${CONTINUATION}")
+    echo "$RESPONSE"
+    TOKEN=$(echo "$RESPONSE" | jq -r '.continuation // empty')
+    if [ -z "$TOKEN" ]; then break; fi
+    CONTINUATION="&continuation=${TOKEN}"
+  done
+```
+
+### 検証
+
+selection 条件に一致するすべてのドキュメントが削除されたことを確認します:
+
+```sh
+$ vespa visit --selection 'id.hash().abs() % 100 == 0' --field-set "[id]" | wc -l
+  0
+```
+
+残りのドキュメントを一覧表示します:
+
+```sh
+$ vespa visit --field-set "[id]" | wc -l
+  98984
+```

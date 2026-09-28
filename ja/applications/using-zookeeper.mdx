@@ -1,0 +1,59 @@
+---
+title: "ZooKeeper の使用"
+description: "Vespa コンテナーは [ZooKeeper](https://zookeeper.apache.org/) をサポートしており、コンテナー・クラスター内のノード間で分散同期を行うことができます。"
+---
+
+有効化すると、コンテナー・クラスター内のすべてのノードが自動的に ZooKeeper アンサンブルを形成し、サーバーとして参加します。コンテナー・クラスターにノードが追加または削除されると、Vespa が ZooKeeper メンバーの再設定を行います。
+
+<Note>
+**注:**
+
+Vespa は、ZooKeeper を使用するクラスターに対して最適なノード数の制限を適用します。このノード数に違反するアプリケーション・パッケージは拒否されます。有効なノード数は 3、5、または 7 です。それ以外のノード数については [#15762](https://github.com/vespa-engine/vespa/issues/15762) を参照してください。
+</Note>
+
+## 設定
+
+<Steps>
+  <Step>
+  ZooKeeper は、[コンテナー・クラスターの設定](/ja/reference/applications/services/container#zookeeper)で明示的に有効化する必要があります。
+  </Step>
+
+  <Step>
+  アプリケーションで `zkfacade` への依存関係を指定する必要があります。`pom.xml` の例:
+     
+     ```xml
+     <dependency>
+       <groupId>com.yahoo.vespa</groupId>
+       <artifactId>zkfacade</artifactId>
+       <version>[vespa-version]</version>
+       <scope>provided</scope>
+     </dependency>
+     ```
+  </Step>
+
+</Steps>
+
+## コード例
+
+ZooKeeper の機能は [VespaCurator](https://github.com/vespa-engine/vespa/blob/master/zkfacade/src/main/java/com/yahoo/vespa/curator/api/VespaCurator.java) を通じて公開されています。使用するには `VespaCurator` を[インジェクト](/ja/applications/dependency-injection)します。[Handler](/ja/applications/request-handlers) の例:
+
+```java
+public class MyRequestHandler extends ThreadedHttpRequestHandler {
+    private final VespaCurator curator;
+    @Inject
+    public CuratorHandler(Executor executor, VespaCurator curator) {
+        super(executor);
+        this.curator = curator;
+    }
+    @Override
+    public HttpResponse handle(HttpRequest httpRequest) {
+        Path lockPath = Path.fromString("/locks/mylock");
+        Duration timeout = Duration.ofSeconds(1);
+        try (var lock = curator.lock(lockPath, timeout)) {
+            // Do something while holding lock
+        } catch (Exception e) {
+        throw new RuntimeException("Failed to acquire lock " + lockPath, e);
+    }
+}
+}
+```

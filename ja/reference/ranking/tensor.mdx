@@ -1,0 +1,280 @@
+---
+title: "テンソル リファレンス"
+---
+
+
+テンソルとは、その*次数 (order)* を定義する名前付きの*次元 (dimension)* の集合と、それらの次元が張る空間内に位置する値の集合です:
+
+- _セル (Cell)_: 次元空間内に位置する値。セル・アドレスとそのアドレスにある値で構成されます。
+- _アドレス (Address)_: キーと値の集合。各キーはテンソルの次元集合に含まれる*次元*であり、各値はその次元におけるセルの位置を決定する*ラベル*(整数または文字列)です。
+
+次元の集合、セルの値、セル・アドレスのキー・値は、ゼロを含む任意のサイズにできます。次元は mapped または indexed のいずれかです。mapped 次元は(マップのように)セル・アドレスのラベルとして文字列識別子を使用し、indexed 次元は(配列のように)`[0,N>` の範囲の整数を使用します。ここで N は次元のサイズです。
+
+## テンソル型の指定
+
+[constant](/ja/reference/schemas/schemas#constant) または [tensor フィールド型](/ja/reference/schemas/schemas#tensor)に含まれます。テンソルの次元とセル型がその型を定義します。テンソル型は、以下の形式で次元のリストを含みます:
+
+```bash
+tensor<value-type>(dimension-1,dimension-2,...,dimension-N)
+```
+
+value-type は以下のいずれかです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>型</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>float</td>
+      <td>32 ビット IEEE 754 浮動小数点数</td>
+    </tr>
+    <tr>
+      <td>double</td>
+      <td>64 ビット IEEE 754 浮動小数点数</td>
+    </tr>
+    <tr>
+      <td>int8</td>
+      <td>符号付き 8 ビット整数。<a href="/ja/performance/feature-tuning#cell-value-types" aria-label="performance considerations">パフォーマンス上の考慮事項</a>を参照してください</td>
+    </tr>
+    <tr>
+      <td>bfloat16</td>
+      <td>32 ビット IEEE 754 浮動小数点数の先頭 16 ビット。<a href="/ja/performance/feature-tuning#cell-value-types" aria-label="performance considerations">パフォーマンス上の考慮事項</a>を参照してください</td>
+    </tr>
+  </tbody>
+</table>
+
+次元は次のように指定します:
+
+- `dimension-name{}` - mapped 次元
+- `dimension-name[size]` - indexed 次元
+
+2 つの mapped 次元 _x_ と _y_ を持つ tensor\<float\> のテンソル型は次のようになります:
+
+```bash
+tensor<float>(x{},y{})
+```
+
+この型を持つテンソルの例:
+
+```bash
+{{x:a,y:b}:10.0, {x:c,y:d}:20.1}
+```
+
+サイズがそれぞれ 3 と 2 の 2 つの indexed 次元 _x_ と _y_ を持つ tensor\<float\> のテンソル型は次のようになります:
+
+```bash
+tensor<float>(x[3],y[2])
+```
+
+この型を持つテンソル(行列を表現)の例:
+
+```bash
+{{x:0,y:0}:1, {x:0,y:1}:2.1,
+ {x:1,y:0}:3, {x:1,y:1}:5,
+ {x:2,y:0}:7, {x:2,y:1}:11}
+```
+
+ラベルは _[0,dimension-size\>_ の範囲のインデックスであることに注意してください
+
+mapped 次元と indexed 次元の両方を持つ tensor\<double\> は *mixed(混合)* です:
+
+```bash
+tensor<double>(key{},x[2])
+```
+
+例:
+
+```bash
+{{key:a,x:0}:10, {key:b,x:0}:2.7,
+ {key:a,x:1}:5.3, {key:b,x:1}:-7 }
+```
+
+## テンソル・リテラル形式
+
+テンソル・リテラル形式は以下で使用されます:
+
+- クエリー内のテンソル。[クエリー・フィーチャー型の定義](/ja/ranking/ranking-expressions-features#query-feature-types)と[テンソル・ユーザー・ガイド](/ja/ranking/tensor-user-guide#querying-with-tensors)を参照してください
+- [ステートレス・モデル評価](/ja/reference/ranking/model-files)における定数テンソル
+- [Java Tensor API](https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html) を使用したテンソルの構築
+
+テンソル・リテラル形式は JSON フォーマット*ではありません*。(クエリーを POST する場合など)JSON フォーマットの中で送信する場合は、文字列として渡す必要があります。
+
+### 一般リテラル形式
+
+一般リテラル形式は冗長かつ明示的で、あらゆるテンソルを表現でき、次のとおりです (EBNF):
+
+```bash
+literal tensor = ( tensor-type-spec ":" )? "{" cells "}" ;
+cells = | cell , { "," cell } ;
+cell = "{" address "}:" scalar ;
+address = | element, { "," element } ;
+element = dimension ":" label ;
+dimension = integer | identifier ;
+label = integer | identifier | 'string' | "string" ;
+identifier = ["A"-"Z","a"-"z","0"-"9","_","@"](["A"-"Z","a"-"z","0"-"9","_","@","$"])*
+```
+
+クエリー入力の場合、型はランキング・プロファイルで input として宣言されるべきなので、型指定は通常省略されます。
+
+#### 一般リテラル形式の例:
+
+空のテンソル:
+
+```bash
+{}
+```
+
+単一の mapped 次元 _x_ を持つ単一値のテンソル:
+
+```bash
+{ {x:foo}:5.0 }
+```
+
+複数の値と mapped 次元 _x_、_y_ を持つテンソル:
+
+```bash
+{ {x:foo, y:bar}:5.0, {x:foo, y:baz}:7.0 }
+```
+
+ベクトルを表す単一の indexed 次元 _x_ を持ち、型が明示的に指定されたテンソル:
+
+```bash
+tensor<float>(x[3]):{ {x:0}:3.0, {x:1}:5.0, {x:2}:7.0 }
+```
+
+デフォルトの値型 (double) を使用する型と、引用符付きラベルを持つテンソル:
+
+```bash
+tensor(key{}):{ {key:'key.1'}:3.0, {key:'key 2'}:5.0, {key:"key's"}:7.0 }
+```
+
+### indexed 短縮形式
+
+すべての次元が indexed であるテンソルは、*右側の次元が隣接する*順序で、角括弧で囲んだ数値として書くことができます。型がまだ宣言されていない場合、この形式では明示的なテンソル型が必要です。注: 次元はアルファベット順に並べるべきです。
+
+括弧は型の構造に従ってネストしなければならず、右側の次元の値は左側の次元よりも近くなります。後方互換性のために(式ではサポートされていません)、セルの値をフラットな配列と同じ順序で指定することもできます。
+
+#### indexed 短縮形式の例:
+
+indexed 形式の float の 1 次元テンソル:
+
+```bash
+tensor<float>(x[3]):[3.0, 5.0, 7.0]
+```
+
+indexed 形式の行列。最も右側の次元 (y) の値が隣接するため、ここでは値 3 がセル \{x:0,y:2} に割り当てられます:
+
+```bash
+tensor<float>(x[2],y[3]):[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+```
+
+非推奨: 内側の括弧は省略できるため、上記は次と等価です
+
+```bash
+tensor<float>(x[2],y[3]):[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+```
+
+### バイナリ 16 進数形式
+
+バイナリ・データを表すテンソル(`int8` セル値型の indexed テンソル)は、対応する [JSON テンソル・フィード・フォーマット](/ja/reference/schemas/document-json-format#tensor-hex-dump)と同様に、16 進数表現で表すことができます。テンソル型が `tensor<int8>(x[2],y[3])` と宣言されている場合、入力は単に
+
+```bash
+0B22038405FF
+```
+
+とすることができ、これは次と等価です:
+
+```bash
+[[11, 34, 3], [-124, 5, -1]]
+```
+
+### mapped 短縮形式
+
+単一の mapped 次元を持つテンソルは、完全なアドレス・マップの代わりに、その暗黙的な次元におけるラベルだけを指定して書くことができます。この形式では、型が宣言されているか、明示的に指定されている必要があります。
+
+#### mapped 短縮形式の例:
+
+```bash
+tensor<float>(key{}):{ key1:1.0, key2:2.0 }
+```
+
+### mixed 短縮形式
+
+単一の mapped 次元と 1 つ以上の indexed 次元を持つテンソルは、mapped 次元を map 短縮形式で指定し、各 dense サブスペースの値を indexed 短縮形式で指定して書くことができます。この形式では、型が既知(宣言済み)であるか、指定されている必要があります。
+
+#### mixed 短縮形式の例:
+
+行列のマップ:
+
+```bash
+tensor<float>(key{},x[2],y[3]):{ key1:[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+                                 key2:[[1.1, 2.1, 3.1], [4.1, 5.1, 6.1]] }
+```
+
+これは dense サブスペースの 16 進数形式と組み合わせることもできます:
+
+```bash
+tensor<int8>(key{},x[5]):{ key1: 0102030405, key2: fffefdfcfb }
+```
+
+複数の mapped 次元を持つテンソルは、ラベルをネストする mixed 短縮形式の拡張バリアントを使用できます。ここでも、型は次元をアルファベット順に並べて宣言すべきであり、これによりネストは一貫した順序に従うことに注意してください。
+
+```bash
+tensor(category{},key{},x[2],y[3]):{
+   cat1:{key1:[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+         key2:[[1.1, 2.1, 3.1], [4.1, 5.1, 6.1]]},
+   cat2:{key1:[[7.3, 8.3, 9.3], [7.0, 8.0, 9.0]],
+         key3:[[7.5, 8.5, 9.5], [7.9, 8.9, 9.9]]}
+}
+```
+これと等価な完全指定のリテラル形式は次のようになります
+```bash
+tensor(category{},key{},x[2],y[3]):{{category:cat1, key:key1, x:0, y:0}: 1.0,
+                                    {category:cat1, key:key1, x:0, y:1}: 2.0,
+                                    {category:cat1, key:key1, x:0, y:2}: 3.0,
+                                    {category:cat1, key:key1, x:1, y:0}: 4.0,
+                                    {category:cat1, key:key1, x:1, y:1}: 5.0,
+                                    {category:cat1, key:key1, x:1, y:2}: 6.0,
+                                    {category:cat1, key:key2, x:0, y:0}: 1.1,
+                                    {category:cat1, key:key2, x:0, y:1}: 2.1,
+                                    {category:cat1, key:key2, x:0, y:2}: 3.1,
+                                    {category:cat1, key:key2, x:1, y:0}: 4.1,
+                                    {category:cat1, key:key2, x:1, y:1}: 5.1,
+                                    {category:cat1, key:key2, x:1, y:2}: 6.1,
+                                    {category:cat2, key:key1, x:0, y:0}: 7.3,
+                                    {category:cat2, key:key1, x:0, y:1}: 8.3,
+                                    {category:cat2, key:key1, x:0, y:2}: 9.3,
+                                    {category:cat2, key:key1, x:1, y:0}: 7.0,
+                                    {category:cat2, key:key1, x:1, y:1}: 8.0,
+                                    {category:cat2, key:key1, x:1, y:2}: 9.0,
+                                    {category:cat2, key:key3, x:0, y:0}: 7.5,
+                                    {category:cat2, key:key3, x:0, y:1}: 8.5,
+                                    {category:cat2, key:key3, x:0, y:2}: 9.5,
+                                    {category:cat2, key:key3, x:1, y:0}: 7.9,
+                                    {category:cat2, key:key3, x:1, y:1}: 8.9,
+                                    {category:cat2, key:key3, x:1, y:2}: 9.9}
+```
+
+## テンソル関数
+
+テンソル関数は[式](/ja/reference/ranking/ranking-expressions#tensor-functions)のドキュメントに一覧があります。
+
+## テンソル・ランク・フィーチャー
+
+以下のランク・フィーチャーは、ランキング式でテンソルを参照または作成するために使用できます。テンソルは、ドキュメント、クエリー、またはアプリケーション・パッケージ内の定数から取得できます:
+
+- [attribute(tensor\_attribute)](/ja/reference/ranking/rank-features#attribute(name))
+- [query(tensor\_feature)](/ja/reference/ranking/rank-features#query(value))
+- [constant(tensor\_constant)](/ja/reference/ranking/rank-features#constant(name))
+- [tensorFromWeightedSet(source, dimension)](/ja/reference/ranking/rank-features#tensorFromWeightedSet(source,dimension))
+- [tensorFromLabels(source, dimension)](/ja/reference/ranking/rank-features#tensorFromLabels(source,dimension))
+- [tensorFromStructs(attribute,key,value,type)](/ja/reference/ranking/rank-features#tensorFromStructs(attribute,key,value,type))
+
+ドキュメントでのテンソルの使用方法については、以下のリファレンス・ドキュメントを参照してください:
+
+- [スキーマ内の tensor フィールド](/ja/reference/schemas/schemas#tensor)
+- [Document JSON フォーマット](/ja/reference/schemas/document-json-format)

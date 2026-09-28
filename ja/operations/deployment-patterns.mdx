@@ -1,0 +1,179 @@
+---
+title: "デプロイメント・パターン"
+---
+
+Vespa Cloud の[自動デプロイメント](/ja/operations/automated-deployments)を使うと、段階的なロールアウトやマルチゾーン・デプロイメントのための CD パイプラインを設計できます。このガイドでは、そうしたパターンのいくつかを説明します。
+
+## 2 リージョン、各 2 AZ、順次デプロイメント
+
+これは最もシンプルなパターンで、一連の zone／リージョンに順番にデプロイします:
+
+<Frame>
+![2 リージョン、各 2 AZ、順次デプロイメント](/assets/img/pipeline-1.png)
+</Frame>
+
+```xml
+<deployment version="1.0">
+    <prod>
+        <region>aws-us-east-1c</region>
+        <region>aws-use1-az4</region>
+        <region>aws-use2-az1</region>
+        <region>aws-use2-az3</region>
+    </prod>
+</deployment>
+```
+
+## 2 リージョン、各 2 AZ、並列デプロイメント
+
+上記と同じですが、すべての zone に並列でデプロイします:
+
+<Frame>
+![2 リージョン、各 2 AZ、並列デプロイメント](/assets/img/pipeline-2.png)
+</Frame>
+
+```xml
+<deployment version="1.0">
+    <prod>
+        <parallel>
+            <region>aws-us-east-1c</region>
+            <region>aws-use1-az4</region>
+            <region>aws-use2-az1</region>
+            <region>aws-use2-az3</region>
+        </parallel>
+    </prod>
+</deployment>
+```
+
+## 2 リージョン、各 2 AZ、リージョン内での並列デプロイメント
+
+最初に use1 リージョンの両方の AZ に並列でデプロイし、次に use2 リージョンの両方の AZ に並列でデプロイします:
+
+<Frame>
+![2 リージョン、各 2 AZ、リージョン内での並列デプロイメント](/assets/img/pipeline-3.png)
+</Frame>
+
+```xml
+<deployment version="1.0">
+    <prod>
+        <parallel>
+            <region>aws-us-east-1c</region>
+            <region>aws-use1-az4</region>
+        </parallel>
+        <parallel>
+            <region>aws-use2-az1</region>
+            <region>aws-use2-az3</region>
+        </parallel>
+    </prod>
+</deployment>
+```
+
+## まずテストインスタンスにデプロイする
+
+まず（スケールダウンした）インスタンスにデプロイし、後続のインスタンスや zone に伝播させる前にディレイを追加します。
+
+<Frame>
+![カナリアインスタンスを用いる場合](/assets/img/canary-instance-one-app.png)
+</Frame>
+
+```xml
+<deployment version="1.0">
+    <instance id="canary">
+        <prod>
+            <region>aws-use2-az1</region>
+            <delay hours="1" />
+        </prod>
+    </instance>
+    <instance id="prod">
+        <prod>
+            <region>aws-use2-az1</region>
+        </prod>
+    </instance>
+</deployment>
+```
+
+### デプロイメント・バリアント
+
+スケールダウンしたインスタンスをセットアップするには、[デプロイメント・バリアント](/ja/operations/deployment-variants)が便利です。[services.xml](/ja/reference/applications/services/services) で、インスタンスごとに設定を上書きします:
+
+```xml
+<nodes deploy:instance="canary" count="2">
+    <resources vcpu="4" memory="32Gb" disk="100Gb"/>
+</nodes>
+<nodes deploy:instance="prod" count="32">
+    <resources vcpu="16" memory="128Gb" disk="1000Gb"/>
+</nodes>
+```
+
+## テストインスタンスと prod インスタンスを別々のアプリケーションにする
+
+前のセクションでは、テストアプリと prod アプリを 1 つのパイプラインとしてモデル化しました。これにより、ユーザーは（ディレイを利用して）prod への伝播の前にパイプラインを停止できます。
+
+場合によっては、これを別々のアプリケーションとしてモデル化する方が適しています:
+
+- CI パイプラインが複数ステップで、承認や異なるブランチの使用を伴う場合
+
+以下では、フローをモデル化するために異なる*アプリケーション*を使用しています。これらは完全に独立したアプリケーション・インスタンスです。アプリケーションのオーナーは、自身のツールでフローをモデル化し、必要に応じて Vespa Cloud へのデプロイメントをオーケストレーションします:
+
+<Frame>
+![canary アプリ](/assets/img/canaryapp.png) 
+</Frame>
+<Frame>
+![prod アプリ](/assets/img/prodapp.png)
+</Frame>
+
+重要な点は、これらが Vespa Cloud への 2 つの*別々の* deploy コマンドであるということです:
+
+```bash
+$ vespa config set application tenant1.canaryapp
+$ vespa prod deploy app
+```
+
+```xml
+<deployment version="1.0">
+    <instance id="canary">
+        <prod>
+            <region>aws-use2-az1</region>
+        </prod>
+    </instance>
+</deployment>
+```
+
+```bash
+$ vespa config set application tenant1.prodapp
+$ vespa prod deploy app
+```
+
+```xml
+<deployment version="1.0">
+    <instance id="prod">
+        <prod>
+            <region>aws-use2-az1</region>
+        </prod>
+    </instance>
+</deployment>
+```
+
+## services.xml の構造
+
+include を使うと、*services.xml* を複数のファイルに分割できます:
+
+```xml
+<services version="1.0" xmlns:preprocess="properties"  xmlns:deploy="vespa">
+    <preprocess:include file="container-cluster.xml" />
+    <preprocess:include file="content-cluster.xml" />
+</services>
+```
+
+<Note>
+**Note:** 
+
+include 機能は[デプロイメント・バリアント](#deployment-variants)と組み合わせて使用することはできません。
+</Note>
+
+## 次に読むべきページ
+
+<CardGroup>
+  <Card title="環境" icon="layer-group" href="/ja/operations/environments" horizontal />
+  <Card title="Zone" icon="globe" href="/ja/operations/zones" horizontal />
+  <Card title="ルーティング" icon="code-branch" href="/ja/operations/endpoint-routing" horizontal />
+</CardGroup>

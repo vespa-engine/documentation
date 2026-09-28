@@ -1,0 +1,469 @@
+---
+title: "services.xml - http"
+---
+
+これは [services.xml](/ja/reference/applications/services/services) の [container](/ja/reference/applications/services/container) のサブ要素である `http` のリファレンスです。http ブロックは http サーバーとフィルターを設定するために使用されます。この要素が存在する場合、デフォルトの http サーバーは無効になります。
+
+```yml exoandable
+http
+    server [id, port]
+        ssl
+            private-key-file
+            certificate-file
+            ca-certificates-file
+            client-authentication
+            protocols
+            cipher-suites
+        ssl-provider [class, bundle]
+    filtering
+        filter [id, class, bundle, provides, before, after]
+          provides
+          before
+          after
+          filter-config
+        request-/response-chain [id, inherits, excludes]
+          binding
+          filter [id, class, bundle, provides, before, after]
+              provides
+              before
+              after
+              filter-config
+          inherits
+              chain
+              exclude
+          phase [id, before, after]
+              before
+              after
+```
+
+ほとんどの要素はオプションの [config](/ja/reference/applications/config-files#generic-configuration-in-services-xml) 要素を取ります。[server](#server) の例を参照してください。
+
+注: 検索ハンドラーのポート(つまりクエリー用ハンドラー)をバインドするには、[search bindings](/ja/reference/applications/services/search#binding) を参照してください。
+
+例:
+
+```xml
+<http>
+    <server id="server1" port="8080" />
+    <server id="server2" port="9000" />
+
+    <filtering>
+        <filter id="request-filter1" class="com.yahoo.test.RequestFilter1" />
+        <filter id="response-filter1" class="com.yahoo.test.ResponseFilter1" />
+
+        <request-chain id="test-request-chain">
+            <binding>http://*/*</binding>
+            <filter id="request-filter1"/>
+            <filter id="request-filter2" class="com.yahoo.test.RequestFilter2" />
+        </request-chain>
+
+        <response-chain id="test-response-chain">
+            <binding>http://*:8080/*</binding>
+            <binding>http://*:9000/path</binding>
+            <filter id="response-filter1"/>
+            <filter id="response-filter2" class="com.yahoo.test.ResponseFilter2" />
+        </response-chain>
+    </filtering>
+</http>
+```
+
+## server
+
+http サーバーの定義です。サーバーの設定には [jdisc.http.connector.def](https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/resources/configdefinitions/jdisc.http.jdisc.http.connector.def) を使用します。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;id&#42;&#42;</td>
+      <td>必須</td>
+      <td>string</td>
+      <td></td>
+      <td>コンポーネント ID</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;port&#42;&#42;</td>
+      <td>オプション</td>
+      <td>number</td>
+      <td><a href="/ja/operations/self-managed/files-processes-and-ports#environment-variables" aria-label="environment variables">環境変数</a>のウェブサービス・ポート</td>
+      <td>サーバーのポート</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;default-request-chain&#42;&#42;</td>
+      <td>オプション</td>
+      <td>string</td>
+      <td></td>
+      <td>マッチしなかったリクエストに使用するデフォルトのリクエストチェーン</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;default-response-chain&#42;&#42;</td>
+      <td>オプション</td>
+      <td>string</td>
+      <td></td>
+      <td>マッチしなかったリクエストに使用するデフォルトのレスポンスチェーン</td>
+    </tr>
+  </tbody>
+</table>
+
+例:
+
+```xml
+<server id="server1" port="8080">
+    <config name="jdisc.http.connector">
+        <idleTimeout>90</idleTimeout>
+    </config>
+</server>
+```
+
+## ssl
+
+PEM 形式で提供された資格情報を使用して、HTTP サーバーに TLS を設定します。
+
+## private-key-file
+
+PEM 形式の秘密鍵ファイルへのパス。
+
+## certificate-file
+
+PEM 形式の証明書ファイルへのパス。
+
+## ca-certificates-file
+
+PEM 形式の CA 証明書ファイルへのパス。
+
+## client-authentication
+
+クライアント認証。サポートされる値: *disabled*、*want*、*need*。
+
+## protocols
+
+有効にする TLS プロトコルバージョンのカンマ区切りリスト。例: *TLSv1.2,TLSv1.3*。
+
+## cipher-suites
+
+有効にする TLS 暗号スイートのカンマ区切りリスト。指定した暗号は JDK インストールでサポートされている必要があります。例: *TLS\_AES\_256\_GCM\_SHA384,TLS\_ECDHE\_ECDSA\_WITH\_AES\_256\_GCM\_SHA384*。
+
+## ssl-provider
+
+プログラムによる Java インターフェースを通じて HTTP サーバーに TLS を設定します。指定するクラスは [SslProvider](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/jdisc/http/SslProvider.html) インターフェースを実装している必要があります。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;class&#42;&#42;</td>
+      <td>必須</td>
+      <td>string</td>
+      <td></td>
+      <td>クラス名</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;bundle&#42;&#42;</td>
+      <td>必須</td>
+      <td>string</td>
+      <td></td>
+      <td>バンドル名</td>
+    </tr>
+  </tbody>
+</table>
+
+## filtering
+
+`filtering` は http フィルターチェーンを設定するためのものです。サブ要素:
+
+- [filter](#filter)
+- [request-chain](#chain)
+- [response-chain](#chain)
+
+例:
+
+```xml
+<filtering>
+    <filter id="request-filter1" class="com.yahoo.test.RequestFilter1" />
+    <filter id="response-filter1" class="com.yahoo.test.ResponseFilter1" />
+
+    <request-chain id="test-request-chain">
+        <binding>http://*/</binding>
+        <filter id="request-filter1"/>
+        <filter id="request-filter2" class="com.yahoo.test.RequestFilter2" />
+    </request-chain>
+
+    <response-chain id="test-response-chain">
+        <binding>http://*/</binding>
+        <filter id="response-filter1"/>
+        <filter id="response-filter2" class="com.yahoo.test.ResponseFilter2" />
+    </response-chain>
+</filtering>
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;strict-mode&#42;&#42;</td>
+      <td>オプション</td>
+      <td>boolean</td>
+      <td>true</td>
+      <td>true に設定した場合、すべてのリクエストはいずれかのフィルターにマッチしなければなりません。マッチしないリクエストに対しては HTTP 403 レスポンスが返されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+## binding
+
+指定した URI パターンにマッチするリクエスト/レスポンスを、[request-chain/response-chain](#chain) を通して送ることを指定します。
+
+## filter
+
+単一フィルターの定義で、チェーンを定義する際に参照するためのものです。単一のフィルターを異なるチェーンで使用する場合は、各チェーンごとに個別にインラインで定義するよりも、`http` の直下に定義して `id` で参照する方がすっきりします。次のフィルタータイプがサポートされています:
+
+- RequestFilter
+- ResponseFilter
+- SecurityRequestFilter
+- SecurityResponseFilter
+
+Security\[Request/Response\]Filter は自動的に Security\[Request/Response\]FilterChain にラップされます。これにより、チェーンに関しては通常の Request/Response フィルターと同様に振る舞います。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;id&#42;&#42;</td>
+      <td>必須</td>
+      <td>string</td>
+      <td></td>
+      <td>コンポーネント ID</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;class&#42;&#42;</td>
+      <td>オプション</td>
+      <td>string</td>
+      <td>id</td>
+      <td>コンポーネントのクラス。デフォルトは id</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;bundle&#42;&#42;</td>
+      <td>オプション</td>
+      <td>string</td>
+      <td>id または class</td>
+      <td>コンポーネントをロードするバンドル。デフォルトは class または id(class が指定されていない場合)</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;before&#42;&#42;</td>
+      <td>オプション</td>
+      <td>string</td>
+      <td></td>
+      <td>このフェーズの後に続くべきフェーズおよび/またはフィルターのスペース区切りリスト</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;class&#42;&#42;</td>
+      <td>オプション</td>
+      <td>string</td>
+      <td>id</td>
+      <td>このフェーズに先行すべきフェーズおよび/またはフィルターのスペース区切りリスト</td>
+    </tr>
+  </tbody>
+</table>
+
+サブ要素:
+
+- [provides](#provides)
+- [before](#before)
+- [after](#after)
+- [filter-config](#filter-config)
+
+例:
+
+```bash
+<filter id="filter2" class="com.yahoo.test.Filter2"/>
+```
+
+## provides
+
+フィルターが提供する名前で、フェーズや他のフィルターが依存関係として使用します。[filter](#filter) および [filter](#filter)(チェーン内)に含まれます。
+
+## before
+
+このフェーズまたはフィルターの後に続くべきフェーズまたはフィルターの名前です。チェーン内でこのフィルターまたはフェーズの後に常に続くべきフィルターやフェーズを定義する必要がある場合に、`before` タグを使用できます。言い換えると、定義されるフェーズまたはフィルターは、タグ内の名前の*前*に配置されます。[filter](#filter)、[filter](#filter)(チェーン内)、[phase](#phase) に含まれます。
+
+## after
+
+このフェーズまたはフィルターに先行すべきフェーズまたはフィルターの名前です。チェーン内でこのフィルターまたはフェーズに常に先行すべきフィルターやフェーズを定義する必要がある場合に、`after` タグを使用できます。言い換えると、定義されるフェーズまたはフィルターは、タグ内の名前の*後*に配置されます。[filter](#filter)、[filter](#filter)(チェーン内)、[phase](#phase) に含まれます。例:
+
+```xml
+<filter id="filterauth" class="com.yahoo.test.auth">
+    <provides>Authorization</provides>
+    <before>LastFilters</before>
+    <after>Earlyfilters</after>
+</filter>
+```
+
+## filter-config
+
+`com.yahoo.jdisc.http.filter.security.FilterConfig` で設定されるフィルターの設定にのみ使用します。JDisc バンドルで提供されるすべてのフィルターがこれに該当します。
+
+## request-chain/response-chain
+
+それぞれ、リクエストフィルターまたはレスポンスフィルターのチェーンを定義します。チェーンは依存関係によって順序付けられた集合です。依存関係はフェーズを通じて表現され、フェーズは他のフェーズやフィルターに依存できます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;inherits&#42;&#42;</td>
+      <td></td>
+      <td>string</td>
+      <td></td>
+      <td>このチェーンが内容を取り込むべきチェーンのスペース区切りリスト</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;excludes&#42;&#42;</td>
+      <td></td>
+      <td>string</td>
+      <td></td>
+      <td>このチェーンに含めるべきでない(継承したチェーンに含まれる)フィルターのスペース区切りリスト</td>
+    </tr>
+  </tbody>
+</table>
+
+サブ要素:
+
+- [binding](#binding)
+- [filter](#filter)。フィルターの参照または定義。*config* や *filter-config* は参照には追加できず、フィルター定義にのみ追加できます。
+- [inherits](#inherits)
+- [phase](#phase)
+
+例:
+
+```xml
+<request-chain id="default-request-filters">
+    <binding>http://*/*</binding>
+    <filter id="com.yahoo.test.RequestFilter"/>
+</request-chain>
+<response-chain id="response-filters">
+    <binding>http://*:8080/*</binding>
+    <binding>http://*:9000/path</binding>
+    <filter id="com.yahoo.test.ResponseFilter"/>
+</response-chain>
+```
+
+## inherits
+
+チェーンがどのチェーンを(継承する場合に)どのように継承するかに関する情報のラッパー要素です。[request-chain](#chain) および [response-chain](#chain) に含まれます。サブ要素:
+
+- (継承される) [chain](#inheritedchain)
+- [exclude](#exclude)
+
+## (inherited) chain
+
+このチェーンが継承すべき、つまりすべてのフィルターとフェーズを取り込むべきチェーンの ID です。複数のチェーンのフィルターを組み合わせる必要がある場合は、複数の `chain` タグを使用します。[inherits](#inherits) に含まれます。
+
+## exclude
+
+定義中のチェーンが、継承元のチェーンから除外すべきフィルターです。複数のフィルターを除外するには、複数の `exclude` タグを使用します。[inherits](#inherits) に含まれます。例:
+
+```xml
+<request-chain id="demo">
+    <inherits>
+        <chain>idOfSomeInheritedChain</chain>
+        <exclude>idOfUnwantedFilter</exclude>
+        <exclude>idOfYetAnotherUnwantedFilter</exclude>
+    </inherits>
+    <filter id="filter2" class="com.yahoo.test.Filter2"/>
+</request-chain>
+```
+
+## phase
+
+フェーズを定義します。フェーズはフィルターの順序付けを助けるチェックポイントです。フィルターや他のフェーズは、フィルターの順序について前提を置けるように、フェーズに依存できます。[chain](#chain) に含まれます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+      <th>デフォルト</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;id&#42;&#42;</td>
+      <td>必須</td>
+      <td>string</td>
+      <td></td>
+      <td>他のフェーズやフィルターが<a href="#before" aria-label="successor">後続</a>または<a href="#after" aria-label="predecessor">先行</a>として依存できる ID(名前)</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;before&#42;&#42;</td>
+      <td>オプション</td>
+      <td>string</td>
+      <td></td>
+      <td>このフェーズの後に続くべきフェーズおよび/またはフィルターのスペース区切りリスト</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;after&#42;&#42;</td>
+      <td>オプション</td>
+      <td>string</td>
+      <td></td>
+      <td>このフェーズに先行すべきフェーズおよび/またはフィルターのスペース区切りリスト</td>
+    </tr>
+  </tbody>
+</table>
+
+サブ要素:
+
+- [before](#before)
+- [after](#after)
+
+例:
+
+```xml
+<request-chain id="demo">
+    <phase id="CheckpointName">
+        <before>Authorization</before>
+    </phase>
+    <filter id="filter2" class="com.yahoo.test.Filter2"/>
+</request-chain>
+```

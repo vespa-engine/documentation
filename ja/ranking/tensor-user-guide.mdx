@@ -1,0 +1,340 @@
+---
+title: "テンソル・ガイド"
+sidebarTitle: "テンソル・ユーザーガイド"
+---
+
+Vespa は、データに対する高度な計算をサポートするために、_テンソル_ データモデルと計算エンジンを提供しています。このガイドでは、Vespa におけるテンソルのサポートについて説明します。[テンソル・リファレンス](/ja/reference/ranking/tensor)、および私たちの[公開論文](https://dl.acm.org/doi/10.1145/3459104.3459152)([pdf](/assets/a_tensor_formalism_for_computer_science.pdf))も参照してください。
+
+## テンソルの概念
+
+Vespa におけるテンソルは、スカラー、ベクトル、行列を任意の次元数に一般化したデータ構造です:
+
+- スカラーはランク 0 のテンソル
+- ベクトルはランク 1 のテンソル
+- 行列はランク 2 のテンソル
+- ...
+
+テンソルはスカラー値の _セル_ のセットで構成され、各セルは一意な _アドレス_ を持ちます。セルのアドレスは、そのテンソルのすべてのディメンションにおけるインデックスまたはラベルによって指定されます。テンソルのディメンション数がテンソルの _ランク_ です。各ディメンションは _mapped_ または _indexed_ のいずれかです。mapped ディメンションはスパースであり、アドレスを指定する任意のラベル(文字列識別子)を使用できます。一方、indexed ディメンションは 0 から始まる密な数値インデックスを使用します。
+
+例: [リテラル形式](/ja/reference/ranking/tensor#tensor-literal-form)を使用すると、次のテンソル:
+
+```js
+{
+    {user:bob, movie:"Heat"}:0.1,
+    {user:alice, movie:"Frozen"}:0.9,
+    {user:carol, movie:"Top Gun"}:0.3,
+}
+```
+
+は `user` と `movie` という名前の 2 つのディメンションを持ち、定義された値を持つ 3 つのセルを持ちます:
+
+<Frame>
+ ![テンソルのグラフィカルな表現](/assets/img/tensor-mapped.png)
+</Frame>
+
+テンソルは _型_ を持ちます。型は、ディメンション名のセット、ディメンションの種類、および[テンソル・セル値の型](/ja/reference/ranking/tensor#tensor-type-spec)で構成されます。ディメンション名は任意です。これは、上図のような float の 2 次元 mapped テンソル(スパースな 2D 行列)を定義します:
+
+```bash
+tensor<float>(user{},movie{})
+```
+これは 2 次元の indexed テンソル(2D の 1280x720 行列)です。たとえば、画像を表現するために使用します:
+```bash
+tensor<int8>(x[1280],y[720])
+```
+これは 3 次元の indexed テンソルです。たとえば、空間データを表現するために使用します:
+```bash
+tensor<float>(x[256], y[256], z[128])
+```
+これは _mapped_ ディメンションと _indexed_ ディメンションを組み合わせた _mixed_ テンソルです。たとえば、word2vec を表現するために使用します:
+```bash
+tensor<bfloat16>(word_id{},vec[300])
+```
+もう一つの mixed テンソルは、[マルチベクトル・インデクシング](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/)を支えるパラグラフの[エンベディング](/ja/rag/embedding)を表現するために使用されます。
+```bash
+tensor<float>(paragraph{},embedding[768])
+```
+
+Vespa は、テンソルの型情報を使用して、設定時にテンソル式の実行プランを最適化します。
+
+## テンソル・ドキュメント・フィールド
+
+[スキーマ](/ja/basics/schemas)のドキュメント・フィールドは、任意のテンソル型にすることができます:
+
+```js expandable
+schema product {
+
+    document product {
+
+        field title type string {
+            indexing: summary | index
+        }
+
+        field price type int {
+            indexing: summary | attribute
+        }
+
+        field popularity type float {
+            indexing: summary | attribute
+        }
+
+        field sales_score type tensor<float>(category{}) {
+            indexing: summary | attribute
+        }
+
+        field embedding type tensor<float>(x[4]) {
+            indexing: summary | attribute | index
+            attribute {
+                distance-metric: dotproduct
+            }
+        }
+    }
+}
+```
+
+上記のスキーマは、2 つのテンソル・フィールドを持つ _product_ を例示しています。`sales_score` テンソル・フィールドは、一意な _category_ ごとに製品がどれだけ人気があるかを表します。この情報は、ユーザーのクエリーに対して製品を[ランキング](/ja/basics/ranking)する際に使用できます。`embedding` テンソル・フィールドは、製品のエンベディング・ベクトル表現を表します。
+
+- **sales\_score** は、単一の mapped ディメンション `category` を持つ _mapped_ テンソルです。mapped ディメンションはスパースであり、アドレスを指定する任意のラベル(文字列識別子)を使用できます。
+- **embedding** は _indexed_ テンソルです。indexed ディメンションは 0 から始まる密な数値インデックスを使用します。
+
+[ランキング](/ja/ranking/ranking-intro)でドキュメントのテンソル・フィールドに対して計算を実行するには、フィールドを [attribute](/ja/content/attributes) で定義する必要があります。
+
+次の型を持つテンソルは、[HNSW](/ja/querying/approximate-nn-hnsw) でインデックス化し、[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor) クエリー演算子を使用して効率的に検索できます:
+
+- 1 つの indexed ディメンション - テンソル・フィールドごとに単一のベクトル
+- 1 つの mapped ディメンションと 1 つの indexed ディメンション - テンソル・フィールドごとに複数のベクトル
+
+[最近傍検索](/ja/querying/nearest-neighbor-search)と[近似最近傍検索](/ja/querying/approximate-nn-hnsw)を参照してください。
+
+## テンソルのフィード
+
+Vespa JSON フォーマットの _product_ ドキュメントの例です。この例では、製品カテゴリーの文字列を mapped のラベルキーとして使用しています。_embedding_ テンソルは、密な[エンベディング](/ja/rag/embedding)を保存し、([HNSW](/ja/querying/approximate-nn-hnsw) で)インデックス化します。
+
+```json 
+{
+    "put": "id:shopping:product::B0BFW5SXX2",
+    "fields": {
+        "title": "Keyboard Case for iPad Pro 12.9 inch",
+        "price": 29,
+        "popularity": 0.8,
+        "sales_score": {
+            "Tablet Keyboard Cases": 8.0,
+            "Keyboards": 2.0,
+            "Personal Computers": 0.1
+        },
+        "embedding": [
+            1,
+            2,
+            3,
+            4
+        ]
+    }
+}
+```
+
+上記の JSON フィード・フォーマットの例は、短い値形式を使用しています。テンソル・フィールドは、冗長性の異なるさまざまな [JSON フォーマット](/ja/reference/schemas/document-json-format#tensor)で表現できます。
+
+テンソル・フィールドには、テンソル・セルの [add](/ja/reference/schemas/document-json-format#tensor-add)、[remove](/ja/reference/schemas/document-json-format#tensor-remove)、[modify](/ja/reference/schemas/document-json-format#tensor-modify) による[部分更新](/ja/writing/partial-updates)や、まったく新しいテンソル値の [assign](/ja/reference/schemas/document-json-format#tensor-field) を使用できます。[コンテナー・コンポーネント](/ja/applications/components)からは、[テンソル Java API](https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html) を使用してテンソル値を作成・変更できます。
+
+通常は、カテゴリーごとの販売スコアを Vespa の外部で再計算し、他のフィールドの再フィードや再インデックスを避けるために、[部分更新](/ja/writing/partial-updates)を使用して継続的に更新します。
+
+## テンソルによるクエリー
+
+クエリー入力テンソルは、[inputs](/ja/reference/schemas/schemas#inputs) を使用してスキーマの [rank-profile](/ja/ranking/ranking-intro) で**必ず**定義しなければなりません:
+
+```js
+rank-profile product_ranking inherits default {
+    inputs {
+        query(q_category) tensor<float>(category{})
+        query(q_embedding) tensor<float>(x[4])
+    }
+    .....
+}
+```
+
+上記は、[ランキング](/ja/ranking/ranking-intro)式で参照できる 2 つのクエリー入力テンソルを定義しています。テンソルのクエリー名とテンソル型が定義されていれば、次のことができます:
+
+- [サーチャー](/ja/applications/searchers)内で [Tensor クラス](https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html)を使用し、`Query.getRanking().getFeatures.put("query(q_embedding)", myTensorInstance)` で設定してクエリーに追加する、または 
+- `input.query(q_embedding)` のような HTTP パラメータを使用してテンソルの[値](/ja/reference/ranking/tensor#tensor-literal-form)をリクエストで渡す。 
+
+[Vespa CLI のクエリー・リクエスト](/ja/clients/vespa-cli#queries)を使用したクエリー・リクエストの例:
+
+```bash
+vespa query 'yql=select * from product where {targetHits:1}nearestNeighbor(embedding,q_embedding)' \
+  'input.query(q_embedding)=[1,2,3,4]' \
+  'input.query(q_category)={"Tablet Keyboard Cases":0.8, "Keyboards":0.3}' \
+  'ranking=product_ranking'
+```
+
+このクエリー・リクエストの例では、ユーザーのクエリーが _Tablet Keyboard Cases_ および _Keyboards_ カテゴリーに関連するとマッピング(分類)されていると仮定しています。同様に、ユーザーのクエリーは密なベクトル表現(`query(q_embedding`)にマッピングされ、[YQL クエリー言語](/ja/querying/query-language)で表現される [nearestNeighbor](/ja/reference/querying/yql#nearestneighbor) クエリー演算子への入力として使用されます。
+
+Vespa CLI は HTTP GET を使用します。_-v_ フラグを使用すると、同等の curl GET を確認できます。JSON を使用した [POST](/ja/querying/query-api#using-post) クエリー・リクエストの場合、同等の JSON は次のとおりです:
+
+```json
+{
+    "yql": "select * from product where {targetHits:1}nearestNeighbor(embedding,q_embedding)",
+    "input": {
+        "query(q_embedding)": [
+            1,
+            2,
+            3,
+            4
+        ],
+        "query(q_category)": {
+          "Tablet Keyboard Cases": 0.8,
+          "Keyboards":0.3
+        }
+    },
+    "ranking": "product_ranking"
+}
+```
+
+[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor) 演算子に使用される入力クエリー・テンソルがスキーマの rank-profile で定義されていない場合、リクエストは失敗します:
+
+```json
+"Expected 'query(q_embedding)' to be a tensor, but it is the string '[1,2,3,4]'"
+```
+
+## テンソルによるランキング
+
+テンソルは、クエリーにマッチしたドキュメントに対する推論計算に使用できます。これらの計算は、スキーマの [rank profile](/ja/reference/schemas/schemas#rank-profile) 内の[ランキング式](/ja/reference/ranking/ranking-expressions)で表現されます。このサポートを使用して、密なエンベディングのドット積類似度とカテゴリー販売スコアの両方によって製品をランキングできます。
+
+```js
+rank-profile product_ranking inherits default {
+
+    inputs {
+        query(q_category) tensor<float>(category{})
+        query(q_embedding) tensor<float>(x[4])
+    }
+
+    function p_sales_score() {
+        expression: sum(query(q_category) * attribute(sales_score))
+    }
+
+    function p_embedding_score() {
+        expression: closeness(field, embedding)
+    }
+
+    first-phase {
+        expression: p_sales_score() + p_embedding_score()
+    }
+    match-features: p_sales_score() p_embedding_score()
+}
+```
+
+上記のプロファイルは、[first phase](/ja/ranking/phased-ranking) の式で 2 つのドット積計算の組み合わせを使用しています。`first-phase` の式は、[YQL クエリー言語](/ja/querying/query-language)によって**リトリーブ**されたすべてのドキュメントに対して呼び出されます。
+
+- _p\_sales\_score_ 関数は、_query(q\_category)_ テンソルと _attribute(sales\_score)_ テンソルの間のスパース・テンソルのドット積を計算します。 
+- _p\_embedding\_score_ は、_query(q\_embedding)_ テンソルと _attribute(embedding)_ テンソルの間の密なテンソルのドット積を計算します。この関数は、[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor) クエリー演算子によって計算される [closeness(dimension,name)](/ja/reference/ranking/rank-features#closeness(dimension,name)) [ランク・フィーチャー](/ja/reference/ranking/rank-features)を使用します。あるいは、クエリー・リクエストで _nearestNeighbor_ 演算子を使用しない場合は、スパース・テンソルのドット積を使用できます:
+```js
+function p_embedding_score() {
+    expression: sum(query(q_embedding) * attribute(embedding))
+}
+```
+
+テンソル関数の完全なリストは、[ランキング式リファレンス](/ja/reference/ranking/ranking-expressions#tensor-functions)に記載されています。[match-features](/ja/reference/schemas/schemas#match-features) を使用すると、開発者は検索結果で関数の出力をデバッグしたり、ログに記録したりできます。
+
+```json
+"matchfeatures": {
+    "p_embedding_score": 30.0,
+    "p_sales_score": 8.0,
+},
+"documentid": "id:shopping:product::B0BFW5SXX2",
+"title": "Keyboard Case for iPad Pro 12.9 inch"
+```
+
+## ドキュメント・フィールドからのテンソルの作成
+
+テンソルではない単一値のアトリビュート、配列、weighted set、または array\<struct\> フィールドからテンソル計算を行う必要がある場合、ランキング式の中でそれらを変換できます:
+
+- テンソル生成関数を使用して、単一値のアトリビュート(price と popularity)から _値_ を持ち上げた _indexed_ テンソルを作成する:
+```js
+function to_indexed_tensor() {
+    expression: tensor(x[2]):[attribute(price),attribute(popularity)]
+}
+```
+- テンソル生成関数を使用して、単一値のアトリビュートから _値_ を持ち上げた _mapped_ テンソルを作成する:
+```js
+function to_mapped_tensor() {
+    expression: tensor(x{}):{key1:attribute(price),key2:attribute(popularity)}
+}
+```
+- 文字列配列または単一値のアトリビュートから _ラベル_ を持ち上げた _mapped_ テンソルの作成は、[ドキュメント・フィーチャー](/ja/reference/ranking/rank-features#document-features) `tensorFromLabels` で行えます。 
+- weighted set からラベル _と_ 値を持ち上げた _mapped_ テンソルの作成は、[ドキュメント・フィーチャー](/ja/reference/ranking/rank-features#document-features) `tensorFromWeightedSet` で行えます。 
+- `array<struct>` アトリビュートからラベルと値を持ち上げた _mapped_ テンソルの作成は、[ドキュメント・フィーチャー](/ja/reference/ranking/rank-features#document-features) `tensorFromStructs` で行えます。 
+
+テンソルではないフィールドをクエリー実行時にテンソルに変換すると、配列、weighted set、または struct 配列の要素数に比例したパフォーマンス上のペナルティが発生します。代わりにネイティブのテンソル・フィールドを使用することを推奨します。テンソルではないフィールドを変換する利点は、`int`、`float`、`weightedset`、`array<struct>` のようなテンソルではないフィールドを効率的にクエリーできることです。[nearestNeighbor](/ja/reference/querying/yql#nearestneighbor) クエリー演算子で効率的に検索できるのは、特定のテンソル型のみです。
+
+## 定数テンソル
+
+ドキュメント・テンソルとクエリー・テンソルに加えて、[定数テンソル](/ja/reference/schemas/schemas#constant)を[アプリケーション・パッケージ](/ja/reference/applications/application-packages)に配置できます。これは、機械学習モデルを追加するのに便利です。例:
+
+```js
+constants {
+    my_tensor_constant tensor<float>(x[4]): file: constants/constant_tensor_file.json
+}
+```
+
+これは、定義された型を持ち、その内容がアプリケーション・パッケージのファイル _constants/constant\_tensor\_file.json_ で配布される新しいテンソルを定義します。このファイルのフォーマットは[定数テンソル JSON フォーマット](/ja/reference/ranking/constant-tensor-json-format)です:
+
+```json
+{
+    "type": "tensor<float>(x[4])",
+    "values": [
+        0,
+        0,
+        0,
+        1.0
+    ]
+}
+```
+
+この定数テンソルをランキング式で使用するには、定数名を `constant(...)` で囲みます:
+
+```js
+rank-profile use_constant_tensor inherits product_ranking {
+    constants {
+        my_tensor_constant tensor<float>(x[4]): file: constants/constant_tensor_file.json
+    }
+    first-phase {
+        expression: sum(query(q_embedding) * attribute(embedding) * constant(my_tensor_constant))
+    }
+}
+```
+
+この rank profile は、`product_ranking` プロファイルで定義した inputs を `inherit` していることに注意してください。使用した例のデータでは、first-phase の式は 16.0 を返します。なぜなら:
+
+```json
+"embedding": [
+    1.0,
+    2.0,
+    3.0,
+    4.0
+  ],
+  "query(q_embedding)": [
+    1.0,
+    2.0,
+    3.0,
+    4.0
+  ],
+  "constant(my_tensor_constant)": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+  ]
+```
+
+## 文字列を含むテンソル
+
+Vespa のテンソルは文字列を値として持つことはできません。そのような「テンソル」に対しては数学的なテンソル関数が未定義になるためです。ただし、mapped テンソル・ディメンションのキーとして文字列を使用し、たとえば値として 1.0 を使用することで、テンソルで文字列の集合を表現することは可能です。これにより、それらのテンソルを他のテンソルや通常のテンソル演算と非互換にすることなく、文字列に対する集合演算などを実行できます。
+
+## さらに読む
+
+以下も参照してください:
+
+- [ブログ記事: Computing with tensors in Vespa](https://blog.vespa.ai/computing-with-tensors/)。
+- Vespa でテンソル入力を受け取る機械学習モデルを使用するための [ONNX モデルの使用](/ja/ranking/onnx)。
+- いくつかの[実践的なテンソル計算の例](/ja/ranking/tensor-examples)。
+- ブラウザで Vespa のテンソルを作成して計算できる[テンソル・プレイグラウンド](https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QGNIAaFDSPBdDTAF30gAkBTAJ2bAE8sBXMAgIYA7MDgA2AzmAGteQgCbSFYZgA8cbAJYBbZkNpgA7ptoALMLT0BnLKytLFloTdYr17K1c1ZnAOjAs7GCa9gJgVqa2BgA6QmoC2uLMxFy8-MJg0JrK2rYc2dC22gK03iIlYLGIZhxOLmA8VmxgAOY8mvLMALoAFKa0tDhWcAD0I-JYBFa+AG7MVjgCvgKaI3ojdbYAtI1sW20dzL792mIAlJBkqAC+V9ekGNTkuAxEDzQU+E8f9AiQAIIWay2YKhMDyEphKy0Vg8Ai0HhBMwVELSVp6NgCMSaABeJTKYCw0HCggkdhSc3htlCORKrE0BHm-liABVgXYwKYBHM0UIeNoAEbNIngnTWMr2ZEGQQiIUqEymZqdZwcEELGRNQmuMIELCC7L4ny+WL-ETxRJiVXEqGLOy1dlwS40MC3DD3K7fCDYShQZgkK5en2ezBCBjqu0AfU2rH9zq9fr+0Z6qmA1zOcGAAjgAEZiAK4AAma5Omium7vCDB72vWMfIMBugMQHKzXRowKiyGLCi3TOCUpTS+I5o4owzSqR0NssQd2PBvVv5+iuYetxqChv4t5hR9m152QBNQJOqRAFrrETiIADMXXTiEQuYLxBvxEQABZiABWYgANi6XRLN07mXKsXj+N551XONIF+KA2Wcal0hELkeQFLAzHCW1NWERQtx7cUfCsFIPB4MRSiEFpgnKMBtHHZhHHZfxAg4YwMJqMAAANoDELASg42IIVoMJaE4DRJ2dacXRA+cwN9PcVy+BsvQ3KBaNUeidwQmNl3IQ8YPZAAebjeNoAA+ZNUwva9bwzLMH2IJ8X3zd8v1-LpiynYCPRkn1IAg-coP3WDIHglx7BQjgoWYAwRVwTFSkI6QxB44wKMyEEwnkTQ5jtcJosJYldUSHghISoR-AAMRBbJoWERkUjCDiACssGyDjxNLLy533WSD3kwNFLXSAVMgfrMD0lrsh6cMmk0lwUjUjToxSaAegEPMzjWgAqAUzguTy3WknrfP8utBug4KWVMVFUWYABHdoZixPQDFoLAOqAw7vOOhgl0g879xGsb4zDLDtzbLaaLo+Q5tsQCbi61BQJOsbPioJSjwYKrXFyIJzSSIi8o4RAJimWZ5kWZZVnWaMtnxy1phOMRen6QZhjGUnpjmdUqbWIQNnZOnVASAnjloU59oku4UC6EBriAA)。
+- [テンソル Java API](https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html)。
+- [テンソル・ランキングのパフォーマンス](/ja/performance/feature-tuning#tensor-ranking)。

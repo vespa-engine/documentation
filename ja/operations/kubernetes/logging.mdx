@@ -1,0 +1,152 @@
+---
+title: "ログ収集の設定"
+description: "Fluent Bit Operator を使用してログを収集し、Grafana Cloud Loki に転送します。"
+---
+
+## 1. Fluent Bit Operator のインストール
+
+専用の `logging` 名前空間に Fluent Bit Operator をインストールします。
+
+```bash
+$ helm repo add fluent https://fluent.github.io/helm-charts
+$ helm repo update
+$ kubectl create namespace logging
+$ helm install fluent-operator fluent/fluent-operator --namespace logging --set operator.logLevel=debug
+```
+
+Operator の Pod が実行中であることを確認して、インストールを検証します:
+
+```bash
+$ kubectl get pods -n logging
+```
+
+## 2. Loki の認証情報の設定
+
+ログを Grafana Cloud Loki に転送するには、認証情報を含む Kubernetes Secret を作成する必要があります。User ID と API Token は、Grafana Cloud Portal の *Connections → Loki* から取得します。
+
+```bash
+$ kubectl create secret generic grafana-cloud-loki -n logging --from-literal=username=$USER_ID --from-literal=password=$API_TOKEN
+```
+
+## 3. Fluent Bit 設定のデプロイ
+
+Fluent Operator は、ロギング・パイプラインを定義するためにカスタム・リソースを使用します。次の設定では、コンテナー・ログを tail する **ClusterInput**、Kubernetes メタデータを追加する **ClusterFilter**、ログを Loki に送信する **ClusterOutput** をセットアップします。
+
+以下を `fluentbit-logging.yaml` として保存します。**注:** `logs-prod-006.grafana.net` は、お使いの Loki エンドポイントに置き換えてください。
+
+```yaml expandable
+    apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterFluentBitConfig
+metadata:
+  name: fluent-bit-config
+spec:
+  service:
+    httpServer: true
+    parsersFile: parsers.conf
+  inputSelector:
+    matchLabels:
+      fluentbit.fluent.io/enabled: "true"
+  filterSelector:
+    matchLabels:
+      fluentbit.fluent.io/enabled: "true"
+  outputSelector:
+    matchLabels:
+      fluentbit.fluent.io/enabled: "true"
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterInput
+metadata:
+  name: kube-containers
+  labels:
+    fluentbit.fluent.io/enabled: "true"
+spec:
+  tail:
+    tag: kube.*
+    path: /var/log/containers/*.log
+    parser: cri
+    readFromHead: false
+    memBufLimit: 5MB
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterFilter
+metadata:
+  name: k8s-meta
+  labels:
+    fluentbit.fluent.io/enabled: "true"
+spec:
+  match: "kube.*"
+  filters:
+    - kubernetes:
+        mergeLog: true
+        keepLog: false
+        labels: true
+        annotations: true
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterOutput
+metadata:
+  name: loki
+  labels:
+    fluentbit.fluent.io/enabled: "true"
+spec:
+  match: "kube.*"
+  loki:
+    host: logs-prod-006.grafana.net
+    port: 443
+    tls:
+      verify: false
+    httpUser:
+      valueFrom:
+        secretKeyRef:
+          name: grafana-cloud-loki
+          key: username
+    httpPassword:
+      valueFrom:
+        secretKeyRef:
+          name: grafana-cloud-loki
+          key: password
+    labels:
+      - job=fluentbit
+      - cluster=minikube
+    autoKubernetesLabels: "off"
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: FluentBit
+metadata:
+  name: fluent-bit
+  namespace: logging
+spec:
+  fluentBitConfigName: fluent-bit-config
+  image: ghcr.io/fluent/fluent-operator/fluent-bit:3.1.4
+  tolerations:
+    - operator: Exists
+```
+
+設定をクラスターに適用します:
+
+```bash
+$ kubectl apply -f fluentbit-logging.yaml
+```
+
+## 4. ログのクエリー
+
+デプロイが完了すると、Fluent Bit はすべてのノード上で `DaemonSet` として実行されます。Grafana Explore で LogQL を使用してログをクエリーできます。
+
+Fluent Bit のログを確認し、認証エラー(HTTP 401)がないことを確かめます:
+
+```bash
+$ kubectl logs -n logging -l app.kubernetes.io/name=fluent-bit --tail=50
+```
+
+Vespa コンポーネントを個別に調べるには、次の LogQL クエリーを使用します:
+
+```bash
+# Filter logs for the Config Server
+{cluster="minikube", namespace_name="default", pod_name=~"cfg-.*"}
+
+# Filter logs for specific containers (e.g., query container)
+{cluster="minikube", container_name="vespa"}
+
+# Search for errors across all Vespa pods
+{cluster="minikube"} |= "error"
+```

@@ -1,0 +1,191 @@
+---
+title: "Gatling を使用したコンテナーの HTTP パフォーマンステスト"
+sidebarTitle: "HTTP パフォーマンステスト"
+---
+
+コンテナーのテストでは、単純に HTTP リクエストでインターフェイスを飽和させるだけでなく、より高い柔軟性とより詳細なチェックが必要になることがよくあります。ストレステストツール [Gatling](https://gatling.io/) は、任意のプラグインを書ける仕組みと、最も一般的なケース向けの DSL によって、そのような機能を柔軟な形で提供します。このドキュメントでは、Vespa で Gatling を使い始める方法を紹介します。経験豊富な Gatling ユーザーであれば、Vespa のテストが他の HTTP サービスのテストと比べて特別なことは何もないと感じるはずです。
+
+## Gatling のインストール
+
+Gatling の[入門ドキュメント](https://gatling.io/docs/gatling/reference/current/)を参照するか、単に [Gatling のフロントページ](https://gatling.io/)から最新バージョンを取得し、tar ボールを展開してそのまま使い始めてください。このツールは、展開時に作成されるディレクトリーから問題なく実行できます。このチュートリアルは Gatling 2 を念頭に書かれています。
+
+## クエリーログを使った最初のテストの設定
+
+レコーダーのセットアップ方法については、Gatling のドキュメントを参照してください。このツールはブラウザーのプロキシーとして動作し、ブラウザーでの操作を記録して、それをテストシナリオとして再生できるようにします。
+
+*bin/recorder.sh* を実行し、パッケージを *com.vespa.example*、クラス名を *VespaTutorial* に設定した上で、ノード *mynode*(たとえば [album-recommendation-java](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java) を実行しているもの)に対してシンプルなクエリーを実行すると、*user-files/simulations/com/vespa/example/VespaTutorial.scala* に、次のような基本的なシミュレーションが作成されるはずです:
+
+```scala expandable
+package com.vespa.example
+
+import io.gatling.core.Predef._
+import io.gatling.core.session.Expression
+import io.gatling.http.Predef._
+import io.gatling.jdbc.Predef._
+import io.gatling.http.Headers.Names._
+import io.gatling.http.Headers.Values._
+import scala.concurrent.duration._
+import bootstrap._
+import assertions._
+
+class VespaTutorial extends Simulation {
+
+        val httpProtocol = http
+                .baseURL("http://mynode:8080")
+                .acceptHeader("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .acceptEncodingHeader("gzip, deflate")
+                .connection("keep-alive")
+                .userAgentHeader("Mozilla/5.0 (X11; Linux x86_64; rv:27.0) Gecko/20100101 Firefox/27.0")
+
+        val headers_1 = Map("""Cache-Control""" -> """max-age=0""")
+
+        val scn = scenario("Scenario Name")
+                .exec(http("request_1")
+                        .get("""/search/?query=bad""")
+                        .headers(headers_1))
+
+        setUp(scn.inject(atOnce(1 user))).protocols(httpProtocol)
+}
+```
+
+同じクエリーを何度も繰り返し実行しても有用ではないので、テストで実行したい小さなクエリーログを CSV ファイル *user-files/data/userinput.csv* として用意します:
+
+```text
+userinput
+bad religion
+bad
+lucky oops
+radiohead
+bad jackson
+```
+
+CSV ファイルの通例どおり、最初の行はパラメーター名を示します。リテラルのカンマは、"\\," のようにバックスラッシュでエスケープできます。URL のクォートは Gatling が処理してくれるため、たとえばスペースを "%20" にエンコードする必要はありません。
+
+フィーダーを追加します:
+
+```scala expandable
+package com.vespa.example
+
+import io.gatling.core.Predef._
+import io.gatling.core.session.Expression
+import io.gatling.http.Predef._
+import io.gatling.jdbc.Predef._
+import io.gatling.http.Headers.Names._
+import io.gatling.http.Headers.Values._
+import scala.concurrent.duration._
+import bootstrap._
+import assertions._
+
+class VespaTutorial extends Simulation {
+
+        val httpProtocol = http
+                .baseURL("http://mynode:8080")
+                .acceptHeader("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .acceptEncodingHeader("gzip, deflate")
+                .connection("keep-alive")
+                .userAgentHeader("Mozilla/5.0 (X11; Linux x86_64; rv:27.0) Gecko/20100101 Firefox/27.0")
+
+        val headers_1 = Map("""Cache-Control""" -> """max-age=0""")
+
+        val scn = scenario("Scenario Name")
+                .feed(csv("userinput.csv").random)
+                .exec(http("request_1")
+                        .get("/search/")
+                        .queryParam("query", "${userinput}")
+                        .headers(headers_1))
+
+        setUp(scn.inject(constantRate(100 usersPerSec) during (10 seconds)))
+                .protocols(httpProtocol)
+}
+```
+
+ここでは、元のシナリオにいくつかの変更を加えました。まず、フィーダーを追加しました。ある程度のトラフィックのシナリオを作れるだけの長時間の実行に十分なクエリーがないため、「random」戦略を選択しました。これは、呼び出しごとにランダムなユーザー入力文字列が選択され、再利用される可能性があることを意味します。また、テストの実行方法を、単一のクエリーだけから、10 秒間にわたり毎秒 100 ユーザーの一定レートに変更しました。テストレポートでは、可能な限り 100 QPS に近い値が期待できるはずです。
+
+## ベンチマークの実行
+
+これで、ヘッドレスノードでも個人のラップトップでも実行できるものができました。実行例の出力:
+
+```bash expandable
+$ ./bin/gatling.sh
+GATLING_HOME is set to ~/tmp/gatling-charts-highcharts-2.0.0-M3a
+Choose a simulation number:
+     [0] advanced.AdvancedExampleSimulation
+     [1] basic.BasicExampleSimulation
+     [2] com.vespa.example.VespaTutorial
+2
+Select simulation id (default is 'vespatutorial'). Accepted characters are a-z, A-Z, 0-9, - and _
+
+Select run description (optional)
+
+Simulation com.vespa.example.VespaTutorial started...
+
+================================================================================
+2014-04-09 11:54:33                                           0s elapsed
+---- Scenario Name -------------------------------------------------------------
+[-                                                                         ]  0%
+          waiting: 998    / running: 2      / done:0
+---- Requests ------------------------------------------------------------------
+> Global                                                   (OK=0      KO=0     )
+
+================================================================================
+
+
+================================================================================
+2014-04-09 11:54:38                                           5s elapsed
+---- Scenario Name -------------------------------------------------------------
+[####################################                                      ] 49%
+          waiting: 505    / running: 0      / done:495
+---- Requests ------------------------------------------------------------------
+> Global                                                   (OK=495    KO=0     )
+> request_1                                                (OK=495    KO=0     )
+================================================================================
+
+
+================================================================================
+2014-04-09 11:54:43                                          10s elapsed
+---- Scenario Name -------------------------------------------------------------
+[######################################################################### ] 99%
+          waiting: 8      / running: 0      / done:992
+---- Requests ------------------------------------------------------------------
+> Global                                                   (OK=992    KO=0     )
+> request_1                                                (OK=992    KO=0     )
+================================================================================
+
+
+================================================================================
+2014-04-09 11:54:43                                          10s elapsed
+---- Scenario Name -------------------------------------------------------------
+[##########################################################################]100%
+          waiting: 0      / running: 0      / done:1000
+---- Requests ------------------------------------------------------------------
+> Global                                                   (OK=1000   KO=0     )
+> request_1                                                (OK=1000   KO=0     )
+================================================================================
+
+Simulation finished.
+Generating reports...
+Parsing log file(s)...
+Parsing log file(s) done
+
+================================================================================
+---- Global Information --------------------------------------------------------
+> numberOfRequests                                    1000 (OK=1000   KO=0     )
+> minResponseTime                                       10 (OK=10     KO=-     )
+> maxResponseTime                                       30 (OK=30     KO=-     )
+> meanResponseTime                                      10 (OK=10     KO=-     )
+> stdDeviation                                           2 (OK=2      KO=-     )
+> percentiles1                                          10 (OK=10     KO=-     )
+> percentiles2                                          10 (OK=10     KO=-     )
+> meanNumberOfRequestsPerSecond                         99 (OK=99     KO=-     )
+---- Response Time Distribution ------------------------------------------------
+> t < 800 ms                                          1000 (100%)
+> 800 ms < t < 1200 ms                                   0 (  0%)
+> t > 1200 ms                                            0 (  0%)
+> failed                                                 0 (  0%)
+================================================================================
+
+Reports generated in 0s.
+Please open the following file : ~/tmp/gatling-charts-highcharts-2.0.0-M3a/results/vespatutorial-20140409115432/index.html
+```
+
+レポートには、テストの進行状況を示すグラフと、失敗および所要時間のサマリーが表示されます。

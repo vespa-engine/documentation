@@ -1,0 +1,196 @@
+---
+title: "アップグレード"
+sidebarTitle: "Kubernetes 上の Vespa のアップグレード"
+---
+
+Kubernetes 上の Vespa は、ダウンタイムゼロのローリングアップグレードをサポートしています。アップグレードでは、Helm チャート経由での `vespa-operator` のアップグレードと、`VespaSet` リソースを通じた ConfigServer および Application(Container と Content)Pod のアップグレードを行います。
+
+`vespa-operator` と `VespaSet` の間のバージョンのずれはサポートしていません。したがって、すべてのコンポーネントが一緒に更新されるようにアップグレードを計画してください。可用性を確保するため、このガイドに示す順序で実施してください。
+
+## CRD の更新
+
+一部のアップグレードでは、`VespaSet` の CRD 定義に変更が入ることがあります。これらの変更は、アップグレードを実施する前にクラスターへ適用してください。経験則として、すべてのアップグレード手順の前にこれを実行することを推奨します。
+
+Helm は、インストール後の CRD のライフサイクルを管理しません([公式ドキュメント](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/?utm_source=chatgpt.com)を参照)。そのため、CRD の更新は手動で行う必要があります。Kubernetes 上の Vespa の公式 Helm チャートでは、OCI パッケージから CRD 定義を抽出し、`kubectl` を使って直接適用することでこれを実施できます。
+
+```text
+$ helm show crds $HELM_CHART_REF --version $VESPA_VERSION > vespaset-crd.yaml
+$ kubectl apply -f vespaset-crd.yaml
+```
+
+## Vespa Operator のアップグレード
+
+オペレーターは、新しい `VESPA_VERSION` を指定して `helm upgrade` を実行することで、Helm 経由でアップグレードできます。`$NAMESPACE` は Vespa がインストールされているネームスペースに置き換えてください。最新の `VESPA_VERSION` については [Factory](https://factory.vespa.ai/) を参照してください。オペレーターのアップグレードは、ConfigServer および Application Pod には影響しないことに注意してください。それらのアップグレードは後続のステップで実施します。
+
+```bash
+$ helm upgrade vespa-operator vespa/vespa-operator \
+  --version $OPERATOR_VERSION \
+  --namespace $NAMESPACE \
+  --reuse-values
+```
+
+先へ進む前に、オペレーターのロールアウトが完了するのを待ちます。
+
+```js
+$ kubectl rollout status deployment/vespa-operator -n $NAMESPACE
+```
+
+## VespaSet のアップグレード
+
+ConfigServer とアプリケーションの Pod をアップグレードするには、`VespaSet` リソースの `spec.version` フィールドをパッチします。先へ進む前に、ターゲットイメージが `VESPA_OPERATOR_IMAGE:VESPA_VERSION` および `VESPA_IMAGE:VESPA_VERSION` として Kubernetes Node 上で利用可能でアクセスできることを確認してください。例:
+
+```bash
+$ cat > vespaset.yaml <<EOF
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: vespaset-sample
+  namespace: ${NAMESPACE}
+spec:
+  version: 8.566.7 # Specify the version to upgrade to.
+
+  configServer:
+    image: "${VESPA_OPERATOR_IMAGE}"
+    storageClass: "gp3"
+    generateRbac: false
+
+  application:
+    image: "${VESPA_IMAGE}"
+    storageClass: "gp3"
+
+  ingress:
+    endpointType: "NONE"
+EOF
+
+$ kubectl apply -f vespaset.yaml
+```
+
+
+ConfigServer Pod は `VespaSet` リソースの変更を検出し、自身と Application Pod へのアップグレード手順をオーケストレーションします。
+
+## アップグレードの順序
+
+アップグレードは常に 2 つのフェーズで進行します。まず ConfigServer Pod がアップグレードされ、その後 Application Pod がアップグレードされます。Config Server が Application Pod を新バージョンへ安全にオーケストレーションするには、先に Config Server 自身が新バージョンで稼働している必要があるため、この順序が必須です。
+
+さらに、ConfigServer Pod と Application Pod のどちらであれ、Vespa Pod を作成するためのベーステンプレートがアップグレード中に変更されている可能性があります。そのため、ConfigServer Pod は古いテンプレートではなく最新のテンプレートに基づいていることを保証し、アップグレード後に最新テンプレートで Pod を不必要に再作成することを防ぐ必要があります。
+
+アップグレード手順の間、各 Pod は 1 つずつアップグレードされます。このプロセスは逐次的です。各 Pod について、オペレーターは:
+
+1. Pod からトラフィックをドレインし、メモリー内の状態をディスクにフラッシュします。
+2. Pod を削除し、新しいイメージで再作成します
+3. Pod が正常になり、VespaSet 上のステータスとして `Converged Version` を報告するのを待ちます
+4. 次の Pod へ進みます。
+
+この手順の間、クラスターは稼働し続けます。各ノードが順番にアップグレードされる間、残りの ConfigServer Pod は Application Pod への設定の提供を継続し、Dataplane レイヤーは通常どおりトラフィックを処理し続けます。Content Pod については、オペレーターは次の Pod に進む前にデータの再分配が完了するのを待つため、ロールアウト中のデータ損失はありません。
+
+アプリケーションのダウンタイムをゼロにするには、Dataplane レイヤー全体でトラフィックが正しくロードバランスされるようにイングレスを適切に構成し、アップグレード中の Pod からリクエストがシームレスに迂回されるようにしてください。詳細は[イングレス](/ja/operations/kubernetes/ingress)ページを参照してください。
+
+## アップグレードの監視
+
+アップグレードの間、各 Pod のステータスは `VespaSet` のステータスに反映されます。アップグレード中の Pod は、フェーズを `UPGRADING` として報告します。アップグレードが正常に完了した Pod は、`Converged Version` として新しいバージョンを報告します。
+
+以下の例では、Config Server Pod はすべて `8.577` に収束済みですが、Application Pod の `default-100` は現在アップグレード中で、まだ `8.576` から収束していません。
+
+```bash expandable
+$ kubectl describe vespaset vespaset-sample -n $NAMESPACE
+Name:         vespaset-sample
+Namespace:    $NAMESPACE
+Labels:       <none>
+Annotations:  <none>
+API Version:  k8s.ai.vespa/v1
+Kind:         VespaSet
+Metadata:
+  Creation Timestamp:  2026-01-29T21:32:27Z
+  Finalizers:
+    vespasets.k8s.ai.vespa/finalizer
+  Generation:        1
+  Resource Version:  121822902
+  UID:               a70f56e9-6625-4011-acd7-9f7cad29dbc2
+Spec:
+  Application:
+    Image:          $VESPA_IMAGE
+    Storage Class:  gp3
+  Config Server:
+    Generate Rbac:    false
+    Image:            $VESPA_IMAGE
+    Storage Class:    gp3
+  Ingress:
+    Endpoint Type:  LOAD_BALANCER
+  Version:          8.577
+Status:
+  Bootstrap Status:
+    Pods:
+      cfg-1:
+        Last Updated:  2026-01-29T21:38:45Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.577
+      cfg-2:
+        Last Updated:  2026-01-29T21:38:09Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.577
+      cfg-3:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.577
+      default-100:
+        Last Updated:  2026-01-29T21:38:45Z
+        Message:       Pod is upgrading
+        Phase:         UPGRADING
+        Converged Version: 8.576
+      default-101:
+        Last Updated:  2026-01-29T21:38:09Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+      documentation-102:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+      documentation-103:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+      cluster-controller-104:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+      cluster-controller-105:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+      cluster-controller-106:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.576
+  Last Transition Time:  2026-01-29T21:33:55Z
+  Message:               All configservers running
+  Phase:                 RUNNING
+Events:                  <none>
+```
+
+すべての Pod の `Converged Version` が新しいバージョンと一致し、すべてのフェーズが `RUNNING` を報告すれば、アップグレードは完了です。
+
+## アップグレード失敗のデバッグ
+
+イメージのプル失敗、クラッシュループ、ヘルスチェックの失敗などにより Pod がターゲットバージョンに収束できない場合、ConfigServer は、成功するか管理者が介入するまで、その Pod のアップグレードを継続的に再試行します。
+
+このシナリオでは、管理者は ConfigServer のログ、または現在のアップグレードフェーズで失敗している Pod のイベントを調べることで問題を診断できます。問題が解決されると、ConfigServer はその Pod のアップグレードを自動的に再試行し、残りのノードの処理を続行します。
+
+例えば、Pod `search-106` がアップグレードに失敗しているとします。
+
+```bash
+$ kubectl get logs cfg-1 -n $NAMESPACE
+$ kubectl get logs cfg-2 -n $NAMESPACE
+$ kubectl get logs cfg-3 -n $NAMESPACE
+$ kubectl describe pod search-106 -n $NAMESPACE
+```
+
+この設計により、不良なアップグレードが残りの Pod へ連鎖するのを防ぎます。ConfigServer は収束していない Pod を飛び越えて先へ進むことを拒否するため、管理者が調査する間、残りの Pod は既知の正常な旧バージョンにとどまります。

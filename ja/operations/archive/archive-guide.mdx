@@ -1,0 +1,87 @@
+---
+title: "アーカイブ・ガイド"
+---
+
+Vespa Cloud は、ログ・データ、ヒープ・ダンプ、Java Flight Recorder のセッションをストレージ・バケットにエクスポートします。使用されるバケット・システムは、アプリケーションが稼働しているゾーンを支えているクラウド・プロバイダーによって異なります。AWS のゾーンでは AWS S3 が、GCP のゾーンでは Cloud Storage が使用されます。
+
+ストレージ・バケットへのアクセス方法と使用方法は、各クラウド・プロバイダー向けのドキュメントに記載されています:
+
+<CardGroup>
+  <Card title="AWS S3" icon="cloud" href="/ja/operations/archive/archive-guide-aws" horizontal />
+  <Card title="Google Cloud Storage" icon="cloud" href="/ja/operations/archive/archive-guide-gcp" horizontal />
+</CardGroup>
+
+## 例
+
+これらの例では GCP をソースとして使用しています。必要に応じて AWS のコマンドに置き換えてください。ここで、*resonant-triode-123456* は、データ・コピー先のバケット *my\_access\_logs* を所有する(そして、もしあればデータ・ダウンロード費用が課金される)Google プロジェクト ID です。
+
+Vespa Cloud コンソールの CLUSTERS ビューを使用して、ログをエクスポートするノードのホスト名を確認し、その後、内容を一覧表示します:
+
+```bash
+$ gsutil -u resonant-triode-123456 ls \
+  gs://vespa-cloud-data-prod-gcp-us-central1-f-73770f/mytenant/myapp/
+
+$ gsutil -u resonant-triode-123456 ls \
+  gs://vespa-cloud-data-prod-gcp-us-central1-f-73770f/mytenant/myapp/myinstance
+
+$ gsutil -u resonant-triode-123456 ls \
+  gs://vespa-cloud-data-prod-gcp-us-central1-f-73770f/mytenant/myapp/myinstance/h404a/logs/access
+```
+
+ホストのファイルを *my\_access\_logs* バケットにコピーします:
+
+```bash
+$ gsutil -u resonant-triode-123456 \
+  -m -o "GSUtil:parallel_process_count=1" \
+  cp -r \
+  gs://vespa-cloud-data-prod-gcp-us-central1-f-73770f/vespa-team/vespacloud-docsearch/default/h404a \
+  gs://my_access_logs/vespa-files
+```
+
+`rsync` を使用すると、`-x` でパスを除外して、コピーするファイル数を減らせます:
+
+```bash
+$ gsutil -u resonant-triode-123456 \
+  -m -o "GSUtil:parallel_process_count=1" \
+  rsync -r \
+  -x '.*/connection/.*|.*/vespa/.*|.*/zookeeper/.*' \
+  gs://vespa-cloud-data-prod-gcp-us-central1-f-73770f/vespa-team/vespacloud-docsearch/default/h404a \
+  gs://my_access_logs/vespa-files
+```
+
+Google Cloud と AWS でファイルを処理する簡単な関数の作成方法とデプロイ方法については、[cloud-functions](https://github.com/vespa-engine/sample-apps/tree/master/examples/google-cloud/cloud-functions) と [lambda](https://github.com/vespa-engine/sample-apps/tree/master/examples/aws/lambda) を参照してください。
+
+ローカルで処理する場合は、ホストのファイルをローカル・ファイル・システムにコピーします(または `rsync` を使用します):
+
+```bash
+$ gsutil -u resonant-triode-123456 \
+  -m -o "GSUtil:parallel_process_count=1" \
+  cp -r \
+  gs://vespa-cloud-data-prod-gcp-us-central1-f-73770f/vespa-team/vespacloud-docsearch/default/h404a \
+  .
+```
+
+[zstd](https://facebook.github.io/zstd/) を使用してファイルを解凍します:
+
+```bash
+$ zstd -d *
+```
+
+例: [jq](https://stedolan.github.io/jq/) を使用してヘルスチェックを除外します:
+
+```bash
+$ cat JsonAccessLog.20230117* | jq '.  |
+  select (.uri != "/status.html")      |
+  select (.uri != "/state/v1/metrics") |
+  select (.uri != "/state/v1/health")'
+```
+
+各アクセス・ログのエントリーに、人間が読める日付フィールドを追加します:
+
+```bash
+$ cat JsonAccessLog.20230117* | jq '.  |
+  select (.uri != "/status.html")      |
+  select (.uri != "/state/v1/metrics") |
+  select (.uri != "/state/v1/health")  |
+  . +{iso8601date:(.time|todateiso8601)}'
+```

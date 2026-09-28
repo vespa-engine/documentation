@@ -1,0 +1,161 @@
+---
+title: "Vespa ベンチマーク"
+sidebarTitle: "ベンチマーク"
+---
+Vespa アプリケーションのベンチマークは、テスト構成がどの程度のパフォーマンスを発揮するかを把握するために不可欠です。したがって、ベンチマークは検索クラスターそのもののサイジングの重要な一部です。クラスターのベンチマークによって、次の疑問に答えられます:
+
+- 検索ノードにどの程度のスループットとレイテンシーが期待できるか?
+- システムのボトルネックとなるリソースはどれか?
+
+これらは、必要なノード数や、ディスクや CPU のアップグレードが有効かどうかといった他の疑問にも間接的に答えます。つまり、ベンチマークは、すべてのリソースを最適に活用する最適な Vespa 構成を見つける助けとなり、結果としてコストの削減につながります。
+
+ワークロードが変わるたびにベンチマークを行うのが良い習慣です。クエリーに新機能を追加する際にもベンチマークを行うべきです。
+
+クエリーミックスと SLA を理解しておくと、テストパラメーターの設定に役立ちます。ベンチマークの前に、次を検討してください:
+
+- 想定されるクエリーミックスは何か? 有効な結果を得るには、代表的なクエリーミックスでテストすることが不可欠です。クエリーの種類ごとに分割することも、どのクエリークラスがリソースを大量に消費するかを把握するのに有用です。
+- レイテンシーとクエリースループットの両面で、想定される SLA は何か?
+- リアルタイム性はどの程度重要か? ドキュメントの流入レートは(あるとすれば)どの程度か?
+- タイムアウト。ベンチマークのシナリオにおいて、リクエストがタイムアウトしても問題ないか? デフォルトの [timeout](/ja/reference/querying/yql#timeout) は 500 ms で、[softtimeout](/ja/reference/api/query#ranking.softtimeout.enable) は有効です。すべてのクエリーの完全なコストを考慮する場合:
+	- 実行パラメーターでソフトタイムアウトを無効にする
+		- [クエリープロファイル](/ja/reference/querying/query-profiles)による
+		- [vespa-fbench](#vespa-fbench) の `-a` オプションに `&ranking.softtimeout.enable=false` を追加する
+	- タイムアウトを例えば 5 秒に設定する
+		- YQL 内の `timeout` が優先されることに注意
+		- YQL 内の timeout を置き換えるか、上記のように実行パラメーター [timeout](/ja/reference/api/query#timeout) を使用する。
+
+Vespa Cloud を使ってベンチマークする場合は、[Vespa Cloud ベンチマーク](/ja/performance/benchmarking-cloud)を参照してください。
+
+## vespa-fbench
+
+Vespa は、クエリーを実行して統計を生成するクエリー負荷生成ツール [vespa-fbench](/ja/reference/operations/tools#vespa-fbench) を提供しています - 従来の Web サーバー負荷生成ツールとよく似ています。任意の数の*クライアント*(つまりクライアントが多いほど負荷が高い)を任意の時間だけ実行でき、次のクエリーを発行するまでのクライアントの応答時間を調整できます。スループット、最大・最小・平均レイテンシー、および 25、50、75、90、95、99、99.9 のレイテンシーパーセンタイルを出力します。これにより、システムがワークロードをどの程度うまく処理しているかについて、かなり正確な情報が得られます。
+
+**免責事項:** *vespa-fbench* は、ベンチマークとチューニングのために負荷をかけるツールです。本番環境での最大負荷やレイテンシーを見つけるためのツールではありません。これは実装方法によるものです。実行ごとに `-n` 個のクライアントで実行されます。さまざまな並行度で proton を観察できるため、テストには適しています。実世界では、クライアント数とクエリーの到着は異なる分布に従い、95p / 99p のレイテンシーパーセンタイルに影響します。
+
+### クエリーの準備
+
+vespa-fbench は、GET および POST クエリーに*クエリーファイル*を使用します - [リファレンス](/ja/reference/operations/tools#vespa-fbench)を参照してください - 例: *HTTP GET* リクエスト:
+
+```bash
+/search/?yql=select%20%2A%20from%20sources%20%2A%20where%20true
+```
+
+*HTTP POST* リクエストの形式:
+
+```text
+/search/
+{"yql" : "select * from sources * where true"}
+```
+
+### クエリーの実行
+
+典型的な vespa-fbench コマンドは次のようになります:
+
+```bash
+$ vespa-fbench -n 8 -q queries.txt -s 300 -c 0 myhost.mydomain.com 8080
+```
+
+これは、`queries.txt` から読み込んだリクエストを使って 8 つのクライアントを起動します。`-s` パラメーターは、ベンチマークを 300 秒間実行することを示します。`-c` パラメーターは、各クライアントスレッドがクエリーごとに 0 ミリ秒待機することを指定します。最後の 2 つのパラメーターは、コンテナーのホスト名とポートです。複数のホストとポートを指定でき、クライアントは均等に分散されてコンテナーにラウンドロビンでクエリーします。
+
+Docker を使い、Vespa Cloud のエンドポイントにアクセスする、より複雑な例:
+
+```bash
+$ docker run -v /Users/myself/tmp:/testfiles \
+      -w /testfiles --entrypoint '' vespaengine/vespa \
+      /opt/vespa/bin/vespa-fbench \
+          -C data-plane-public-cert.pem -K data-plane-private-key.pem -T /etc/ssl/certs/ca-bundle.crt \
+          -n 10 -q queries.txt -o result.txt -s 300 -c 0 \
+          myapp.mytenant.aws-us-east-1c.z.vespa-app.cloud 443
+```
+
+HTTP POST リクエストのクエリーファイルを使用する場合(`-P` オプション)、`-H` ヘッダーオプションで *Content-Type* ヘッダーも渡す必要があります。
+
+```bash
+  $ docker run -v /Users/myself/tmp:/testfiles \
+        -w /testfiles --entrypoint '' vespaengine/vespa \
+        /opt/vespa/bin/vespa-fbench \
+            -C data-plane-public-cert.pem -K data-plane-private-key.pem -T /etc/ssl/certs/ca-bundle.crt \
+            -n 10 -P -H "Content-Type: application/json" -q queries_post.txt -o output.txt -s 300 -c 0 \
+            myapp.mytenant.aws-us-east-1c.z.vespa-app.cloud 443
+```
+
+### 後処理
+
+各実行の後、サマリーが stdout に出力されます(場合によっては各クライアントからの出力ファイルにも) - 例:
+
+```text
+***************** Benchmark Summary *****************
+clients:                      30
+ran for:                    1800 seconds
+cycle time:                    0 ms
+lower response limit:          0 bytes
+skipped requests:              0
+failed requests:               0
+successful requests:    12169514
+cycles not held:        12169514
+minimum response time:      0.82 ms
+maximum response time:   3010.53 ms
+average response time:      4.44 ms
+25 percentile:              3.00 ms
+50 percentile:              4.00 ms
+75 percentile:              6.00 ms
+90 percentile:              7.00 ms
+95 percentile:              8.00 ms
+99 percentile:             11.00 ms
+actual query rate:       6753.90 Q/s
+utilization:               99.93 %
+```
+
+*failed requests* の数に注目してください。この数が多い場合、システムが過負荷であるか、クエリーが無効であることを示している可能性があります。
+
+- 一部の動作モードでは、vespa-fbench は次のクエリーを送信する前に待機します。「utilization」は、vespa-fbench がクエリーを送信してレスポンスを待っている時間の割合を表します。例えば「system utilization」が 50% の場合、vespa-fbench は時間の 50% でシステムにストレステストを行い、残りの 50% は何もしていないことを意味します
+- vespa-fbench のレイテンシー結果には、クライアントと Vespa インスタンス間のネットワークレイテンシーが含まれます。真の vespa クエリーレイテンシーを得るには、ネットワークレイテンシーを測定して差し引いてください。
+
+## ベンチマーク
+
+戦略: 最適な *requestthreads* 数を見つけ、その後、並列テストクライアント数を増やしてキャパシティを見つけます:
+
+<Steps>
+<Step>
+単一クライアント(n=1)、単一スレッドでテストして、*レイテンシーベースライン*を見つけます。テスト実行ごとに [threads](/ja/reference/applications/services/content#requestthreads) を増やします:
+
+```xml
+<content id="search" version="1.0">
+	  <engine>
+	    <proton>
+	      <tuning>
+	        <searchnode>
+	            <requestthreads>
+	                <persearch>1</persearch>
+	            </requestthreads>
+```
+
+1、2、4、8、... スレッドを使い、クエリーレイテンシー(vespa-fbench の出力)と CPU 使用率(下記の[メトリクス](#metrics))を測定します。注: スレッド設定の変更をデプロイした後、新しいスレッド設定を有効にするには [proton](/ja/content/proton) を再起動する必要があります(ONLINE を確認してください):
+
+```bash
+$ vespa-stop-services && vespa-start-services && sleep 60 && vespa-proton-cmd --local getProtonStatus
+   ...
+  "matchengine","OK","state=ONLINE",""
+  "documentdb:search","OK","state=ONLINE configstate=OK",""
+```
+</Step>
+<Step>
+最適なスレッド数を使用したうえで、クライアント数を増やし、レイテンシーと CPU を観察します。
+</Step>
+</Steps>
+
+### メトリクス
+
+*コンテナー*ノードは [/metrics/v2/values](/ja/operations/metrics) インターフェースを公開しています - ベンチマーク中のメトリクスのダンプにはこれを使用してください。例 - コンテントノードからすべてのメトリクスを出力:
+
+```bash
+$ curl http://localhost:8080/metrics/v2/values | \
+  jq '.nodes[] | select(.role=="content/mysearchcluster/0/0") | .node.metrics[].values'
+```
+
+CPU 使用率を出力:
+
+```bash
+$ curl http://localhost:8080/metrics/v2/values | \
+  jq '.nodes[] | select(.role=="content/mysearchcluster/0/0") | .node.metrics[].values."cpu.util"'
+```

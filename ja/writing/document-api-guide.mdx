@@ -1,0 +1,468 @@
+---
+title: "Document API"
+---
+
+これは、Document API を使用して Vespa クライアントを構築およびコンパイルする方法の入門ガイドです。Document API は、ドキュメントのフィード、更新、取得、またはリポジトリからのドキュメントの削除に使用できます。[Java リファレンス](https://javadoc.io/doc/com.yahoo.vespa/documentapi)も参照してください。
+
+接続先のコンフィグサーバーを設定するには、[VESPA\_CONFIG\_SOURCES](/ja/operations/self-managed/files-processes-and-ports#environment-variables) 環境変数を使用します。
+
+最も一般的なユースケースは、[ドキュメントプロセッサー](/ja/applications/document-processors)内で非同期 API を使用することです。サンプルアプリの例:
+
+- [LyricsDocumentProcessor.java](https://github.com/vespa-engine/sample-apps/blob/master/examples/document-processing/src/main/java/ai/vespa/example/album/LyricsDocumentProcessor.java) の非同期 GET
+- [ReviewProcessor.java](https://github.com/vespa-engine/sample-apps/blob/master/use-case-shopping/src/main/java/ai/vespa/example/shopping/ReviewProcessor.java) の非同期 UPDATE
+
+## ドキュメント
+
+Vespa でフィード、インデックス、検索されるすべてのデータは、`Document` クラスのインスタンスです。[ドキュメント](/ja/schemas/documents)は、以下で構成される複合オブジェクトです:
+
+- ドキュメント内に存在できるフィールドの集合を定義する `DocumentType`。ドキュメントは単一の *ドキュメントタイプ* しか持てませんが、ドキュメントタイプは別のドキュメントタイプの内容を継承できます。継承された型のすべてのフィールドは、そのすべての子孫で利用できます。ドキュメントタイプは[スキーマ](/ja/reference/schemas/schemas)で定義され、これは `DocumentManager` によって読み取られる構成ファイルへと変換されます。
+	登録されたすべてのドキュメントタイプは、インスタンス化されてドキュメントマネージャー内に保存されます。これらのオブジェクトへの参照は、必要なドキュメントタイプの名前とバージョンを指定して `getDocumentType()` メソッドで取得できます。
+	`DocumentManager` の初期化は、適切な構成をサブスクライブすることによって、Document API が自動的に行います。
+- 一意のドキュメント識別子である `DocumentId`。ドキュメントの分散にはこのドキュメント識別子が使用されます。詳細は[リファレンス](/ja/content/buckets#distribution)を参照してください。
+- `(Field, FieldValue)` ペアの集合、略して「フィールド」。`Field` クラスには、その名前、データ型、内部識別子を取得するメソッドがあります。指定したフィールド名のフィールドオブジェクトは、`DocumentType` の `getField(<fieldname>)` メソッドを使用して取得できます。
+
+[DocumentAccess](https://javadoc.io/doc/com.yahoo.vespa/documentapi/latest/com/yahoo/documentapi/DocumentAccess.html) の javadoc を参照してください。サンプルアプリ:
+
+```js
+<dependencies>
+    <dependency>
+        <groupId>com.yahoo.vespa</groupId>
+        <artifactId>documentapi</artifactId>
+        <version>8.689.26</version> {/* Find latest version at search.maven.org/search?q=g:com.yahoo.vespa%20a:documentapi */}
+    </dependency>
+<dependencies>
+```
+
+```java expandable
+import com.yahoo.document.DataType;
+import com.yahoo.document.Document;
+import com.yahoo.document.DocumentId;
+import com.yahoo.document.DocumentPut;
+import com.yahoo.document.DocumentType;
+import com.yahoo.document.DocumentUpdate;
+import com.yahoo.document.datatypes.StringFieldValue;
+import com.yahoo.document.datatypes.WeightedSet;
+import com.yahoo.document.update.FieldUpdate;
+import com.yahoo.documentapi.DocumentAccess;
+import com.yahoo.documentapi.SyncParameters;
+import com.yahoo.documentapi.SyncSession;
+
+public class DocClient {
+
+    public static void main(String[] args) {
+
+        // DocumentAccess is injectable in Vespa containers, but not in command line tools, etc.
+        DocumentAccess access = DocumentAccess.createForNonContainer();
+        DocumentType type = access.getDocumentTypeManager().getDocumentType("music");
+        DocumentId id = new DocumentId("id:namespace:music::0");
+        Document docIn = new Document(type, id);
+        SyncSession session = access.createSyncSession(new SyncParameters.Builder().build());
+
+        // Put document with a1,1
+        WeightedSet<StringFieldValue> wset = new WeightedSet<>(DataType.getWeightedSet(DataType.STRING));
+        wset.put(new StringFieldValue("a1"), 1);
+        docIn.setFieldValue("aWeightedset", wset);
+        DocumentPut put = new DocumentPut(docIn);
+        System.out.println(docIn.toJson());
+        session.put(put);
+
+        // Update document with a1,10 and a2,20
+        DocumentUpdate upd1 = new DocumentUpdate(type, id);
+        WeightedSet<StringFieldValue> wset1 = new WeightedSet<>(DataType.getWeightedSet(DataType.STRING));
+        wset1.put(new StringFieldValue("a1"), 10);
+        wset1.put(new StringFieldValue("a2"), 20);
+        upd1.addFieldUpdate(FieldUpdate.createAddAll(type.getField("aWeightedset"), wset1));
+        System.out.println(upd1.toString());
+        session.update(upd1);
+
+        Document docOut = session.get(id);
+        System.out.println("document get:" + docOut.toJson());
+
+        session.destroy();
+        access.shutdown();
+    }
+}
+```
+
+[サンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation)を使用してテストするには、クライアントが localhost 上のコンフィグサーバーやその他のプロセスに接続できるように、より多くのポートを公開します。docker コマンドを次のように変更してください:
+
+```js
+$ docker run --detach --name vespa --hostname localhost --privileged \
+  --volume $VESPA_SAMPLE_APPS:/vespa-sample-apps --publish 8080:8080 \
+  --publish 19070:19070 --publish 19071:19071 --publish 19090:19090 --publish 19099:19099 --publish 19101:19101 --publish 19112:19112 \
+  vespaengine/vespa
+```
+
+
+## フィールド
+
+例:
+
+```js expandable
+doc.setFieldValue("aByte", (byte)1);
+doc.setFieldValue("aInt", (int)1);
+doc.setFieldValue("aLong", (long)1);
+doc.setFieldValue("aFloat", 1.0);
+doc.setFieldValue("aDouble", 1.0);
+doc.setFieldValue("aBool", new BoolFieldValue(true));
+doc.setFieldValue("aString", "Hello Field!");
+
+doc.setFieldValue("unknownField", "Will not see me!");
+
+Array<IntegerFieldValue> intArray = new Array<>(doc.getField("aArray").getDataType());
+intArray.add(new IntegerFieldValue(11));
+intArray.add(new IntegerFieldValue(12));
+doc.setFieldValue("aArray", intArray);
+
+Struct pos = PositionDataType.valueOf(1,2);
+       pos = PositionDataType.fromString("N0.000002;E0.000001");  // two ways to set same value
+doc.setFieldValue("aPosition", pos);
+
+doc.setFieldValue("aPredicate", new PredicateFieldValue("aLong in [10..20]"));
+
+byte[] rawBytes = new byte[100];
+for (int i = 0; i < rawBytes.length; i++) {
+    rawBytes[i] = (byte)i;
+}
+doc.setFieldValue("aRaw", new Raw(ByteBuffer.wrap(rawBytes)));
+
+Tensor tensor = Tensor.Builder.of(TensorType.fromSpec("tensor<float>>(x[2],y[2])")).
+        cell().label("x", 0).label("y", 0).value(1.0).
+        cell().label("x", 0).label("y", 1).value(2.0).
+        cell().label("x", 1).label("y", 0).value(3.0).
+        cell().label("x", 1).label("y", 1).value(5.0).build();
+doc.setFieldValue("aTensor", new TensorFieldValue(tensor));
+
+MapFieldValue<StringFieldValue, StringFieldValue> map = new MapFieldValue<>(new MapDataType(DataType.STRING, DataType.STRING));
+map.put(new StringFieldValue("key1"), new StringFieldValue("foo"));
+map.put(new StringFieldValue("key2"), new StringFieldValue("bar"));
+doc.setFieldValue("aMap", map);
+
+WeightedSet<StringFieldValue> wset = new WeightedSet<>(DataType.getWeightedSet(DataType.STRING));
+wset.put(new StringFieldValue("strval 1"), 5);
+wset.put(new StringFieldValue("strval 2"), 10);
+doc.setFieldValue("aWeightedset", wset);
+```
+
+## ドキュメントの更新
+
+ドキュメントの更新は、ドキュメントを変更するためのリクエストです。[読み取りと書き込み](/ja/writing/reads-and-writes)を参照してください。
+
+プリミティブフィールドと一部の複数値フィールド(WeightedSet および Array`<primitive>`)は、[FieldUpdate](https://javadoc.io/doc/com.yahoo.vespa/document/latest/com/yahoo/document/update/FieldUpdate.html) を使用して更新します。
+
+Map や Array`<struct>` のような複雑な複数値フィールドは、[AddFieldPathUpdate](https://javadoc.io/doc/com.yahoo.vespa/document/latest/com/yahoo/document/fieldpathupdate/AddFieldPathUpdate.html)、[AssignFieldPathUpdate](https://javadoc.io/doc/com.yahoo.vespa/document/latest/com/yahoo/document/fieldpathupdate/AssignFieldPathUpdate.html)、[RemoveFieldPathUpdate](https://javadoc.io/doc/com.yahoo.vespa/document/latest/com/yahoo/document/fieldpathupdate/RemoveFieldPathUpdate.html) を使用して更新します。フィールドパス更新は、アトリビュートでない[フィールド](/ja/reference/schemas/schemas#field)、[インデックス](/ja/reference/schemas/schemas#index)フィールド、または[構造体フィールド](/ja/reference/schemas/schemas#struct-field)のアトリビュートを含むフィールドでのみサポートされています。フィールドがインデックスフィールドとアトリビュートの両方である場合、ドキュメントストア内のドキュメントは更新され、インデックスも更新されますが、アトリビュートは更新されません。そのため、ドキュメントサマリーのリクエストで古い値が返されたり、ランキングやグルーピングで古い値が使用されたりする可能性があります。更新するフィールドは[フィールドパス](/ja/reference/schemas/document-field-path)文字列で指定します。例:
+
+```bash
+upd.addFieldPathUpdate(new AssignFieldPathUpdate(type, "myMap{key2}", new StringFieldValue("abc")));
+```
+
+*FieldUpdate* の例:
+
+```js expandable
+// Simple assignment
+Field intField = type.getField("aInt");
+IntegerFieldValue intFieldValue = new IntegerFieldValue(2);
+FieldUpdate assignUpdate = FieldUpdate.createAssign(intField, intFieldValue);
+upd.addFieldUpdate(assignUpdate);
+
+// Arithmetic
+FieldUpdate addUpdate = FieldUpdate.createIncrement(type.getField("aLong"), 3);
+upd.addFieldUpdate(addUpdate);
+
+// Composite - add one array element
+upd.addFieldUpdate(FieldUpdate.createAdd(type.getField("aArray"),
+        new IntegerFieldValue(13)));
+
+// Composite - add two array elements
+upd.addFieldUpdate(FieldUpdate.createAddAll(type.getField("aArray"),
+        List.of(new IntegerFieldValue(14), new IntegerFieldValue(15))));
+
+// Composite - add weightedset element
+upd.addFieldUpdate(FieldUpdate.createAdd(type.getField("aWeightedset"),
+        new StringFieldValue("add_me"),101));
+
+// Composite - add set to set
+WeightedSet<StringFieldValue> wset = new WeightedSet<>(DataType.getWeightedSet(DataType.STRING));
+wset.put(new StringFieldValue("a1"), 3);
+wset.put(new StringFieldValue("a2"), 4);
+upd.addFieldUpdate(FieldUpdate.createAddAll(type.getField("aWeightedset"), wset));
+
+// Composite - update array element
+upd.addFieldUpdate(FieldUpdate.createMap(type.getField("aArray"),
+        new IntegerFieldValue(1), // array index
+        new AssignValueUpdate(new IntegerFieldValue(2))));  // value at index
+
+// Composite - increment weight
+upd3.addFieldUpdate(FieldUpdate.createIncrement(type.getField("aWeightedset"),
+        new StringFieldValue("a1"), 1));
+
+// Composite - add to set
+upd.addFieldUpdate(FieldUpdate.createMap(type.getField("aWeightedset"),
+        new StringFieldValue("element1"), // value
+        new AssignValueUpdate(new IntegerFieldValue(30))));
+```
+
+*FieldPathUpdate* の例:
+
+```js
+// Add an element to a map
+Array stringArray = new Array(DataType.getArray(DataType.STRING));
+stringArray.add(new StringFieldValue("my-val"));
+AddFieldPathUpdate addElement = new AddFieldPathUpdate(type, "aMap{key1}", stringArray);
+upd.addFieldPathUpdate(addElement);
+
+// Modify an element in a map
+upd.addFieldPathUpdate(new AssignFieldPathUpdate(type, "aMap{key2}", new StringFieldValue("abc")));
+````
+
+### 更新応答のセマンティクス
+
+更新対象となるドキュメントがシステム内で見つからない更新を送信しても、エラーとは *みなされません*。これらは(更新処理中に実際のエラーが発生しなかったと仮定して)成功のステータスコードとともに返されます。更新が適用されたことが確認できたかどうかをチェックするには、[UpdateDocumentReply.wasFound()](https://javadoc.io/doc/com.yahoo.vespa/documentapi/latest/com/yahoo/documentapi/UpdateResponse.html#wasFound\(\)) を使用してください。
+
+更新がエラー応答とともに返された場合、プラットフォームスタックのどこでエラーが発生したかに応じて、更新は適用されている *可能性も、されていない可能性も* あります。
+
+## Document Access
+
+ドキュメントや更新を Vespa に渡すための出発点は、`DocumentAccess` クラスです。これはシングルトン(`get()` メソッドを参照)のセッションファクトリー(`createXSession()` 系メソッドを参照)であり、3 つの異なるアクセスタイプを提供します:
+
+- **同期ランダムアクセス**: `SyncSession` クラスが提供します。低スループットの概念実証(proof-of-concept)アプリケーションに適しています。
+- [**非同期ランダムアクセス**](#asyncsession): `AsyncSession` クラスが提供します。**高スループット**でのドキュメントリポジトリへの書き込みとランダムアクセスを可能にします。
+- [**Visit**](#visitorsession): `VisitorSession` クラスが提供します。ドキュメントリポジトリが決定する順序で一連のドキュメントにアクセスでき、ランダムアクセスよりも高い読み取りスループットが得られます。
+
+### AsyncSession
+
+このクラスは、ドキュメントリポジトリへの非同期アクセスのためのセッションを表します。`myDocumentAccess.createAsyncSession(myAsyncSessionParams)` を呼び出すことで作成され、高スループットでのドキュメントリポジトリへの書き込みとランダムアクセスを提供します。非同期セッションの使用パターンは次のとおりです:
+
+1. セッションに対して `put()`、`update()`、`get()`、または `remove()` を呼び出すと、リクエストが成功したかどうかを示す同期的な `Result` オブジェクトが返されます。`Result` オブジェクトには *リクエスト識別子* も含まれます。
+2. クライアントは、セッションの `getNext()` メソッドを通じて `Response` をポーリングします。非同期セッションが受け付けた操作は、設定されたタイムアウト内に必ず 1 つのレスポンスを生成します。
+3. レスポンスが利用可能になったら、レスポンスのリクエスト識別子を調べることで、リクエストと照合します。レスポンスには、取得されたドキュメント、または処理が必要な失敗したドキュメントの Put や更新といったデータが含まれることもあります。
+4. クライアントは必ずレスポンスキューを処理しなければならないことに注意してください。そうしないと JVM でガベージコレクションの問題が発生します。基盤となるセッションはすべてのレスポンスを追跡しており、消費されない限りレスポンスは保持され続け、ガベージコレクションされません。
+
+例:
+
+```java expandable
+import com.yahoo.document.*;
+import com.yahoo.documentapi.*;
+
+public class MyClient {
+
+    // DocumentAccess is injectable in Vespa containers, but not in command line tools, etc.
+    private final DocumentAccess access = DocumentAccess.createForNonContainer();
+    private final AsyncSession session = access.createAsyncSession(new AsyncParameters());
+    private boolean abort = false;
+    private int numPending = 0;
+
+    /**
+     * Implements application entry point.
+     *
+     * @param args Command line arguments.
+     */
+    public static void main(String[] args) {
+        MyClient app = null;
+        try {
+            app = new MyClient();
+            app.run();
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (app != null) {
+                app.shutdown();
+            }
+        }
+        if (app == null || app.abort) {
+            System.exit(1);
+        }
+    }
+
+    /**
+     * This is the main entry point of the client. This method will not return until all available documents
+     * have been fed and their responses have been returned, or something signaled an abort.
+     */
+    public void run() {
+        System.out.println("client started");
+        while (!abort) {
+            flushResponseQueue();
+
+            Document doc = getNextDocument();
+            if (doc == null) {
+                System.out.println("no more documents to put");
+                break;
+            }
+            System.out.println("sending doc " + doc);
+
+            while (!abort) {
+                Result res = session.put(doc);
+                if (res.isSuccess()) {
+                    System.out.println("put has request id " + res.getRequestId());
+                    ++numPending;
+                    break; // step to next doc.
+                } else if (res.type() == Result.ResultType.TRANSIENT_ERROR) {
+                    System.out.println("send queue full, waiting for some response");
+                    processNext(9999);
+                } else {
+                    res.getError().printStackTrace();
+                    abort = true; // this is a fatal error
+                }
+            }
+        }
+        if (!abort) {
+            waitForPending();
+        }
+        System.out.println("client stopped");
+    }
+
+    /**
+     * Shutdown the underlying api objects.
+     */
+    public void shutdown() {
+        System.out.println("shutting down document api");
+        session.destroy();
+        access.shutdown();
+    }
+
+    /**
+     * Returns the next document to feed to Vespa. This method should only return null when the end of the
+     * document stream has been reached, as returning null terminates the client. This is the point at which
+     * your application logic should block if it knows more documents will eventually become available.
+     *
+     * @return The next document to put, or null to terminate.
+     */
+    public Document getNextDocument() {
+        return null; // TODO: Implement at your discretion.
+    }
+
+    /**
+     * Processes all immediately available responses.
+     */
+    void flushResponseQueue() {
+        System.out.println("flushing response queue");
+        while (processNext(0)) {
+            // empty
+        }
+    }
+
+    /**
+     * Wait indefinitely for the responses of all sent operations to return. This method will only return
+     * early if the abort flag is set.
+     */
+    void waitForPending() {
+        while (numPending != 0) {
+            if (abort) {
+                System.out.println("waiting aborted, " + numPending + " still pending");
+                break;
+            }
+            System.out.println("waiting for " + numPending + " responses");
+            processNext(9999);
+        }
+    }
+
+    /**
+     * Retrieves and processes the next response available from the underlying asynchronous session. If no
+     * response becomes available within the given timeout, this method returns false.
+     *
+     * @param timeout The maximum number of seconds to wait for a response.
+     * @return True if a response was processed, false otherwise.
+     */
+    boolean processNext(int timeout) {
+        Response res;
+        try {
+            res = session.getNext(timeout);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            abort = true;
+            return false;
+        }
+        if (res == null) {
+            return false;
+        }
+        System.out.println("got response for request id " + res.getRequestId());
+        --numPending;
+        if (!res.isSuccess()) {
+            System.err.println(res.getTextMessage());
+            abort = true;
+            return false;
+        }
+        return true;
+    }
+}
+```
+
+### VisitorSession
+
+このクラスは、高スループットでドキュメントを順次 Visit するためのセッションを表します。
+
+Visitor は、`createVisitorSession` の呼び出しによって `VisitorSession` を作成した時点で開始されます。Visitor ターゲット、すなわち Visitor データの受信側は、`createVisitorDestinationSession` の呼び出しによって作成できます。`VisitorSession` は Visitor データの受信側です。詳細は [Visit のリファレンス](/ja/writing/visiting)を参照してください。`VisitorSession` は次のことを行います:
+
+- Visit プロセスの動作を制御する
+- システム内のデータを Visit した結果として得られるデータを処理する
+
+これら 2 つの異なるタスクは、それぞれ `VisitorControlHandler` と `VisitorDataHandler` によって処理されるように設定できます。これらのハンドラーは、Visit 用のその他の一連のパラメーターとともに、`VisitorParameters` オブジェクト内で `VisitorSession` に渡すことができます。例: パフォーマンスを向上させるには、より多くの個別の Visitor 宛先に Visitor データを処理させることとし、リモートのデータハンドラーのアドレスを指定します。
+
+`DocumentAccess` から返される `VisitorSession` が使用するデフォルトの `VisitorDataHandler` は `VisitorDataQueue` で、受信したドキュメントをキューに入れ、ポーリング API を実装しています。ドキュメントはセッションの `getNext()` メソッドの呼び出しで取り出すことができ、`ack()` メソッドで確認応答(ack)できます。デフォルトの `VisitorControlHandler` には、セッションの `getProgress()`、`isDone()`、`waitUntilDone()` メソッドを通じてアクセスできます。
+
+カスタムの `VisitorControlHandler` と `VisitorDataHandler` を実装するには、これらをサブクラス化し、`VisitorParameters` オブジェクトに渡します。
+
+`VisitorParameters` オブジェクトは、どのデータをどのように Visit するかを制御します。[javadoc](https://javadoc.io/doc/com.yahoo.vespa/documentapi/latest/com/yahoo/documentapi/VisitorParameters.html) を参照してください。どのデータを Visit するかを選択するには、[ドキュメントセレクション](/ja/reference/writing/document-selector-language)文字列を設定します。デフォルトはすべてのデータです。
+
+[fieldSet](https://javadoc.io/doc/com.yahoo.vespa/documentapi/latest/com/yahoo/documentapi/VisitorParameters.html) を指定することで、結果に含めるフィールドを指定できます。[ドキュメントのフィールドセット](/ja/schemas/documents#fieldsets)を参照してください。必要なフィールドのみを指定すると、パフォーマンスが大きく向上する可能性があります。特に、メモリ内フィールドだけで済む場合や、返す必要のない大きなフィールドがある場合に有効です。
+
+例:
+
+```java expandable
+import com.yahoo.document.Document;
+import com.yahoo.document.DocumentId;
+import com.yahoo.documentapi.DocumentAccess;
+import com.yahoo.documentapi.DumpVisitorDataHandler;
+import com.yahoo.documentapi.ProgressToken;
+import com.yahoo.documentapi.VisitorControlHandler;
+import com.yahoo.documentapi.VisitorParameters;
+import com.yahoo.documentapi.VisitorSession;
+
+import java.util.concurrent.TimeoutException;
+
+public class MyClient {
+
+    public static void main(String[] args) throws Exception {
+        VisitorParameters params = new VisitorParameters("true");
+        params.setLocalDataHandler(new DumpVisitorDataHandler() {
+
+            @Override
+            public void onDocument(Document doc, long timeStamp) {
+                System.out.print(doc.toXML(""));
+            }
+
+            @Override
+            public void onRemove(DocumentId id) {
+                System.out.println("id=" + id);
+            }
+        });
+        params.setControlHandler(new VisitorControlHandler() {
+
+            @Override
+            public void onProgress(ProgressToken token) {
+                System.err.format("%.1f %% finished.\n", token.percentFinished());
+                super.onProgress(token);
+            }
+
+            @Override
+            public void onDone(CompletionCode code, String message) {
+                System.err.println("Completed visitation, code " + code + ": " + message);
+                super.onDone(code, message);
+            }
+        });
+        params.setRoute(args.length > 0 ? args[0] : "[Storage:cluster=storage;clusterconfigid=storage]");
+        params.setFieldSet(args.length > 1 ? args[1] : "[document]");
+
+        // DocumentAccess is injectable in Vespa containers, but not in command line tools, etc.
+        DocumentAccess access = DocumentAccess.createForNonContainer();
+        VisitorSession session = access.createVisitorSession(params);
+        if (!session.waitUntilDone(0)) {
+            throw new TimeoutException();
+        }
+        session.destroy();
+        access.shutdown();
+    }
+}
+```
+
+このクライアントの最初のオプション引数は、Visit するクラスターの[ルート](/ja/writing/document-routing)です。2 番目は、取得する[フィールドセット](/ja/schemas/documents#fieldsets)です。

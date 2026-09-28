@@ -1,0 +1,339 @@
+---
+# Copyright Vespa.ai. All rights reserved.
+title: "ニュース検索とレコメンデーションのチュートリアル - 検索"
+---
+
+
+これは、パーソナライズされたニュースレコメンデーションのための Vespa アプリケーションを構築するチュートリアルシリーズの第 3 部です。シリーズの構成は次のとおりです:
+
+1. [はじめに](/ja/learn/tutorials/news-1-deploy-an-application)
+2. [基本的なニュース検索アプリケーション](/ja/learn/tutorials/news-2-basic-feeding-and-query) - アプリケーション・パッケージ、フィード、クエリー
+3. [ニュース検索](/ja/learn/tutorials/news-3-searching) - ソート、グルーピング、ランキング
+4. [ユーザーとニュース記事の埋め込み生成](/ja/learn/tutorials/news-4-embeddings)
+5. [ニュースレコメンデーション](/ja/learn/tutorials/news-5-recommendation) - 部分更新(ニュース埋め込み)、ANN、フィルタリング
+6. [サーチャーによるニュースレコメンデーション](/ja/learn/tutorials/news-6-recommendation-with-searchers) - カスタムサーチャー、ドキュメントプロセッサー
+7. [親子関係によるニュースレコメンデーション](/ja/learn/tutorials/news-7-recommendation-with-parent-child) - 親子関係、テンソルランキング
+8. 高度なニュースレコメンデーション - 幕間 - ランキングモデルの学習
+9. 高度なニュースレコメンデーション - ML モデル
+
+前のパートでは、[Microsoft News Dataset](https://msnews.github.io/)(MIND)を Vespa 用に変換し、アプリケーションにフィードしました。このパートでは、このコンテンツに対して検索を実行し、結果のソート、グルーピング、ランキングを見ていきます。
+
+参考として、このチュートリアルの最終状態は `news` サンプルアプリケーションの [app-3-searching](https://github.com/vespa-engine/sample-apps/tree/master/news/app-3-searching) サブディレクトリにあります。
+
+概念的には、Vespa は返却する結果を正確に決定する際に 2 つのステージを経ます。最初は「マッチング」で、クエリーにマッチするすべてのドキュメントを見つけます。これは二値の判定で、ドキュメントはマッチするかしないかのどちらかです。たとえば、ある単語を検索すると、その単語を含むすべてのドキュメントがこのステージで候補として選択されます。
+
+次のステージでは結果の順序を決定します。結果の並び順は次のいずれかによって決まると考えることができます:
+
+- ドキュメント内の固定値、すなわち属性
+- スコアを計算する関数
+
+属性による並べ替えは[ソート](/ja/reference/querying/sorting-language)と呼ばれます。たとえば、`date` の降順でソートできます。[グルーピング](/ja/reference/querying/grouping-language)も属性に対して機能します。例としては、`category` 属性で結果をグルーピングすることが挙げられます。
+
+並べ替えのためのスコアを計算することは、一般に「ランキング」と呼ばれます。これらのスコアは通常、クエリーとドキュメントの両方に依存するため、*relevance*(関連度)とも呼ばれます。このような式は任意に複雑にできますが、一般にこのスコアを求めるには何らかの計算が必要です。ランキングは[複数のランクフェーズ](/ja/ranking/phased-ranking)に分割することもできます。
+
+まず属性ベースのソートとグルーピングを見てから、ランキングに進みます。
+
+
+## 属性とは?
+
+`news.sd` スキーマには属性の例が複数ありました。たとえば:
+
+`field date type int { indexing: summary | attribute attribute: fast-search }`
+
+この `date` フィールドはここでは `int` として定義されており、ドキュメントをフィードする際に日付を `YYYYMMDD` 形式に変換している点に注意してください。
+
+[属性(attribute)](/ja/content/attributes)はインメモリのフィールドです。これは _index_ フィールドとは異なります。index フィールドは、ドキュメントが追加されインデックスが大きくなるにつれて、ディスクベースのインデックスに移されることがあります。属性はメモリ内に保持されるため、多くのドキュメントに対して高速なアクセスが必要なフィールド、たとえばクエリー結果のソート、ランキング、グルーピングに使用するフィールドに最適です。欠点はメモリ使用量が増えることです。
+
+上記のフィールド定義には、追加のプロパティ `attribute: fast-search` を含めています。これは、このフィールドでの*高速な**マッチング*のために転置インデックス構造(辞書とポスティングリスト)を構築することを Vespa に指示します。詳細は、パフォーマンス機能チューニングのセクションにある [fast-search を使うべき場合](/ja/performance/feature-tuning#when-to-use-fast-search-for-attribute-fields)を参照してください。
+
+
+### 属性フィールドを使ったクエリーの例
+
+```bash
+$ vespa query -v 'yql=select * from news where default contains "20191110"'
+```
+
+
+これは、`default` フィールドセットに対する `20191110` という単一タームのクエリーです。スキーマでは、`date` フィールドは `default` フィールドセットに含まれていないため、結果は見つかりません。代わりに、数値型や bool 型のフィールドに使用できる `=` を使って検索します:
+
+
+```bash
+$ vespa query -v 'yql=select * from news where date=20191110'
+```
+
+
+2019 年 11 月 10 日に作成された、つまり `date` フィールドが `20191110` のドキュメントを取得するには、YQL クエリー文字列の `default` を `date` に置き換えます。
+
+
+```bash
+$ vespa query -v 'yql=select * from news where date=20191110 and default contains "weather"'
+```
+
+
+これは 2 つのタームを持つクエリーです。`default` フィールドセットに対するターム "weather" の検索と、`date` フィールドに対する値 `20191110` の検索を組み合わせたものです。
+
+
+### 範囲検索
+
+上記の例では、`date` を他のフィールドと同様に検索し、値がちょうど `20191110` のドキュメントを要求しました。しかし、このフィールドは _int_ 型なので、「より小さい」「より大きい」演算子(`<` と `>`)を使った_範囲検索_にも使用できます。クエリー:
+
+
+```bash
+$ vespa query -v 'yql=select * from news where date < 20191110'
+```
+
+
+は、`date` の値が `20191110` より小さいすべてのドキュメント、つまり 2019 年 11 月 10 日より前のすべてのドキュメントを見つけます。一方、
+
+
+```bash
+$ vespa query -v 'yql=select * from news where date = 20191108'
+```
+
+
+は、2019 年 11 月 8 日から 2019 年 11 月 10 日まで(両端を含む)のすべてのニュース記事を見つけます。
+
+
+### 属性フィールドでのソート
+
+最初に見る機能は、属性を使ってヒットの順序を変える方法です。ここまでで、ヒットが関連度(ドキュメントがクエリーにどれだけよくマッチするか)の降順で返されることに気づいたと思います。まだであれば、少し時間を取って確認してください。まだランキングに触れていないのに、Vespa がどうやってこれを行うのか疑問に思うかもしれません。答えは、スキーマで何も定義されていない場合、Vespa は [nativeRank](/ja/ranking/nativerank) スコアを使用するということです。カスタムランキングの定義については後で扱います。
+
+では、次のクエリーを Vespa に送信し、ヒットの順序を見てください:
+
+
+```bash
+$ vespa query -v 'yql=select date from news where default contains phrase("music","festival") order by date'
+```
+
+
+デフォルトでは、ソートは昇順で行われます。これはソート属性名の後に `asc` を付けて指定することもできます。結果を降順にソートするには `desc` を使用します:
+
+
+```bash
+$ vespa query -v 'yql=select date from news where default contains phrase("music","festival") order by date desc'
+```
+
+
+スキーマで属性として定義されていないフィールドでソートしようとするとエラーになります。
+
+
+### クエリー時の結果グルーピング
+
+[グルーピング](/ja/querying/grouping)とは、クエリー時にマッチしたすべてのドキュメントを走査し、すべてのドキュメントにわたって指定されたフィールドに対する操作を実行するという概念です。一般的なユースケースには次のようなものがあります:
+
+- あるフィールドのすべての一意な値を見つけ、**一意な値ごとに 1 つのグループ**を作り、グループごとのドキュメント数を返す。
+- 固定幅またはカスタム幅のバケットで**時刻や日付によりドキュメントをグルーピング**する。固定幅バケットの例としてはすべてのドキュメントを年でグルーピングすること、カスタムバケットの例としてはバグチケットを作成日によって _Today_、_Past Week_、_Past Month_、_Past Year_、_Everything else_ のバケットに振り分けることが挙げられます。
+- あるフィールドの**最小値/最大値/平均値**を計算する。
+- [結果の多様化](https://blog.vespa.ai/result-diversification-with-vespa/)。たとえば、最大 5 カテゴリについて、カテゴリごとにランキング上位 3 件のみを表示する。
+
+このようなグループとそのサイズ(グループごとのマッチしたドキュメント数)を、各グループへのリンクとともに検索結果ページに表示することは、ユーザーに検索を絞り込ませる一般的な方法です。ここでは、単純なグルーピングクエリーだけを実行して、`category` の一意な値のリストを出現ドキュメント数順に取得し、上位 3 件を表示します:
+
+
+```bash
+$ vespa query -v 'yql=select * from news where true limit 0 | all(group(category) max(3) order(-count())each(output(count())))'
+```
+
+
+パイプ(`|`)の後の式に注目してください。これはグルーピングの実行方法を決定するグルーピング式です。グルーピング構文の詳細は[グルーピングリファレンスドキュメント](/ja/reference/querying/grouping-language)を参照してください。`limit 0` はネイティブの `hits` パラメーターの代替構文です。この場合、グループの件数だけに関心があるため、limit を 0 に設定しています。
+
+このクエリーでは、次のような結果が得られます:
+```json expandable
+{
+    "root": {
+        "children": [
+            {
+                "children": [
+                    {
+                        "children": [
+                            {
+                                "fields": {
+                                    "count()": 9115
+                                },
+                                "id": "group:string:news",
+                                "relevance": 1.0,
+                                "value": "news"
+                            },
+                            {
+                                "fields": {
+                                    "count()": 6765
+                                },
+                                "id": "group:string:sports",
+                                "relevance": 0.6666666666666666,
+                                "value": "sports"
+                            },
+                            {
+                                "fields": {
+                                    "count()": 1886
+                                },
+                                "id": "group:string:finance",
+                                "relevance": 0.3333333333333333,
+                                "value": "finance"
+                            }
+                        ],
+                        "continuation": {
+                            "next": "BGAAABEBGBC"
+                        },
+                        "id": "grouplist:category",
+                        "label": "category",
+                        "relevance": 1.0
+                    }
+                ],
+                "continuation": {
+                    "this": ""
+                },
+                "id": "group:root:0",
+                "relevance": 1.0
+            }
+        ],
+        "coverage": {
+            "coverage": 100,
+            "documents": 28603,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "fields": {
+            "totalCount": 28603
+        },
+        "id": "toplevel",
+        "relevance": 1.0
+    }
+}
+```
+
+つまり、インデックスされたドキュメント(デモデータセット)における `category` の最も一般的な一意な値の上位 3 つは次のとおりです:
+
+- `news`: 9115 記事
+- `sports`: 6765 記事
+- `finance`: 1886 記事
+
+YQL+ 式のフィルター部分(`where` 句)を "weather" のテキストマッチに変更したり、`date` を 20191110 未満に制限したりして、クエリーにマッチするドキュメントの集合が変わるにつれて一意な値のリストがどう変化するか見てみてください。ドキュメントセットに*存在しない*単一のタームを検索すると、マッチするドキュメントがないためグループのリストが空になることがわかります。Vespa のグルーピングは、クエリーにマッチしたドキュメントに対してのみ適用されます。
+
+次の例では、[select](/ja/reference/api/query#select) パラメーターを使ってグルーピング仕様を渡します:
+
+
+```bash
+$ vespa query -v 'yql=select * from news where userQuery() limit 0' \ 'select=all(group(category) max(2) each(max(2)each(output(summary()))))' \ 'query=drinks'
+```
+
+
+このリクエストは drinks を検索し、category でグルーピングして、一意なカテゴリごとに(使用されているランクプロファイルに従って)ランキング上位 2 件のヒットを出力します。グループはデフォルトでグループ内の最大関連度によってソートされます。最も外側の max によって一意なグループ数の上限も設定している点に注意してください。これは一意な値が多い場合に重要です。[Result diversification using Vespa result grouping](https://blog.vespa.ai/result-diversification-with-vespa/) も参照してください。
+
+Vespa のグルーピングを使った詳しい情報と例については、[グルーピングガイド](/ja/querying/grouping)を参照してください。ソートと同様に、スキーマで属性として定義されていないフィールドでグルーピングしようとするとエラーになります。
+
+
+### マッチング - index と attribute の違い
+
+ランキングに進む前に、`index` と `attribute` の違いをいくつか知っておくことが重要です。
+
+#### マッチング
+
+スキーマの `title` フィールドと、タイトルが "A little snow causes a big mess, more than 100 crashes on Minnesota roads" の記事のドキュメントを考えてみましょう。元の入力では、`title` の値は 14 個の単語を単一の空白文字で区切って構成した文字列です。このフィールドはどうすれば検索できるでしょうか?
+
+`index` を持つ文字列フィールド(デフォルトは `match:text`)に対しては、Vespa は文字列の言語処理を行います。これには、文字列の[トークナイゼーション](/ja/linguistics/linguistics-opennlp#tokenization)、[正規化](/ja/linguistics/linguistics-opennlp#normalization)、言語依存の[ステミング](/ja/linguistics/linguistics-opennlp#stemming)が含まれます。
+
+この例では、上記の文字列は 14 個のトークンに分割され、Vespa は次のような検索でこのドキュメントをマッチさせられるようになります:
+
+- "Michigan"、"snow"、"roads" のような単一タームのクエリー
+- 完全なフレーズクエリー "A little snow causes a big mess, more than 100 crashes on Minnesota roads"
+- 2 つ以上のトークンを任意の順序で含むクエリー(例: "minnesota crashes")
+
+これは、私たちが通常の全文検索に期待する動作そのものです。
+
+しかし、`indexing:attributes` を持つ文字列フィールドは `match:text` をサポートせず、*完全一致*または*前置一致*のみをサポートします。デフォルトは完全一致で、その名のとおり、マッチさせるにはフィールドの内容と完全に一致する検索をする必要があります。サポートされる[マッチ](/ja/reference/schemas/schemas#match)モードと、`attribute` と `index` のサポートの違いを参照してください。
+
+#### メモリ使用量
+
+属性はメモリに保存されます。これは `index` を持つフィールドとは対照的で、index のデータは主にディスクに保持され、必要に応じてページインされて OS のバッファーキャッシュにキャッシュされます。大きなフレーバータイプであっても、すべてのドキュメントタイプのフィールドを属性として定義するのは現実的でないことに気づくでしょう。検索ノードあたりのドキュメント数が大幅に制限されるためです。Vespa アプリケーションの中にはノードあたり 10 億件を超えるドキュメントを持つものもあります。ドキュメントごとに数メガバイトのテキストをメモリに保持するのは、コスト効率が良くないかもしれません。
+
+#### 属性を使うべき場合
+
+属性の使用には利点と欠点の両方があります。ソート、ランキング、グルーピングが可能になる一方、より多くのメモリを必要とし、`match:text` の機能をサポートしません。属性フィールドは通常の `index` フィールドより少なくとも 1 桁高い更新スループットをサポートします。[Vespa での部分更新](/ja/writing/partial-updates)を参照してください。
+
+属性をいつ使うかはアプリケーションによります。一般的には、次のようなフィールドに属性を使用します:
+
+- ソートに使用するフィールド(例: 最終更新タイムスタンプ)
+- グルーピングに使用するフィールド(例: category)
+- ランキング式でアクセスするフィールド
+
+最後に、ランキングで使用するすべての数値フィールドと[テンソル](/ja/ranking/tensor-user-guide)フィールドは attribute で定義する必要があります。
+
+#### index と attribute の組み合わせ
+
+`field category type string { indexing: summary | attribute | index }`
+
+同じフィールドに index と attribute の両方を組み合わせることがサポートされています。この場合、category でソートやグルーピングができる一方、検索やマッチングには `match:text` による index マッチングが使用され、フィールドの内容はトークナイズおよびステミングされます。
+
+
+## 関連度とランキング
+
+[ランキング](/ja/basics/ranking)と関連度については上で簡単に触れました。ヒットの関連度とは実際には何でしょうか? 関連度の計算はどうすれば変更できるでしょうか? ここで _rank profile_(ランクプロファイル)と _ranking expression_(ランキング式)を紹介します。これらは関連度をチューニングするためのシンプルながら強力な手法です。
+
+関連度とは、あるドキュメントがクエリーにどれだけよくマッチするかの尺度です。デフォルトの関連度は、複数の*マッチング*要素を考慮する式によって計算されます。本質的には、ドキュメントがクエリー内のタームにどれだけよくマッチするかを計算します。Vespa のデフォルトのランキング関数とその制限については、[nativeRank によるランキング](/ja/ranking/nativerank)で説明されています。
+
+有用と思われるランキングシグナル、たとえば新しさ(クエリー時刻と比較したドキュメントの古さ)やその他のドキュメント・クエリー特徴量は、nativeRank の計算には含まれていません。これらはアプリケーションの要件に応じてランキング関数に追加する必要があります。
+
+関連度計算を調整するユースケースの例:
+
+- 何らかのプロパティ(年齢、国籍、言語、友人や友人の友人)に基づいて検索結果をパーソナライズする。
+- 他の関連度指標も考慮しつつ、新しい(古さの小さい)ドキュメントを上位にランキングする。
+- 地理的な位置によってドキュメントをランキングし、近くの関連リソースを検索する。
+- 機械学習されたランキング関数によってドキュメントをランキングする - Learning to Rank(LTR)。
+- ビジネス上の制約によってドキュメントをランキングする - たとえば商品の在庫状況によって。
+
+Vespa では、任意の数の _rank profile_ を作成できます。これはランキングおよび関連度計算の名前付きコレクションで、クエリー時に選択できます。高度に特化したランキング式を作成するための多数の組み込み関数や式が利用でき、ユーザーはスキーマ内で独自の関数を定義することもできます。
+
+
+### ニュース記事の人気度シグナル
+
+ニュースデータセットの変換中に、変換スクリプトはニュース記事が表示された回数(インプレッション)と受け取ったクリック数の両方を集計しました。インプレッションに対してクリック数が多いことは、そのニュース記事が広く人気だったことを示します。このシグナルはランキングに使用できます。クリックもインプレッションも属性フィールドであるため、これらのフィールドは非常に高いスループットでスケーラブルに[更新](/ja/writing/partial-updates)できます。
+
+このシグナルをランキングで使うために、以下のように `schemas/news.sd` の末尾で定義される `popularity` ランクプロファイルを含めます。ランクプロファイルは `document` ブロックの外側に定義される点に注意してください:
+
+
+```txt
+schema news { document news { field news_id type string { indexing: summary | attribute attribute: fast-search } field category type string { indexing: summary | attribute } field subcategory type string { indexing: summary | attribute } field title type string { indexing: index | summary index: enable-bm25 } field abstract type string { indexing: index | summary index: enable-bm25 } field body type string { indexing: index | summary index: enable-bm25 } field url type string { indexing: index | summary } field date type int { indexing: summary | attribute attribute: fast-search } field clicks type int { indexing: summary | attribute } field impressions type int { indexing: summary | attribute } }
+
+fieldset default { fields: title, abstract, body }
+
+rank-profile popularity inherits default { function popularity() { expression: if (attribute(impressions) > 0, attribute(clicks) / attribute(impressions), 0) } first-phase { expression: nativeRank(title, abstract) + 10 * popularity } } }
+```
+
+
+- `rank-profile popularity inherits default`
+
+これは、`popularity` という名前の新しいランクプロファイルを作成するよう Vespa を設定します。このプロファイルはデフォルトの rank-profile のすべてのプロパティを継承し、明示的に定義またはオーバーライドされたプロパティだけがデフォルトの rank-profile と異なります。
+
+- `first-phase`
+
+Vespa の関連度計算は 2 フェーズ制です。第 1 フェーズの計算はクエリーにマッチするすべてのドキュメントに対して実行され、第 2 フェーズの計算は第 1 フェーズの計算によって決定された上位 `n` 件のドキュメントに対してのみ実行されます。[フェーズドランキング](/ja/ranking/phased-ranking)を参照してください。
+
+- `function popularity()`
+
+これは他の式から呼び出せる関数を定義します。この関数は、人気度を示すためにクリック数をインプレッション数で割った値を計算します。ただし、インプレッション数が少ない記事は不確実性が高いにもかかわらずこの値が高くなり得るため、これは必ずしも最良の計算方法ではありません。
+
+- `expression: nativeRank + 10 * popularity`
+
+この式はドキュメントのランキングに使用されます。ここでは、クエリーとの関連性を持たせるためにデフォルトのランキング式(`default` フィールドセットの `nativeRank`)を含め、第 2 項では `popularity` 関数を呼び出しています。この 2 つの項の重み付き和が、各ドキュメントの最終的な関連度になります。ここでの重み `10` は観察によって設定されたものである点に注意してください。より良いアプローチは、このような値を機械学習で学習することです。
+
+詳細は[スキーマリファレンス](/ja/reference/schemas/schemas#rank-profile)を参照してください。
+
+_popularity_ ランクプロファイルをデプロイします:
+
+
+```bash
+$ vespa deploy --wait 600 my-app
+```
+
+クエリーを実行します:
+
+```bash
+$ vespa query -v \ 'yql=select * from news where default contains "music"' \ 'ranking=popularity'
+```
+
+すると、`popularity` の値が高いドキュメントが上位に来ることがわかります。使用するランクプロファイルは、実行時の `ranking` パラメーターで指定する必要がある点に注意してください。
+
+## まとめ
+
+チュートリアルのこのパートを完了すると、Vespa にデータをロードし、コンテンツを効果的に検索する方法の基本を理解できたはずです。[チュートリアルの次のパート](/ja/learn/tutorials/news-4-embeddings)では、この検索アプリをレコメンデーションシステムに変換するための基礎から始めます。

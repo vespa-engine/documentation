@@ -202,6 +202,16 @@ The below example blocks all changes on weekends, and blocks revisions outside w
               time-zone="America/Los_Angeles"/>
 ```
 
+To block *only* maintenance operations, `revision` and `version` must be explicitly set to `false`, since they default to `true`. The below example blocks maintenance during working hours, while still allowing application deployments and platform upgrades at any time:
+
+```xml
+<block-change maintenance="true"
+              revision="false"
+              version="false"
+              hours="8-15"
+              time-zone="America/Los_Angeles"/>
+```
+
 The below example blocks:
 
 - all changes on Sundays starting on 2022-03-01
@@ -224,6 +234,8 @@ The below example blocks:
 
 In `<deployment>`, **or** `<instance>`. Configures scheduled backups of production content clusters. When present, backups will be created at the specified frequency. Must be placed after any `<test>` and `<staging>` tags, and before `<prod>`.
 
+Note that the first backup is not created immediately when this element is added. A cluster becomes eligible for its first backup only once a content node has been running for at least one full `frequency` interval; subsequent backups then follow at the configured frequency. See [Automated Backups](/en/operations/data-management#backup) for details.
+
 <table className="vespa-table">
   <thead>
     <tr>
@@ -236,7 +248,7 @@ In `<deployment>`, **or** `<instance>`. Configures scheduled backups of producti
     <tr>
       <td>frequency</td>
       <td>Yes</td>
-      <td>A positive integer with a suffix <code>{`h`}</code> (hours) or <code>{`d`}</code> (days), e.g. <code>{`12h`}</code> or <code>{`7d`}</code>. Minimum 1h.</td>
+      <td>A positive integer with a suffix <code>{`h`}</code> (hours) or <code>{`d`}</code> (days), e.g. <code>{`24h`}</code> or <code>{`7d`}</code>. Minimum 24h.</td>
     </tr>
     <tr>
       <td>granularity</td>
@@ -523,7 +535,7 @@ In `<deployment>`, **or** in `<instance>`. If present, the application is deploy
 
 ## region
 
-In `<prod>`, `<parallel>`, `<steps>`, or `<group>`. The application is deployed to the production [region](/en/operations/zones) with id contained in this element.
+In `<prod>`, `<parallel>`, `<steps>`, or `<group>`. The application is deployed to the production [region](/en/operations/zones) identified by the `name` attribute.
 
 <table className="vespa-table">
   <thead>
@@ -534,6 +546,11 @@ In `<prod>`, `<parallel>`, `<steps>`, or `<group>`. The application is deployed 
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td>name</td>
+      <td>Yes</td>
+      <td>The region identifier, e.g. <code>aws-us-east-1c</code>. See <a href="/en/operations/zones" aria-label="zones">zones</a> for the list of available regions. Mandatory <em>unless</em> the region name is specified in the element body, but this is not compatible with specifying <a href="#availability-zone" aria-label="availability-zone"><code>&lt;availability-zone&gt;</code></a> children.</td>
+    </tr>
     <tr>
       <td>fraction</td>
       <td>No</td>
@@ -546,6 +563,19 @@ In `<prod>`, `<parallel>`, `<steps>`, or `<group>`. The application is deployed 
     </tr>
   </tbody>
 </table>
+
+### availability-zone
+
+In `<region>`. The element body must be one of the availability zone identifiers listed in [zones](/en/operations/zones). At least one availability zone *must* be specified when deploying to a production region that supports more than one availability zone. The application instance will be spread out evenly across these availability zones for resiliency. See [availability zones](/en/operations/az) for more.
+
+Example:
+
+```xml
+<region name="aws-us-east-1">
+    <availability-zone>use1-az1</availability-zone>
+    <availability-zone>use1-az2</availability-zone>
+</region>
+```
 
 ## dev
 

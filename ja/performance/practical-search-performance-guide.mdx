@@ -1,0 +1,1907 @@
+---
+title: "Vespaクエリーパフォーマンス - 実践ガイド"
+sidebarTitle: "実践パフォーマンスガイド"
+---
+
+これはVespaクエリーパフォーマンスの実践ガイドです。[Last.fm](http://millionsongdataset.com/lastfm/)トラック・データセットを使用してVespaのクエリーパフォーマンスを説明します。このガイドに記載されているレイテンシーの数値は、MacBook Pro x86でこのガイドを実行して得られたものです。
+
+このガイドでは、以下のクエリーサービングのパフォーマンスに関する側面を扱います:
+
+<CardGroup>
+  <Card title="Basic text search query performance" icon="search" href="#basic-text-search-query-performance" horizontal />
+  <Card title="Hits and document summaries" icon="file-text" href="#hits-and-summaries" horizontal />
+  <Card title="Multivalued query operators (dotProduct, weakAnd, wand, in)" icon="sliders" href="#multi-valued-query-operators" horizontal />
+  <Card title="Searching attribute fields" icon="database" href="#searching-attribute-fields" horizontal />
+  <Card title="Searching attribute fields with fast-search" icon="zap" href="#searching-attribute-fields-using-fast-search" horizontal />
+  <Card title="Ranking with tensor computations" icon="bar-chart" href="#tensor-computations" horizontal />
+  <Card title="Multithreaded search and ranking" icon="code-branch" href="#multithreaded-search-and-ranking" horizontal />
+  <Card title="Range-search with hit limits for early termination" icon="filter" href="#advanced-range-search-with-hitlimit" horizontal />
+  <Card title="Early termination using match phase limits" icon="stop-circle" href="#match-phase-limit---early-termination" horizontal />
+  <Card title="Advanced query tracing" icon="chart-bar" href="#advanced-query-tracing" horizontal />
+</CardGroup>
+
+このガイドには、実験を再現するためのステップバイステップの手順が含まれています。このガイドは、先に[Vespa概要](/ja/learn/overview)のドキュメントを読んでから読むことをお勧めします。
+
+<Info>
+**前提条件:**
+
+- x86\_64またはarm64上のLinux、macOS、またはWindows 10 Proで、[Podman Desktop](https://podman.io/)または[Docker Desktop](https://www.docker.com/products/docker-desktop/)がインストールされ、エンジンが実行されていること。
+	- あるいは、Podmanデーモンを起動します:
+    
+    ```bash
+    $ podman machine init --memory 6000
+    $ podman machine start
+    ```
+    - システム制限やその他の設定については[Docker Containers](/ja/operations/self-managed/docker-containers)を参照してください。
+- Haswell(2013年)より古いCPUについては、[CPU Support](/ja/operations/self-managed/cpu-support)を参照してください。
+- メモリ: Docker/Podman専用に最低4 GBのRAM。[メモリの推奨事項](/ja/operations/self-managed/node-setup#memory-settings)。
+- ディスク: `NO_SPACE`を回避してください - vespaengine/vespaコンテナーイメージとデータ用の余裕分にはディスクスペースが必要です。[詳細はこちら](/ja/writing/feed-block)。
+- [Vespa CLI](/ja/clients/vespa-cli)をインストールするための[Homebrew](https://brew.sh/)、または[Github releases](https://github.com/vespa-engine/vespa/releases)からVespa CLIをダウンロードします。
+- データセットをVespa JSONに変換するためのPython3。
+- データセットのダウンロードとVespaのヘルスチェックを実行するための`curl`。
+</Info>
+
+## vespa-cliのインストール
+
+このチュートリアルでは[Vespa-CLI](/ja/clients/vespa-cli)を使用します。Vespa CLIはVespa.aiの公式コマンドラインクライアントです。ランタイム依存関係のない単一バイナリで、Linux、macOS、Windowsで利用できます。
+
+```bash
+$ brew install vespa-cli 
+```
+
+## データセット
+
+このガイドでは[Last.fm](http://millionsongdataset.com/lastfm/)トラック・データセットを使用します。このデータセットは以下の条件のもとで公開されていることに注意してください:
+
+> *Research only, strictly non-commercial. For details, or if you are unsure, please contact Last.fm. Also, Last.fm has the right to advertise and refer to any work derived from the dataset.*
+
+データセットを直接ダウンロードするには(120 MBのzipファイル)、次を実行します:
+
+```bash
+$ curl -L -o lastfm_test.zip \
+    http://millionsongdataset.com/sites/default/files/lastfm/lastfm_test.zip 
+$ unzip lastfm_test.zip
+```
+
+ダウンロードしたデータは、[Vespaが期待するJSON形式](/ja/reference/schemas/document-json-format)に変換する必要があります。
+
+この[python](https://www.python.org/)スクリプトは、データセットのファイルを走査し、Vespaのフィード操作を含むJSONL形式のフィードファイルを作成するために使用します。このフィードのスキーマは次のセクションで紹介します。
+
+<Card>
+上記の内容をファイル create-vespa-feed.py に貼り付けてください
+</Card>
+
+```python expandable
+import os
+import sys
+import json
+import unicodedata
+
+directory = sys.argv[1]
+seen_tracks = set() 
+
+def remove_control_characters(s):
+    return "".join(ch for ch in s if unicodedata.category(ch)[0]!="C")
+
+def process_file(filename):
+    global seen_tracks
+    with open(filename) as fp:
+        doc = json.load(fp)
+        title = doc['title']
+        artist = doc['artist']
+        hash = title + artist
+        if hash in seen_tracks:
+            return
+        else:
+            seen_tracks.add(hash) 
+
+        track_id = doc['track_id']
+        tags = doc['tags']
+        tags_dict = dict()
+        for t in tags:
+            k,v = t[0],int(t[1])
+            tags_dict[k] = v
+        similars = doc['similars']
+        tensor_cells = []
+        keys_seen = dict()
+        for s in similars:
+            k,v = s[0],float(s[1])
+            if k in keys_seen:
+                continue
+            else:
+                keys_seen[k] = 1
+            cell = {
+                "address": {
+                    "trackid": k
+                },
+                "value": v
+            }
+            tensor_cells.append(cell)
+
+        vespa_doc = {
+            "put": "id:music:track::%s" % track_id,
+                "fields": {
+                    "title": remove_control_characters(title),
+                    "track_id": track_id,
+                    "artist": remove_control_characters(artist),
+                    "tags": tags_dict,
+                    "similar": {
+                        "cells": tensor_cells
+                    }
+            }
+        }
+        print(json.dumps(vespa_doc))
+
+sorted_files = []
+for root, dirs, files in os.walk(directory):
+    for filename in files:
+        filename = os.path.join(root, filename)
+        sorted_files.append(filename)
+sorted_files.sort()
+for filename in sorted_files:
+    process_file(filename)
+```
+
+
+スクリプトを実行して`feed.jsonl`ファイルを作成します:
+
+```bash
+$ python3 create-vespa-feed.py lastfm\_test > feed.jsonl
+```
+
+## Vespaアプリケーション・パッケージの作成
+
+[Vespaアプリケーション・パッケージ](/ja/basics/applications)は、Vespaシステムの動作を定義する設定ファイルとJavaプラグインのセットです。使用する機能、利用可能なドキュメントタイプ、ランキングの方法、フィードおよびインデックス作成時のデータ処理方法を定義します。
+
+基本的な検索アプリケーションを作成するために最低限必要なファイルは`track.sd`と`services.xml`です。設定ファイル用のディレクトリを作成します:
+
+```bash
+$ mkdir -p app/schemas; mkdir -p app/search/query-profiles/
+```
+
+### スキーマ
+
+Vespaの[スキーマ](/ja/basics/schemas)は、ドキュメントタイプと、ランキングおよび計算仕様の設定です。このアプリでは、以下のように定義された`track`スキーマを使用します:
+
+```js expandable
+schema track {
+
+    document track {
+
+        field track\_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
+
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset<string> {
+            indexing: summary | attribute
+        }
+
+        field similar type tensor<float>(trackid{}) {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: title, artist
+    }
+}
+```
+
+<Card>
+上記の内容をファイル app/schemas/track.sd に貼り付けてください
+</Card>
+
+`track_id`フィールドには以下の設定があることに注目してください:
+
+- [rank: filter](/ja/reference/schemas/schemas#rank)。この設定により、このフィールドに対するマッチング時にリソースを節約できます。
+- [match: word](/ja/reference/schemas/schemas#match)。これはデータベース形式のマッチングモードで、句読点文字を保持します。
+
+### サービス仕様
+
+[services.xml](/ja/reference/applications/services/services)は、Vespaアプリケーションを構成するサービス、つまりどのサービスを実行し、サービスごとに何ノード使用するかを定義します。
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
+
+    <container id="default" version="1.0">
+        <search/>
+        <document-api/>
+    </container>
+
+    <content id="tracks" version="1.0">
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="track" mode="index"></document>
+        </documents>
+        <nodes>
+            <node distribution-key="0" hostalias="node1"></node>
+        </nodes>
+    </content>
+</services>
+```
+
+<Card>
+上記の内容をファイル app/services.xml に貼り付けてください
+</Card>
+
+デフォルトの[クエリープロファイル](/ja/reference/querying/query-profiles)を使用すると、すべてのクエリーに対してクエリーAPIのデフォルト設定を上書きできます。
+
+以下は[presentation.timing](/ja/reference/api/query#presentation.timing)を有効にし、`weightedset`フィールドをJSONマップとしてレンダリングします。
+
+```xml
+<query-profile id="default">
+    <field name="presentation.timing">true</field>
+    <field name="renderer.json.jsonWsets">true</field>
+</query-profile>
+```
+
+<Card>
+上記の内容をファイル app/search/query-profiles/default.xml に貼り付けてください
+</Card>
+
+## アプリケーション・パッケージのデプロイ
+
+これで、アプリケーション・パッケージを実行中のVespaインスタンスにデプロイできます。[Vespaクイックスタートガイド](/ja/basics/deploy-an-application-local)も参照してください。
+
+Dockerを使用してVespaコンテナーイメージを起動します:
+
+```bash
+$ docker run --detach --name vespa --hostname vespa-container \
+  --publish 8080:8080 --publish 19071:19071 --publish 19110:19110 \
+  vespaengine/vespa
+```
+
+コンテナーの起動には少し時間がかかることがあります。続行する前に、`vespa status deploy`を使用して設定サービスが実行されていることを確認してください。
+
+```bash
+$ vespa config set target local
+$ vespa status deploy --wait 300 
+```
+
+準備ができたら、Vespa CLIを使用してVespaアプリケーションをデプロイできます:
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+## データセットのインデックス作成
+
+前のセクションで生成したフィードファイルをフィードします:
+
+```bash
+$ vespa feed -t http://localhost:8080 feed.jsonl
+```
+
+## 基本的なテキスト検索クエリーのパフォーマンス
+以降のセクションでは、Vespaの[クエリーAPI](/ja/reference/api/query)を使用し、Vespaの[クエリー言語](/ja/querying/query-language)を使ってクエリーを組み立てます。読みやすさのため、すべてのクエリー例は、Vespaインスタンスに対するクエリー実行をサポートする[vespa-cli](/ja/clients/vespa-cli)コマンドで表現しています。CLIは内部的にVespaのhttp検索APIを使用します。実際に送信されるhttpリクエストを確認するには`vespa query -v`を使用します:
+
+```bash
+$ vespa query -v 'yql=select ..'
+```
+
+最初のクエリーは、すべての`track`ドキュメントにマッチさせるために`where true`を使用します。また、レスポンスで返すドキュメント数を指定するために[hits](/ja/reference/api/query#hits)を使用しています:
+
+```bash
+$ vespa query \
+    'yql=select artist, title, track_id, tags from track where true' \
+    'hits=1'
+```
+
+このクエリーの[結果のJSON出力](/ja/reference/querying/default-result-format)は次のようになります:
+
+```json expandable
+{
+    "timing": {
+        "querytime": 0.009000000000000001,
+        "summaryfetchtime": 0.001,
+        "searchtime": 0.011
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 95666
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/632facf01973795ba294b7d5",
+                "relevance": 0.0,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRRRGWV128F92FC7E0",
+                    "title": "Zombies",
+                    "artist": "True Blood"
+                }
+            }
+        ]
+    }
+}
+```
+
+観察結果:
+
+- クエリーは1つのノードを検索し(`coverage.nodes`)、カバレッジ(`coverage.coverage`)は100%でした。`coverage`要素とVespaのタイムアウト動作の詳細については、[graceful-degradation](/ja/performance/graceful-degradation)を参照してください。Vespaのデフォルトのタイムアウトは0.5秒です。
+- クエリーは、利用可能な95666ドキュメント(`coverage.documents`)のうち、合計95666ドキュメント(`totalCount`)にマッチしました。
+
+レスポンスの`timing`には3つのフィールドがあります。Vespaのクエリーは2つのプロトコルフェーズで実行されます:
+
+- クエリーマッチングフェーズ。クエリーをステートレスなコンテナーからコンテントグループにファンアウトし、グループ内の各ノードがそのノードのtop-kドキュメントを見つけてk件を返します。次に、ステートレスなコンテナーが各ノードのk件のヒットをマージして、グローバルに順序付けられたtop-kドキュメントを取得します。
+- サマリーフェーズ。グローバルなtop-kヒットを生成したコンテントノードにサマリーデータを要求します。
+
+[Life of a query in Vespa](/ja/performance/sizing-search#life-of-a-query-in-vespa)も参照してください。レスポンスの`timing`は、これら2つのフェーズの実行にかかった時間を計測します:
+
+- `querytime` - 最初のプロトコルフェーズ/マッチングフェーズの実行時間。
+- `summaryfetchtime` - グローバルに順序付けられたtop-kヒットに対するサマリーフィルプロトコルフェーズの実行時間。
+- `searchtime` は、おおよそ上記2つの合計であり、クライアントが観測する時間に近い値です(ネットワークレイテンシーを除く)。
+
+3つのメトリクスはいずれも秒単位です。続いて、次のクエリーはフリーテキストクエリーを実行します:
+
+```bash
+$ vespa query \
+    'yql=select artist, title, track_id from track where userQuery()' \
+    'query=total eclipse of the heart' \
+    'hits=1'
+```
+
+このクエリーリクエストは、YQLの[userQuery()](/ja/reference/querying/yql#userquery)とVespaの[シンプルクエリー言語](/ja/reference/querying/simple-query-language)を組み合わせています。デフォルトの[クエリータイプ](/ja/reference/api/query#model.type)は`all`を使用し、すべての語句がマッチすることを要求します。
+
+上記の例では、フィールドセット`default`(スキーマ内で`title`と`artist`フィールドを含む)に対して *total AND eclipse AND of AND the AND heart* を検索します。リクエストで[ランキング](/ja/basics/ranking)パラメーターを何も指定していないため、マッチしたドキュメントはVespaのデフォルトのテキストランク機能である[nativeRank](/ja/ranking/nativerank)でランク付けされました。
+
+上記クエリーの結果出力:
+
+```json expandable
+{
+    "timing": {
+        "querytime": 0.012,
+        "summaryfetchtime": 0.001,
+        "searchtime": 0.014
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 1
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/3f18869c19c25e3ae237702f",
+                "relevance": 0.13274821039905835,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRUKHZD128F92DF70A",
+                    "title": "Total Eclipse Of The Heart",
+                    "artist": "Bonnie Tyler"
+                }
+            }
+        ]
+    }
+}
+```
+
+このクエリーは、クエリー語句がANDで結合されていたため、1つのドキュメントにしかマッチしませんでした。[クエリーモデルタイプ](/ja/reference/api/query#model.type)を使用して、代わりに`type=any`でマッチングを緩和できます。
+
+```bash
+$ vespa query \
+    'yql=select artist, title, track_id from track where userQuery()' \
+    'query=total eclipse of the heart' \
+    'hits=1' \
+    'type=any'
+```
+
+今度は、クエリーは24,053ドキュメントにマッチし、先ほどの`all`クエリーよりもかなり遅くなります。これら2つのクエリー例の`querytime`を比較すると、より多くのドキュメントにマッチする方が`querytime`が大きくなります。最悪の場合、検索クエリーはすべてのドキュメントにマッチし、早期終了やスキップのテクニックがなければ、すべてのマッチがランキングの対象になります。クエリーパフォーマンスは、クエリー仕様にマッチするドキュメント数に大きく影響されます。一般に、タイプ`any`のクエリーはタイプ`all`よりも多くのクエリー計算リソースを必要とします。
+
+`type=any`のクエリーには、WANDアルゴリズムを実装した`weakAnd`クエリー演算子を使用するアルゴリズム的な最適化が利用できます。アルゴリズムの入門については[using wand with Vespa](/ja/ranking/wand)を参照してください。
+
+同じクエリーを、`type=any`の代わりに`type=weakAnd`を使用して実行します:
+
+```bash
+$ vespa query \
+    'yql=select artist, title, track_id from track where userQuery()' \
+    'query=total eclipse of the heart' \
+    'hits=1' \
+    'type=weakAnd'
+```
+
+24,053ドキュメントを完全にランク付けしたタイプ`any`のクエリーと比較して、`weakAnd`は3,679ドキュメントしか完全にランク付けしません。また、この高速な検索でも同じドキュメントが1位で返されることに注目してください。概念的には、検索クエリーとはクエリーにマッチするドキュメントを見つけ、次にランキングモデルを使用してドキュメントをスコアリングすることです。最悪の場合、検索クエリーはすべてのドキュメントにマッチし、それらすべてがランキングの対象となります。
+
+## ヒットとサマリー
+
+これまでの例では`hits=1`クエリーパラメーターを使用しており、これまでのクエリー例では`summaryfetchtime`はほぼ一定でした。
+
+次のクエリーは、かなり多くのヒットを要求します。読みやすさのために結果を`head`にパイプしていることに注意してください:
+
+```bash
+$ vespa query \
+    'yql=select artist, title, track_id from track where userQuery()' \
+    'query=total eclipse of the heart' \
+    'hits=200' \
+    'type=weakAnd' |head -40 
+```
+
+ヒット数を増やすと、これまでのクエリー例と比べて`summaryfetchtime`が大幅に増加しますが、`querytime`は比較的変わりません。同じクエリーを2回目に実行すると、コンテントノードのサマリーキャッシュにより`summaryfetchtime`が減少します。詳細は[caches in Vespa](/ja/performance/caches-in-vespa)を参照してください。
+
+`summaryfetchtime`を決定する要因は大きく4つあります:
+
+- 要求されたヒット数と、`querytime`を構成するクエリー結果を生成したコンテントノードの数。クエリーがディスパッチされたグループに多くのコンテントノードがある場合、上位ランクのヒットはノード間に分散されることが期待されるため、各ノードの作業は少なくなります。
+- 各ヒットのネットワークパッケージサイズ。より大きなフィールドを持つヒットを返すことは、小さなドキュメントよりも多くのリソースを消費し、`summaryfetchtime`が高くなります。
+- クエリーで使用されるサマリーと、そのサマリーに含まれるフィールド。たとえば、`attribute`として定義されたフィールドのみを含む[document-summary](/ja/querying/document-summaries)はメモリから読み取られます。`default`サマリー、または少なくとも1つの非attributeフィールドを含むその他のサマリーの場合、フィルはディスク上のサマリーストレージからデータにアクセスする可能性があります。インメモリの[attribute](/ja/content/attributes)フィールドの詳細をお読みください。
+- コンテントノードから計算済みの[ランク機能](/ja/reference/ranking/rank-features)を返すために使用される[summary-features](/ja/reference/schemas/schemas#summary-features)。
+
+`track_id`フィールドのみを含む専用の[document-summary](/ja/querying/document-summaries)を作成するとパフォーマンスが向上します。`track_id`はスキーマ内で`attribute`として定義されているため、このドキュメントサマリーを使用するサマリーフェッチはすべてインメモリのデータを読み取ります。さらに、このサマリーは1つのフィールドしか含まないため、サマリーフィルフェーズで転送されるデータが少なくなり、ネットワーク時間を節約できます。
+
+```js
+document-summary track_id {
+    summary track_id { }
+}
+```
+
+新しいスキーマは次のようになります:
+
+```js expandable
+schema track {
+
+    document track {
+
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
+
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset<string> {
+            indexing: summary | attribute
+        }
+
+        field similar type tensor<float>(trackid{}) {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: title, artist
+    }
+
+    document-summary track_id {
+        summary track_id { }
+    }
+}
+```
+
+<Card>
+上記の内容をファイル app/schemas/track.sd に貼り付けてください
+</Card>
+
+アプリケーションを再デプロイします:
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+[summary](/ja/reference/api/query#presentation.summary)クエリーリクエストパラメーターを設定して、`track_id`の`document-summary`を使用してクエリーを再実行します:
+
+```bash
+$ vespa query \
+    'yql=select artist, title, track_id from track where userQuery()' \
+    'query=total eclipse of the heart' \
+    'hits=200' \
+    'type=weakAnd' \
+    'summary=track_id' |head -40 
+```
+
+この特定のケースでは`summaryfetchtime`の差はそれほど大きくありませんが、ヒット数が多い場合やドキュメントが大きい場合には、その差は顕著です。特に単一コンテントノードのデプロイメントでは顕著です。
+
+YQLでのselectフィールドスコーピング(例: `select title, track_id from ..`)についての注意です。summaryパラメーターを使用せずデフォルトのサマリーを使用する場合、フィールドスコーピングに関係なく、サマリーフィルフェーズですべてのフィールドがコンテントノードからステートレスな検索コンテナーに転送されます。検索コンテナーは選択されていないフィールドのセットを取り除いて結果をレンダリングします。したがって、selectのスコーピングはクライアントに返されるデータ量を減らすだけであり、内部通信や潜在的なサマリーキャッシュミスのパフォーマンスには影響も最適化ももたらしません。クライアントに大量のヒットを要求するユースケースで最適なパフォーマンスを得るには、専用のドキュメントサマリーを使用することをお勧めします。また、Vespaはデフォルトで最大ヒット数を400に制限していることにも注意してください。この動作は[デフォルトのqueryProfile](/ja/reference/api/query#queryprofile)で上書きできます。
+
+大量のデータを要求する場合は、レスポンスサイズを削減する方法を検討してください。HTTPクライアントが[Accept-Encoding](https://www.rfc-editor.org/rfc/rfc9110.html#name-accept-encoding) HTTPリクエストヘッダーを使用する場合、Vespaはgzip圧縮をサポートします:
+
+```text
+Accept-Encoding: gzip
+```
+
+圧縮はデータ転送を削減しますが、CPUオーバーヘッドが追加されます。ネットワーク帯域幅が十分であれば、圧縮なしの方が最も低いレイテンシーが得られます。[CBOR形式](/ja/reference/api/query#presentation.format)(`format=cbor`または`Accept: application/cbor`)は、特にテンソルや埋め込みなどの数値データにおいて、JSONよりもコンパクトで生成も高速です。CBORはgzip圧縮と組み合わせることもできます。CBORはJSONのドロップイン代替であり、デシリアライズすると結果は同一です。
+
+## attributeフィールドの検索
+
+前のセクションでは、`indexing:index`を持つフィールドを含む`fieldset`でのフリーテキスト検索を扱いました。[インデックス作成リファレンス](/ja/reference/schemas/schemas#indexing)を参照してください。[string型](/ja/reference/schemas/schemas#field)のフィールドは、`index`か`attribute`かによって扱いが異なります:
+
+- `index`は[linguistic](/ja/linguistics/linguistics)処理と統合され、[match:text](/ja/reference/schemas/schemas#match)を使用してマッチングされます。
+- `attribute`はlinguistic処理と統合されず、[match:word](/ja/reference/schemas/schemas#match)を使用してマッチングされます。
+
+`index`を使用すると、Vespaはおおよそ以下で構成される転置インデックスのデータ構造を構築します:
+
+- ユニークなテキストトークンの辞書(linguistic処理後)
+- コレクション内の各ユニークテキストトークンに対するポスティングリスト。ポスティングリストにはさまざまな形式があり、`rank: filter`を使用すると、どの形式を使用するかの判断の助けになります。ビットベクトル表現は最も圧縮率の高いポスティングリスト表現です。
+
+`attribute`の場合、Vespaはデフォルトでは、より高速なクエリー評価のための転置インデックスのようなデータ構造を構築しません。[Wikipedia:Inverted Index](https://en.wikipedia.org/wiki/Inverted_index)と[Vespa internals](/ja/content/proton#index)を参照してください。このデフォルト設定の理由は、Vespaの`attribute`フィールドは[ランキング](/ja/basics/ranking)、[結果グルーピング](/ja/querying/grouping)、[結果ソート](/ja/reference/querying/sorting-language)、そして検索/マッチングといった、さまざまな用途に使用できるためです。
+
+以降のセクションでは、`attribute`で定義した`tags`フィールドに焦点を当てます。このフィールドでのマッチングは、`indexing: attribute`を持つstringフィールドのデフォルトのマッチモードである`match:word`を使用して実行されます。`tags`フィールドは[weightedset](/ja/reference/schemas/schemas#weightedset)型です。
+
+```js
+ field tags type weightedset<string> {
+      indexing: summary | attribute
+ }
+```
+
+`weightedset`は、タグを整数の重み付きで表現できるフィールド型で、ランキングに使用できます。この場合、転置インデックス構造はなく、`tags`フィールドに対するマッチングは線形スキャンとして実行されます。以下は、`tags`が *rock* にマッチするドキュメントをスキャンします:
+
+```bash
+$ vespa query \
+    'yql=select track_id, tags from track where tags contains "rock"' \
+    'hits=1' 
+```
+
+このクエリーは8,160ドキュメントにマッチします。`match: word`の場合、マッチングには空白や、一般に句読点文字も含められることに注意してください。これらは、`index`を持つstringフィールドで`match:text`を使用する場合には取り除かれ、検索できません:
+
+```bash
+$ vespa query \
+    'yql=select track_id, tags from track where tags contains "classic rock"' \
+    'hits=1' 
+```
+
+上記のクエリーは、"classic rock"というタグに正確にマッチし、"rock"にも"classic rock music"にもマッチしません。
+
+*rock* または *pop* を検索する別のクエリー:
+
+```bash
+$ vespa query \
+    'yql=select track_id, tags from track where tags contains "rock" or tags contains "pop"' \
+    'hits=1' 
+```
+
+`tags`フィールドを検索するこれらすべての例では、マッチングはすべての`track`ドキュメントの線形スキャンによって行われます。`tags`検索は、転置インデックス構造を持つフィールドを検索する通常のフリーテキストクエリー語句と組み合わせることができます:
+
+```bash
+$ vespa query \
+    'yql=select track_id, tags from track where tags contains "rock" and userQuery()' \
+    'hits=1' \
+    'query=total eclipse of the heart'
+```
+
+この場合、デフォルトのフィールドセットを検索するクエリー語句が、*tags* の制約でスキャンする必要のあるドキュメント数を制限します。このクエリーはVespaのクエリープランナーによって自動的に最適化されます。
+
+### fast-searchを使用したattributeフィールドの検索
+
+このセクションでは、検索を制限する他のクエリーフィルターがない場合の検索を高速化するために、`tags`フィールドに`fast-search`を追加します。`fast-search`を追加したスキーマ:
+
+```js expandable
+schema track {
+
+    document track {
+
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
+
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset<string> {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor<float>(trackid{}) {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: title, artist
+    }
+
+    document-summary track_id {
+        summary track_id { }
+    }
+}
+```
+
+<Card>
+上記の内容をファイル app/schemas/track.sd に貼り付けてください
+</Card>
+
+アプリケーションを再デプロイします:
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+上記を実行するとWARNINGが表示されます:
+
+```bash
+vespa deploy --wait 300 app/ 
+Uploading application package ... done
+
+Success: Deployed app/
+WARNING Change(s) between active and new application that require restart:
+In cluster 'tracks' of type 'search':
+    Restart services of type 'searchnode' because:
+        1) Document type 'track': Field 'tags' changed: add attribute 'fast-search'
+
+Waiting up to 300 seconds for query service to become available ...
+```
+
+`fast-search`を有効にするには、attributeのfast-searchデータ構造を再構築するために、コンテントノードの再起動が必要です。
+
+以下は[vespa-sentinel-cmdコマンドツール](/ja/reference/operations/self-managed/tools#vespa-sentinel-cmd)を使用してsearchnodeプロセスを再起動します:
+
+```bash
+$ docker exec vespa vespa-sentinel-cmd restart searchnode
+```
+
+このステップではsearchnodeを待つ必要があります。[health state api](/ja/reference/operations/metrics#health-state-api)を使用します:
+```bash
+$ curl -s http://localhost:19110/state/v1/health
+```
+
+再度クエリーを実行する前に、ステータスコードが`up`に変わるのを待ちます:
+
+```json
+{
+    "status": {
+        "code": "up"
+    }
+}
+```
+
+起動したら、`tags`クエリーを再度実行します:
+
+```bash
+$ vespa query \
+    'yql=select track_id, tags from track where tags contains "rock" or tags contains "pop"' \
+    'hits=1'
+```
+
+今度は、Vespaがattributeで`fast-search`をサポートするインデックス構造を構築したため、`querytime`は数ミリ秒になります。`fast-search`を有効にすることのデメリットは、メモリ使用量の増加とインデックス作成スループットのわずかな低下です。[when to use fast-search for attributes](/ja/performance/feature-tuning#when-to-use-fast-search-for-attribute-fields)も参照してください。
+
+[weightedset](/ja/reference/schemas/schemas#weightedset)のような複数値のstringフィールド型を検索する際に`match:text`が必要なユースケースについては、[searching multi-value fields](/ja/querying/searching-multivalue-fields)を参照してください。
+
+マッチのランク機能を必要としないフィールドには、[rank: filter](/ja/reference/schemas/schemas#rank)の使用を強くお勧めします。
+
+```js
+field availability type int {
+    indexing: summary | attribute
+    rank: filter
+    attribute {
+        fast-search
+    }
+}
+```
+
+上記の設定では、ビットベクトルのポスティングリスト表現が使用されます。これは特に[TAAT (term at a time)](/ja/performance/feature-tuning#hybrid-taat-daat)クエリー評価と組み合わせて使用する場合に効率的です。多くのクエリー語句を含む一部のケースでは、`rank: filter`を有効にするとマッチのレイテンシーを75%削減できます。
+
+## 複数値クエリー演算子
+
+このセクションでは、[複数値クエリー演算子](/ja/ranking/multivalue-query-operators)とそのクエリーパフォーマンス特性を扱います。実世界の検索やレコメンデーションの多くのユースケースでは、構造化された複数値クエリーが使用されます。
+
+あるプロセスがスパースなユーザープロファイル表現を学習したとします。あるユーザーについて、サービスでの過去のインタラクションに基づいて、*hard rock*、*rock*、*metal*、*finnish metal* を含むユーザープロファイルが生成されるかもしれません。これは固定の語彙/特徴空間からのスパースな特徴です。
+
+スパース表現を使用した検索とランキングは、スパースなユーザープロファイル表現とドキュメント表現の間のドット積を使用して行えます。trackの例では、`tags`フィールドがドキュメント側のスパース表現になり得ます。各ドキュメントには重み付きの複数の`tags`が付けられており、同様にスパースなユーザープロファイル表現でも重みを使用できます。
+
+以下の例では、[dotProduct()](/ja/reference/querying/yql#dotproduct)および[wand()](/ja/reference/querying/yql#wand)クエリー演算子を使用します。
+
+[ランキング](/ja/basics/ranking)を設定するには、スキーマに`rank-profile`を追加します:
+
+```js expandable
+schema track {
+
+    document track {
+
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
+
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset<string> {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor<float>(trackid{}) {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: title, artist
+    }
+
+    document-summary track_id {
+        summary track_id { }
+    }
+
+    rank-profile personalized {
+        first-phase {
+            expression: rawScore(tags)
+        }
+    }
+}
+```
+
+<Card>
+上記の内容をファイル app/schemas/track.sd に貼り付けてください
+</Card>
+
+`dotProduct`および`wand`クエリー演算子は、[rawScore(name)](/ja/reference/ranking/rank-features#rawScore\(field\))という`rank feature`を生成します。この機能は、クエリーとドキュメントの重みの間のスパースなドット積を計算します。
+
+アプリケーションを再度デプロイします:
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+[dotProduct](/ja/reference/querying/yql#dotproduct)クエリー演算子は、マッチング対象のフィールドを受け取り、[パラメーター置換](/ja/reference/querying/yql#parameter-substitution)をサポートします。大きな入力に対しては、YQL入力の解析時に計算リソースを節約できるため、置換の使用をお勧めします。
+
+次の例は、学習済みのスパース表現を、等しい重みで想定しています:
+
+```js
+userProfile={"hard rock":1, "rock":1,"metal":1, "finnish metal":1}
+```
+
+このuserProfileはパラメーターとして参照されます
+
+```text
+where dotProduct(tags, @userProfile)
+```
+
+```bash
+$ vespa query \
+    'yql=select track_id, title, artist, tags from track where dotProduct(tags, @userProfile)' \
+    'userProfile={"hard rock":1, "rock":1,"metal":1, "finnish metal":1}' \
+    'hits=1' \
+    'ranking=personalized'
+```
+
+このクエリーは`rank-profile`の`personalized`も指定しています。指定しない場合、ランキングには`nativeRank`が使用されます。上記のクエリーは次のレスポンスを返します:
+
+```json expandable
+{
+    "timing": {
+        "querytime": 0.004,
+        "summaryfetchtime": 0.001,
+        "searchtime": 0.006
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 10323
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/74d3f4df2989650b2cc095be",
+                "relevance": 400.0,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRJTBAO128F932191C",
+                    "title": "Vastarannan valssi",
+                    "artist": "Viikate",
+                    "tags": {
+                        "Suomi": 100,
+                        "rautalanka": 100,
+                        "suomi rock": 100,
+                        "hard rock": 100,
+                        "melodic metal": 100,
+                        "finnish": 100,
+                        "finnish metal": 100,
+                        "metal": 100,
+                        "rock": 100
+                    }
+                }
+            }
+        ]
+    }
+}
+```
+
+上記のクエリーは、`tags`フィールドが複数値のuserProfile特徴の *いずれか* にマッチするすべてのトラックを総当たりでランク付けすることに注目してください。このため、`totalCount`に見られるように、このクエリーは10,323トラックをランク付けします。たとえばuserProfileのリストに *pop* を含めると、ヒット数は13,638に増加します。
+
+多くの学習済み特徴/タグを持つ大きなユーザープロファイルでは、ドキュメントコレクション全体にマッチしてランク付けすることになりかねません。また、`relevance`スコアが400であることにも注目してください。これはドキュメントがクエリー入力のすべてのタグにマッチしているためです(4x100 = 400)。
+
+評価を最適化するには、[wandクエリー演算子](/ja/reference/querying/yql#wand)を使用できます。`wand`クエリー演算子は、`first-phase`ランキング関数に渡す上位ランクヒットの目標数の設定をサポートしています。
+
+上記のクエリーを、`dotProduct`を`wand`に置き換えて繰り返します:
+
+```bash
+$ vespa query \
+    'yql=select track_id, title, artist, tags from track where {totalTargetHits:10}wand(tags, @userProfile)' \
+    'userProfile={"hard rock":1, "rock":1,"metal":1, "finnish metal":1}' \
+    'hits=1' \
+    'ranking=personalized'
+```
+
+`wand`クエリー演算子は、1位にまったく同じヒットを取得します。これは期待どおりの動作です。`wand`クエリー演算子は安全(safe)です。つまり、`dotProduct`クエリー演算子と同じtop-k結果を返します。
+
+より大きなドキュメントコレクションでは、*wand* クエリー演算子は`dotProduct`と比較してクエリーパフォーマンスを大幅に向上させることができます。
+
+*wand* は、マッチングとランキングをインターリーブして実行し、top-k結果に入る可能性のないドキュメントをスキップするクエリー演算子です。[Using wand with Vespa](/ja/ranking/wand)ガイドにWANDアルゴリズムの詳細があります。
+
+最後に、これらの複数値クエリー演算子は単一値フィールドと配列フィールドの両方で動作しますが、最適なパフォーマンスは[weightedset](/ja/reference/schemas/schemas#weightedset)フィールド型を使用することで得られます。`weightedset`フィールド型は整数の重みのみをサポートします。次のセクションでは、より多くの浮動小数点数型をサポートするテンソルを扱います。
+
+## テンソル計算
+
+これまでのセクションでは、マッチングとランキングを扱い、クエリーマッチングのクエリー演算子が、返されるヒットの順序に影響を与えるために使用できるランク機能も生成していました。このセクションでは、[テンソル式](/ja/ranking/tensor-user-guide)を使用した[テンソル計算](/ja/ranking/tensor-examples)によるランキングを見ていきます。
+
+テンソル計算は、密なドット積、スパースなドット積、行列積、ニューラルネットワークなどの計算に使用できます。テンソル計算は、クエリーマッチング演算子によって取得されたドキュメントに対して実行できます。唯一の例外は、密な1階のテンソル(ベクトル)で、Vespaは[(近似)最近傍検索](/ja/querying/approximate-nn-hnsw)を使用した「マッチング」もサポートしています。
+
+`track`スキーマは、1つの名前付き *mapped* 次元を持つ`similar`テンソルフィールドで定義されています。*Mapped* テンソルは、`weightedset`フィールドと同様に、スパースな特徴表現を表すために使用できますが、より汎用的な方法で、ここではテンソルセルの値の表現に`float`を使用しています。
+
+```js
+field similar type tensor<float>(trackid{}) {
+      indexing: summary | attribute
+}
+```
+
+vespa-cli([Vespa document/v1 api](/ja/writing/document-v1-api-guide)をラップしています)を使用して、1つのドキュメントを確認します:
+
+```bash
+$ vespa document get id:music:track::TRQIQMT128E0791D9C
+```
+
+戻り値:
+
+```json expandable
+{
+    "pathId": "/document/v1/music/track/docid/TRUAXHV128F42694E8",
+    "id": "id:music:track::TRUAXHV128F42694E8",
+    "fields": {
+        "artist": "Bryan Adams",
+        "title": "Summer Of '69",
+        "similar": {
+            "cells": [
+                {
+                    "address": {
+                        "trackid": "TRWJIPT128E0791D99"
+                    },
+                    "value": 1.0
+                },
+                {
+                    "address": {
+                        "trackid": "TRKPGHH128F1453DD0"
+                    },
+                    "value": 0.9129049777984619
+                },
+                 {
+                    "address": {
+                        "trackid": "TRGVORX128F4291DF1"
+                    },
+                    "value": 0.3269079923629761
+                }
+            ]
+        },
+        "tags": {
+            "All time favourites": 1,
+            "male vocalists": 7,
+            "singer-songwriter": 6,
+            "happy": 2,
+            "Driving": 3,
+            "classic rock": 59,
+            "loved": 1,
+            "Energetic": 2,
+            "male vocalist": 1,
+            "dance": 1,
+            "soft rock": 2,
+            "1980s": 1
+        }
+    }
+}
+```
+
+lastfmコレクションでは、各トラックはfloat精度の類似度スコアとともに類似トラックをリストしています。この類似度アルゴリズムによると、このサンプルドキュメントに最も類似したトラックは`TRWJIPT128E0791D99`で、類似度スコアは1.0です。
+
+クエリーAPIを使用してそのドキュメントを検索します:
+
+```bash
+$ vespa query \
+    'yql=select title, artist from track where track_id contains "TRWJIPT128E0791D99"' \
+    'hits=1'  
+```
+
+`track_id`は`fast-search`で定義されていないため、他のクエリー語句なしでこれを検索すると、このクエリーはすべてのトラックの線形スキャンになることに注意してください。
+
+クエリーは次を返します:
+
+```json expandable
+{
+    "timing": {
+        "querytime": 0.01,
+        "summaryfetchtime": 0.002,
+        "searchtime": 0.013000000000000001
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 1
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/63eadd770a5dfde1f111aed7",
+                "relevance": 0.0017429193899782135,
+                "source": "tracks",
+                "fields": {
+                    "title": "Run To You",
+                    "artist": "Bryan Adams"
+                }
+            }
+        ]
+    }
+}
+```
+
+単一のトラックであれば、ドキュメントを取得してオフラインで計算された類似トラックを表示するだけでよいかもしれません。しかし、ユーザーがリアルタイムのセッションで複数のトラックを聴いた場合は、ユーザーの最近のアクティビティとトラックのsimilarフィールドの間のスパースなドット積を使用できます。たとえば、次のトラックを聴いた場合:
+
+- `TRQIQMT128E0791D9C` Summer Of '69 by Bryan Adams
+- `TRWJIPT128E0791D99` Run To You by Bryan Adams
+- `TRGVORX128F4291DF1` Broken Wings by Mr. Mister
+
+これはクエリーテンソル`query(user_liked)`として表現でき、次のようにクエリーリクエストと一緒に渡せます:
+
+```bash
+input.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
+```
+
+ドキュメントテンソルとクエリーテンソルの両方が、*名前付き* の *mapped* 次元として`trackid{}`で定義されています。スパースなテンソルのドット積は、`rank-profile`で次のように表現できます:
+
+```js
+rank-profile similar {
+    inputs {
+        query(user_liked) tensor<float>(trackid{})
+    }
+    first-phase {
+        expression: sum(attribute(similar) * query(user_liked))
+    }
+}
+```
+
+テンソルフィールドとVespaでのテンソル計算の詳細については、[テンソルユーザーガイド](/ja/ranking/tensor-user-guide)を参照してください。この`rank-profile`をドキュメントスキーマに追加します:
+
+```js expandable
+schema track {
+
+    document track {
+
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
+
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset<string> {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor<float>(trackid{}) {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: title, artist
+    }
+
+    document-summary track_id {
+        summary track_id { }
+    }
+
+    rank-profile personalized {
+        first-phase {
+            expression: rawScore(tags)
+        }
+    }
+
+    rank-profile similar {
+        inputs {
+            query(user_liked) tensor<float>(trackid{})
+        }
+        first-phase {
+            expression: sum(attribute(similar) * query(user_liked))
+        }
+    }
+}
+```
+
+<Card>
+上記の内容をファイル app/schemas/track.sd に貼り付けてください
+</Card>
+
+アプリケーションを再度デプロイします:
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+最近再生した(または「いいね」した)トラックのリスト:
+
+- `TRQIQMT128E0791D9C` Summer Of '69 by Bryan Adams
+- `TRWJIPT128E0791D99` Run To You by Bryan Adams
+- `TRGVORX128F4291DF1` Broken Wings by Mr. Mister
+
+は、`query(user_liked)`クエリーテンソルとして表現されます
+
+```bash
+input.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}
+```
+
+最初のクエリー例は、`where true`を使用してすべてのトラックに対してテンソル計算を実行します。`ranking=similar`にも注目してください。これがないと、`nativeRank`によるランキングはクエリーテンソルを考慮しません:
+
+```bash
+$ vespa query \
+    'yql=select title, artist, track_id from track where true' \
+    'input.query(user_liked)={{trackid:TRUAXHV128F42694E8}:1.0,{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5
+```
+
+このクエリーは、以前に *いいね* したトラックのいくつかも取得しました。これらは`not`クエリー演算子(YQLでは`!`で表現)を使用して結果セットから除去できます。
+
+```bash
+where !(track_id in (@userLiked))
+```
+
+[inクエリー演算子](/ja/reference/querying/yql#in)は最も効率的な複数値 *フィルタリング* クエリー演算子で、ポジティブフィルター(いずれかのキーがマッチしたらマッチ)としても、`not`を使用したネガティブフィルター(いずれかのキーがマッチしたら結果から除去)としても使用できます。
+
+その他の例は[feature-tuning set filtering](/ja/performance/feature-tuning#multi-lookup-set-filtering)を参照してください。
+
+`not`フィルター付きでクエリーを実行します:
+
+```bash
+vespa query \
+    'yql=select title, artist, track_id from track where !(track_id in (@userLiked))' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5' \
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1''
+```
+
+テンソルのクエリー入力形式は、複数値クエリー演算子`wand`、`in`、`dotProduct`でサポートされている変数置換とは少し異なることに注意してください。上記のクエリーは次の結果を生成します:
+
+```json expandable
+{
+    "timing": {
+        "querytime": 0.121,
+        "summaryfetchtime": 0.004,
+        "searchtime": 0.125
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 95663
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 95666,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/83b83fed0f2353b738591b15",
+                "relevance": 1.1211640238761902,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRGJNAN128F42AEEF6",
+                    "title": "Holding Out For A Hero",
+                    "artist": "Bonnie Tyler"
+                }
+            },
+            {
+                "id": "index:tracks/0/be76cb3bc209be6f818c91a7",
+                "relevance": 1.0151770114898682,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRAONMM128F92DF7B0",
+                    "title": "Africa",
+                    "artist": "Toto"
+                }
+            },
+            {
+                "id": "index:tracks/0/074b6b937d0ff7b59710c279",
+                "relevance": 1.0,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRFQRYC12903CD0BB9",
+                    "title": "Kyrie",
+                    "artist": "Mr. Mister"
+                }
+            },
+            {
+                "id": "index:tracks/0/f13697952a0d5eaeb2c43ffc",
+                "relevance": 0.7835690081119537,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRKLIXH128F42766B6",
+                    "title": "Total Eclipse Of The Heart",
+                    "artist": "Bonnie Tyler"
+                }
+            },
+            {
+                "id": "index:tracks/0/1c3ab39c8ffa4fd2ba388b4e",
+                "relevance": 0.7503079921007156,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRAFGCY128F92E5F6C",
+                    "title": "Hold The Line",
+                    "artist": "Toto"
+                }
+            }
+        ]
+    }
+}
+```
+
+このクエリーは95,663ドキュメントを取得し、以前に *いいね* した3つのトラックは結果から除去されました。
+
+次の例は、tagsクエリー`tags:popular`でフィルタリングし、テンソルランキング式でランク付けされるドキュメントを減らすことでクエリーの複雑さを低減します:
+
+```bash
+vespa query \
+    'yql=select title,artist, track_id from track where tags contains "popular" and !(track_id in (@userLiked))' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5' \
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1'
+```
+
+テンソル式でスコアリングするマッチが少なくなると、レイテンシーは低下します。このクエリーケースでは、レイテンシーはマッチ数に対して厳密に線形です。効率的な検索のための`wand`と、ランキングのためのテンソル計算を組み合わせて使用することもできます。制約のない検索の`querytime`が約120 msだったことに注目してください。これはリアルタイムサービングとしては高めの値です。
+
+スパースなテンソル積は、mappedフィールドテンソルに`attribute: fast-search`を追加することで最適化できます。`attribute: fast-search`は、mapped次元を使用する`tensor`フィールド、またはmapped次元とdense次元の両方を使用するmixedテンソルでサポートされています。その代償はメモリ使用量の増加です。`similar`テンソルフィールドに`attribute: fast-search`を追加したスキーマ:
+
+```js expandable
+schema track {
+    document track {
+
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
+
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset<string> {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor<float>(trackid{}) {
+            indexing: summary | attribute
+            attribute: fast-search 
+        }
+    }
+
+    fieldset default {
+        fields: title, artist
+    }
+
+    document-summary track_id {
+        summary track_id { }
+    }
+
+    rank-profile personalized {
+        first-phase {
+            expression: rawScore(tags)
+        }
+    }
+
+    rank-profile similar {
+        inputs {
+            query(user_liked) tensor<float>(trackid{})
+        }
+        first-phase {
+            expression: sum(attribute(similar) * query(user_liked))
+        }
+    }
+}
+```
+
+<Card>
+上記の内容をファイル app/schemas/track.sd に貼り付けてください
+</Card>
+
+アプリケーションを再度デプロイします:
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+そして再び、`fast-search`の追加にはsearchnodeプロセスの再起動が必要です:
+
+```bash
+$ docker exec vespa vespa-sentinel-cmd restart searchnode
+```
+
+`status:code:up`を待って、searchnodeの起動を待ちます:
+
+```bash
+$ curl -s http://localhost:19110/state/v1/health
+```
+
+テンソルランキングクエリーを再実行します:
+
+```bash
+vespa query \
+    'yql=select title,artist, track_id from track where !(track_id in (@userLiked))' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5' \
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1'
+```
+
+`querytime`は、`fast-search`オプションなしの120 msから40 msに低下しました。テンソル式を使用する際の[パフォーマンスに関する考慮事項](/ja/performance/feature-tuning#tensor-ranking)も参照してください。Vespaは`int8`、`bfloat16`、`float`、`double`精度のセル型をサポートしています。速度、精度、メモリ使用量のトレードオフです。
+
+## マルチスレッドの検索とランキング
+
+ここまでこのガイドでは、すべての検索クエリーとランキング計算はシングルスレッド実行で行われてきました。マルチスレッド実行を有効にするには、`services.xml`に設定を追加する必要があります。マルチスレッドの検索とランキングは、クエリーレイテンシーを大幅に改善し、マルチCPUコアアーキテクチャをより有効に活用できます。
+
+以下は、`services.xml`に`tuning`要素を追加し、[requestthreads:persearch](/ja/reference/applications/services/content#requestthreads-persearch)を上書きします。`persearch`で使用されるスレッドのデフォルト数は1です。
+
+```xml expandable
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
+
+    <container id="default" version="1.0">
+        <search/>
+        <document-api/>
+    </container>
+
+    <content id="tracks" version="1.0">
+        <engine>
+            <proton>
+                <tuning>
+                    <searchnode>
+                        <requestthreads>
+                            <persearch>4</persearch>
+                        </requestthreads>
+                    </searchnode>
+                </tuning>
+            </proton>
+        </engine>
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="track" mode="index"></document>
+        </documents>
+        <nodes>
+            <node distribution-key="0" hostalias="node1"></node>
+        </nodes>
+    </content>
+</services>
+```
+
+<Card>
+上記の内容をファイル app/services.xml に貼り付けてください
+</Card>
+
+アプリケーションを再度デプロイします:
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+グローバルな検索あたりのスレッド数を変更するには、`searchnode`プロセスの再起動が必要です:
+
+```bash
+$ docker exec vespa vespa-sentinel-cmd restart searchnode
+```
+
+`searchnode`の起動を待ちます:
+```bash
+$ curl -s localhost:19110/state/v1/health
+```
+
+その後、テンソルランキングクエリーを繰り返します:
+
+```bash
+vespa query \
+    'yql=select title,artist, track_id from track where !(track_id in (@userLiked))' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5' \
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1'
+```
+
+今度は、コンテントノードが複数の検索スレッドを使用してマッチングとランキングを並列化し、`querytime`は約15 msに低下します。
+
+`services.xml`のこの設定はグローバルな *persearch* 値を設定します。[num-threads-per-search](/ja/reference/schemas/schemas#num-threads-per-search)を使用した`rank-profile`のオーバーライドにより、クエリーで使用されるスレッド数を減らすことができます。rank-profileごとの設定は、グローバルなデフォルトより少ないスレッド数への調整にのみ使用できることに注意してください。
+
+`persearch`を増やすと、同時に実行できるクエリーの最大数が減少することに注意してください。マッチエンジンのエグゼキューターには`search / persearch`のスロットがあるためです。このボトルネックを回避するためのスレッドプールのサイジングの詳細については、[thread configuration](/ja/performance/sizing-search#thread-configuration)を参照してください。
+
+以下は、グローバルな4の設定の代わりに`num-threads-per-search: 2`を使用する新しい`rank-profile`の`similar-t2`を追加します。[ranking.matching.numThreadsPerSearch](/ja/reference/api/query#ranking.matching)を使用して、クエリーリクエストでスレッド数を設定することもできます。
+
+```js expandable
+schema track {
+
+    document track {
+
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
+
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset<string> {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor<float>(trackid{}) {
+            indexing: summary | attribute
+            attribute: fast-search 
+        }
+    }
+
+    fieldset default {
+        fields: title, artist
+    }
+
+    document-summary track_id {
+        summary track_id { }
+    }
+
+    rank-profile personalized {
+        first-phase {
+            expression: rawScore(tags)
+        }
+    }
+
+    rank-profile similar {
+        inputs {
+            query(user_liked) tensor<float>(trackid{})
+        }
+        first-phase {
+            expression: sum(attribute(similar) * query(user_liked))
+        }
+    }
+
+    rank-profile similar-t2 inherits similar {
+        num-threads-per-search: 2
+    }
+}
+```
+
+<Card>
+上記の内容をファイル app/schemas/track.sd に貼り付けてください
+</Card>
+
+アプリケーションを再度デプロイします:
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+新しいrank-profileの追加には再起動は不要です。今度は`similar-t2`プロファイルを使用して、クエリーを再度繰り返します:
+
+```bash
+$ vespa query \
+    'yql=select title,artist, track_id from track where !(track_id in (@userLiked))' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar-t2' \
+    'hits=5' \
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1'
+```
+
+複数のランクプロファイルを使用することで、開発者はスレッドを増やしてもレイテンシーがあまり改善しなくなるスイートスポットを見つけられます。検索あたりのスレッド数を増やすと、クエリーごとに占有されるスレッドが増えるため、クエリーの同時実行性が制限されます。詳細は[Vespa sizing guide:reduce latency with multithreaded search](/ja/performance/sizing-search#reduce-latency-with-multi-threaded-per-search-execution)をお読みください。
+
+## hitLimitを使用した高度なレンジ検索
+
+Vespaには、`fast-search`のattributeフィールドの値が大きい方からk件、または小さい方からk件のドキュメントを選択できる高度なクエリー演算子があります。
+
+このクエリー演算子を実演するために、このガイドでは`popularity`フィールドを導入します。last.fmデータセットには実際の人気度メトリクスがないため、トラックあたりのタグ数を実際のトラック人気度の *代理(proxy)* として使用します。
+
+次のスクリプトはデータセットを走査してタグ数をカウントし、トラックごとにVespaの[部分更新](/ja/writing/partial-updates)フィード操作を作成します。
+
+<Card>
+上記の内容をファイル create-popularity-updates.py に貼り付けてください
+</Card>
+
+```python expandable
+import os
+import sys
+import json
+
+directory = sys.argv[1]
+seen_tracks = set() 
+
+def process_file(filename):
+    global seen_tracks
+    with open(filename) as fp:
+        doc = json.load(fp)
+        title = doc['title']
+        artist = doc['artist']
+        hash = title + artist
+        if hash in seen_tracks:
+            return
+        else:
+            seen_tracks.add(hash) 
+
+        track_id = doc['track_id']
+        tags = doc['tags']
+        tags_dict = dict()
+        for t in tags:
+            k,v = t[0],int(t[1])
+            tags_dict[k] = v
+        n = len(tags_dict)
+
+        vespa_doc = {
+            "update": "id:music:track::%s" % track_id,
+                "fields": {
+                    "popularity": {
+                        "assign": n
+                    }
+                }
+        }
+        print(json.dumps(vespa_doc))
+
+sorted_files = []
+for root, dirs, files in os.walk(directory):
+    for filename in files:
+        filename = os.path.join(root, filename)
+        sorted_files.append(filename)
+sorted_files.sort()
+for filename in sorted_files:
+    process_file(filename)
+```
+
+このスクリプトを使用してデータセットを走査し、[部分更新](/ja/writing/partial-updates)フィードを作成します:
+
+```bash
+$ python3 create-popularity-updates.py lastfm\_test > updates.jsonl
+```
+
+`fast-search`で定義された`popularity`フィールドを`track`スキーマに追加します。また、検索ごとに1スレッドを使用する`popularity`ランクプロファイルも追加します:
+
+```js expandable
+schema track {
+
+    document track {
+
+        field track_id type string {
+            indexing: summary | attribute
+            rank: filter
+            match: word
+        }
+
+        field title type string {
+            indexing: summary | index
+            index: enable-bm25
+        }
+
+        field artist type string {
+            indexing: summary | index
+        }
+
+        field tags type weightedset<string> {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+
+        field similar type tensor<float>(trackid{}) {
+            indexing: summary | attribute
+            attribute: fast-search 
+        }
+
+        field popularity type int {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+    }
+
+    fieldset default {
+        fields: title, artist
+    }
+
+    document-summary track_id {
+        summary track_id { }
+    }
+
+    rank-profile personalized {
+        first-phase {
+            expression: rawScore(tags)
+        }
+    }
+
+    rank-profile similar {
+        inputs {
+            query(user_liked) tensor<float>(trackid{})
+        }
+        first-phase {
+            expression: sum(attribute(similar) * query(user_liked))
+        }
+    }
+
+    rank-profile similar-t2 inherits similar {
+        num-threads-per-search: 2
+    }
+
+    rank-profile popularity {
+        num-threads-per-search: 1
+        first-phase {
+            expression: attribute(popularity)
+        }
+    }
+}
+```
+
+<Card>
+上記の内容をファイル app/schemas/track.sd に貼り付けてください
+</Card>
+
+アプリケーションを再度デプロイします:
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+新しいフィールドの追加には再起動は不要です。以下で部分更新を適用します:
+
+```bash
+$ vespa feed -t http://localhost:8080 updates.jsonl
+```
+
+このフィードジョブが完了すると、[range()](/ja/reference/querying/yql#range)クエリー演算子と[hitLimit](/ja/reference/querying/yql#hitlimit)を使用して、人気度が最も高い5つのトラックを選択できます:
+
+```bash
+vespa query \
+    'yql=select track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity)' \
+    'ranking=popularity'
+```
+
+5件だけを要求したにもかかわらず、この検索は1,352ドキュメントを返しました。その理由は、`range`演算子の`hitLimit`アノテーションが下限のみを指定するためです。上位5つの値の範囲内で同じ`popularity`値でタイになっているドキュメントが返されます。
+
+`hitLimit`を伴う`range()`クエリー演算子は、インデックス内のドキュメントのサブセットをランク付けするための *top-k* 選択を効率的に実装するために使用できます。たとえば、`hitLimit`を伴う`range`検索を使用して、最も人気のあるトラックに対してのみトラックの[レコメンデーションテンソル計算](#tensor-computations)を実行します:
+
+```bash
+vespa query \
+    'yql=select title,artist, track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and !(track_id in (@userLiked))' \
+    'input.query(user_liked)={{trackid:TRQIQMT128E0791D9C}:1.0,{trackid:TRWJIPT128E0791D99}:1.0,{trackid:TRGVORX128F4291DF1}:1.0}' \
+    'ranking=similar' \
+    'hits=5' \
+    'userLiked=TRQIQMT128E0791D9C,TRWJIPT128E0791D99,TRGVORX128F4291DF1'
+```
+
+このクエリーは1,349ドキュメントを返す一方で、前の例の`range`検索は1,352ドキュメントを返したことに注目してください。これは`not`フィルターによるものです。
+
+`hitLimit`を伴うレンジ検索は、`fast-search`を持つ単一値の数値`attribute`の *top-k* を効率的に選択したいケースで使用できます。これを使用して効率的に実装できるユースケースには次のようなものがあります:
+
+- タイムスタンプを表す`long`(例: Unixエポックを使用)を使用して、最新のドキュメントに対してランキング計算を実行する。
+- 事前に選択されたコンテント(例: 人気度を使用)に対してパーソナライゼーションのテンソル式を計算する。
+- [ソート](/ja/reference/querying/sorting-language)クエリーの最適化。大きな結果をソートする代わりに、`hitLimit`を伴うレンジ検索を使用して最小値または最大値を素早く見つける。
+- オートサジェスト - [#25333](https://github.com/vespa-engine/vespa/issues/25333)を参照。
+
+クエリー内の他のクエリー語句やフィルター語句は、top-kドキュメントを見つけた後に適用されるため、多くのドキュメントを除去する強力なフィルターは、結果として0ドキュメントの再現に終わる可能性があることに注意してください。
+
+この動作は次のクエリーで示されます:
+
+```bash
+vespa query \
+    'yql=select track_id, popularity from track where {hitLimit:5,descending:true}range(popularity,0,Infinity) and popularity=99'
+```
+
+このクエリーはドキュメントを1件も取得できません。レンジ検索はpopularityが100である1,352ドキュメントを見つけますが、そのtop-k結果をpopularity=99のフィルター制約と *AND* すると、結果は0件になるからです。
+
+`hitLimit`を伴うレンジ検索クエリー演算子は、オートコンプリートや[検索サジェスト](https://github.com/vespa-engine/sample-apps/tree/master/incremental-search/search-suggestions)のような検索ユースケースで実用的です。これらでは通常、[match: prefix](/ja/reference/schemas/schemas#match)や、[match: gram](/ja/reference/schemas/schemas#match)を使用したn-gramマッチングを使用します。最初の数文字の短い検索を、popularityに対する`hitLimit`レンジを含むように制限すると、クエリーパフォーマンスを大幅に向上させると同時に、人気のあるサジェストにマッチさせることができます。ユーザーがより多くの文字を入力するとマッチ数は大幅に減少するため、ランキングは単一のpopularity attributeだけでなくより多くの要素に注力でき、`hitLimit`を増やせます。
+
+## マッチフェーズ制限 - 早期終了
+
+`hitLimit`を伴う`range`検索の代替は、[match-phase](/ja/reference/schemas/schemas#match-phase)を使用した早期終了です。これにより、ドキュメントのフィールドを使用して検索の評価順序を決定し、検索と`first-phase`ランキングを早期終了できます。
+
+match-phaseの早期終了は、マッチングとランキング中にattributeフィールドを使用して、検索とランキングが実行される順序に影響を与えます。クエリーがノードあたり`ranking.matchPhase.maxHits`を超えるヒットを生成する可能性が高い場合、検索は早期に終了され、クエリーのマッチングと評価は`ranking.matchPhase.attribute`のattributeフィールドが決める順序で行われます。
+
+マッチフェーズの早期終了には、`attribute`と`fast-search`を持つ単一値の数値フィールドの使用が必要です。[Match phase query parameters](/ja/reference/api/query#ranking.matchPhase)を参照してください。マッチフェーズ制限は、潜在的な`second-phase`ランキング式を早期終了・停止させることはできず、マッチングと`first-phase`ランキングのみを対象とします。それがこの名前の由来です: *マッチフェーズ制限*。
+
+以下は、`maxHits`目標を100に設定して`matchPhase`早期終了を有効にします:
+
+```bash
+$ vespa query \
+    'yql=select track\_id, popularity from track where true' \
+    'ranking=popularity' \
+    'ranking.matchPhase.maxHits=100' \
+    'ranking.matchPhase.attribute=popularity' \
+    'hits=2'
+```
+
+これは次の結果を生成します:
+
+```json expandable
+{
+    "timing": {
+        "querytime": 0.007,
+        "summaryfetchtime": 0.002,
+        "searchtime": 0.01
+    },
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 1476
+        },
+        "coverage": {
+            "coverage": 0,
+            "documents": 252,
+            "degraded": {
+                "match-phase": true,
+                "timeout": false,
+                "adaptive-timeout": false,
+                "non-ideal-state": false
+            },
+            "full": false,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 0
+        },
+        "children": [
+            {
+                "id": "index:tracks/0/63f963f1f9372275e12d9e9c",
+                "relevance": 100.0,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRGCNGP12903CFA2BA",
+                    "popularity": 100
+                }
+            },
+            {
+                "id": "index:tracks/0/7a74f1cd064acef348a1a701",
+                "relevance": 100.0,
+                "source": "tracks",
+                "fields": {
+                    "track_id": "TRFVTTT128F930D148",
+                    "popularity": 100
+                }
+            }
+        ]
+    }
+}
+```
+
+この場合、totalCountは1,476となり、`hitLimit`を伴う`range`検索よりも少し多くなりました。`coverage:degraded`の存在にも注目してください。これは、この結果がマッチしたすべてのドキュメントに対して完全には評価されなかったことをクライアントに知らせます。詳細は[graceful result degradation](/ja/performance/graceful-degradation)をお読みください。この例では、検索ごとに1スレッドで設定された`popularity`ランクプロファイルを使用していることに注意してください。`maxHits`の設定値が低い場合には、これが推奨される設定です。
+
+```js
+rank-profile popularity {
+    num-threads-per-search: 1
+    first-phase {
+        expression: attribute(popularity)
+    }
+}
+```
+
+上限付きレンジ検索(capped range search)との主な違いは、`match-phase`が安全(safe)であることです。フィルターは検索とインラインで動作し、top-kドキュメントを見つけた後に適用されるわけではありません。
+
+次のクエリーは、クエリーにマッチするヒットが少ないため、match-phaseの早期終了をトリガーしません:
+
+```bash
+vespa query \
+    'yql=select track_id, popularity from track where popularity=99' \
+    'ranking=popularity' \
+    'ranking.matchPhase.maxHits=100' \
+    'ranking.matchPhase.attribute=popularity' \
+    'hits=2'
+```
+
+一般に、`hitLimit`を伴う`range`検索よりも`match-phase`早期終了を優先してください。マッチフェーズ制限はテキスト検索クエリーと組み合わせて使用することもできます:
+
+```bash
+vespa query \
+    'yql=select title, artist, popularity from track where userQuery()' \
+    'query=love songs' \
+    'type=any' \
+    'ranking=popularity' \
+    'ranking.matchPhase.maxHits=100' \
+    'ranking.matchPhase.attribute=popularity' \
+    'hits=2'
+```
+
+このクエリーは`type=any`を使用しているため、上記のクエリーは目標の`matchPhase.maxHits`よりもはるかに多くのドキュメントを取得します。そのため早期終了がトリガーされ、検索コアは人気度が最も高いトラックをマッチングしてランク付けします。
+
+マッチフェーズ制限による早期終了は、ドキュメントの品質シグナルが利用できる多くの大規模サービングユースケースで、レイテンシーとコストを抑えられる強力な機能です。マッチフェーズの終了は、結果の多様性(diversity)制約の指定もサポートしています。[Result diversification blog post](https://blog.vespa.ai/result-diversification-with-vespa/)を参照してください。結果の多様性は通常、Vespaの[結果グルーピング](/ja/querying/grouping)で得られることに注意してください。match-phaseの多様性は、早期終了が発動した**場合**にも多様なヒットが収集されることを保証するために使用されます。
+
+## 高度なクエリートレーシング
+
+このセクションではクエリートレーシングを紹介します。トレーシングは、時間(とコスト)がどこで費やされているか、そしてクエリーやスキーマ設定をどのように最適化するのがベストかを理解するのに役立ちます。クエリートレーシングは、以下のパラメーターを使用して有効にできます:
+
+<CardGroup>
+  <Card title="trace.level" icon="chart-bar" href="../reference/api/query#trace.level" horizontal />
+  <Card title="trace.explainLevel" icon="info-circle" href="../reference/api/query#trace.explainlevel" horizontal />
+  <Card title="trace.timestamps" icon="clock" href="../reference/api/query#trace.timestamps" horizontal />
+</CardGroup>
+
+トレーシングを有効にした簡単なクエリー例:
+
+```bash
+vespa query 'yql=select track_id from track where tags contains "rock"' \
+  'trace.level=3' 'trace.timestamps=true' 'trace.explainLevel=1' 'hits=1'
+```
+
+トレースの最初の部分は、ステートレスなコンテナーの検索チェーンを通過するクエリーをトレースします。チェーン内で呼び出される各searcherに対して、クエリーリクエストの開始からの相対タイムスタンプが出力されます:
+
+```json
+{
+    "trace": {
+        "children": [
+            {
+                "message": "Using query profile 'default' of type 'root'"
+            },
+            {
+                "message": "Invoking chain 'vespa' [com.yahoo.search.querytransform.WeakAndReplacementSearcher@vespa -> com.yahoo.prelude.statistics.StatisticsSearcher@native -> ... -> federation@native]"
+            },
+            {
+                "children": [
+                {
+                    "timestamp": 0,
+                    "message": "Invoke searcher 'com.yahoo.search.querytransform.WeakAndReplacementSearcher in vespa'"
+                }]
+            }
+        ]
+    }
+}
+```
+
+トレースは、クエリーがコンテントノードにディスパッチされ、マージされたレスポンスがクライアントに返されるまで、ずっと続きます。
+
+```json
+{
+    "timestamp": 2,
+    "message": "sc0.num0 search to dispatch: query=[tags:rock] timeout=9993ms offset=0 hits=1 restrict=[track]"
+}
+```
+
+この場合、トレーシングによると、クエリーがコンテントノードへ向けてネットワークに送出される直前までに、ステートレスなコンテナーでの処理に2msかかっています。
+
+最初のプロトコルフェーズが次のトレースメッセージです。この場合、応答はタイムスタンプ6でネットワークから読み取り可能になっているため、ネットワークのシリアライズとデシリアライズを含め、最初のプロトコルマッチングフェーズにおよそ4 msが費やされました。
+
+```json
+{
+    "timestamp": 6,
+    "message": [
+        {
+            "start_time": "2022-03-27 15:03:20.769 UTC",
+            "traces": [
+
+            ],
+            "distribution-key": 0,
+            "duration_ms": 1.9814
+        }
+    ]
+}
+```
+
+```text
+Inside this message is the content node traces of the query, `timestamp_ms` is relative to the start of the query on the content node. In this case, the content node uses 1.98 ms to evaluate the first protocol phase of the query (`duration_ms`).
+```
+
+コンテントノードの`traces`に関するさらなる説明は近日公開予定です。これには以下のような情報が含まれます
+
+- 辞書の走査とクエリーのセットアップにどれだけの時間が費やされたか。
+- マッチングとfirst-phaseランキングにどれだけの時間が費やされたか。
+- second-phaseランキング(有効な場合)にどれだけの時間が費やされたか。
+
+これらのトレースは、機能チューニングの判断と[スケーリングとサイジング](/ja/performance/sizing-search)の両方の指針になります。
+
+トレースの後の方では、2番目のクエリープロトコルフェーズであるサマリーフィルも確認できます:
+```json
+{
+    "timestamp": 7,
+    "message": "sc0.num0 fill to dispatch: query=[tags:rock] timeout=9997ms offset=0 hits=1 restrict=[track] summary=[null]"
+}
+```
+
+そして最後に、2つのフェーズの全体的な内訳:
+
+```json
+{
+    "timestamp": 9,
+    "message": "Query time query 'tags:rock': 7 ms"
+}
+{
+    "timestamp": 9,
+    "message": "Summary fetch time query 'tags:rock': 2 ms"
+}
+```
+
+クエリートレースのフレームグラフを表示できる[Trace Visualizer](https://github.com/vespa-engine/vespa/tree/master/client/js/app#trace-visualizer)もお試しください。
+
+## コンテナーの破棄
+
+これでこのチュートリアルは終了です。以下でコンテナーとデータを削除します:
+
+```bash
+$ docker rm -f vespa
+```

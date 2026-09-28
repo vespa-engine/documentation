@@ -1,0 +1,614 @@
+---
+title: マルチ通貨プライシング
+---
+
+Vespa for e-commerce には、商品がさまざまな通貨で価格設定され、複数の市場で販売されるグローバルな商品カタログを持つ e コマースアプリケーション向けのマルチ通貨プライシングサポートが含まれています。マルチ通貨プライシングとは、複数の通貨で価格を提示し扱うことを指し、購入者が希望する通貨で表現された価格を使用して商品のクエリー、フィルタリング、ランキングを行えるようにします。これにより、任意の通貨での価格帯によるフィルタリングと、換算後の価格をランキングに使用することが可能になり、市場固有の価格が利用できない場合は自動的に通貨換算が行われます。
+
+## 概要
+
+マルチ通貨プライシング機能は以下をサポートします:
+
+- **市場ごとの価格設定** - 各商品に対して市場ごとに異なる価格を定義します。
+- **為替レートの管理** - 通貨から通貨への為替レートの N×N テンソルマッピングが「forex」ドキュメントに保存され、いつでも更新できます。
+- **自動通貨換算** - 購入者の市場に対する市場固有の価格が存在しない場合、デフォルト市場にフォールバックします。
+- **クエリー時フィルタリング** - 任意の通貨での価格帯によって商品をフィルタリングします。
+- **ランキングとの統合** - ランキング式で使用するために為替レートをオプションで公開します(計算された価格でのランキング)。
+
+実装は 2 つの主要コンポーネントで構成されます:
+
+- **MultiCurrencyFilterSearcher** - クエリーをインターセプトし、実効価格に基づいて商品を動的にフィルタリングするカスタムサーチャー。
+- **CachedForexRateService** - より高速なルックアップのために、forex ドキュメントの為替レートをメモリ内に保存するバックグラウンドサービス。
+
+## クイックスタート
+このクイックスタートでは、Vespa アプリケーションでマルチ通貨プライシングを有効にするエンドツーエンドの例を順を追って説明します。
+### スキーマの定義
+
+2 つのスキーマを作成します。1 つは為替レートを保存するためのもの、もう 1 つは商品用です。既存の商品スキーマがある場合は、以下で説明する必須フィールドが含まれていればそれを再利用できます。
+
+#### Forex スキーマ
+
+forex スキーマは、通貨の為替レートをテンソルとして保存します。次のように定義した `forex.sd` スキーマをアプリケーションに追加します:
+
+```json
+schema forex {
+    document forex {
+        field timestamp type long {
+            indexing: attribute | summary
+        }
+
+        field rates type tensor<double>(from{}, to{}) {
+            indexing: attribute | summary
+        }
+    }
+}
+```
+
+#### 商品スキーマ
+
+商品スキーマは、販売者通貨と市場ごとの価格とともに商品を保存します。`per_market_price` 配列には特定の市場に対する価格の上書きが含まれ、フォールバックとして `DEFAULT` 市場が使用されます。すべての商品には `DEFAULT` エントリを含める必要があり、すべての `per_market_price.price` の値はドキュメントの `seller_currency` で表現されます。
+
+<Info>
+ **注:** 市場ごとの上書きはすべて販売者のネイティブ通貨で保存されるため、サーチャーは保存された価格を書き換えるのではなく、購入者の価格ウィンドウを換算できます。
+</Info>
+
+<Danger>
+ **重要:** struct-field に対する `fast-search` を推奨します。これがないと、サポートする通貨の数が増えるにつれて価格フィルタリングが大幅に遅くなります。さらなる最適化のために `rank: filter` を追加できますが、これは特定のランキング設定に依存します。詳細は [rank: filter](/ja/reference/schemas/schemas#filter) を参照してください。
+</Danger>
+
+```js expandable
+schema product {
+    document product {
+
+        # Your existing fields above
+
+        field seller_currency type string {
+            indexing: summary | attribute
+        }
+
+        struct market_price {
+            field market type string {}
+            field price type double {}
+        }
+
+        field per_market_price type array<market_price> {
+            indexing: summary
+            summary: matched-elements-only
+            struct-field market {
+                indexing: attribute
+                attribute: fast-search
+            }
+            struct-field price {
+                indexing: attribute
+                attribute: fast-search
+            }
+        }
+
+        # Your existing fields below
+
+    }
+}
+```
+
+### サービスの設定
+
+Vespa は、サーチャーと forex キャッシュがコンテナー・クラスターに組み込まれている場合にのみ、マルチ通貨フィルタリングを適用します。クエリーは `MultiCurrencyFilterSearcher` を含むチェーンを通過する必要があり、`ForexRateRetriever` は独自のサーチチェーンを介してグローバルな forex ドキュメントを読み取る必要があります。`services.xml` のコンテナー定義に、両方のチェーンと 2 つのコンポーネントを追加します:
+
+既存の `<container>` ブロック内に、マルチ通貨のチェーンとコンポーネントを追加します:
+
+```xml
+<search>
+    <chain id="multi-currency-filter" inherits="vespa">
+        <searcher id="ai.vespa.ecommerce.multicurrency.MultiCurrencyFilterSearcher"
+                  bundle="ecommerce-multi-currency" />
+    </chain>
+    <chain id="forex-cache" inherits="vespa" />
+</search>
+
+<component id="ai.vespa.ecommerce.common.ForexRateService"
+           class="ai.vespa.ecommerce.multicurrency.CachedForexRateService"
+           bundle="ecommerce-multi-currency" />
+
+<component id="ai.vespa.ecommerce.multicurrency.ForexRateRetriever"
+           bundle="ecommerce-multi-currency" />
+```
+
+`<content>` クラスター内で、両方のドキュメントタイプが宣言されていることを確認します:
+
+```
+<documents>
+    <document type="forex" mode="index" global="true" />
+    <document type="product" mode="index" />
+</documents>
+```
+
+retriever は `forex-cache` チェーンを通してバックグラウンドクエリーを発行します。このチェーンが存在しない場合や、誤ったドキュメントタイプに制限されている場合、キャッシュは決して `READY` に到達せず、クエリーは "ensure exactly one forex document exists" というエラーで失敗します。
+
+すべてをまとめると、最小限の `services.xml` は次のようになります:
+
+```xml
+<services version="1.0">
+  <container id="default" version="1.0">
+    <document-api/>
+    <search>
+      <chain id="multi-currency-filter" inherits="vespa">
+        <searcher id="ai.vespa.ecommerce.multicurrency.MultiCurrencyFilterSearcher"
+                  bundle="ecommerce-multi-currency" />
+      </chain>
+      <chain id="forex-cache" inherits="vespa" />
+    </search>
+    <component id="ai.vespa.ecommerce.common.ForexRateService"
+               class="ai.vespa.ecommerce.multicurrency.CachedForexRateService"
+               bundle="ecommerce-multi-currency" />
+    <component id="ai.vespa.ecommerce.multicurrency.ForexRateRetriever"
+               bundle="ecommerce-multi-currency" />
+  </container>
+
+  <content id="content" version="1.0">
+    <documents>
+      <document type="forex" mode="index" global="true" />
+      <document type="product" mode="index" />
+    </documents>
+    <nodes count="2" />
+  </content>
+</services>
+```
+
+### データのフィード
+
+#### 為替レートのフィード
+
+すべての通貨間の為替レートを含む、ID `id:forex:forex::forex` の単一の forex ドキュメントをフィードします。セルの欠落によるルックアップの失敗を避けるため、同一通貨のレート(例: USD→USD = 1.0)を含めてください。`timestamp` フィールドは必須であり、キャッシュが新しいレートを取得できるように、レートを変更するたびに更新する必要があります。
+
+ **警告:** グローバルな forex ドキュメントは正確に 1 つだけ存在する必要があります。複数のドキュメントが存在する場合、retriever は `INVALID_FOREX_DOCUMENTS` を報告し、サーチャーは forex ドキュメントを 1 つに保つよう指示するエラーヒットを返します。
+
+```json
+{
+  "put": "id:forex:forex::forex",
+  "fields": {
+    "timestamp": 1757385600,
+    "rates": {
+      "cells": [
+        {"address": {"from": "USD", "to": "USD"}, "value": 1.0},
+        {"address": {"from": "USD", "to": "EUR"}, "value": 0.92},
+        {"address": {"from": "USD", "to": "GBP"}, "value": 0.78},
+        {"address": {"from": "USD", "to": "NOK"}, "value": 10.50},
+        {"address": {"from": "EUR", "to": "USD"}, "value": 1.09},
+        {"address": {"from": "EUR", "to": "EUR"}, "value": 1.0},
+        {"address": {"from": "EUR", "to": "GBP"}, "value": 0.85}
+      ]
+    }
+  }
+}
+```
+
+#### 商品のフィード
+
+販売者通貨と市場ごとの価格とともに商品をフィードします。フォールバックとして、常に `DEFAULT` 市場のエントリを含めてください。
+
+```json
+{
+  "put": "id:product:product::sku-100",
+  "fields": {
+    "seller_currency": "USD",
+    "per_market_price": [
+      {"market": "DEFAULT", "price": 199.0},
+      {"market": "EU", "price": 189.0},
+      {"market": "UK", "price": 209.0},
+      {"market": "NO", "price": 300.0}
+    ]
+  }
+}
+```
+
+<Info>
+ **注:** 商品スキーマにすでに識別子や説明用フィールド(`product_id` や `product_name` など)が含まれている場合は、通常どおりフィードに含めてください。この例は、上記の最小限のスキーマで動作するように、必須の通貨フィールドのみを保持しています。
+</Info>
+
+### 価格フィルタリング付きのクエリー
+
+特定の市場と通貨での価格帯によって商品をフィルタリングするには、次のクエリーパラメーターを使用します:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>パラメーター</th>
+      <th>説明</th>
+      <th>例</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`ecommerce.multicurrency.market`}</code></td>
+      <td>対象市場コード</td>
+      <td><code>{`NO`}</code>、<code>{`US`}</code>、<code>{`EU`}</code>、<code>{`NO-49`}</code>、<code>{`27`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`ecommerce.multicurrency.currency`}</code></td>
+      <td>対象通貨コード</td>
+      <td><code>{`NOK`}</code>、<code>{`USD`}</code>、<code>{`EUR`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`ecommerce.multicurrency.price-min`}</code></td>
+      <td>対象通貨での最低価格</td>
+      <td><code>{`1000`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`ecommerce.multicurrency.price-max`}</code></td>
+      <td>対象通貨での最高価格</td>
+      <td><code>{`1500`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`ecommerce.multicurrency.enrich`}</code></td>
+      <td>オプション: ランキング用に為替レートをクエリーテンソルとして公開します。デフォルトは false です</td>
+      <td><code>{`true`}</code> または <code>{`false`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+#### クエリーの例
+
+```sql
+$ vespa query \
+    'yql=select * from product where true' \
+    'searchChain=multi-currency-filter' \
+    'ecommerce.multicurrency.market=NO' \
+    'ecommerce.multicurrency.currency=NOK' \
+    'ecommerce.multicurrency.price-min=1000' \
+    'ecommerce.multicurrency.price-max=1500'
+```
+
+このクエリーは、ノルウェー市場向けの NOK(ノルウェークローネ)での実効価格が 1000 から 1500 NOK の間にあるすべての商品を返します。サーチャーは次のように動作します:
+
+1. 商品が `NO` に対する市場固有の価格を持っているかを確認する
+2. 持っている場合は、その価格を直接使用する
+3. 持っていない場合は、為替レートを使用して商品の `DEFAULT` 市場価格を販売者通貨から NOK に換算する
+4. 指定された価格帯内にある商品のみを保持する
+
+### バリデーションルール
+
+マルチ通貨サーチャーはクエリーパラメーターを検証し、検証に失敗した場合はエラーを返します:
+
+- **通貨コード**は正確に 3 文字でなければなりません(ISO-4217 形式。例: `USD`、`EUR`、`NOK`)
+- **市場コード**は英数字でなければなりません(例: `US`、`NO`、`EU`、`NO-47`、`13`)
+- **価格の値**は有効な数値かつ非負でなければなりません
+- **価格帯**: `price-max` は `price-min` 以上でなければなりません
+- **通貨の利用可能性**: 要求された通貨は forex ドキュメント内に存在しなければなりません
+
+いずれかのパラメーターが欠落しているか無効な場合、サーチャーは(フォーマットの問題であれば)フィルタリングをスキップするか、(無効な価格帯や不明な通貨といった論理的な問題であれば)エラー結果を返します。
+
+<Info>
+ **注:** 不正な入力によってフィルタリングがスキップされた場合、サーチャーは何もしない(no-op)ものとして動作し、トレースログにその理由が記録されます(たとえば "currency failed ISO-4217 validation; skipping filter")。マルチ通貨フィルターが実際に実行されたかどうかを確認するには、[クエリートレーシング](/ja/reference/api/query#tracing)を使用してください。
+</Info>
+
+### 為替レートの更新
+
+為替レートは、更新された `timestamp` フィールドを持つ新しいバージョンの forex ドキュメントをフィードすることで、いつでも更新できます。キャッシュは、次のリフレッシュサイクル(通常は数秒以内)で自動的に新しいレートを取得します。
+
+```bash
+$ vespa feed <(echo '{
+    "update": "id:forex:forex::forex",
+    "fields": {
+        "timestamp": {"assign": 1757472000},
+        "rates": {
+            "assign": {
+                "cells": [...]
+            }
+        }
+    }
+}')
+```
+
+## 動作の仕組み
+
+### 価格解決ロジック
+
+各商品について、対象通貨での実効価格は次のように決定されます:
+
+1. **市場固有の価格:** 商品が要求された市場に対する価格エントリを持つ場合、その価格を直接使用します
+2. **通貨換算:** そうでない場合、`DEFAULT` 市場価格を使用し、為替レートを使って販売者通貨から対象通貨に換算します
+3. **価格帯フィルター:** 実効価格が指定された最小/最大の範囲内にある商品のみを保持します
+
+### Forex キャッシュ
+
+`CachedForexRateService` コンポーネントは、為替レートのメモリ内キャッシュを維持し、forex ドキュメント(`id:forex:forex::forex`)から定期的にリフレッシュします。これにより、クエリー処理中に低レイテンシーで為替レートにアクセスできます。
+
+#### 自動リフレッシュ
+
+`ForexRateRetriever` コンポーネントは、固定スケジュールを使用して 10 秒ごとに為替レートを自動的にリフレッシュします。このリズム(10 秒間隔、5 秒のリトライウィンドウ、1 回の試行あたり 1 秒)は提供されるコンポーネントにハードコードされており、デプロイ時に調整することはできません。各リフレッシュサイクルでは:
+
+- `forex-cache` サーチチェーンを使用して forex ドキュメントをクエリーします
+- ドキュメントが `rates`(テンソル)フィールドと `timestamp`(long)フィールドの両方を持つことを検証します
+- タイムスタンプがキャッシュ済みバージョンより新しい場合にのみ更新を適用します
+- 最初の試行が失敗した場合、5 秒の割り当て時間内でリトライします
+
+#### ヘルス状態
+
+forex サービスは、次のヘルス状態でその運用状況を追跡します:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>状態</th>
+      <th>説明</th>
+      <th>クエリーの動作</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`READY`}</code></td>
+      <td>為替レートがロードされ、サービスが稼働中</td>
+      <td>マルチ通貨フィルタリング付きのクエリーは通常どおり動作します</td>
+    </tr>
+    <tr>
+      <td><code>{`UNINITIALIZED`}</code></td>
+      <td>forex ドキュメントがまだロードされていない</td>
+      <td>クエリーはエラーを返します: "forex rate service not initialized"</td>
+    </tr>
+    <tr>
+      <td><code>{`OUTAGE`}</code></td>
+      <td>リフレッシュに失敗したが古いデータが存在する(retriever が再び成功すると、キャッシュは再利用可能な状態を維持します)</td>
+      <td>クエリーはエラーを返します: "forex rate service temporarily unavailable (last refresh failed)"</td>
+    </tr>
+    <tr>
+      <td><code>{`INVALID_FOREX_DOCUMENTS`}</code></td>
+      <td>複数の forex ドキュメントが検出された(正確に 1 つが期待される)</td>
+      <td>クエリーはエラーを返します: "ensure exactly one forex document exists"</td>
+    </tr>
+  </tbody>
+</table>
+
+#### エラーハンドリング
+
+サービスが `READY` 状態でない場合、マルチ通貨フィルタリング付きのクエリーは次のように動作します:
+
+- 適切なエラーメッセージとともに空の結果を返します
+- 適切なトレースレベルで詳細な診断情報をログに記録します
+- 成功するまでバックグラウンドでのリフレッシュ試行を継続します
+
+### パフォーマンス
+
+マルチ通貨の価格フィルタリングは、結果生成時の評価ではなく、効率的なクエリー時のフィルター構築として実装されています。これにより、Vespa はすべてのドキュメントを走査することなく、インデックスを使用してマッチする商品を見つけることができます。
+
+#### フィルタリングの仕組み
+
+マルチ通貨パラメーターを含むクエリーを受け取ると、サーチャーは次のように動作します:
+
+1. **価格帯を事前計算:** キャッシュされた為替レートを使用して、購入者の価格帯(例: 1000〜1500 NOK)を、すべての販売者通貨における同等の範囲に換算します。たとえば、forex キャッシュに USD、EUR、GBP がある場合、1000〜1500 NOK が各通貨でいくらに相当するかを計算します。
+2. **構造化されたクエリーフィルターを構築:** Vespa の効率的なクエリープリミティブを使用してクエリーツリーを作成します: 
+  - `SameElementItem` - market と price が同じ配列要素に現れるドキュメントにマッチします
+  - `RangeItem` - インデックスを使用して数値の価格帯を効率的にフィルタリングします
+  - `WordItem` - 販売者通貨と市場の値に完全一致でマッチします
+
+3. **フィルターをクエリーツリーに注入:** 価格フィルターをユーザーのクエリーと組み合わせ、Vespa のクエリー実行エンジンがインデックスを使用して効率的に評価できるようにします。
+
+このアプローチには、いくつかのパフォーマンス上の利点があります:
+
+- **ドキュメントの走査なし:** Vespa は attribute インデックスを使用して、すべての商品をフェッチして評価することなく、マッチするドキュメントを素早く特定します
+- **1 回限りの換算:** 通貨換算はクエリー構築時に一度だけ行われ、結果セット内の商品ごとには行われません
+- **インデックスに支えられたフィルタリング:** 価格帯と市場のマッチングは、Vespa の高速な attribute ルックアップを活用します
+- **クエリー最適化:** Vespa のクエリーオプティマイザーは、効率的な実行のために結合されたクエリーツリーを並べ替えて最適化できます
+
+## 高度な使い方
+
+### カスタムフィールド設定
+
+デフォルトでは、マルチ通貨コンポーネントは商品スキーマに特定のフィールド名を期待します。`ecommerce-schema-wiring` 設定を使用して、これらのフィールド名をカスタマイズできます。利用可能なすべてのパラメーターとそのデフォルト値については、[設定リファレンス](#configuration)を参照してください。
+
+```html
+<container id="default" version="1.0">
+    <search>
+        <chain id="multi-currency-filter" inherits="vespa">
+            <searcher id="ai.vespa.ecommerce.multicurrency.MultiCurrencyFilterSearcher"
+                      bundle="ecommerce-multi-currency">
+                <config name="ai.vespa.ecommerce.common.ecommerce-schema-wiring">
+                    <productFields>
+                        <sellerCurrency>seller_currency</sellerCurrency>
+                        <perMarketPriceArrayStruct>per_market_price</perMarketPriceArrayStruct>
+                        <marketStructField>market</marketStructField>
+                        <priceStructField>price</priceStructField>
+                    </productFields>
+                    <defaults>
+                        <market>DEFAULT</market>
+                    </defaults>
+                    <rankProfileInputs>
+                        <forexRates>forexRates</forexRates>
+                    </rankProfileInputs>
+                </config>
+            </searcher>
+        </chain>
+    </search>
+</container>
+```
+
+### ランキングでの為替レートの使用
+
+`ecommerce.multicurrency.enrich=true` が設定されると、サーチャーは為替レートをクエリーテンソル `query(forexRates)` として公開し、ランキング式で使用できるようにします。ランキングプロファイルは、サーチャーと同じフォールバックロジックを実装する必要があります。すなわち、まず市場固有の価格を確認し、次に `DEFAULT` 市場価格にフォールバックし、購入者の通貨に換算します。
+
+```js expandable
+rank-profile price_ranking {
+    inputs {
+        query(forexRates) tensor<double>(from{}, to{})
+        query(buyer_currency) tensor<double>(to{})
+        query(buyer_market) tensor<double>(market{})
+    }
+
+    function from_selector() {
+        expression: tensorFromLabels(attribute(seller_currency), from)
+    }
+
+    function buyer_rate() {
+        expression: sum(query(forexRates) * from_selector() * query(buyer_currency), from, to)
+    }
+
+    function price_tensor() {
+        expression: tensorFromStructs(attribute(per_market_price), market, price, double)
+    }
+
+    function market_specific_price() {
+        expression: sum(price_tensor() * query(buyer_market), market)
+    }
+
+    function default_price() {
+        expression: price_tensor(){market:'DEFAULT'}
+    }
+
+    function effective_price_in_seller_currency() {
+        expression: if(market_specific_price() > 0, market_specific_price(), default_price())
+    }
+
+    function effective_price_in_buyer_currency() {
+        expression: effective_price_in_seller_currency() * buyer_rate()
+    }
+
+    first-phase {
+        expression: -effective_price_in_buyer_currency()
+    }
+}
+```
+
+#### フィルターパラメーターとランキング入力の違い
+
+一緒に使用されるクエリーパラメーターには 2 つの異なる種類があり、これらを混同してはなりません:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>種類</th>
+      <th>プレフィックス</th>
+      <th>フォーマット</th>
+      <th>目的</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>フィルターパラメーター</td>
+      <td><code>{`ecommerce.multicurrency.*`}</code></td>
+      <td>プレーンな文字列または数値</td>
+      <td>どの市場、通貨、価格帯でフィルタリングするかをサーチャーに伝えます。サーバー側で消費され、ランクプロファイルには決して到達しません。</td>
+    </tr>
+    <tr>
+      <td>ランキング入力</td>
+      <td><code>{`ranking.features.query(...)`}</code></td>
+      <td>ワンホットテンソル</td>
+      <td>スコアリング式を駆動するために、ランクプロファイルに直接渡されます。サーチャーはこれらを読み取ることも変更することもありません。</td>
+    </tr>
+  </tbody>
+</table>
+
+<Info>
+ **注:** 唯一の例外は `enrich=true` で、これによりサーチャーはメモリ内キャッシュから `query(forexRates)` を注入します。クライアントは現在のレートを知ることができないためです。`buyer_currency` と `buyer_market` はクライアントがすでに知っているので、サーチャー経由ではなくランキング入力として直接渡されます。
+</Info>
+
+#### ワンホットテンソルのフォーマット
+
+ランキング入力はワンホットエンコードされたテンソルを使用します。フォーマットは `{{dimension:value}:1}` で、`dimension` はランクプロファイルの `inputs` ブロックで定義された名前付きディメンション、`value` は選択するラベルです:
+
+- `query(buyer_currency)` はディメンション `to` を持ちます。`{{to:NOK}:1}` を渡します
+- `query(buyer_market)` はディメンション `market` を持ちます。`{{market:NO}:1}` を渡します
+
+上記の例のランクプロファイルでは、両方のテンソルが必須です。どちらかを省略すると、そのランキング式はすべてのドキュメントに対してゼロを生成します。
+
+#### フィルタリングとランキングを含む完全なクエリー
+
+次の例では、上で定義した `price_ranking` プロファイルを、価格フィルタリングと両方のランキング入力テンソルとともに使用します:
+
+```bash
+$ vespa query \
+    'yql=select * from product where true' \
+    'searchChain=multi-currency-filter' \
+    'ecommerce.multicurrency.market=NO' \
+    'ecommerce.multicurrency.currency=NOK' \
+    'ecommerce.multicurrency.price-min=1000' \
+    'ecommerce.multicurrency.price-max=1500' \
+    'ecommerce.multicurrency.enrich=true' \
+    'ranking.profile=price_ranking' \
+    'ranking.features.query(buyer_currency)={{to:NOK}:1}' \
+    'ranking.features.query(buyer_market)={{market:NO}:1}'
+```
+
+主要な関数:
+
+- `tensorFromStructs` - ランキング時に `per_market_price` 配列をテンソルに変換します
+- `market_specific_price()` - 要求された市場の価格が存在すれば抽出します
+- `default_price()` - フォールバックとして `DEFAULT` 市場価格を取得します
+- `effective_price_in_seller_currency()` - 市場固有の価格を選択するか、`DEFAULT` にフォールバックします
+- `effective_price_in_buyer_currency()` - 為替レートを使用して実効価格を換算します
+
+## 設定リファレンス
+
+このセクションでは、マルチ通貨コンポーネントで使用される[設定パラメーター](/ja/applications/configuring-components)について説明します。すべてのパラメーターは `ecommerce-schema-wiring` 設定(`ai.vespa.ecommerce.common.ecommerce-schema-wiring`)の一部です。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>パラメーター</th>
+      <th>説明</th>
+      <th>型</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`productFields.sellerCurrency`}</code></td>
+      <td>商品の販売者通貨のフィールド名。</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`seller_currency`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`productFields.perMarketPriceArrayStruct`}</code></td>
+      <td>市場ごとの価格を含む配列フィールド名。</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`per_market_price`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`productFields.marketStructField`}</code></td>
+      <td>市場コードの struct フィールド名。</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`market`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`productFields.priceStructField`}</code></td>
+      <td>価格値の struct フィールド名。</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`price`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`defaults.market`}</code></td>
+      <td>市場固有の価格が存在しない場合にフォールバックとして使用されるデフォルトの市場識別子。</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`DEFAULT`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`rankProfileInputs.forexRates`}</code></td>
+      <td>ランキングにおける為替レートのクエリーテンソル名。<code>{`enrich=true`}</code> の場合に、forex テンソルをクエリーに注入するために使用されます。</td>
+      <td><code>{`string`}</code></td>
+      <td><code>{`forexRates`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+## 要件
+
+- **単一のグローバル forex ドキュメント:** ID `id:forex:forex::forex` を持つドキュメントを 1 つ維持し、`global="true"` を指定してください。追加のドキュメントは `INVALID_FOREX_DOCUMENTS` ヘルス状態を引き起こし、クエリーは失敗します。 
+- **forex ペイロードの完全性:** すべてのフィード/更新には、フィルタリング対象のすべての購入者/販売者のペアに対する `rates` テンソル、同一通貨のレート(USD→USD など)、そして単調増加する `timestamp`(エポック秒)を含める必要があります。 
+- **商品スキーマのレイアウト:** 商品は `seller_currency` を公開し、すべての `per_market_price.price` の値をその販売者通貨でエンコードし、`DEFAULT` 市場エントリを含める必要があります。 
+- **コンテナーの配線:** `multi-currency-filter` サーチチェーンと `forex-cache` チェーンを、`ForexRateService` および `ForexRateRetriever` コンポーネントとともにコンテナー・クラスターにデプロイしてください。 
+- **クエリーパラメーター:** マルチ通貨フィルタリングは、クエリーが `market`、`currency`、`price-min`、`price-max` を提供する場合にのみ実行されます。パラメーターが欠落しているか不正な場合、サーチャーはフィルタリングをスキップします。 
+
+## 推奨プラクティス
+
+- **必要に応じて商品 ID/名前を構造化する:** 既存の商品フィールド(ID、名前、ファセット)を維持し、その横に必須の通貨フィールドを追加してください。 
+- **非対称レートをモデル化する:** A→B と B→A の両方の換算を明示的に保存し、為替レートが完全な逆数でない場合でも購入者→販売者のルックアップが正確に保たれるようにしてください。 
+- **更新頻度を計画する:** 市場のボラティリティに基づいて、forex データをフィードする頻度を選択してください。retriever は 10 秒ごとにポーリングするため、頻繁なフィードは素早く反映されます。 
+- **デフォルトチェーンの選択:** 該当するクエリーに `searchChain=multi-currency-filter` を設定するか、これをデフォルトチェーンにして、パラメーターが存在する場合にマルチ通貨フィルタリングが常に適用されるようにしてください。 
+
+## 関連情報
+
+- [保存された検索の通知](/ja/modules/e-commerce/saved-search)
+- [機能の組み合わせ利用](/ja/modules/e-commerce/using-features-together)
+- [E コマースチュートリアル](/ja/learn/tutorials/e-commerce)
+- [サーチャー開発](/ja/applications/searchers)
+- [テンソルガイド](/ja/ranking/tensor-user-guide)
+- [tensorFromStructs - struct 配列をテンソルに変換](/ja/reference/ranking/rank-features#tensorFromStructs(attribute,key,value,type))
+- [スキーマにおける struct フィールド](/ja/reference/schemas/schemas#struct-field)
+- [サーチチェーン](/ja/applications/searchers#search-chains)

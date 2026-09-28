@@ -1,0 +1,164 @@
+---
+title: "Significanceモデル"
+---
+
+*Significance*(重要度)は、ドキュメントのコレクションの中であるタームがどれだけ稀であるかを示す尺度です。"neurotransmitter" のような稀なタームは、"the" のような一般的なタームよりもランキング時に高く重み付けされます。significanceは多くの場合、逆文書頻度(IDF)として計算されます:
+
+
+$$
+I D F \left(\right. t , N \left.\right) = l o g \left(\right. \frac{N}{n_{t}} \left.\right)
+$$
+
+
+ここで:
+
+- $N$ はコレクション内のドキュメントの総数
+- $n_{t}$ はターム $t$ を含むドキュメントの数
+
+IDFの変種は [bm25](/ja/ranking/bm25) と [nativeRank](/ja/ranking/nativerank) で使用されています。
+
+*Significanceモデル* は、IDFの計算に必要なデータ、すなわち各タームの $n_{t}$ とドキュメント・コレクションの $N$ を提供します。significanceモデルには、*ローカルとグローバル* の区別があります。ローカル・モデルはノード固有のもので、グローバル・モデルはノード間で共有されます。
+
+## ローカルsignificanceモデル
+
+[bm25](/ja/ranking/bm25) または [nativeRank](/ja/ranking/nativerank) でインデックスされた `string` フィールドについて、Vespaは各コンテント・ノード上で、そのノードが保持するドキュメントからローカルsignificanceモデルを作成します。各クエリータームについて、文書頻度は、検索対象のすべてのフィールドにわたってフィールドごとの文書頻度を集約して計算されます。
+
+同じタームでも、ノードによってsignificance値が異なることがあります。大規模なコレクションでは、この差は通常小さく、ランキング品質には影響しません。
+
+ローカル・モデルの問題の1つは、次の場合にランキングが非決定的になることです:
+
+1. 新しいドキュメントが追加されると、影響を受けるコンテント・ノード上のローカル・モデルが更新されます。
+2. コンテント・クラスターがノード間で[ドキュメントを再分散](/ja/content/elasticity)するとき(スケーリングや障害復旧のためのノードの追加・削除など)、関係するノード上のモデルが変化します。
+3. [グループ分散](/ja/content/elasticity#grouped-distribution)を使用している場合、クエリーはどのグループで処理されるかによって異なる結果を返すことがあります。
+
+もう1つの問題は、[ストリーミング検索](/ja/performance/streaming-search)ではローカルsignificanceモデルを利用できないことです。転置インデックスが構築されないため、IDF値を抽出できないからです。すべてのsignificance値は、未知のタームのデフォルト値である1に設定されます。significance値がないことで、ランキング品質が低下する可能性があります。
+
+グローバルsignificanceモデルは、これらの問題に対処します。
+
+## グローバルsignificanceモデル
+
+*グローバルsignificanceモデル* では、significance値はノード間で共有され、新しいドキュメントが追加されても変化しません。グローバル・モデルを提供する方法は2つあります:
+
+1. [クエリーにsignificance値を含める](/ja/ranking/significance#significance-values-in-a-query)
+2. [Searcherでsignificance値を設定する](/ja/ranking/significance#significance-values-in-a-searcher)
+3. [services.xmlでモデルを指定する](/ja/ranking/significance#significance-models-in-services-xml)
+
+
+### クエリー内のsignificance値
+
+文書頻度とドキュメント数はYQLで指定できます。例:
+
+```js
+select * from example where content contains ({documentFrequency: {frequency: 13, count: 101}}"colors")
+```
+
+あるいは、significance値をYQLで直接指定し、計算されたIDF値の代わりに使用することもできます。例:
+
+```js
+select * from example where content contains ({significance:0.9}"neurotransmitter")
+```
+
+### Searcherでのsignificance値
+
+文書頻度とsignificance値は、[カスタムSearcher](../applications/searchers#writing-a-searcher)でも設定できます:
+
+```js
+private void setDocumentFrequency(WordItem item, long frequency, long numDocuments) {
+    var word = item.getWord();
+    word.setDocumentFrequency(new DocumentFrequency(frequency, numDocuments));
+}
+
+private void setSignificance(WordItem item, float significance) {
+    var word = item.getWord();
+    word.setSignificance(significance);
+}
+```
+
+### services.xmlでのsignificanceモデル
+
+[services.xmlの `significance` 要素](/ja/reference/applications/services/search#significance)で、1つ以上のモデルを指定します:
+
+```xml
+<container version="1.0">
+    <search>
+        <significance>
+            <model model-id="significance-en-wikipedia-v1"/>
+            <model url="https://some/uri/mymodel.multilingual.json" />
+            <model path="models/mymodel.no.json.zst" />
+        </significance>
+    </search>
+</container>
+```
+
+Vespa Cloudユーザーは、`model-id` で識別される[ビルド済みモデル](/ja/rag/model-hub)を利用できます。加えて、すべてのユーザーが、外部リソースへの `url` またはアプリケーション・パッケージ内のモデル・ファイルへの `path` を指定して、独自のモデルを指定できます。Vespaは、ドキュメントから[モデル・ファイル](#significance-model-file)を生成する[コマンドライン・ツール](/ja/reference/operations/self-managed/tools#vespa-significance)を提供しています。モデルを指定する順序がモデルの優先順位を決定します。詳細は[モデル解決](#model-resolution)を参照してください。
+
+[services.xml](/ja/reference/applications/services/search#significance) にモデルを追加することに加えて、スキーマの [`rank-profile` セクション](/ja/reference/schemas/schemas#significance)で `significance` 機能を有効にする必要があります。例:
+
+```js
+schema example {
+    document example {
+        field content type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+    }
+
+    rank-profile default {
+        significance {
+            use-model: true
+        }
+    }
+}
+```
+
+モデルは、クエリーからのsignificance値をすでに持っているものを除く、すべてのクエリータームに適用されます。
+
+services.xmlでのsignificanceモデルの指定は、Vespaのバージョン8.426.8以降で利用できます。
+
+#### Significanceモデル・ファイル
+
+significanceモデル・ファイルは、1つ以上の言語についてタームの文書頻度とドキュメント数を含むJSONファイルです。例:
+
+```json expandable highlight= {12,21}
+{
+  "version": 1,
+  "id": "wikipedia",
+  "description": "Some optional description",
+  "languages": {
+    "en": {
+      "description": "Some optional description for English model",
+      "document-count": 1000,
+      "document-frequencies": {
+        "and": 500,
+        "car": 100,
+        ...
+      }
+    },
+    "no": {
+      "description": "Some optional description for Norwegian model",
+      "document-count": 800,
+      "document-frequencies": {
+        "bil": 80,
+        "og": 400,
+        ...
+      }
+    }
+  }
+}
+```
+
+significanceモデル・ファイルは、アプリケーション・パッケージに含める場合やURL経由で提供する場合に、[zstandard](https://facebook.github.io/zstd/) で圧縮できます。
+
+Vespaは、Vespaのドキュメントからsignificanceモデル・ファイルを生成するための[CLIツール](/ja/reference/operations/self-managed/tools#vespa-significance)を提供しています。このツールは、クエリー処理と同じ[言語処理モジュール](/ja/linguistics/linguistics)を使用して、トークンとその文書頻度を抽出します。CLIはまた、コンテント・ノードからローカルsignificanceモデルを中間ファイル形式にエクスポートし、これらの中間ファイルを1つのファイルにマージすることもできます。そのファイルは、グローバルsignificanceモデル・ファイルに変換できます。
+
+#### モデル解決
+
+モデル解決は、クエリーの言語に基づいて、[services.xml](#significance-models-in-servicesxml) で指定されたモデルの中から1つのモデルを選択します。言語は、[明示的にタグ付け](/ja/reference/api/query#model.language)することも、[暗黙的に検出](/ja/linguistics/linguistics#query-language-detection)することもできます。
+
+解決ロジックは次のとおりです:
+
+- 言語が明示的にタグ付けされている場合
+	- タグ付けされた言語を持つ、最後に指定されたモデルを選択します。利用可能なものがなければ失敗します。
+	- 言語が "un"(不明)としてタグ付けされている場合は、まず "un" のモデルを選択し、なければ "en"(英語)にフォールバックします。利用可能なものがなければ失敗します。
+- 言語が暗黙的に検出された場合
+	- 検出された言語を持つ、最後に指定されたモデルを選択します。利用できない場合は、"un"、次に "en" の言語を試します。利用可能なものがなければ失敗します。

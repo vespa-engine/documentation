@@ -1,0 +1,198 @@
+---
+title: "ソート言語リファレンス"
+sidebarTitle: "ソート"
+---
+
+クエリー内のソート仕様は、1 つ以上のソート式から構成されます。各ソート式は、省略可能なソート順の後に、attribute 名または attribute に対する関数が続くものです。複数の式は 1 つの SPACE 文字で区切ります。
+
+複数のソート式を使用すると、多段ソートになります。この場合、最も優先される式が最初のものであり、後続の式は、直前の式で値が等しいグループ内でのソート方法を詳細に指定します。
+
+<Card>
+Sorting       ::= SortExpr ( ' ' SortExpr )\* <br/>
+SortExpr      ::= \[SortOrder\] ( SortObject | MissingExpr ) <br/>
+MissingExpr   ::= MISSING '(' SortObject ',' MissingPolicy ')' <br/>
+MissingPolicy ::= FIRST | <br/>
+                  LAST | <br/>
+                  AS ',' MissingValue <br/>
+SortObject    ::= SortAttribute | Function <br/>
+Function      ::= LOWERCASE '(' SortAttribute ')' | <br/>
+                  RAW '(' SortAttribute ')' | <br/>
+                  UCA '(' SortAttribute \[ ',' Locale \[ ',' Strength\] \] ')' <br/>
+MISSING       ::= 'missing' <br/>
+FIRST         ::= 'first' <br/>
+LAST          ::= 'last' <br/>
+AS            ::= 'as' <br/>
+LOWERCASE     ::= 'lowercase'<br/>
+UCA           ::= 'uca'<br/>
+RAW           ::= 'raw'<br/>
+Locale        ::= An identifier following [unicode locale identifiers,](https://www.unicode.org/reports/tr35/#Unicode_Language_and_Locale_Identifiers) fx 'en\_US'.<br/>
+Strength      :: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | 'QUATERNARY' | 'IDENTICAL'<br/>
+SortOrder     ::= '+' | '-' <br/>
+SortAttribute ::= ID | ID.key | ID.value            /\* A valid attribute name, with key/value appended for maps \*/ <br/>
+MissingValue  ::= QuotedString | Token <br/>
+Token         ::= TokenChar\* <br/>
+TokenChar     ::= any non Delimiter <br/>
+QuotedString  ::= '"' ( StringChar | '\\' QuotedChar )\* '"' <br/>
+StringChar    ::= any non QuotedChar <br/>
+Delimiter     ::= ' ' | ',' | '(' | ')' | QuotedChar <br/>
+QuotedChar    ::= '\\' | '"' <br/>
+</Card>
+
+距離によるソートについては [Geo 検索](/ja/querying/geo-search)を参照してください。YQL でのソートパラメーターの設定方法については、[YQL Vespa リファレンス](/ja/reference/querying/yql#order-by)を参照してください。
+
+## ソート順
+
+`+` は昇順のソート順を示し、`-` は降順を示します。昇順は、数値の attribute では最小値が先頭になる順序として定義されます。文字列は選択されたソート関数に従ってソートされます。降順は昇順の逆です。
+
+<Info>
+注: クエリー URL 内の `+` は %2B とエンコードする必要があります - 一貫性のために、`-` は %2D とエンコードできます。
+</Info>
+
+### デフォルトのソート順
+
+`+`/`-` を省略すると、デフォルトが使用されます。システム全体のデフォルトである `+`、または[スキーマ](/ja/reference/schemas/schemas#sorting)でのオーバーライドのいずれかです。デフォルトのソート順は `+` すなわち昇順ですが、`[rank]` または特別な組み込みの `[relevance]` は例外で、`-` すなわち降順です。
+
+## ソート attribute
+
+ソート式のソート attribute は、インデックス内の attribute の名前です。attribute 名は多くの場合フィールド名と同じです。スキーマでは、フィールドのインデキシング言語フラグメントに [attribute](/ja/reference/schemas/schemas#attribute) 文があることで attribute であることが示されます。
+
+attribute でソートする場合は、組み込みの *unranked* rank-profile を使用することを推奨します。これにより、多数のヒットに対してランキングフレームワークを実行してから最終的にそのスコアを無視して指定されたソート仕様でソートするよりも、検索カーネルがクエリーを大幅に高速に実行できます。
+
+### 多値ソート attribute
+
+多値 attribute([map](/ja/reference/schemas/schemas#map)、[array](/ja/reference/schemas/schemas#array)、[weightedset](/ja/reference/schemas/schemas#weightedset))でソートする場合、そのドキュメントの値のうちの 1 つがソートに使用されます。昇順のソートでは最小値が、降順のソートでは最大値が使用されます。attribute に値を持たないドキュメントの扱いについては、[missing ポリシー](#missing)のセクションを参照してください。
+
+## ソート関数
+
+[function](/ja/reference/querying/yql#function) を参照してください。
+
+## 特別なソート attribute
+
+インデックス固有の attribute に加えて、3 つの特別な attribute がソートに使用できます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>---</td>
+      <td>---</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;[relevance]&#42;&#42;</td>
+      <td>このクエリーに対するドキュメントの関連度スコアです。これは、ソート仕様を指定しない場合のデフォルトの並び順と同じです([rank] は同じものを指すレガシーな別名です)。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;[source]&#42;&#42;</td>
+      <td>ドキュメントのソース名です。これは複数のソースにクエリーする場合にのみ意味を持ちます。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;[docid]&#42;&#42;</td>
+      <td>検索バックエンドにおけるドキュメントの識別子です。通常、これによりドキュメントはインデキシング順に得られます。&#42;&#42;この id はバックエンドノード内でのみ一意であることに注意してください&#42;&#42;。同じドキュメントが別のノードでは異なる id を持つことがあります。同様に、別のドキュメントが別のノードで同じ id を持つこともあります。これは、ほぼ安定したソート順を安価に得るための手段にすぎません。</td>
+    </tr>
+  </tbody>
+</table>
+
+これらの特別な attribute は、多段ソートにおける二次ソート式として最も有用です。これにより、一次の式で値が等しいグループを、関連度順またはインデキシング順でソートできます。この追加のソート式がない場合、等しい値の各グループ内の順序は決定的ではありません。
+
+<Danger>
+**重要:** [YQL の order by](/ja/reference/querying/yql#order-by) では、特別なソート attribute は引用符で囲む必要があります。
+</Danger>
+
+## Missing ポリシー
+
+ドキュメントが attribute に値を持たないことがあります。その場合、次のいずれかの missing ポリシーが適用されます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>ポリシー</th>
+      <th>例</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>default</td>
+      <td><code>{`+attr`}</code></td>
+      <td>ソート順が昇順で attribute が単一値の場合、そのドキュメントは attribute に値を持つどのドキュメントよりも前にソートされます。attribute が多値の場合、またはソート順が降順の場合、そのドキュメントは attribute に値を持つどのドキュメントよりも後にソートされます。</td>
+    </tr>
+    <tr>
+      <td>first</td>
+      <td><code>{`+missing(attr,first)`}</code></td>
+      <td>そのドキュメントは、attribute に値を持つどのドキュメントよりも前にソートされます。</td>
+    </tr>
+    <tr>
+      <td>last</td>
+      <td><code>{`+missing(attr,last)`}</code></td>
+      <td>そのドキュメントは、attribute に値を持つどのドキュメントよりも後にソートされます。</td>
+    </tr>
+    <tr>
+      <td>as</td>
+      <td><code>{`+missing(attr,as,42)`}</code></td>
+      <td>そのドキュメントは、<a href="#sortspec" aria-label="ソート仕様">ソート仕様</a>で指定された missing 値を持っているかのようにソートされます。missing 値を attribute のデータ型に変換できない場合はエラーが報告されます(インデックス検索ではクエリーが中止され、ストリーミング検索ではソート仕様の該当部分が無視されます)。</td>
+    </tr>
+  </tbody>
+</table>
+
+missing ポリシーは他の関数と組み合わせられることに注意してください。例: `+missing(lowercase(attr),as,"nothing here")`。
+
+## 制限事項
+
+### Attribute のみ
+
+ソートできるのは [attribute](/ja/content/attributes) のみです。attribute が関連付けられていない[インデックスフィールドやサマリーフィールド](/ja/basics/schemas#document-fields)でソートしようとしても機能しません。
+
+また、ソート時には [match-phase](/ja/reference/schemas/schemas#match-phase) が有効になることにも注意してください。
+
+### 総ヒット数が不正確になる最適化
+
+[fast-search](/ja/content/attributes#fast-search) が設定された単一値の数値 attribute でソートする場合、Vespa はデフォルトで、ソート結果の配信を大幅に高速化する一方で総ヒット数が不正確になる最適化を有効にします。この最適化を無効にするには、クエリーパラメーター `sorting.degrading` を false に設定します(リクエストまたは[クエリープロファイル](/ja/querying/query-profiles)で)。詳細は[リファレンス](/ja/reference/api/query#sorting.degrading)を参照してください。
+
+## 例
+
+surname の昇順でソート:
+
+```bash
++surname
+```
+
+surname を小文字化した上で昇順でソート:
+
+```bash
++lowercase(surname)
+```
+
+英語(米国)ロケールの照合順序の昇順で surname をソート。
+
+```bash
++uca(surname,en_US)
+```
+
+ノルウェー語「ブークモール」ロケールの照合順序の昇順で surname をソート:
+
+```bash
++uca(surname,nb_NO)
+```
+
+ノルウェー語「ブークモール」ロケールの照合順序の昇順で surname をソートしますが、文字のより多くの属性を使って区別します。この場合、大文字と小文字が区別され、'aa' と 'å' は異なるものになります:
+
+```bash
++uca(surname,nb_NO,TERTIARY)
+```
+
+surname でソートし、名前が等しい場合は若い順に並べる:
+
+```bash
++surname -yearofbirth
+```
+
+yearofbirth のグループを昇順でソートし、値が等しい各グループ内では関連度の高い順にソート:
+
+```bash
++yearofbirth -[relevance]
+```

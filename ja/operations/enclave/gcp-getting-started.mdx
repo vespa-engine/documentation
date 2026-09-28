@@ -1,0 +1,84 @@
+---
+title: "GCP での Vespa Cloud Enclave をはじめる"
+sidebarTitle: "GCP をはじめる"
+---
+
+Vespa Cloud Enclave のセットアップには、以下が必要です:
+
+<Steps>
+<Step>
+[Vespa Cloud](https://console.vespa-cloud.com) での登録、または既存のテナントの利用。
+</Step>
+<Step>
+プロジェクトに必要な GCP リソースをプロビジョニングするための [Terraform](https://www.terraform.io/) 設定の実行。
+</Step>
+<Step>
+Vespa Cloud への GCP プロジェクトの登録。
+</Step>
+<Step>
+Vespa アプリケーションのデプロイ。
+</Step>
+</Steps>
+
+### 1. Vespa Cloud テナントのセットアップ
+
+[Vespa Cloud](https://console.vespa-cloud.com) で登録するか、既存のテナントを使用します。テナントは[有料プラン](https://vespa.ai/pricing/)である必要があることに注意してください。
+
+### 2. GCP プロジェクトの設定
+
+<Note>
+**Note:** 
+
+Vespa Cloud Enclave には*専用の*プロジェクトを使用することを推奨します。このプロジェクト内のリソースは Vespa Cloud によって完全に管理されます。
+</Note>
+
+1 つのプロジェクトですべての Vespa アプリケーションをホストできます。複数のテナントやプロジェクトは必要ありません。
+
+Vespa Cloud Enclave に使用する予定のプロジェクトは、Vespa アプリケーションをデプロイできるように準備しておく必要があります。Vespa チームが公開している [modules](https://registry.terraform.io/modules/vespa-cloud/enclave/google/latest) を使い、[Terraform](https://www.terraform.io/) で必要なリソースをセットアップしてください。
+
+[マルチリージョンの例](https://github.com/vespa-cloud/terraform-google-enclave/blob/main/examples/multi-region/main.tf)を、お客様のデプロイメントに合わせて変更してください。
+
+Terraform をご存じない方へ: Terraform は、AWS や GCP などのさまざまなクラウドプロバイダーにおけるリソースとその設定を管理するためのツールです。Terraform は [GCP](https://developer.hashicorp.com/terraform/tutorials/gcp-get-started) のチュートリアルを公開しています。また、enclave のユーザーには、[CI/CD](https://developer.hashicorp.com/terraform/tutorials/automation/automate-terraform) に関する Terraform の推奨事項を読み、それに従うことを強くお勧めします。
+
+当社が提供する Terraform モジュールは、Vespa Cloud がお客様のアプリケーションの運用を自動化するために新たに必要となるリソースや追加のパーミッションを加えるべく、定期的に更新されます。enclave のアプリケーションで新機能を使用するには、最新リリースで terraform テンプレートを再適用する必要があります。新しいリリースが利用可能になると、[通知システム](/ja/operations/notifications)がお知らせします。
+
+### 3. オンボーディング
+
+GCP プロジェクトの設定が完了したら、[support@vespa.ai](mailto:support@vespa.ai) に連絡し、Vespa Cloud Enclave を利用するためにオンボーディングすべきテナントを伝えてください。テナントに関連付ける [GCP Project ID](https://cloud.google.com/resource-manager/docs/creating-managing-projects#identifying_projects) も含めてください。
+
+<Note>
+**Note:**
+
+次のステップでアプリケーションをデプロイする前に、オンボーディングが完了したという Vespa チームからの確認をお待ちください。
+</Note>
+
+### 4. Vespa アプリケーションのデプロイ
+
+デフォルトでは、すべてのアプリケーションは Vespa Cloud のアカウント内のリソースにデプロイされます。お客様の enclave アカウントにデプロイするには、[deployment.xml](/ja/reference/applications/deployment) を更新して、オンボーディングした GCP プロジェクトを参照するようにします:
+
+```xml
+<deployment version="1.0" cloud-account="gcp:a-project-id">
+    <dev />
+</deployment>
+```
+
+参考になるリソースとして、[はじめに](/ja/basics/deploy-an-application)と [Vespa Cloud への移行](/ja/learn/migrating-to-cloud)があります。*deployment.xml* は *services.xml* と同じ場所に置いてください。
+
+## 次のステップ
+
+[dev](/ja/operations/environments#dev) 環境へのデプロイが成功したら、設定を反復的に改善して、Vespa 上でアプリケーションを実装していきます。*dev* 環境は迅速なデプロイサイクルを備えており、この作業に最適です。
+
+プロダクションでのサービス提供には、[prod](/ja/operations/environments#prod) 環境にデプロイします。[プロダクション・デプロイメント](/ja/reference/applications/deployment)の手順に従ってください。
+
+## Enclave の廃止
+
+Vespa Cloud Enclave システムを廃止するには、上記の手順を逆の順序で行います:
+
+1. [アプリケーションのアンデプロイ](/ja/operations/deleting-applications)
+2. Terraform の変更のアンデプロイ
+
+Vespa アプリケーションを先にアンデプロイすることが重要です。Terraform を実行した後は、Vespa Cloud は割り当てられたリソースを管理できないため、これらはご自身でクリーンアップする必要があります。
+
+## トラブルシューティング
+
+**ドメインによる ID の制限**: GCP 組織で [ID のドメイン制限](https://cloud.google.com/resource-manager/docs/organization-policy/restricting-domains)を使用している場合、Vespa.ai の GCP ID をプロジェクトに追加できるように許可する必要があります。Vespa Cloud について、ID を許可する組織 ID は *1056130768533*、Google Customer ID は *C00u32w3e* です。

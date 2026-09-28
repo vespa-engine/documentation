@@ -1,0 +1,187 @@
+---
+title: "Parent/Child"
+sidebarTitle: "Parent-childの関係"
+---
+
+[ドキュメント・リファレンス](/ja/reference/schemas/schemas#reference)を使うと、ドキュメントにparent/childの関係を持たせられます。これを使って、parentドキュメントからフィールドを[インポート](/ja/reference/schemas/schemas#import-field)することでデータを結合できます。特徴:
+
+- ドキュメント操作を簡素化 - 1回の書き込みで1つの値を更新
+- 非正規化が不要 - データ更新と、すべてのchildへのアトミックな更新を簡素化
+- parentドキュメントのプロパティに基づいてchildドキュメントを検索
+- parentドキュメントのみを検索
+- [ドキュメント・セレクション](/ja/reference/writing/document-selector-language#using-imported-fields-in-selections)式を使った[visiting](/ja/writing/visiting)や[ガベージ・コレクション](/ja/schemas/documents#document-expiry)の一部として、インポートされたフィールドを使用
+
+parent/childの関係は、[ストリーミング検索](/ja/performance/streaming-search#differences-in-streaming-search)ではサポートされていません。
+
+parentドキュメントの代替手段として、structフィールドの配列またはマップの使用があります - このガイドでは両方を扱います。
+
+一般的なユースケースは、コマース(たとえば複数の販売者を持つ商品)や広告(キャンペーンを持つ広告主とその配下の広告、リアルタイム更新が必要な予算を持つ)のような、構造化データを扱うアプリケーションです。
+
+ドキュメント、インポートされたフィールド、配列フィールドの概要:
+
+<Frame>![Parent/childとグローバル・ドキュメント](/assets/img/parent-child.svg)</Frame>
+
+## Parentドキュメント
+
+parent-childの関係は、[グローバル・ドキュメント](/ja/reference/applications/services/content#document)への[リファレンス](/ja/reference/schemas/schemas#reference)を使ってモデル化します。これはリレーショナル・データベースの外部キーに似ています。parentはさらにparentを持てます。1つのドキュメントは複数のparentへのリファレンスを持つことができ、それらのparentは同じ型でも異なる型でも構いません。
+
+*reference* を使うことで、[アトリビュート](/ja/content/attributes)・フィールドをparent型からchildの[スキーマ](/ja/basics/schemas)に[インポート](/ja/reference/schemas/schemas#import-field)し、マッチング、ランキング、グルーピング、ソートに使用できます。リファレンスは、parentの[ドキュメントID](/ja/schemas/documents#document-ids)を値として持つ特別なアトリビュートです。したがって、リファレンスは弱い結合です:
+
+- カスケード削除はありません
+- 参照先のドキュメントは存在しなくても構いません - この場合、インポートされたフィールドは値を持ちません
+
+parent-childの関係を使用する場合、parentのフィールドがchildにインポートされるため、データを非正規化する必要はありません。フィールドの値が多数のドキュメント間で共有されている場合は、これを利用してparentのフィールドを更新することで更新回数を抑えられます。これにより、コンテント・ノード上でドキュメントを保存・処理するのに必要なリソース(メモリー / ディスク)も抑えられます。
+
+クラスターに変更があると、グローバル・ドキュメントは通常のドキュメントより先に新しいノードへマージされます。一貫性のため、コンテント・ノードは、すべてのグローバル・ドキュメントが同期されるまでクエリーを処理しません - [コンテント・クラスターのエラスティシティ](/ja/content/elasticity)を参照してください。
+
+<Warning>
+**重要:**
+
+循環参照または自己[参照](/ja/reference/schemas/schemas#reference)は許可されていません。
+</Warning>
+
+パフォーマンスに関する注意:
+
+- parentドキュメントはグローバルであるため、書き込みはすべてのコンテント・ノード上で実行されます - [例](/ja/performance/sizing-feeding#parent-child)を参照
+- ノードのキャパシティがparentドキュメントの数を制限します - 通常、parentドキュメントの数はchildドキュメントより一桁少なくあるべきです
+- メモリー使用量もそれに応じて増加します。グローバル・ドキュメントはそれ以外の点では通常のドキュメントと同じですが、各コンテント・ノードは、すべてのグローバル・ドキュメントに加えて、通常のドキュメントの分担分を保持できるサイズにする必要があります
+- リファレンス・フィールドはメモリーの間接参照を追加しますが、クエリー・パフォーマンスへの影響はそれほど大きくありません
+- [検索パフォーマンスに関する注意](/ja/performance/feature-tuning#parent-child-and-search-performance)
+- リファレンス・フィールドへの[部分更新](/ja/writing/partial-updates)には、ドキュメント・ストアへのread-modify-writeが必要となり、スループットが制限されます。
+
+## 多値フィールド
+
+ドキュメントは、structの配列またはマップである[フィールド](/ja/basics/schemas#document-fields)を持てます。structとドキュメントは似ており、フィールド名と値のペアの集合です。したがって、各ドキュメントがそのドキュメントに属する一連のプロパティを持つ場合、parent/childを使う代わりに、この方法で1対多のマッピングを実装できます。
+
+詳細については、[多値フィールド](/ja/querying/searching-multivalue-fields)を参照してください。
+
+## Parentか多値か?
+
+経験則としては、*検索対象となる* アイテムをドキュメントとしてモデル化します - たとえば販売中の商品です。ベンダーのような共有プロパティは、parentドキュメントを使ってモデル化し、ベンダー名フィールドをインポートできます - ベンダーが多くの商品を持ち、ベンダーのリストが限られていることが前提です。靴のサイズや画面解像度など、ドキュメントが持つかもしれないプロパティにはstructの配列またはマップを使用します - プロパティ名用のstructフィールドとプロパティ値用のstructフィールドを持たせることで、可能なプロパティの集合が無制限である商品に対して柔軟な構造を実現できます。
+
+## Parent/childの例
+
+`services.xml` の内容:
+
+```xml
+<content id="mycluster" version="1.0">
+    <documents>
+        <document type="advertiser"  mode="index" global="true" />
+        <document type="campaign"    mode="index" global="true" />
+        <document type="salesperson" mode="index" global="true" />
+        <document type="ad"          mode="index" />
+    </documents>
+</content>
+```
+
+スキーマとデータ:
+
+```js
+schema advertiser {
+    document advertiser {
+        field name type string {
+            indexing : attribute
+        }
+    }
+}
+```
+
+```json
+{
+    "put": "id:test:advertiser::cool",
+    "fields": {
+        "name": "cool"
+    }
+}
+```
+
+```js
+schema campaign {
+    document campaign {
+        field advertiser_ref type reference<advertiser> {
+            indexing: attribute
+        }
+        field budget type int {
+            indexing : attribute
+        }
+    }
+    import field advertiser_ref.name as advertiser_name {}
+}
+```
+
+```json
+[{
+    "put": "id:test:campaign::thebest",
+    "fields": {
+        "advertiser_ref": "id:test:advertiser::cool",
+        "budget": 20
+    }
+},
+{
+    "put": "id:test:campaign::nextbest",
+    "fields": {
+        "advertiser_ref": "id:test:advertiser::cool",
+        "budget": 10
+    }
+}]
+```
+
+```js
+schema salesperson {
+    document salesperson {
+        field name type string {
+            indexing: attribute
+        }
+    }
+}
+```
+
+```json
+{
+    "put": "id:test:salesperson::johndoe",
+    "fields": {
+        "name": "John Doe"
+    }
+}
+```
+
+```js
+schema ad {
+    document ad {
+        field campaign_ref type reference<campaign> {
+            indexing: attribute
+        }
+        field other_campaign_ref type reference<campaign> {
+            indexing: attribute
+        }
+        field salesperson_ref type reference<salesperson> {
+            indexing: attribute
+        }
+    }
+
+    import field campaign_ref.budget as budget {}
+    import field salesperson_ref.name as salesperson_name {}
+    import field campaign_ref.advertiser_name as advertiser_name {}
+
+    document-summary my_summary {
+        summary budget {}
+        summary salesperson_name {}
+        summary advertiser_name {}
+    }
+}
+```
+
+```json
+{
+    "put": "id:test:ad::1",
+    "fields": {
+        "campaign_ref": "id:test:campaign::thebest",
+        "other_campaign_ref": "id:test:campaign::nextbest",
+        "salesperson_ref": "id:test:salesperson::johndoe"
+    }
+}
+```
+
+ドキュメント・タイプ *ad* は、*campaign* への2つのリファレンス(*campaign_ref* と *other_campaign_ref* 経由)と、*salesperson* への1つのリファレンス(*salesperson_ref* 経由)を持ちます。*campaign* の *budget* フィールドは(*campaign_ref* 経由で)*ad* スキーマにインポートされ、*budget* という名前が付けられています。同様に、*salesperson* の *name* は *salesperson_name* としてインポートされています。
+
+ドキュメント・タイプ *campaign* は *advertiser* へのリファレンスを持ち、フィールド *name* を *advertiser_name* としてインポートしています。これは、祖父母にあたる *advertiser* から *campaign_ref* 経由で *ad* にもインポートされています。インポートされたフィールドをサマリーで使用するには、これらのフィールドを含むドキュメント・サマリー *my_summary* を定義します。

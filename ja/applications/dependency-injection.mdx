@@ -1,0 +1,140 @@
+---
+title: "依存性注入"
+description: "コンテナー（JDisc コンテナーとも呼ばれます）は、コンポーネントがアプリケーション内の構成や他のコンポーネントへの任意の依存関係を宣言できる依存性注入フレームワークを実装しています。このドキュメントでは、別のコンポーネントに依存するコンテナー・コンポーネントの書き方を説明します。注入可能なコンポーネントの一覧については[リファレンス](/ja/reference/applications/components#injectable-components)を参照してください。"
+---
+
+コンテナーは Guice モジュールではなく自動注入に依存しています。コンテナー・クラスターで宣言されたすべてのコンポーネントは注入の対象として利用可能であり、依存する側のコンポーネントはコンストラクター・パラメーターとして依存関係を宣言するだけで済みます。一般に、依存性注入には少なくとも 3 つの要素が関わります。
+
+- 依存するコンシューマー
+- コンポーネントの依存関係の宣言
+- 要求に応じて、特定の依存関係を実装するクラスのインスタンスを生成するインジェクター
+
+注記:
+
+- 依存するオブジェクトは、その処理を行うためにどのソフトウェア・コンポーネントに依存するかを記述します。インジェクターは、依存するオブジェクトの要件を満たす具象クラスを決定し、依存するオブジェクトに提供します
+- コンテナーはインジェクターをカプセル化しており、コンシューマーとそのすべての依存関係はコンポーネントと見なされます。
+- コンテナーはコンストラクター注入のみをサポートします（つまり、すべての依存関係はコンポーネントのコンストラクターで宣言する必要があります）。
+- 循環依存はサポートされていません。
+
+実践的な例については、[multiple-bundles サンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/examples/multiple-bundles)を参照してください。
+
+## 別のコンポーネントへの依存
+
+別のコンポーネントに依存するコンポーネントは*コンシューマー*と見なされます。コンポーネントの依存関係は、`@Inject` アノテーションが付いたコンストラクターが引数として宣言しているものです。例えば、次のコンポーネント:
+
+```java 
+package com.yahoo.example;
+import com.yahoo.component.annotation.Inject;
+public class MyComponent {
+    private final MyDependency dependency;
+    @Inject
+    public MyComponent(MyDependency dependency) {
+        this.dependency = dependency;
+    }
+}
+```
+
+は、クラス `com.yahoo.example.MyDependency` に依存しています。`MyComponent` をデプロイするには、`services.xml` に `MyDependency` を登録します:
+
+```xml
+<container version="1.0">
+    <component id="com.yahoo.example.MyComponent" />
+    <component id="com.yahoo.example.MyDependency" />
+</container>
+```
+
+デプロイ時に、コンテナーはまず `MyDependency` をインスタンス化し、そのインスタンスを `MyComponent` のコンストラクターに渡します。複数のコンシューマーが同じ依存関係を受け取ることができます。コンポーネントに[構成を注入する](/ja/applications/configuring-components)ことも可能です。
+
+<Note>
+**注記:**
+
+コンポーネントが再構築されるのは、その依存関係、構成、またはクラスのいずれかが変更されたときだけです。これらはすべて、アプリケーション・パッケージを再デプロイしたときにのみ発生します。再構築は推移的です。コンポーネント A がコンポーネント B に依存し、コンポーネント B がコンポーネント C に依存している場合、コンポーネント B の再構成は A の再構成を引き起こしますが、C には影響しません。C の再構成は A と B の両方の再構築を引き起こします。
+</Note>
+
+### コンポーネントの継承
+
+一方が他方を継承している 2 つのコンポーネントを注入する場合、依存性注入のコードは、親クラスの引数としてどちらを使用すべきか判断できません。これを解決するには、`ComponentRegistry`（後述）を注入し、`getComponent(XXX.class.getName())` のようにしてそのエントリーを検索します。
+
+### バンドルの指定
+
+上記の例は、バンドル名がクラス名から推測できることを前提としています。これは常に当てはまるわけではなく、次のようなクラスロードの問題が発生することがあります:
+
+```txt
+Caused by: java.lang.IllegalArgumentException: Could not create a component with id
+'com.yahoo.example.My'.
+Tried to load class directly, since no bundle was found for spec:
+com.yahoo.example.Dependency
+```
+
+これを解決するには、コンポーネントに jar ファイル（つまりバンドル）を指定します:
+
+```txt
+<container version="1.0">
+    <component id="com.yahoo.example.MyDependency" bundle="the name in <artifactId> in your pom.xml" />
+</container>
+```
+
+## 特定の型のすべてのコンポーネントへの依存
+
+コンポーネントが複数の戦略から選択を行い、各戦略が個別のコンポーネントとして実装されているユースケースを考えてみましょう。コンシューマーを実装する時点では戦略の数と型が不明であるため、それらすべてを列挙するコンストラクターを作ることは不可能です。ここで `ComponentRegistry` の出番です。例えば、次のコンポーネント:
+
+```java 
+package com.yahoo.example;
+public class MyComponent {
+    private final ComponentRegistry<Strategy> strategies;
+    @Inject
+    public MyComponent(ComponentRegistry<Strategy> strategies) {
+        this.strategies = strategies;
+    }
+}
+```
+
+は、`services.xml` に登録されているコンポーネントのうち、クラス `Strategy` のインスタンス（サブクラスを含む）であるすべてのコンポーネントの集合への依存を宣言しています。`ComponentRegistry` クラスは、[コンポーネント ID](/ja/reference/applications/services/container#component) に基づいてコンポーネントを取得するアクセサーを提供します。
+
+## 特殊なコンポーネント
+
+コンポーネントをそのコンシューマーに直接注入できないケースがあります。例:
+
+- コンポーネントをコンストラクターではなくファクトリーメソッド経由でインスタンス化する必要がある
+- 各コンシューマーが依存クラスの一意のインスタンスを持つ必要がある
+- コンポーネントが、スコープ外になったときにクリーンアップが必要なネイティブリソースを使用している
+
+こうした状況のために、JDisc は `Provider` インターフェースを通じた注入と、オプションのデコンストラクション（破棄処理）をサポートしています:
+
+```java
+public interface Provider<T> {
+T get();
+void deconstruct();
+}
+```
+
+`get()` は、JDisc が特定のコンポーネント型をインスタンス化する必要があるたびに呼び出されます。`deconstruct()` は、新しいアプリケーションでシステムを再構成した後、依存関係の変更により現在のプロバイダー・インスタンスが削除または置き換えられる場合にのみ呼び出されます。
+
+先ほどの例に続いて、コンシューマーごとに新しいインスタンスを返す `MyDependency` クラス用のプロバイダーを宣言します:
+
+```java
+package com.yahoo.example;
+import com.yahoo.container.di.componentgraph.Provider;
+public class MyDependencyProvider implements Provider<MyDependency> {
+    @Override
+    public MyDependency get() {
+        return new MyDependency();
+    }
+    @Override
+    public void deconstruct() { }
+}
+```
+
+このプロバイダーを使用すると、`services.xml` には `MyComponent` のインスタンスが 2 つあり、それぞれが一意の `MyDependency` インスタンスを受け取ります:
+
+```xml
+<container version="1.0">
+    <component id="com.yahoo.example.MyDependencyProvider" />
+    <component id="my-component-1" class="com.yahoo.example.MyComponent" />
+    <component id="my-component-2" class="com.yahoo.example.MyComponent" />
+</container>
+```
+
+デプロイ時に、コンテナーはまず `MyDependencyProvider` をインスタンス化し、次に `MyComponent` のインスタンス化ごとに `MyDependencyProvider.get()` を呼び出します。
+
+プロバイダーは、他のコンポーネントと同様に、コンストラクターで依存関係を宣言できます。

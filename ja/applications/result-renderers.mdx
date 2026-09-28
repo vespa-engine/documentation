@@ -1,0 +1,273 @@
+---
+title: "リザルトレンダラー"
+description: "Vespa はクエリー結果に対してデフォルトの JSON フォーマットを提供します。*レンダラー* を設定すると、バイナリーフォーマットやテキストフォーマットのようなカスタムフォーマットを実装できます。レンダラーはビジネスロジックの実装に使用すべきではありません - それは [Searcher](/ja/applications/searchers)、[Handler](/ja/applications/request-handlers)、または [Processor](/ja/applications/processing) に実装すべきです。このガイドは[開発者ガイド](/ja/applications/developer-guide)に精通していることを前提としています。"
+---
+
+レンダラーは、以下のいずれかをサブクラス化して実装します:
+
+- [com.yahoo.search.rendering.Renderer](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/rendering/Renderer)
+- [com.yahoo.search.rendering.SectionedRenderer](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/rendering/SectionedRenderer)
+- [com.yahoo.processing.rendering.AsynchronousSectionedRenderer&lt;Result&gt;](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/processing/rendering/AsynchronousSectionedRenderer)
+
+SectionedRenderer は、レンダリングする各パートを個別のステップで提供する点で Renderer と異なります。そのため、通常の Renderer よりも SectionedRenderer を実装する方が簡単です。AsynchronousSectionedRenderer は SectionedRenderer と似た API を持ちますが、非同期に取得されるヒットコンテンツをサポートしているため、低速なクライアントやバックエンドのサポートを優先する場合にはいくつかの利点があります。AsynchronousSectionedRenderer は Writer の代わりに OutputStream を公開しているため、バックエンドのデータがコンテナーの出力と同じ方法でエンコードされている場合(多くの場合 UTF-8)、パフォーマンスの向上が期待できます。
+
+すべてのレンダラーは[コンポーネント](/ja/applications/components)です。他のすべてのコンテナー・コンポーネントと同様にビルドおよびデプロイされ、[カスタム設定](/ja/applications/configuring-components)をサポートします。
+
+レンダラーはスレッドセーフである必要は *ありません* - レンダリング中の状態をメンバー変数に安全に使用・保存できます。コンテナーは、検索結果をレンダリングする直前にレンダラーをクローンすることでこれをサポートします。クローンを正しくサポートするために、レンダラーは以下の契約に従う必要があります:
+
+1. 構築時には final メンバーのみを初期化し、それらは不変データのみを参照しなければなりません。
+2. レンダリング中に変更される状態は init メソッドで初期化しなければなりません。
+
+レンダラーを有効にするには、[services.xml](/ja/reference/applications/services/container) に以下を追加します:
+
+```xml highlight={6-8}
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0">
+    …
+    <container version="1.0">
+        <search>
+            <renderer id="MyRenderer"
+                      class="com.yahoo.mysearcher.MyRenderer"
+                      bundle="the name in <artifactId> in pom.xml" />
+        </search>
+        …
+    </container>
+    …
+</services>
+```
+
+レンダラーを使用するには、クエリーに [&presentation.format=\[id\]](/ja/reference/api/query#presentation.format) を追加します - この場合は `&presentation.format=MyRenderer` です。
+
+## Renderer
+
+レンダラーの最も単純な形式は `Renderer` を拡張することです。`render` メソッドがすべての作業を行います - 派生クラスは、関心のあるすべてのエンティティを自ら抽出してレンダリングすることが期待されます。簡単な例:
+
+```java
+public class SimpleRenderer extends Renderer {
+    @Override
+    public void render(Writer writer, Result result) throws IOException {
+        writer.write("The result contains " + result.getHitCount() + " hits.");
+    }
+
+    @Override
+    public String getEncoding() {
+        return "utf-8";
+    }
+
+    @Override
+    public String getMimeType() {
+        return "text/plain";
+    }
+}
+```
+
+より複雑な例:
+
+```java expandable
+/**
+ * Render result sets as plain text. First line is whether an error occurred,
+ * second rendering initialization time stamp, then each line is the ID of each
+ * document returned, and the last line is time stamp for when the renderer was finished.
+ */
+public class DemoRenderer extends Renderer {
+    private String heading;
+
+    /**
+     * No global, shared state to set.
+     */
+    public DemoRenderer() {
+    }
+
+    @Override
+    protected void render(Writer writer, Result result) throws IOException {
+        if (result.hits().getErrorHit() == null) {
+            writer.write("OK\n");
+        } else {
+            writer.write("Oops!\n");
+        }
+        writer.write(heading + "\n");
+        renderHits(writer, result.hits());
+        writer.write("Rendering finished work: " + System.currentTimeMillis() + "\n");
+    }
+
+    private void renderHits(Writer writer, HitGroup hits) throws IOException {
+        for (Iterator<Hit> i = hits.deepIterator(); i.hasNext();) {
+            Hit h = i.next();
+            if (h.types().contains("summary")) {
+                String id = h.getDisplayId();
+                if (id != null) {
+                    writer.write(id + "\n");
+                }
+            }
+        }
+    }
+
+    @Override
+    public String getEncoding() {
+        return "utf-8";
+    }
+
+    @Override
+    public String getMimeType() {
+        return "text/plain";
+    }
+
+    /**
+     * Initialize mutable, per-result set state here.
+     */
+    @Override
+    public void init() {
+        long time = System.currentTimeMillis();
+        heading = "Renderer initialized: " + time;
+    }
+
+}
+```
+
+## SectionedRenderer
+
+SectionedRenderer を作成するには、これをサブクラス化して、すべての抽象メソッドを実装します。通常のヒットやクエリーコンテキストなどの非複合エンティティごとに、同じ名前の関連メソッドがあります:
+
+```java
+public class DemoRenderer extends SectionedRenderer<Writer> {
+
+    @Override
+    public void hit(Writer writer, Hit hit) throws IOException {
+        writer.write("Hit: " + hit.getField("documentid") + "\n");
+    }
+}
+```
+
+ヒットグループや結果自体などの複合エンティティごとに、`begin<name>` と `end<name>` という名前のメソッドのペアがあります:
+
+```java
+public class DemoRenderer extends SectionedRenderer<Writer> {
+
+    private int indentation;
+
+    @Override
+    public void beginHitGroup(PrintWriter writer, HitGroup hitGroup) throws IOException {
+        writer.write("Begin hit group:" + hitGroup.getId() + "\n");
+        ++indentation;
+    }
+
+    @Override
+    public void endHitGroup(PrintWriter writer, HitGroup hitGroup) throws IOException {
+        --indentation;
+        writer.write("End hit group:" + hitGroup.getId() + "\n");
+    }
+}
+```
+
+```text
+For a compound entity, a method will be called for each of its members after its `begin`\-method and before its `end`\-method has been called:
+
+                          Call sequence
+                          -------------------
+Result {                  1. beginResult()
+    HitGroup {            2. beginHitGroup()
+        Hit               3. hit()
+        Hit               4. hit()
+        Hit               5. hit()
+    }                     6. endHitGroup()
+}                         7. endResult()
+```
+
+[グルーピング結果](/ja/querying/grouping)には、専用のコールバックのセットが用意されています:
+
+- `beginGroup()` / `endGroup()`
+- `beginGroupList()` / `endGroupList()`
+- `beginHitList()` / `endHitList()`
+
+`Group`、`GroupList`、`HitList` はすべて `HitGroup` のサブクラスであり、上記のメソッドには、それぞれ `beginHitGroup()` と `endHitGroup()` を呼び出すデフォルト実装が提供されています。さらに、これらのクラスのすべての属性はルートの `Hit` クラスで定義された通常のフィールドであるため、`beginHitGroup()`、`endHitGroup()`、`hit()` を実装するだけで出力が行われます。
+
+### JSON の例
+
+カスタム JSON レンダラーを実装する前に、[デフォルトの JSON リザルトフォーマット](/ja/reference/querying/default-result-format)をお読みください。例: JSON データを含むフィールドのセットを JSON 配列としてレンダリングします。言い換えると、利用可能なすべてのデータを含む可変長配列をダンプし、それ以外はすべて無視し、エラー状態も暗黙的に無視します(つまりプロトタイピングに適しています):
+
+```java expandable
+package com.yahoo.mysearcher;
+
+import com.yahoo.search.Result;
+import com.yahoo.search.query.context.QueryContext;
+import com.yahoo.search.rendering.SectionedRenderer;
+import com.yahoo.search.result.ErrorMessage;
+import com.yahoo.search.result.Hit;
+import com.yahoo.search.result.HitGroup;
+
+import java.io.IOException;
+import java.io.Writer;
+import java.util.Collection;
+
+public class MyRenderer extends SectionedRenderer<Writer> {
+    /**
+     * A marker variable for the hit rendering to know whether
+     * the hit being rendered is the first one that is rendered.
+     */
+    boolean firstHit;
+
+    public void init() {
+        firstHit = true;
+    }
+
+    @Override
+    public String getEncoding() {
+        return "utf-8";
+    }
+
+    @Override
+    public String getMimeType() {
+        return "application/json";
+    }
+
+    @Override
+    public void beginResult(Writer writer, Result result) throws IOException {
+        writer.write("[");
+    }
+
+    @Override
+    public void endResult(Writer writer, Result result) throws IOException {
+        writer.write("]");
+    }
+
+    @Override
+    public void error(Writer writer, Collection<ErrorMessage> errorMessages) throws IOException {
+        // swallows errors silently
+    }
+
+    @Override
+    public void emptyResult(Writer writer, Result result) throws IOException {
+        //write nothing.
+    }
+
+    @Override
+    public void queryContext(Writer writer, QueryContext queryContext) throws IOException {
+        //write nothing.
+    }
+
+    @Override
+    public void beginHitGroup(Writer writer, HitGroup hitGroup) throws IOException {
+        //write nothing.
+    }
+
+    @Override
+    public void endHitGroup(Writer writer, HitGroup hitGroup) throws IOException {
+        //write nothing.
+    }
+
+    @Override
+    public void hit(Writer writer, Hit hit) throws IOException {
+        if (!firstHit) {
+            writer.write(",\n");
+        }
+        writer.write(hit.toString());
+        firstHit = false;
+    }
+}
+```
+
+## AsynchronousSectionedRenderer&lt;Result&gt;
+
+これは[プロセッシングフレームワーク](/ja/applications/processing#response-rendering)の場合と同じです。概念的には SectionedRenderer に似ていますが、検索結果そのものに対する特別なケースはありません。ただし、ユーティリティメソッド getResponse() はパラメーター化された戻り値の型を持っているため、レンダラーを `Result` でテンプレート化すると手間がいくらか省けます。
+
+例は [DemoRenderer.java](https://github.com/vespa-engine/sample-apps/blob/master/examples/http-api-using-request-handlers-and-processors/src/main/java/ai/vespa/examples/DemoRenderer.java) にあります。

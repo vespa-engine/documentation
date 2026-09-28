@@ -1,0 +1,361 @@
+---
+title: "Vespaフィード・サイジングガイド"
+sidebarTitle: "Feed sizing guide"
+---
+
+Vespaは、サービス提供中でも、またインスタンスへの計画的・非計画的な変更の最中でも、高いフィード負荷を維持できるように最適化されています。このガイドでは、フィード・パフォーマンスを最適化する方法の概要と、ボトルネックの理解について説明します。
+
+[読み取りと書き込み](/ja/writing/reads-and-writes)ガイドには、Vespaのアーキテクチャーと、フィードおよび検索に関連するAPIの概要があります。重要なポイントの1つは、Vespaが2つの主要なサービスタイプに分かれていることです:
+
+- ステートレスなコンテナー・クラスター
+- ステートフルなコンテント・クラスター
+
+ステートレスなコンテナー・クラスターは、Vespaへのすべてのドキュメント操作の処理を担当します。ステートフルなコンテント・クラスターは、すべてのドキュメント操作の書き込みと同期(状態の永続化とデータ構造の管理)を担当します。
+
+一般的に、Vespaは基盤となるストレージが処理できる(MB/sおよびIOPS)を超える書き込みレートを維持することはできません。リソース使用率を理解するには、CPU、メモリ、ディスク、ネットワークなどのリソース使用状況を監視することが不可欠です。そうすることでのみ、システムを正しくサイジングし、ボトルネックを特定できます。
+
+## ステートレスなコンテナー・クラスター
+
+Vespaへのすべてのドキュメント操作の処理は、ステートレスな *コンテナー* クラスターを経由してルーティングされます。処理には、[言語処理](/ja/linguistics/linguistics)のようなVespaの処理と、カスタムの[ドキュメント処理](/ja/applications/document-processors)の両方が含まれます。ステートレスなコンテナー・クラスターは、[エンベディング](/ja/rag/embedding)の推論も担当します。エンベディング推論は、*embed* 呼び出しの数とエンベディング・モデルのサイズによっては、計算リソースを大量に消費する可能性があります。[エンベディングのパフォーマンス](/ja/rag/embedding#embedder-performance)を参照してください。
+
+ステートレスなクラスターは計算(CPU/GPU使用率)バウンドであり、クライアントがネットワーク経由で十分な操作を届けられる限り、処理レートはクラスター内のノード数とV-CPU数に対して線形にスケールするはずです。
+
+検索と書き込みを別々のコンテナー・クラスターに分離する方法については、[複数のコンテナー・クラスター](/ja/writing/document-routing#multiple-container-clusters)を参照してください。分離されたコンテナー・クラスターは、コンテナー・クラスターが計算バウンドで、検索と書き込みの負荷が同時に発生し、計算関連のリソース競合によって書き込み操作が検索クエリーに影響を与えるのを避けたい、高負荷のシナリオで有用です。
+
+ステートレスなコンテナー・クラスターはJava(JVM)で実装されているため、過剰なJVMガベージコレクションを避けるために、ヒープに十分なメモリを割り当ててください。チューニングのオプションについては、[ステートレス・コンテナーのチューニング](/ja/performance/container-tuning)を参照してください。セルフホスト・デプロイメントでのデフォルトの最大ヒープサイズは、上書きされない限り1.5GBです。
+
+## ステートフルなコンテント・クラスター
+
+Vespaへの**すべてのフィード操作**は、コンテント・ノード上の[トランザクションログ](/ja/content/proton#transaction-log)に**書き込まれ、同期されます**。これには、新しいドキュメントの書き込みと既存ドキュメントの更新の両方が含まれます。Vespaのトランザクションログは、データの耐久性を保証するライトアヘッドログ(WAL)です。操作がトランザクションログに正常に書き込まれ、適用された(検索/getで参照可能になった)ときにのみ、クライアントに応答が返されます。
+
+書き込みパターンは追記型のシーケンシャル(ランダムではない)IOです。Vespaは基盤となるストレージが処理できるレートを超える書き込みレートを維持できないことに注意してください。コンテント・ノードがネットワーク接続ストレージを使用している場合、(耐久性のための)sync操作のコストがローカル接続ストレージ(SSDなど)よりもはるかに高いため、フィードが深刻な影響を受ける可能性があります。[sync-transactionlog](/ja/reference/applications/services/content#sync-transactionlog)を参照してください。
+
+### ドキュメント・ストア
+
+ドキュメントは、すべての[インデックス・モード](/ja/reference/applications/services/content#document)において[ドキュメント・ストア](/ja/content/proton#document-store)に書き込まれます - ここにドキュメントのコピーが永続化されます。
+
+ドキュメント・ストアへの新しいドキュメントの追加は、シーケンシャルIOパターンの追記専用です。ドキュメントの新しいバージョンを書き込むこと(既に存在するドキュメントのPUT)は、存在しないドキュメントIDの場合と同じです。どちらの場合も、ドキュメントIDからサマリー・データファイルの位置へのインメモリ・マッピングが最新バージョンを指すように更新されます。サマリー・ファイルは、古いバージョンのドキュメントを削除するために[デフラグ](/ja/content/proton#defragmentation)されます。
+
+### Attributeストア
+
+[attribute](/ja/content/attributes)プロパティで定義されたフィールドはインメモリのフィールドであり、\`index\` プロパティでインデックスされたフィールドよりも高い[部分更新](/ja/writing/partial-updates)スループットでインプレース更新をサポートします(read-apply-writeパターンを回避)。attributeストアはメモリのみのデータ構造で、[attributeストア](/ja/content/proton#attributes)で定期的にディスクへ永続化されます。
+
+```js
+schema ticker {
+    document ticker {
+        field volume type int {
+            indexing: summary | attribute
+        }
+    }
+}
+```
+
+詳細は[部分更新](/ja/writing/partial-updates)を参照してください。
+
+#### 冗長性の設定
+
+メモリのみの更新(およびトランザクションログへの書き込み)を実現するには、更新対象のすべてのattributeが[ready](/ja/content/proton#sub-databases)であること、つまりコンテント・ノードがattributeフィールドをメモリにロードしていることを確認してください:
+
+- これを保証する方法の1つは、[searchable copies](/ja/reference/applications/services/content#searchable-copies)を[redundancy](/ja/reference/applications/services/content#redundancy)と同じ値に設定することです - つまり、ドキュメントのレプリカを持つすべてのノードが、それをsearchableとしてロードしている状態にします
+- もう1つの方法は、更新対象の各attributeに[fast-access](/ja/reference/schemas/schemas#attribute)を設定することです
+
+### インデックス
+
+インデックス・フィールドへの変更は、[ドキュメント・ストア](#document-store)と[インデックス](/ja/content/proton#index)に書き込まれます。UPDATE操作はドキュメント・ストアへのread-modify-writeを必要とし、スループットを制限することに注意してください。詳細は[部分更新](/ja/writing/partial-updates)を参照してください。
+
+```js
+schema music {
+    document music {
+        field artist type string {
+            indexing: summary | index
+        }
+    }
+}
+```
+
+### コンテント・ノードのスレッドプール
+
+コンテント・ノードで書き込み操作を処理する際には、複数のスレッドプールが関与します。これらを次の表にまとめます。すべての変更操作を並列に処理できるわけではないため、これらのメトリクスを追跡することでボトルネックの特定に役立ちます。例えば、フィードのスループットが特定のCPU使用率を超えて増加しないことに気づいた場合、いずれかのスレッドプールが飽和している可能性があります。メトリクスは各スレッドプールごとに利用できます。詳細は[searchnodeメトリクス](/ja/reference/operations/metrics/vespa-metric-set#searchnode-metrics)を参照してください。
+
+パフォーマンスとボトルネックを分析するには、最も重要なメトリクスは *.utilization* と *.queuesize* です。加えて、[field writer](#field-writer-executor)スレッドプールには *.saturation* が重要です。詳細は[ボトルネック](#bottlenecks)を参照してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>スレッドプール</th>
+      <th>説明</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;master&#42;&#42;</td>
+      <td><a href="/ja/content/attributes#document-meta-store" aria-label="document metastore">ドキュメント・メタストア</a>を更新し、<a href="#index-thread" aria-label="index">index</a>および<a href="#summary-thread" aria-label="summary">summary</a>スレッドへのタスクを準備し、書き込み操作を個々の<a href="/ja/content/proton#attributes" aria-label="attributes">attribute</a>を更新する一連のタスクに分割します。これらのタスクは<a href="#field-writer-executor" aria-label="field writer">field writer</a>のスレッドによって実行されます。</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;スレッド数&#42;&#42;</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;インスタンス数&#42;&#42;</td>
+      <td>ドキュメント・データベースごとに1インスタンス。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;メトリクスのプレフィックス&#42;&#42;</td>
+      <td>&#42;content.proton.documentdb.threading_service.master.&#42;</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;index&#42;&#42;</td>
+      <td><a href="/ja/content/proton#index" aria-label="memory index">メモリ・インデックス</a>におけるインデックス・フィールドの書き込みを管理します。書き込み操作を個々のインデックス・フィールドを更新する一連のタスクに分割し、これらのタスクは<a href="#field-writer-executor" aria-label="field writer">field writer</a>のスレッドによって実行されます。</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;スレッド数&#42;&#42;</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;インスタンス数&#42;&#42;</td>
+      <td>ドキュメント・データベースごとに1インスタンス。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;メトリクスのプレフィックス&#42;&#42;</td>
+      <td>&#42;content.proton.documentdb.threading_service.index.&#42;</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;summary&#42;&#42;</td>
+      <td>ドキュメントを<a href="/ja/content/proton#document-store" aria-label="document store">ドキュメント・ストア</a>に書き込みます。</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;スレッド数&#42;&#42;</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;インスタンス数&#42;&#42;</td>
+      <td>ドキュメント・データベースごとに1インスタンス。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;メトリクスのプレフィックス&#42;&#42;</td>
+      <td>&#42;content.proton.documentdb.threading_service.summary.&#42;</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;field writer&#42;&#42;</td>
+      <td>このスレッドプールのスレッドは、インデックス・フィールドの転置、メモリ・インデックスへの変更の書き込み、attributeへの変更の書き込みに使用されます。すべてのドキュメント・データベースにわたるインデックス・フィールドとattributeフィールドは、このスレッドプール内のいずれかのスレッドにランダムに割り当てられます。書き込みや更新のコストが高いフィールドが、フィード中のボトルネックになる可能性があります。</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;スレッド数&#42;&#42;</td>
+      <td>多数。<a href="/ja/reference/applications/services/content#feeding" aria-label="feeding concurrency">フィーディングの並行度</a>によって制御されます。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;インスタンス数&#42;&#42;</td>
+      <td>すべてのドキュメント・データベース間で共有される1インスタンス。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;メトリクスのプレフィックス&#42;&#42;</td>
+      <td>&#42;content.proton.executor.field_writer.&#42;</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;shared&#42;&#42;</td>
+      <td>このスレッドプールのスレッドは、特に<a href="/ja/content/proton#document-store" aria-label="document store">ドキュメント・ストア</a>内のドキュメントの圧縮・解凍、<a href="/ja/content/proton#disk-index-fusion" aria-label="disk index fusion">ディスク・インデックス・フュージョン</a>の一環としてのファイルのマージ、<a href="/ja/reference/schemas/schemas#index-hnsw" aria-label="HNSW index">HNSWインデックス</a>へのベクトル挿入の準備に使用されます。</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;スレッド数&#42;&#42;</td>
+      <td>多数。<a href="/ja/reference/applications/services/content#feeding" aria-label="feeding concurrency">フィーディングの並行度</a>によって制御されます。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;インスタンス数&#42;&#42;</td>
+      <td>すべてのドキュメント・データベース間で共有される1インスタンス。</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>&#42;&#42;メトリクスのプレフィックス&#42;&#42;</td>
+      <td>&#42;content.proton.executor.shared.&#42;</td>
+    </tr>
+  </tbody>
+</table>
+
+## 多値attribute
+
+[多値attribute](/ja/reference/schemas/schemas#field)とは、*weightedset*、*array of struct/map*、*map of struct/map*、*tensor* です。これらのattributeはそれぞれ異なる特性を持ち、書き込みパフォーマンスに影響します。一般的に、多値フィールドへの更新は、フィールドサイズが大きくなるほどコストが高くなります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;weightedset&#42;&#42;</td>
+      <td>更新時はメモリのみの操作です: セット全体を読み取り、更新し、書き戻します。可能な場合は文字列の代わりに数値型を使用して、更新のコストをできるだけ低く抑えてください。例: 多数(1000以上)の要素を持つstringのweighted set。セットへの要素の追加は、enumストアの参照/追加と、attributeの多値マップへの追加/ソートを意味します - 詳細は<a href="/ja/content/attributes" aria-label="attributes">attributes</a>を参照してください。これを高速化するには、代わりに数値型を使用してください - 文字列比較が発生しません。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;array/map of struct/map&#42;&#42;</td>
+      <td>array of struct/mapおよびmap of struct/mapへの更新は、<a href="/ja/content/proton#document-store" aria-label="document store">ドキュメント・ストア</a>からの読み取りを必要とし、更新レートを低下させます - <a href="https://github.com/vespa-engine/vespa/issues/10892" aria-label="#10892">#10892</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;tensor&#42;&#42;</td>
+      <td>テンソルのセル値の更新はメモリのみの操作です: テンソルをコピーし、更新し、書き戻します。大きなテンソルの場合、これは単一セルの更新のために大きなメモリ・チャンクの読み書きが発生することを意味します。</td>
+    </tr>
+  </tbody>
+</table>
+
+## 親子関係
+
+[親ドキュメント](/ja/schemas/parent-child)はグローバルであり、すべてのノードにレプリカを持ちます。親ドキュメントのフィールドへの書き込みは、すべての(子)ドキュメントを更新する非正規化のケースと比較して、多くの場合ロジックを簡素化します。書き込みパフォーマンスは、子ドキュメントの平均数とクラスター内のノード数との比較によって決まります - 例:
+
+- 10ノードのクラスター、子の平均数=100、redundancy=2: 親への書き込みは10回の書き込みを意味し、200回の書き込みと比較して20倍良い
+- 50ノードのクラスター、子の平均数=10、redundancy=2: 親への書き込みは50回の書き込みを意味し、20回の書き込みと比較して2.5倍悪い
+
+つまり、子が多いほど、親への書き込みのパフォーマンス効果が高くなります。
+
+## 条件付き更新
+
+条件付き更新は次のようになります:
+
+```json
+{
+    "update" : "id:namespace:myDoc::1",
+    "condition" : "myDoc.myField == \"abc\"",
+    "fields" : { "myTimestamp" : { "assign" : 1570187817 } }
+}
+```
+
+条件の評価時に[ドキュメント・ストア](/ja/content/proton#document-store)へのアクセスが発生すると、永続化されたデータ構造への単純な追記ではなくランダムアクセスになるため、パフォーマンスが大幅に低下します。高いパフォーマンスを得るには、条件はattribute値を使用して評価されるべきです - 上記の例では、*myField* はattributeであるべきです。
+
+<Note>
+**注:** 
+
+条件がstructまたはmapを使用する場合、値はドキュメント・ストアから読み取られます:
+</Note>
+
+```bash
+    "condition" : "myDoc.myMap{1} == 3"
+```
+
+これは、すべてのstructフィールドがattributeとして定義されている場合でも当てはまります。これに対する改善は[#10892](https://github.com/vespa-engine/vespa/issues/10892)で追跡されています。
+
+## クライアントのラウンドトリップ
+
+同じドキュメントに2つのフィールドのassignを送信する場合の違いを考えてみましょう:
+
+```json
+{
+    "update" : "id:namespace:doctype::1",
+    "fields" : {
+        "myMap{1}" : { "assign" : { "timestamp" : 1570187817 } }
+        "myMap{2}" : { "assign" : { "timestamp" : 1570187818 } }
+    }
+}
+```
+
+と
+
+```json
+{
+    "update" : "id:namespace:doctype::1",
+    "fields" : {
+        "myMap{1}" : { "assign" : { "timestamp" : 1570187817 } }
+    }
+}
+{
+    "update" : "id:namespace:doctype::1",
+    "fields" : {
+        "myMap{2}" : { "assign" : { "timestamp" : 1570187818 } }
+    }
+}
+```
+
+前者の場合、[vespa feed](/ja/clients/vespa-cli)から *1つ* の更新操作が送信されます - 後者の場合、クライアントは最初の操作のackを受信した *後に* 2つ目の更新操作を送信します。複数のフィールドを更新する場合は、できるだけ少ない操作に更新をまとめてください。[順序付けの詳細](/ja/content/content-nodes#ordering)を参照してください。
+
+## フィード vs. 検索
+
+コンテント・ノードは通常、固定されたリソース(CPU、メモリ、ディスク)を持ちます。フィードと検索のCPU割り当ては[concurrency](/ja/reference/applications/services/content#feeding)で設定します - 値は0から1.0で、値が大きいほどフィードにより多くのCPUリソースが割り当てられます。
+
+さらに、フィードと検索の優先度、より正確にはフィードをどれだけ「nice」にするかも制御できます。プロセスがフィードの優先度を上げるにはroot権限が必要なため、フィードの優先度を下げる(niceにする)方式を採用しています。これは0から1.0の[niceness](/ja/reference/applications/services/content#feeding-niceness)値で制御されます - 値が大きいほど、フィードよりも検索が優先されます。デフォルトは0です。
+
+## フィードのテスト
+
+フィード容量をテストする場合:
+
+<Steps>
+<Step>
+[vespa feed](/ja/clients/vespa-cli)を使用します。
+</Step>
+<Step>
+1つのコンテント・ノードを使用してテストし、その容量と、ボトルネックがどこにあるか(リソース使用率メトリクス)およびVespaメトリクスを確認します
+</Step>
+<Step>
+フィーダー・インスタンスを追加して、フィード・パフォーマンスをテストします。飽和するまで、ネットワークとCPU(コンテント・ノードとコンテナー・ノード)の使用率が増加することを確認します。
+</Step>
+<Step>
+エラーがないことを確認するために、末尾のトラブルシューティングを参照します。
+</Step>
+</Steps>
+
+その他のシナリオ: 定常状態のシステム、状態変更中、クエリー負荷中における持続的な負荷に対する容量のフィード・テスト。
+
+## トラブルシューティング
+
+<Note>
+**注:** 
+
+メトリクスに慣れるために、[モニタリング・サンプルアプリ](/ja/operations/self-managed/monitoring#monitoring-with-grafana)を使用して、ドキュメント/クエリーのフィードとダッシュボードを備えたサンプル・システムをセットアップしてください。
+</Note>
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;メトリクス&#42;&#42;</td>
+      <td>コンテント・ノードの<a href="/ja/reference/operations/metrics/vespa-metric-set#storage-metrics" aria-label="metrics">メトリクス</a>を使用して、キューを確認します - キューの待ち時間とキューサイズ(すべてのメトリクスはミリ秒単位):<br/><br/>  <code>{`vds.filestor.averagequeuewait.sum`}</code><br/> <code>{`vds.filestor.queuesize`}</code><br/><br/>  すべてのノードにわたってコンテント・ノードのメトリクスを確認し、外れ値がないか調べてください。操作タイプごとのレイテンシー・メトリクスも確認してください:<br/><br/>  <code>{`vds.filestor.allthreads.put.latency`}</code><br/> <code>{`vds.filestor.allthreads.update.latency`}</code><br/> <code>{`vds.filestor.allthreads.remove.latency`}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;ボトルネック&#42;&#42;</td>
+      <td>書き込み操作の処理に使用される<a href="#content-node-thread-pools" aria-label="threads">スレッド</a>のいずれかが、フィード中のボトルネックになる可能性があります。すべてのスレッドプールの &#42;.utilization&#42; メトリクスを確認してください:<br/><br/>  <code>{`content.proton.documentdb.threading_service.master.utilization`}</code><br/> <code>{`content.proton.documentdb.threading_service.index.utilization`}</code><br/> <code>{`content.proton.documentdb.threading_service.summary.utilization`}</code><br/> <code>{`content.proton.executor.field_writer.utilization`}</code><br/> <code>{`content.proton.executor.shared.utilization`}</code>  <br/><br/><a href="#field-writer-executor" aria-label="field writer">field writer</a>または<a href="#shared-executor" aria-label="shared">shared</a>の使用率が高い場合は、<a href="/ja/reference/applications/services/content#feeding" aria-label="feeding concurrency">フィーディングの並行度</a>を調整して、フィードにより多くのCPUコアを使用できるようにしてください。 <br/><br/> field writerについては、&#42;.saturation&#42; メトリクスも確認してください: <br/><br/> <code>{`content.proton.executor.field_writer.saturation`}</code><br/><br/>  これが1.0に近く、&#42;.utilization&#42; より高い場合は、ワーカースレッドの1つがボトルネックになっていることを示します。原因としては、その特定のスレッドが、書き込みや更新のコストが本質的に高い、大きなインデックスまたはattributeフィールドを処理していることが考えられます。<a href="/ja/content/proton#custom-component-state-api" aria-label="custom component state API">カスタム・コンポーネント状態API</a>を使用して、どのインデックスおよびattributeフィールドがどのスレッド(&#42;executor_id&#42; で識別)に割り当てられているかを調べ、field writerの詳細な統計を確認して、実際にボトルネックになっているスレッドを特定してください: <br/><br/> <code>{`state/v1/custom/component/documentdb/mydoctype/subdb/ready/index`}</code><br/> <code>{`state/v1/custom/component/documentdb/mydoctype/subdb/ready/attributewriter`}</code><br/> `state/v1/custom/component/threadpools/field_writer</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;失敗率&#42;&#42;</td>
+      <td>負荷テスト中の失敗については、これらのメトリクスを調べてください:<br/><br/>  <code>{`vds.distributor.updates.latency`}</code><br/> <code>{`vds.distributor.updates.ok`}</code><br/> <code>{`vds.distributor.updates.failures.total`}</code><br/> <code>{`vds.distributor.puts.latency`}</code><br/> <code>{`vds.distributor.puts.ok`}</code><br/> <code>{`vds.distributor.puts.failures.total`}</code><br/> <code>{`vds.distributor.removes.latency`}</code><br/> <code>{`vds.distributor.removes.ok`}</code><br/> <code>{`vds.distributor.removes.failures.total`}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;フィードのブロック&#42;&#42;</td>
+      <td>このメトリクスは0であるべきです - <a href="/ja/writing/feed-block" aria-label="feed block">フィード・ブロック</a>を参照してください:<br/><br/>  <code>{`content.proton.resource_usage.feeding_blocked`}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;同時変更&#42;&#42;</td>
+      <td>複数のクライアントが同じドキュメントを同時に更新すると、書き込みが停滞します:<br/><br/>  <code>{`vds.distributor.updates.failures.concurrent_mutations`}</code><br/><br/> 特定のドキュメントIDに対する変更系のクライアント操作は、<a href="/ja/content/content-nodes#distributor" aria-label="distributors">ディストリビューター</a>上で順序付けされます。あるドキュメントに対して既に操作がアクティブな場合、後から到着した操作は一時的な失敗コードとともにクライアントへ差し戻されます。これは通常、ユーザーが同期なしで複数のクライアントから同時にフィードを送信した場合に発生します。単一のクライアントから送信されたフィード操作はクライアント側で順序付けされるため、単一クライアントのみの場合はこれが観測されないはずです。差し戻された操作はバックエンドへは送られないため、そこでのレイテンシー上昇の原因にはなりませんが、バックオフを伴う自動リトライにより、クライアント側ではより高いレイテンシーが観測されます。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;誤った分散&#42;&#42;</td>
+      <td><code>{`vds.distributor.updates.failures.wrongdistributor`}</code><br/><br/> クライアントが誤ったディストリビューターに送信し続けていることを示します。クライアントは正しいディストリビューターへ直接ルーティングするために必要なすべての状態を更新・キャッシュするため(Vespaは決定論的なCRUSHベースのアルゴリズム分散を使用します)、通常これはまれにしか発生しません(ただし、クライアントの起動時やディストリビューターの状態遷移時には &#42;実際に&#42; 発生します)。考えられる原因:<br/><br/> 1. クライアントがキャッシュされた状態なしで絶えず再作成されている。<br/> 2. システムが何らかの流動状態にあり、基盤となる状態が絶えず変化し続けている。<br/> 3. クライアントの分散ポリシーが非常に多くのエラーを受け取ったため、例えばネットワーク分断の悪い側の情報だけをキャッシュしているケースを避けるために、キャッシュされた状態を破棄してクリーンな状態からやり直している。<br/> 4. システムが何らかの理由で共有クラスター状態への収束に失敗し、クラスターの一部が他と異なる正しい状態の認識を持っている。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;クラスターの非同期状態&#42;&#42;</td>
+      <td>&#42;update_puts/gets&#42; は「2フェーズ」更新を示します:<br/><br/>  <code>{`vds.distributor.update_puts.latency`}</code><br/> <code>{`vds.distributor.update_puts.ok`}</code><br/> <code>{`vds.distributor.update_gets.latency`}</code><br/> <code>{`vds.distributor.update_gets.ok`}</code> <br/><code>{`vds.distributor.update_gets.failures.total`}</code><br/> <code>{`vds.distributor.update_gets.failures.notfound`}</code><br/><br/>  レプリカ間で同期が取れていない場合、状態が分岐するリスクがあるため、更新をレプリカ・ノード上で直接適用できません。この場合、Vespaはディストリビューター上で明示的なread-consolidate-write(書き込み修復)操作を実行します。これは並列に行われないため、通常の更新パスよりもはるかに遅くなります。また、他の操作の書き込みパスでも発生するため、更新のCPUコストが高い場合、それらをブロックするリスクがあります。レプリカの非同期状態は、定義上、システムの期待される定常状態ではありません。例えば、1つ以上のレプリカ・ノードが操作を処理または永続化できない場合に、レプリカの分岐が発生することがあります。(保留中の)マージを追跡してください:<br/><br/>  <code>{`vds.idealstate.buckets`}</code><br/> <code>{`vds.idealstate.merge_bucket.pending`}</code><br/> <code>{`vds.idealstate.merge_bucket.done_ok`}</code><br/> <code>{`vds.idealstate.merge_bucket.done_failed`}</code></td>
+    </tr>
+  </tbody>
+</table>

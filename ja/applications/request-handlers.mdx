@@ -1,0 +1,53 @@
+---
+title: "リクエスト・ハンドラー"
+description: "このドキュメントでは、カスタム・リクエスト・ハンドラーの実装方法とデプロイ方法を説明します。"
+---
+
+サーチャーとプロセッサーの両方がリクエスト・データに直接アクセスできるため、多くの場合、独自のリクエスト・ハンドラーを実装する必要はありません。ただし、カスタム・リクエスト・ハンドラーが役立つケースがいくつかあります:
+
+
+1.  カスタム REST API を実装する必要がある場合。
+2. アプリケーションが、リクエストを特定の検索チェーンや処理チェーンにルーティングするためにどのパラメーターを使用するかを制御する必要がある場合。
+
+## リクエスト・ハンドラーの実装
+
+リクエストを受信すると、リクエスト・ハンドラーはその内容を消費し、処理し、レスポンスを返さなければなりません。リクエスト・ハンドラーを実装する最も便利な方法は、[ThreadedHttpRequestHandler](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/container/jdisc/ThreadedHttpRequestHandler) をサブクラス化することです。
+
+このユーティリティー基底クラスは、同期 API とマルチスレッド実行モデルを使用します。また、ほとんどのリクエスト・ハンドラーに必要な多くの機能を実装しています:
+
+- クエリーは自動的にアクセス・ログに書き込まれます
+- レスポンスに HTTP の date ヘッダーが追加されます(ただし、独自のコードが date ヘッダーを追加した場合、それが上書きされることはありません)
+- 例外とタイムアウトしたクエリーのロギング
+- Error がスローされた場合の自動シャットダウン
+
+### リクエスト・ハンドラーの実装例
+
+GitHub の [Vespa サンプル・アプリ](https://github.com/vespa-engine/sample-apps)には、リクエスト・ハンドラーの実装例がいくつか含まれています:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>ハンドラー</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="https://github.com/vespa-engine/sample-apps/blob/master/examples/http-api-using-request-handlers-and-processors/src/main/java/ai/vespa/examples/DemoHandler.java" aria-label="DemoHandler">DemoHandler</a></td>
+      <td>リクエストを <code>{`ProcessingHandler`}</code> にディスパッチする前に変更するハンドラーです。このハンドラーは <a href="/ja/learn/tutorials/http-api" aria-label="HTTP API tutorial">HTTP API チュートリアル</a>でも使用されています。これは ProcessingHandler に依存するため、使用するには <code>{`container`}</code> タグに <code>{`processing`}</code> を追加する必要があることに注意してください。代わりに Query を発行したい場合は、com.yahoo.search.searchchain.ExecutionFactory を注入してもらい、それを使って execution を作成し、search/fill を呼び出してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+## リクエスト・ハンドラーのデプロイ
+
+アプリケーションにリクエスト・ハンドラーをデプロイするには、*services.xml* の [handler](/ja/reference/applications/services/container#handler) 要素を使用します:
+
+```xml highlight={2-4}
+<container id="default" version="1.0">
+    <handler id="my.package.MyRequestHandler" bundle="the name in <artifactId> in your pom.xml">
+        <binding>http://*/*</binding>
+    </handler>
+```
+
+各パターンに対して [binding](/ja/reference/applications/services/container#binding) 要素を追加することで、リクエスト・ハンドラーを 0 個以上の URI パターンにバインドできます。

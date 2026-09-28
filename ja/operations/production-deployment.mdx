@@ -1,0 +1,243 @@
+---
+title: "本番デプロイ"
+---
+
+本番ゾーンは、安全なデプロイのための [CI/CDパイプライン](/ja/operations/automated-deployments)とともに、さまざまなロケーションからのサービス提供を可能にします。このガイドでは、本番デプロイのための最小限の手順を説明します - 要点は次のとおりです:
+
+- [deployment.xml](/ja/reference/applications/deployment) で本番ゾーンを設定する。
+- [services.xml](/ja/reference/applications/services/services) でクラスターのリソースを設定する。
+- テナントとアプリケーションに名前を付け、ログインする。
+- データプレーンの証明書/鍵ペアを作成するか、アクセスできるようにする。
+- アプリケーションをVespa Cloudにデプロイする。
+
+[getting started](/ja/basics/deploy-an-application) で使用したサンプル・アプリケーションは、これらの手順の良い出発点です。[ソース・ファイル](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation)を参照してください。
+
+デプロイとエンドポイントの使用に関する入門として、まず [Vespa Cloudへの移行](/ja/learn/migrating-to-cloud)をお読みください。
+
+このガイドの最後には、別のデプロイ方法も紹介しています。
+
+## deployment.xml
+
+*deployment.xml* に `<prod>` 要素を追加します:
+
+```xml
+<deployment version="1.0">
+    <prod>
+        <region>aws-us-east-1c</region>
+    </prod>
+</deployment>
+```
+
+*deployment.xml* が存在しない場合は、アプリケーション・パッケージのルート(*services.xml* の隣)に追加してください。
+
+<Note>
+**注:** 
+
+アプリケーションが[プライベート・エンドポイント](/ja/operations/private-endpoints)を使用する場合は、その設定もここに追加し、ガイドにあるセットアップ手順を実行してください。
+</Note>
+
+## services.xml
+
+*services.xml* を変更します - 最小限の例:
+
+```xml expandable
+<services version="1.0" xmlns:deploy="vespa" xmlns:preprocess="properties">
+
+    <container id="default" version="1.0">
+        <document-api/>
+        <search/>
+        <nodes count="2">
+            <resources vcpu="2" memory="8Gb" disk="100Gb"/>
+        </nodes>
+    </container>
+
+    <content id="music" version="1.0">
+        <min-redundancy>2</min-redundancy>
+        <documents>
+            <document type="music" mode="index" />
+        </documents>
+        <nodes count="2">
+            <resources vcpu="2" memory="8Gb" disk="100Gb"/>
+        </nodes>
+    </content>
+
+</services>
+```
+
+本番デプロイでは、メンテナンス作業やアップグレード中の可用性を確保するために、各クラスターに少なくとも2ノードが必要です。冗長性は失われるものの、それでもクラスターあたり1ノードだけを使いたい場合もあります。これは、[バリデーション・オーバーライド](/ja/reference/applications/validation-overrides) `minimum-node-count`(コンテント・クラスターの場合はさらにバリデーション・オーバーライド `redundancy-one`)を追加することで可能です。`nodes` セクションは、必要な[リソース](/ja/reference/applications/services/services#resources)を指定する場所でもあります:
+
+```xml
+<nodes count="2">
+            <resources vcpu="2" memory="8Gb" disk="100Gb"/>
+        </nodes>
+```
+
+また、最小冗長度の要件が2であることにも注意してください:
+
+```xml
+<min-redundancy>2</min-redundancy>
+```
+
+## 最小リソース
+
+信頼性の高いサービスを確保するため、本番環境のノードには最小リソース要件があります。現在の最小値は、0.5 VCPU、8Gbのメモリ、ディスクについてはステートレス・ノードでメモリの2倍、コンテント・ノードでメモリの3倍です。ディスク・リソースは通常最も安価であるため、より高価なCPUおよびメモリ・リソースの活用を妨げないよう、余裕をもって割り当てることをお勧めします。
+
+## アプリケーション名
+
+デプロイに名前を付けて、ログインします:
+
+```bash
+vespa config set target cloud
+vespa config set application mytenant.myapp
+vespa auth login
+```
+
+テナント名はコンソールで確認できます。アプリケーション名は組織内で一意のものです - [テナント、アプリケーション、インスタンス](/ja/learn/tenant-apps-instances)を参照してください。
+
+## 公開証明書の追加
+
+[getting started](/ja/basics/deploy-an-application) ガイドと同様に、アプリケーション・パッケージの *security* ディレクトリに公開鍵が必要です。すでにペアを持っているかもしれませんが、なければ生成します:
+
+```bash
+$ vespa auth cert -f
+Success: Certificate written to security/clients.pem
+Success: Certificate written to /Users/me/.vespa/mytenant.myapp.default/data-plane-public-cert.pem
+Success: Private key written to /Users/me/.vespa/mytenant.myapp.default/data-plane-private-key.pem
+```
+
+ファイルが *$HOME/.vespa* に置かれることに注目してください。*data-plane-public-cert.pem* の内容は *security/clients.pem* にコピーされます。詳細は[データプレーンのアクセス制御権限](/ja/security/guide#permissions)を参照してください。
+
+## アプリケーションのデプロイ
+
+アプリケーションをパッケージ化し、本番ゾーンにデプロイします:
+
+```bash
+vespa prod deploy
+```
+
+別のデプロイ手順は次のセクション以降で紹介します。
+
+<Note>
+**注:** 
+
+本番ゾーンへの `vespa prod deploy` コマンドは [deployment.xml](/ja/reference/applications/deployment) を使用し、devゾーンで使用される `vespa deploy` コマンドとは異なります - [環境](/ja/operations/environments)を参照してください。
+</Note>
+
+## エンドポイント
+
+使用する「ゾーン」エンドポイントは、[コンソール](https://console.vespa-cloud.com/)のEndpointsで確認できます。デフォルトでは、ゾーンごとにmTLSエンドポイントがあります。mTLS証明書の使用方法については [mTLSの設定](/ja/security/guide#configuring-mtls)を参照してください。
+
+mTLSの代替として、コンソールで[アクセス・トークン](/ja/security/guide#configuring-tokens)を追加することもできます。また、*deployment.xml* で[グローバル](/ja/reference/applications/deployment#endpoints-global)および[プライベート](/ja/reference/applications/deployment#endpoint-private)エンドポイントを指定できます。
+
+HTTP/2を使用した [document/v1 API](/ja/reference/api/document-v1)、または [Vespa CLI](/ja/clients/vespa-cli) を使って、データを効率的に書き込みます。[Javaライブラリ](/ja/clients/vespa-feed-client#java-library)もあります。
+
+セルフホストのVespaから新しいクラウド・インスタンスへデータをフィードするには、[付録](#feeding-data-from-an-existing-vespa-instance)または[アプリケーションとデータのクローン](/ja/operations/cloning)を参照してください。
+
+[HTTPベスト・プラクティスのドキュメント](/ja/clients/http-best-practices)も参照してください。
+
+## デプロイの自動化
+
+[deploy-vector-search.yaml](https://github.com/vespa-cloud/vector-search/blob/main/.github/workflows/deploy-vector-search.yaml) を出発点として使用し、詳細は [Automating with GitHub Actions](/ja/operations/automated-deployments#automating-with-github-actions) を参照してください。
+
+## コンソールを使った本番デプロイ
+
+[Vespa CLI](/ja/clients/vespa-cli) を使う代わりに、zipだけで本番デプロイ用のアプリケーション・パッケージをビルドすることもできます:
+
+- 上記のとおり [deployment.xml](#deployment-xml) を作成し、[services.xml](#services-xml) を変更します。
+- [アプリケーション名](#application-name)のステップはスキップします。
+- 公開証明書を *security/clients.pem* に追加します。鍵/証明書ペアの作成方法については[自己署名証明書の作成](/ja/basics/deploy-an-application-shell#create-a-self-signed-certificate)を参照し、証明書ファイルを *security/clients.pem* にコピーします。この時点で、ファイルはデプロイの準備が整いました。
+- デプロイ可能なzipファイルを作成します:
+
+    ```bash
+    zip -r application.zip . \
+      -x application.zip "ext/*" README.md .gitignore ".idea/*"
+    ```
+- [コンソール](https://console.vespa-cloud.com/)で *Create Application* をクリックします。*PROD* タブを選択します。アプリケーションの名前を入力し、アップロード・セクションに *application.zip* ファイルをドロップします。
+- *Create and deploy* をクリックして、アプリケーションを本番環境にデプロイします。
+
+## コンポーネントを含む本番デプロイ
+
+[コンポーネント](/ja/applications/components)を含むアプリケーションのデプロイは、上記とは少し異なります:
+
+- アプリケーション・パッケージのルートは *src/main/application* にあります。
+- コンポーネントをコンパイルするためのVespa APIバージョンを調べます。
+- アプリケーション・パッケージは、デプロイする前にzipアーティファクトとしてビルドされます。
+
+前提条件については [Getting started java](/ja/basics/deploy-an-application-java) を参照してください。手順:
+
+<Steps>
+<Step>
+[album-recommendation-java](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java) サンプル・アプリケーションを出発点として使用します。
+</Step>
+<Step>
+*src/main/application/deployment.xml* と *src/main/application/services.xml* に同じ変更を加えます。
+</Step>
+<Step>
+[アプリケーション名](#application-name)と[公開証明書の追加](#add-public-certificate)の同じ手順を実行します。
+</Step>
+<Step>
+現在のデプロイ(があれば)の中で最も低いVespaバージョンを調べます - [詳細](/ja/operations/automated-deployments#deploying-components):
+
+```bash
+mvn vespa:compileVersion \
+  -Dtenant=mytenant \
+  -Dapplication=myapp
+```
+</Step>
+<Step>
+*target/application.zip* をビルドします:
+
+```bash
+mvn -U package -Dvespa.compile.version="$(cat target/vespa.compile.version)"
+```
+</Step>
+<Step> 
+[アプリケーションのデプロイ](#deploy-the-application)のステップを実行します。この場合、Vespa CLIコマンドは、上のステップでビルドされた *target/application.zip* をデプロイします。
+</Step>
+</Steps>
+
+## 次のステップ
+
+- Vespa Cloudは、アプリケーションの変更をすべての本番ゾーンへロールアウトすること、およびその変更を事前にテストすることに責任を持ちます。通常は、アプリケーションの変更がチェックインされたときにアプリケーション・パッケージを自動的にビルドするジョブをセットアップして、アプリケーションの継続的デプロイを実現するとよいでしょう。自動化、CDテストの追加、マルチゾーン・デプロイについては[自動デプロイ](/ja/operations/automated-deployments)をお読みください。
+- 負荷パターンについて経験を積んだら、[オートスケーリング](/ja/operations/autoscaling)を検討してください。
+- [モニタリング](/ja/operations/monitoring)をセットアップしてください。
+
+## 既存のVespaインスタンスからのデータのフィード
+
+既存のVespaインスタンスからデータをダンプするには、Vespa CLIで次のコマンドを使用できます:
+
+```bash
+slices=10
+for slice in $(seq 0 $((slices-1))); do
+    vespa visit \
+        --slices $slices --slice-id $slice \
+        --target [existing Vespa instance endpoint] \
+        | gzip > dump.$slice.gz &
+done
+```
+
+これはすべてのコンテントをファイルにダンプしますが、コンテントを直接 'vespa feed' にパイプすることもできます。
+
+データをフィードするには:
+
+```bash
+slices=10
+for slice in $(seq 0 $((slices-1))); do
+    zcat dump.$slice.gz | \
+    vespa feed \
+        --application <tenant>.<application>.<instance> \
+        --target [zone endpoint from the Vespa Console] -
+done
+```
+
+これらのコマンドの異なるスライスは、別々のマシンで並行して実行できることに注意してください。
+
+## 別のアカウントの別のVPCからパブリック・クラウドのアプリケーションにアクセスする
+
+パブリック・クラウドにデプロイする際の一般的な課題は、異なるアカウントおよびVPCで実行されているワークロード間のネットワーク接続です。チーム内では、VPC間のVPCピアリングをセットアップすることで解決されることが多いですが、多数の異なるチームや動的なワークロードの間で調整する場合には課題があります。Vespaは直接のVPCピアリングをサポートしていません。
+
+推奨されるオプションは3つあります:
+
+1. **パブリック・エンドポイントを使用する。ただし可能ならIPv6で:** デフォルトの方法です。Zero-Trustアプローチと、パブリック・エンドポイント経由でアプリケーションにアクセスすることには多くの利点があります。IPv6を使用すれば、IPv4のNATなどに関連するネットワーク・コストの一部も回避できます。一部のアプリケーションではこのオプションはコスト的に見合わない可能性がありますが、エンドポイント経由で転送されるデータ量が中程度のアプリケーションすべてに当てはまると考えるべきではありません。
+2. **AWS PrivateLinkまたはGCP Private Service Connect経由のプライベート・エンドポイントを使用する:** Vespaでは、自身の同一ロケーションにあるVPCからの専用アクセスのためのプライベート・エンドポイントをセットアップできます。これは一般的なVPCピアリングよりも管理オーバーヘッドが少なく、より安全です。[プライベート・エンドポイント](/ja/operations/private-endpoints)を参照してください。
+3. **Vespaワークロードを自身のアカウント/プロジェクトで実行する(Enclave):** Vespa Cloud Enclave機能を使うと、すべてのVespaワークロードを自身のアカウントで実行できます。この場合、アプリケーションへの接続を開くために必要な任意のピアリングをセットアップできます。一般提供されてはいるものの、Vespa Cloud Enclaveの使用は、サービスの運用という点でアプリケーション・チームに大幅に多くの労力を要求するため、セキュリティや相互運用性などの観点から追加の作業を正当化できる、より大規模なアプリケーションにのみ推奨されます。[Vespa Cloud Enclave](/ja/operations/enclave/enclave) を参照してください。

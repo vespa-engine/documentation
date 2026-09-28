@@ -1,0 +1,143 @@
+---
+title: "Cloudflare Workers を Vespa Cloud と組み合わせて使用する"
+sidebarTitle: "Cloudflare Workers"
+---
+このガイドでは、[Cloudflare Workers](https://workers.cloudflare.com/) を使用して、mutual TLS で保護された Vespa Cloud のエンドポイントにアクセスする方法を説明します。
+
+## Vespa Cloud エンドポイントへの書き込みと読み取り
+
+Vespa Cloud のエンドポイントは mutual TLS で保護されています。これは、クライアントが、Vespa アプリケーションが信頼する TLS 証明書を提示しなければならないことを意味します。証明書は Vespa のアプリケーション・パッケージに含まれているため、アプリケーションはどの証明書を信頼すべきかを認識しています。
+
+### mTLS の設定
+
+Mutual TLS 証明書は [Vespa CLI](/ja/clients/vespa-cli) を使用して作成できます:
+
+例えば、テナント `samples`、アプリケーション `vsearch`、インスタンス `default` の場合:
+
+```bash
+$ vespa auth cert --application samples.vsearch.default
+Success: Certificate written to security/clients.pem
+Success: Certificate written to $HOME/.vespa/samples.vsearch.default/data-plane-public-cert.pem
+Success: Private key written to $HOME/.vespa/samples.vsearch.default/data-plane-private-key.pem
+```
+
+詳細は[セキュリティガイド](/ja/security/guide)を参照してください。
+
+### mTLS の Vespa Cloud エンドポイントと連携する Cloudflare Worker の作成
+
+2023 年 3 月、Cloudflare は [Mutual TLS available for Workers](https://blog.cloudflare.com/mtls-workers/) を発表しました。[Workers Runtime API mTLS](https://developers.cloudflare.com/workers/runtime-apis/mtls/) も参照してください。
+
+wrangler をインストールして worker プロジェクトを作成します。Wrangler は Cloudflare のコマンドラインインターフェース（CLI）です。[Workers:Get started guide](https://developers.cloudflare.com/workers/get-started/guide/) を参照してください。設定と認証が完了したら、Vespa Cloud のデータプレーン証明書を Cloudflare にアップロードできます。
+
+Vespa Cloud の mTLS 証明書を Cloudflare にアップロードします:
+
+```bash
+$ npx wrangler mtls-certificate upload \
+  --cert $HOME/.vespa/samples.vsearch.default/data-plane-public-cert.pem \
+  --key $HOME/.vespa/samples.vsearch.default/data-plane-private-key.pem \
+  --name vector-search-dev
+```
+
+出力は次のようになります:
+```bash
+Uploading mTLS Certificate vector-search-dev...
+Success! Uploaded mTLS Certificate vector-search-dev
+ID: 63316464-1404-4462-baf7-9e9f81114d81
+Issuer: CN=cloud.vespa.example
+Expires on 3/11/2033
+```
+
+出力の `ID` に注目してください。これはアップロードされた mTLS 証明書の `certificate_id` です。worker のコードでこの証明書を使用するには、プロジェクトの `wrangler.toml` ファイルに `mtls_certificates` 変数を追加して、証明書 ID に名前をバインドします。この例では `VESPA_CERT` にバインドします:
+
+```toml
+mtls_certificates = [
+ { binding = "VESPA_CERT", certificate_id = "63316464-1404-4462-baf7-9e9f81114d81" }
+]
+```
+
+上記のバインディングを設定すると、Worker のコード内で次のように `VESPA_CERT` にアクセスできます:
+
+```javascript
+export default {
+    async fetch(request, env) {
+        return await env.VESPA_CERT.fetch("https://vespa-cloud-endpoint");
+    }
+}
+```
+
+`env` は Cloudflare の worker インフラストラクチャから渡される変数であることに注意してください。
+
+### Worker の例
+
+以下の worker の例は、POST および GET の HTTP リクエストを Vespa Cloud エンドポイントの `/search/` パスに転送します。それ以外のパスや他の HTTP メソッドは拒否します。
+
+```js expandable
+/**
+ * Simple Vespa proxy that forwards read (POST and GET) requests to the 
+ * /search/ endpoint
+ * Learn more at https://developers.cloudflare.com/workers/
+ */
+
+export default {
+  async fetch(request, env, ctx) {
+    //Change to your endpoint url, obtained from the Vespa Cloud Console. 
+    //Use global endpoint if you have global routing with multiple Vespa regions
+    const vespaEndpoint = "https://vsearch.samples.aws-us-east-1c.dev.z.vespa-app.cloud";
+    async function MethodNotAllowed(request) {
+      return new Response(`Method ${request.method} not allowed.`, {
+        status: 405,
+        headers: {
+          Allow: 'GET,POST',
+        }
+      });
+    }
+    async function NotAcceptable(request) {
+      return new Response(`Path not Acceptable.`, {
+        status: 406,
+      });
+    }
+
+    if (request.method !== 'GET' && request.method !== 'POST') {
+      return MethodNotAllowed(request);
+    }
+    let url = new URL(request.url)
+    const { pathname, search } = url;
+    if (!pathname.startsWith("/search/")) {
+      return NotAcceptable(request);
+    }
+    const destinationURL = `${vespaEndpoint}${pathname}${search}`;
+    let new_request = new Request(destinationURL, request);
+    return await env.VESPA_CERT.fetch(new_request)
+  },
+};
+```
+
+上記を Cloudflare の全世界のグローバルエッジネットワークにデプロイするには、次を使用します:
+
+```bash
+$ npx wrangler publish
+```
+
+ローカルインスタンスを起動するには、次を使用します:
+
+```bash
+$ npx wrangler dev
+```
+
+`curl` を使用してテストします:
+```bash
+$ curl --json '{"yql": "select * from sources * where true"}' http://127.0.0.1:8787/search/
+```
+
+Cloudflare のプロダクションに公開した後は:
+
+```bash
+$ curl --json '{"yql": "select * from sources * where true"}' https://your-worker-name.workers.dev/search/
+```
+
+## データプレーンのアクセス制御パーミッション
+
+Vespa Cloud は、`read` アクセスと `write` アクセスを分離するために複数の証明書を持つことをサポートしています。  
+これにより、読み取り専用の証明書を Cloudflare worker にアップロードして、書き込みアクセスを制限できます。
+
+[データプレーンのアクセス制御パーミッション](/ja/security/guide#permissions)を参照してください。

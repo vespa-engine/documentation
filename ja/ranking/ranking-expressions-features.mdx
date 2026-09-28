@@ -1,0 +1,280 @@
+---
+title: "ランキング式とランク・フィーチャー"
+---
+
+まず[ランキング入門](/ja/basics/ranking)をお読みください。このガイドでは[ランキング式](/ja/reference/ranking/ranking-expressions)と[ランク・フィーチャー](/ja/reference/ranking/rank-features)について説明します。以下にガイドと例を示します。
+
+## ランキング式
+
+Vespa は[ランキング式](/ja/reference/ranking/ranking-expressions)を使用して、クエリーにマッチしたドキュメントをランキングし、ドキュメントごとにランクスコアを計算します。ランキング式は _rank profile_ に格納されます。
+
+ランキング式は数学的な関数です。関数には、組み込みフィーチャーへの単一の参照から機械学習モデルまで、あらゆるものを含めることができます。ランキング式は、通常の演算子や関数に加えて、_if_ 関数もサポートしており、決定木や条件付きビジネスロジックを実現できます。また、包括的な[テンソル関数](/ja/reference/ranking/tensor)のセットをサポートしており、ディープニューラルネットのような機械学習された関数を表現できます。ドット積、テンソル、wand の使用の詳細については、[multivalue query operators](/ja/ranking/multivalue-query-operators) を参照してください。
+
+ランキングは多くの場合、リソース消費の主要因です。ここにアプリケーションのロジックが実装されるからです。最適化には[二段階ランキング](/ja/ranking/phased-ranking)を使用します。低コストな _first-phase_ ランキングで最下位の候補を除外し、その後、強力な _second-phase_ ランキングにリソースを集中させます。
+
+ランキング式は _手書き_ できます。ランキングが十分に明確に定義されていて、ランキング式に容易にマッピングできる場合に有効です。あるいは、_機械学習_ を使用してランキング式を自動的に作成することもできます。ランキング式は大きくなることがあり、[file:filename](/ja/reference/schemas/schemas#expression) を使用してインポートできます。
+
+## ランク・フィーチャー
+
+ランキング式で使用されるプリミティブな値は[ランク・フィーチャー](/ja/reference/ranking/rank-features)と呼ばれます。ランク・フィーチャーは[テンソル](/ja/ranking/tensor-user-guide)、[マルチバリュー・フィールド](/ja/querying/searching-multivalue-fields)、またはスカラーであり、以下のいずれかです:
+
+- アプリケーション・パッケージで設定された定数
+- クエリーと共に送信された値、またはドキュメントに設定された値
+- クエリーがドキュメントにどの程度マッチしたかの情報を提供するために、クエリーとドキュメントから Vespa によって計算された値
+
+Vespa の[ランク・フィーチャー・セット](/ja/reference/ranking/rank-features)には、多数の低レベルのフィーチャーに加えて、いくつかの高レベルのフィーチャーが含まれています。自動学習を使用する場合、多くのケースで、すべてのフィーチャーをそのまま学習アルゴリズムに渡し、どのフィーチャーを使用するかをアルゴリズムに選択させることができます。アルゴリズムによっては、非正規化フィーチャーを除外するのが良い場合もあります。これにより、これらのフィーチャーの正規化方法を学習したり、それらが実際には正規化済みフィーチャーのいくつかと同じ情報を表していると判断したりすることに学習能力を費やすことを避けられます。
+
+クエリーに [ranking.listFeatures](/ja/reference/api/query#ranking.listfeatures) を追加すると、[デフォルトのランク・フィーチャー](https://github.com/vespa-engine/system-test/blob/master/tests/search/rankfeatures/dump.txt)をクエリー結果に含めることができます。これは、自動学習のためにランク・フィーチャーの値を記録するようなタスクに便利です。詳しくは[チュートリアル](/ja/learn/tutorials/text-search-ml)をご覧ください。デフォルトのセットにあるものよりも多くのランク・フィーチャーが必要な場合は、[rank profile](/ja/reference/schemas/schemas#rank-features) でセットに追加できます:
+
+```bash
+rank-features: feature1 feature2 â€¦
+```
+
+どのフィーチャーをダンプするかを制御することも可能です。rank profile に次を追加します:
+
+```bash
+ignore-default-rank-features
+```
+
+これにより、クエリーで rankfeatures を要求した際に、明示的にリストされたランク・フィーチャーのみがダンプされるようになります。
+
+### 正規化
+
+提供されるランク・フィーチャーには、0〜1 の範囲に正規化されたフィーチャーと、カウントや位置のような非正規化フィーチャーの両方が含まれます。可能な限り、正規化されたフィーチャーを優先してください。これらは同じ情報(およびそれ以上)を捉えており、他のフィーチャーとより簡単に組み合わせられるため、使いやすくなっています。さらに、たとえば合計ではなく平均を取るなどして、組み合わせたランクスコアも正規化されるようにランキング式を書くようにしてください。結果として得られる正規化されたランクスコアにより、関連度ベースのブレンディングや、良いヒットがない場合の検索アシスタンスのトリガーなどを実装できるようになります。
+
+### 設定
+
+一部のフィーチャー、特に [fieldMatch](/ja/reference/ranking/rank-features#fieldMatch(name)) フィーチャーには、パフォーマンスや関連度のためにフィールドごとにフィーチャー計算を調整できる設定パラメータがあります。フィーチャーの設定値は、rank profile に次を追加することで設定します:
+
+```bash
+rank-properties {
+    featureName.configurationProperty: "value"
+}
+```
+
+値はフィールドごとに設定します。例:
+
+```js
+rank-properties {
+    fieldMatch(title).maxAlternativeSegmentations: 10
+    fieldMatch(title).maxOccurrences: 5
+    fieldMatch(description).maxOccurrences: 20
+}
+```
+
+[ランク・フィーチャー設定](/ja/reference/ranking/rank-feature-configuration)のリファレンスを参照してください。
+
+### フィーチャー寄与関数
+
+Vespa のランキング・フィーチャーは線形です。たとえば、[earliness](/ja/reference/ranking/rank-features#fieldMatch(name).earliness) フィーチャーは、マッチがフィールドの末尾にある場合は 0、フィールドの先頭にある場合は 1、フィールドのちょうど中央にある場合は 0.5 になります。多くの場合、フィーチャーの寄与はその「良さ」に対して線形であるべきではありません。たとえば、_earliness_ は最初は急速に減衰し、フィールドの終わりに向かってゆっくり減衰するべきかもしれません。これは、マッチがフィールドの 1 番目の単語なのか 20 番目の単語なのかは大きな違いがあるが、1000 番目なのか 1020 番目なのかはそれほど重要ではない、という直観に基づいています。
+
+これを実現するには、フィーチャーの値を、直線を意図に合った曲線に変換する関数に通します。これは正規化されたフィールドで行うのが最も簡単です。関数は同じ点、すなわち f(0)=0 と f(1)=1 で始まり終わりますが、その間は曲線を描きます。上記の効果を得るには、最初はほぼ平坦で最後は急勾配になる曲線が適しています。例:
+
+```bash
+pow(0-x,2)
+```
+
+2 番目の数値は、曲がり具合の強さを決定します。数値を大きくすると、低い x 値への同じ変化と比較して、高い x 値への変化がさらに重要になります。
+
+### 特定のドキュメントのランク・フィーチャーのダンプ
+
+特定のドキュメントに対する判定を含む学習セットの場合、ランク・フィーチャーの値に影響を与えることなく、ドキュメント ID にマッチする条件をクエリーに追加してそれらのドキュメントを選択できると便利です。これを行うには、[ranked](/ja/reference/querying/yql#ranked) を false に設定してその条件を追加します:
+
+```bash
+select * from mydocumenttype where myidfield contains ({ranked: false}"mydocumentid" and ...)
+```
+
+### 結果におけるフィーチャー/関数の値へのアクセス
+
+任意のフィーチャーは、rank profile の [summary-features](/ja/reference/schemas/schemas#summary-features) のリストに追加することで、それを生成したヒットの中で返すことができます。すべての関数はフィーチャーなので、これにより任意の計算結果を結果の中でアクセス可能にできます。例:
+
+```bash
+rank-profile test {
+
+    summary-features: tensor_join join_sum
+
+    function tensor_join() {
+        expression: attribute(my_tensor_field) * query(my_query_tensor)
+    }
+
+    function join_sum() {
+        expression: sum(tensor_join())
+    }
+
+}
+```
+
+これらの関数の結果は、次のように結果の Hits で利用できます:
+
+```js
+import com.yahoo.search.result.FeatureData;
+
+    FeatureData featureData = (FeatureData)hit.getField("summaryfeatures");
+    Tensor tensor_join_value = featureData.getTensor("rankingExpression(tensor_join)");
+    double join_sum_value = featureData.getDouble("rankingExpression(join_sum)");
+```
+
+返されたテンソルに対して、たとえば `Tensor larger = tensor_join_value.map((value) -> 3 * value)` のようにさらに計算を行うことができます。
+
+[マルチフェーズ検索](/ja/applications/searchers#multiphase-searching)も活用する場合、[match-features](/ja/reference/schemas/schemas#match-features) を使用して first phase でランク・フィーチャーを返すことができます。これにより [matchfeatures](/ja/reference/querying/default-result-format#matchfeatures) フィールドが事前に設定されます。結果で観測できる効果は同じであるため、同じ機能のように見えるかもしれませんが、パフォーマンスのトレードオフは異なります:
+
+- _match-features_ の式は、どのヒットを _fill_ するかを選択する前に、first phase で返されるすべてのヒットに対して計算する必要があります。しかしこれは、`matchfeatures` フィールドを使って、`fill()` を呼び出す前にどのヒットを残しどのヒットを除去するかを選択できることも意味します。
+- _summary-features_ の式は _fill_ フェーズより前には利用できませんが、実際に fill されるヒットに対してのみ計算すればよいことになります。
+
+この違いは、コーパスが多数のコンテント・ノードに分散されている場合に最も顕著になります。7 台のコンテント・ノードがあり、それぞれから 100 件のマッチを取得するケースを考えてみましょう。これらは(関連度スコアによって)700 件のヒットのリストにマージされ、関連度が最も高い 100 件が選択されて _fill_ されます。_match-features_ を使用する場合、700 件すべてのヒットに対して計算する必要があります。これに対して _summary-features_ では、最終的な 100 件のヒットのみを計算の対象とすればよいのです。
+
+## 条件式
+
+ランキング式は、ドキュメントのアトリビュート、クエリーのパラメータ、その他のフィーチャーに基づいて異なるサブ式を選択する条件ロジックをサポートしています。これにより、単一の rank profile の中で、異なるドキュメントタイプ、ユーザーセグメント、またはビジネスルールにランキングを適応させることができます。
+
+### if 関数
+
+`if` は、MLR で学習した決定木のエンコード以外の目的にも使用できます。その一つが、同じ検索の中で異なるタイプのドキュメントに対して異なるランキング関数を選択することです。ランキング式は文字列の等価テストを行うことができるため、文字列アトリビュート(たとえば "category")の値に基づいて異なるランキング・サブ関数を選択するには、次のような式を使用します:
+
+```py
+if (attribute(category)=="restaurant",_â€¦restaurant function_, if (attribute(category)=="hotel",_â€¦hotel function_, â€¦))
+```
+
+この方法は、複数のスキーマが同じクラスターにデプロイされ、すべてが同じクエリーに含まれる場合に、各ドキュメントに対して正しいスキーマのランキング式を選択するためにも自動的に使用されます。
+
+`if` 関数を使用することで、厳密な階層化(tiering)を実装し、ある基準を満たすドキュメントが常に他のドキュメントより高いスコアを得るようにすることもできます。例:
+
+```py
+if (fieldMatch(business).fieldCompleteness==1, 0.8+document.distance*0.2,
+                                               if (attribute(category)=="shop", 0.6+fieldMatch(title)*0.2,
+                                                                                 match*attribute(popularity)*0.6 )
+```
+
+この関数は、ビジネス名に完全一致するすべてのドキュメントを地理的距離でソートして最初に配置し、次にタイトルのマッチでソートされたすべてのショップ、最後に全体的なマッチ品質と人気度でソートされたその他すべてを配置します。
+
+階層化されたランキング関数を使用してクエリーと結果をピン留めする包括的な例については、[pin results](/ja/ranking/multivalue-query-operators#pin-results-example) も参照してください。
+
+### switch 関数
+
+同じ判別値に対して多くの値を比較する場合、`switch` 関数は深くネストした `if` 文よりも読みやすい代替手段を提供します。たとえば、上記のネストした if 式は次のようにより明確に書くことができます:
+
+```py
+switch (attribute(category)) {
+    case "restaurant":_â€¦restaurant function_,
+    case "hotel":_â€¦hotel function_,
+    default:_â€¦default function_}
+```
+
+単一の式を複数の値と等価比較でテストする場合は `switch` を使用します。異なる比較演算子を使う場合や、上記の階層化の例のように各条件が異なる式をテストする場合は、引き続き `if` を使用します。詳細は [switch 関数のリファレンス](/ja/reference/ranking/ranking-expressions#the-switch-function)を参照してください。
+
+## 定数の使用
+
+ランキング式は、`constants` 句で定義された定数を参照できます:
+
+```bash
+first-phase {
+    expression: myConst1 + myConst2
+}
+constants {
+    myConst1: 1.5
+    myConst2: 2.5
+    ...
+}
+```
+
+定数のリストは継承され、サブプロファイルでオーバーライドできます。これは、同じ大枠のランキングを使用しつつ定数の値だけが異なる rank profile のセットを作成するのに便利です。
+
+パフォーマンスのために、使用する定数値を rank profile のセットとして列挙できる場合は、常にクエリー変数(下記参照)よりも定数を優先してください。定数は設定時にランキング式に適用され、式の定数部分は事前に計算されるため、特にテンソル定数の場合、実行コストの削減につながることがあります。
+
+## クエリー変数の使用
+
+ランキング式は任意のフィーチャーを名前で参照できるため、[クエリー・フィーチャー](/ja/reference/ranking/rank-features#feature-list)をランキング変数として使用できます。これらの変数は、たとえばランキング式の各部分の重要度をクエリーで指定できるようにしたり、クエリーごとに異なる値を試すことで大きなパラメータ空間をすばやく探索して良いランキングを見つけたりするのに使用できます。これらの変数には、[rank profile](/ja/reference/schemas/schemas#rank-profile) で次のように追加することでデフォルト値を設定できます:
+
+```bash
+inputs {
+    query(myvalue) double: 0.5
+}
+```
+
+これを rank profile に追加します。これらの変数は、クエリーに次を追加することでオーバーライドできます:
+
+```bash
+input.query(myvalue)=0.1
+```
+
+[Query API](/ja/reference/api/query#ranking.features) を参照してください。
+
+## クエリー・フィーチャーの型
+
+すべてのフィーチャーのデフォルトの型はスカラーです。クエリー・フィーチャーとして _テンソル_ を使用するには、[rank profile でその型を定義](/ja/reference/schemas/schemas#inputs)する必要があります。
+
+正しいテンソル型がない場合、渡されたクエリー・フィーチャーはスカラーに変換される文字列として扱われ、_エラーにはなりませんが、誤った結果を生成します_。
+
+テンソルは、[テンソル・リテラル形式](/ja/reference/ranking/tensor#tensor-literal-form)を使用してリクエストで渡すことができます。例:
+
+```bash
+input.query(user_profile)=%7B%7Bcat%3Apop%7D%3A0.8%2C%7Bcat%3Arock%7D%3A0.2%2C%7Bcat%3Ajazz%7D%3A0.1%7D
+```
+
+ただし、通常は代わりに [Searcher](/ja/applications/searchers) で作成する方が望ましいです。[Query](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/Query.java) インスタンスに関連付けられた [RankFeatures](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/query/ranking/RankFeatures.java) インスタンスを使用してテンソル値を設定します。この例では、値 500 を持つ単一のセルを持つテンソルを作成します:
+
+```java
+package com.yahoo.example;
+
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.search.Searcher;
+import com.yahoo.search.searchchain.Execution;
+import com.yahoo.tensor.Tensor;
+import com.yahoo.tensor.TensorType;
+
+public class TensorInQuerySearcher extends Searcher {
+    @Override
+    public Result search(Query query, Execution execution) {
+        // The Tensor type must also be in the application package as described in the above section
+        query.getRanking().getFeatures().put("query(tensor_feature)",
+              Tensor.Builder.of(TensorType.fromSpec("tensor<float>(x{})")).cell().label("x", "foo").value(500).build());
+        return execution.search(query);
+    }
+}
+```
+テンソルをプログラムで構築する方法の詳細については、[Tensor](https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html) Java API を参照してください。
+## 関数スニペット
+
+機械学習ランキングを使用する場合、私たちが探索しているのは、ランキング式がサポートする関数空間よりもはるかに限定された関数空間です。MLR の学習で使用されるプリミティブなフィーチャーは、Vespa におけるプリミティブなフィーチャーである必要はなく、ランキング式のスニペットでもよいため、MLR で利用可能な関数空間を広げることができます。アプリケーションで有用と考えられるフィーチャーの数学的な組み合わせがある場合、それらを Vespa の実際のプリミティブなフィーチャーから事前計算し、プリミティブとして MLR に与えることができます。そのようなプリミティブは、学習された式が Vespa にデプロイされる前に、対応するランキング式スニペットでテキスト的に置き換えることができます。
+
+Vespa は[式関数](/ja/reference/schemas/schemas#function-rank)をサポートしています。引数のない関数は summary-features や rank-features として使用できます。たとえば、関数 "myfeature":
+
+```bash
+rank-profile myrankprofile inherits default {
+    function myfeature() {
+      expression: fieldMatch(title).completeness * pow(0 - fieldMatch(title).earliness, 2)
+    }
+}
+```
+
+は次のようにフィーチャーとして利用可能になります:
+
+```bash
+summary-features {
+    myfeature
+}
+```
+
+## 関連度の変動の経時的な追跡
+
+Vespa には関連度に関するいくつかのシンプルなメトリクスが付属しており、アプリケーションは、関連度の計算方法の変更、クエリー構築の変更、取り込まれるコンテンツの変更、あるいはユーザー行動の変化の結果として、関連度が時間とともにどのように変化するかを確認できます。
+
+関連度メトリクスは `relevance.at_1`、`relevance.at_3`、`relevance.at_10` です。詳細は[メトリクス](/ja/operations/metrics)を参照してください。
+
+## 例
+
+ユーザーが未成年の場合、アダルトコンテンツには 0 を割り当て、タイトル・フィールドのマッチ品質と子供の間での人気度の平均を使用します。そうでない場合は、タイトル・フィールドのマッチ品質を使用します:
+
+```py
+if ( query(userage) < 18,
+     if ( attribute(adultness) > 0.1, 0 , (fieldMatch(title)+attribute(kidspopularity)) / 2 ),
+     fieldMatch(title) )
+```
+
+いくつかのフィールドのマッチ品質の加重平均に、ドキュメントの経過時間の 1-exp を掛けて使用します:
+
+```py
+( 10*fieldMatch(title) + 5*fieldMatch(description) +
+  7*attributeMatch(tags).normalizedWeight ) /22 * ( 1 - age(creationtime) )
+```

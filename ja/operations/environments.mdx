@@ -1,0 +1,115 @@
+---
+title: "環境"
+---
+
+Vespa Cloud には 2 種類の環境があります:
+
+- 迅速な開発とテストのための手動環境: `dev`
+- CD パイプラインが統合された自動環境: `prod`
+
+アプリケーションは 1 つ以上の *zone*（[zone の一覧](/ja/operations/zones)を参照）にデプロイされます。zone は *environment* と *region* の組み合わせで、`vespa deploy -z dev.aws-us-east-1c` のように指定します。
+
+## Dev
+
+dev 環境は迅速な開発サイクルのために構築されており、使いやすさとコスト管理のために自動ダウンスケーリングと自動有効期限切れの仕組みを備えています。dev 環境はデフォルトの環境であり、ここにデプロイするには `vespa deploy` を使用します。
+
+### 自動ダウンスケーリング
+
+dev 環境のユースケースの 1 つは、prod 環境からアプリケーション・パッケージを取得し、デバッグのために dev 環境にデプロイすることです。コストを最小限に抑えて迅速に行えるように、Vespa Cloud はデフォルトで [nodes](/ja/reference/applications/services/services#nodes) と [resources](/ja/reference/applications/services/services#resources) の設定を無視します。
+
+これにより、（通常はサイズの大きい）prod のアプリケーション・パッケージをダウンロードし、変更を加えることなく安全に dev にデプロイできます。
+
+この動作を上書きしてリソースを制御するには、[デプロイメント・バリアント](/ja/operations/deployment-variants#services.xml-variants)に記載されているとおり、dev 環境向けにリソースを明示的に指定します。例:
+
+```xml
+<content version="1.0">
+    <nodes deploy:environment="dev"
+           count="1" />
+    <nodes deploy:environment="prod"
+           deploy:region="aws-us-east-1c"
+           count="20">
+        <resources vcpu="16.0" memory="128Gb" disk="3750Gb"/>
+    </nodes>
+</content>>
+```
+
+<Warning>
+**Important:** 
+
+`dev` 環境はデフォルトで冗長度が 1 であり、可用性やデータ永続性の保証はありません。これらの zone にデプロイされたアプリケーションを、プロダクションのサービス提供用途に使用しないでください。
+</Warning>
+
+### 自動有効期限切れ
+
+`dev` へのデプロイメントは、非アクティブ状態が 14 日間続くと期限切れになります。つまり、最後の[デプロイメント](/ja/basics/applications#deploying-applications)から 14 日後です。**これはすべてのプランに適用されます**。有効期限をさらに 7 日間延長するには、アプリケーションを再デプロイするか、Vespa Cloud Console を使用します。
+
+### Vespa のバージョン
+
+dev 環境へのデプロイ時には、最新のアクティブな Vespa バージョンが使用されます。ダウンタイムを最小限に抑えるために、デプロイメントは開発者にとって夜間である可能性が最も高い時間帯にアップグレードされます（最後にデプロイが行われた時刻に基づきます）。メトリクスが進行中のフィードやクエリーの負荷を示している場合、アップグレードはスキップされますが、現在のバージョンが 1 週間以上古い場合は実行されます。
+
+## Prod
+
+プロダクションでのサービス提供のために、アプリケーションは `prod` 環境にデプロイされます。デプロイメントは、システムテストとステージングテストのために、統合された CD パイプラインを通過します。詳細は[自動デプロイメント](/ja/operations/automated-deployments)を参照してください。
+
+## Test
+
+`test` 環境は、prod デプロイメント用の統合 CD パイプラインが[システムテスト](/ja/operations/automated-deployments#system-tests)を実行するために使用します。テスト用のキャパシティは一時的なもので、テスト中にのみ使用されます。test 環境および staging 環境のノードは、prod 環境のデータにアクセスできません。
+
+test 環境と staging 環境には直接デプロイできないことに注意してください。長期間稼働するテストアプリケーション（例えば、他のサービスと統合された QA システム）には、prod 環境を使用してください。
+
+システムテストは、テストが定義されていなくても必ず実行されます。この場合、インスタンスは単に起動されてから停止されます。これ自体にも、アプリケーションが起動できることを確認できるという価値があります。
+
+テストの実行は[中止](/ja/operations/automated-deployments#disabling-tests)できます。
+
+## Staging
+
+上記のシステムテストの説明を参照してください。これは staging にも当てはまります。[ステージングテスト](/ja/operations/automated-deployments#staging-tests)は、設定された prod キャパシティの一部を使用します。これを上書きして、prod クラスターのサイズに関係なく 1 ノードを使用するようにできます:
+
+```xml
+<content version="1.0">
+    <nodes deploy:environment="staging" count="1">
+        <resources vcpu="2.0" memory="8Gb" disk="50Gb"/>
+    </nodes>
+</content>
+```
+
+## リファレンス
+
+環境の設定:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>有効期限</th>
+      <th>クラスターサイズ</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`dev`}</code></td>
+      <td>手動での開発テストに使用します。</td>
+      <td>14 日</td>
+      <td><code>{`1`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`test`}</code></td>
+      <td><a href="/ja/applications/testing#system-tests" aria-label="自動システムテスト">自動システムテスト</a>に使用します。</td>
+      <td>-</td>
+      <td><code>{`1`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`staging`}</code></td>
+      <td><a href="/ja/applications/testing#staging-tests" aria-label="自動ステージングテスト">自動ステージングテスト</a>に使用します。</td>
+      <td>-</td>
+      <td><code>{`min(max(2, 0.05 * spec), spec)`}</code></td>
+    </tr>
+    <tr>
+      <td><code>{`prod`}</code></td>
+      <td>すべてのプロダクション・デプロイメントをホストします。</td>
+      <td>期限なし</td>
+      <td><code>{`max(2, spec)`}</code></td>
+    </tr>
+  </tbody>
+</table>

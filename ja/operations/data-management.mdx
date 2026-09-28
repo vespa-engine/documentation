@@ -1,0 +1,235 @@
+---
+title: "データ管理とバックアップ"
+---
+
+このガイドでは、Vespa Cloud アプリケーションのデータ管理操作について説明します。自動バックアップ、ドキュメントのエクスポート、フィード、一括更新および一括削除を扱います。
+
+## 自動バックアップ
+
+[プラン](https://vespa.ai/pricing/)に応じて、*deployment.xml* に [`<backup>`](/ja/reference/applications/deployment#backup) 要素を指定すると、コンテント・クラスターは自動的にバックアップされます。Vespa Cloud がバックアップのスケジュール、ストレージ、ライフサイクルを管理するため、外部ツールは不要です。バックアップは設定された頻度で実行されますが、インスタンスに定義された[ブロックウィンドウ](/ja/reference/applications/deployment#block-change)も尊重されます。
+
+```xml
+<instance id="default">
+    <backup frequency="7d" />
+    <prod>
+        <region>aws-us-east-1c</region>
+    </prod>
+</instance>
+```
+
+クラスターの最初のバックアップは、バックアップを有効にした直後には作成されません。クラスターが最初のバックアップの対象になるのは、コンテントノードが少なくとも 1 回分のバックアップ間隔の間稼働してからです — 例えば `7d` の頻度なら、ノードが最初に割り当てられた時点から 7 日間です。以降のバックアップは設定された頻度で行われます。バックアップの対象可否はおよそ 1 時間ごとに評価されるため、クラスターが対象になってから最初のバックアップが現れるまで最大 1 時間かかることがあります。
+
+バックアップは 3 バックアップ間隔分保持されます(例: 7 日頻度なら 21 日間)。直近の完全に完了したバックアップは、経過時間にかかわらず常に保持されます。リストアの依頼方法については[バックアップからのリストア](#restore)を参照してください。
+
+バックアップを自分で管理したい場合は、[Google Cloud Function の例](https://github.com/vespa-engine/sample-apps/tree/master/examples/google-cloud/cloud-functions#backup---experimental)に示すように、`vespa visit` を使ってドキュメントを手動でエクスポートできます。
+
+## バックアップからのリストア
+
+バックアップからのリストアは Vespa Cloud が行います。リストアを開始するには、[Vespa サポート](https://vespa.ai/support/)にお問い合わせください。応答時間と優先度の扱いは、[サポートプラン](https://vespa.ai/pricing/)に準じます。
+
+リストアには、以下を満たすデプロイ済みのターゲットクラスターが必要です:
+
+- バックアップと同じ数のコンテントノード。
+- バックアップ時点と少なくとも同等のノードあたりディスク容量。
+
+リストア後には、通常コンテントの再分配が必要になることに注意してください。詳細は[バックアップのリファレンス](/ja/reference/applications/deployment#backup)を参照してください。
+
+## ドキュメントのエクスポート
+
+<Note>
+**注:** 
+
+以下の例では [Vespa CLI](/ja/clients/vespa-cli) を使用します。最新バージョンがインストールされていることを確認してください。
+</Note>
+
+ドキュメントをエクスポートするには、エクスポート元のアプリケーションを設定し、ゾーン、コンテナー・クラスター、スキーマを選択します - 例:
+
+```bash
+$ vespa config set application vespa-team.vespacloud-docsearch.default
+
+$ vespa visit --zone prod.aws-us-east-1c --cluster default --selection doc | head
+```
+
+上記のパラメーターの一部は、曖昧さがなければ省略可能です。ここでは、アプリケーションは複数のコンテナー・クラスターを持つ [multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) にあるテンプレートを使ってセットアップされています。この例では、`doc` スキーマのドキュメントを[ビジット](/ja/writing/visiting)します。
+
+ドキュメント ID のみをエクスポートするには、[fieldset](/ja/schemas/documents#fieldsets) を使用します:
+
+```bash
+$ vespa visit --zone prod.aws-us-east-1c --cluster default --selection doc --field-set '[id]' | head
+```
+
+<Note>
+**注:** 
+
+スキーマで [`documentid`](/ja/reference/schemas/schemas#documentid) フィールドを attribute に設定すると、この処理でディスクアクセスが不要になり、エクスポート処理が高速化されます。
+</Note>
+
+名前のとおり、fieldset はエクスポートするフィールドのサブセットを選択するのに便利です。ただし、fieldset のフィールド取得にディスクアクセスが必要な場合、インデックスから読み取られるデータ量は同じであるため、フィールドを減らしてもエクスポート処理は速くなりません。フィールドが少なければ、Vespa アプリケーションからのデータ転送量は小さくなります。
+
+アプリケーション間でドキュメントをコピーする方法については、[アプリケーションとデータのクローン](/ja/operations/cloning)を参照してください。
+
+## フィード
+
+ドキュメントフィードを `vespa visit`(上記)で生成した場合、デフォルトですでにフィード可能な [JSON Lines](https://jsonlines.org/) 形式になっています:
+
+```bash
+$ vespa visit | vespa feed - -t $ENDPOINT
+```
+
+その他の例は[アプリケーションとデータのクローン](/ja/operations/cloning)にあります。
+
+[/document/v1](/ja/writing/document-v1-api-guide) を使って生成したドキュメントエクスポートは、`vespa visit` の .jsonl 出力とは少し異なります(例: continuation トークンなどのフィールドが追加されます)。フィードする前に `document` オブジェクトを抽出してください:
+
+```bash
+$ gunzip -c docs.gz | jq '.documents[]' | \
+  vespa feed - -t $ENDPOINT
+```
+
+## 削除
+
+Vespa デプロイメント内のすべてのドキュメント — またはその一部 — を削除するには、*削除ビジット (deletion visit)* を実行します。`DELETE` HTTP メソッドを使い、レスポンスからは continuation トークンのみを取得します:
+
+```bash expandable
+#!/bin/bash
+
+set -x
+
+# The ENDPOINT must be a regional endpoint, do not use '*.g.vespa-app.cloud/'
+ENDPOINT="https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud"
+NAMESPACE=open
+DOCTYPE=doc
+CLUSTER=documentation
+
+# doc.path =~ "^/old/" -- all documents under the /old/ directory:
+SELECTION='doc.path%3D~%22%5E%2Fold%2F%22'
+
+continuation=""
+
+while
+  token=$( curl -X DELETE -s \
+           --cert data-plane-public-cert.pem \
+           --key data-plane-private-key.pem \
+           "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?selection=${SELECTION}&cluster=${CLUSTER}&${continuation}" \
+           | tee >( jq . > /dev/tty ) | jq -re .continuation )
+do
+  continuation="continuation=${token}"
+done
+```
+
+各リクエストはおよそ 1 分後にレスポンスを返します — これは *timeChunk*(デフォルト 60)を指定して変更できます。
+
+ドキュメントエクスポート(上記)内のすべてのドキュメントをパージするには、各ドキュメント ID に対する `remove` エントリーを持つフィードを次のように生成します:
+
+```bash
+$ gunzip -c docs.gz | jq '[ .documents[] | {remove: .id} ]' | head
+
+[
+  {
+    "remove": "id:open:doc::open/documentation/schemas.html"
+  },
+  {
+    "remove": "id:open:doc::open/documentation/securing-your-vespa-installation.html"
+  },
+```
+
+単一チャンクの完全な例:
+
+```bash
+$ gunzip -c docs.gz | jq '[ .documents[] | {remove: .id} ]' | \
+  vespa feed - -t $ENDPOINT
+```
+
+## 更新
+
+Vespa デプロイメント内のすべてのドキュメント — またはその一部 — を更新するには、*更新ビジット (update visit)* を実行します。`PUT` HTTP メソッドを使い、リクエストボディに部分更新を指定します:
+
+```bash expandable
+#!/bin/bash
+
+set -x
+
+# The ENDPOINT must be a regional endpoint, do not use '*.g.vespa-app.cloud/'
+ENDPOINT="https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud"
+NAMESPACE=open
+DOCTYPE=doc
+CLUSTER=documentation
+
+# doc.inlinks == "some-url" -- the weightedset<string> inlinks has the key "some-url"
+SELECTION='doc.inlinks%3D%3D%22some-url%22'
+
+continuation=""
+
+while
+  token=$( curl -X PUT -s \
+           --cert data-plane-public-cert.pem \
+           --key data-plane-private-key.pem \
+           --data '{ "fields": { "inlinks": { "remove": { "some-url": 0 } } } }' \
+           "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?selection=${SELECTION}&cluster=${CLUSTER}&${continuation}" \
+           | tee >( jq . > /dev/tty ) | jq -re .continuation )
+do
+  continuation="continuation=${token}"
+done
+```
+
+各リクエストはおよそ 1 分後にレスポンスを返します — これは *timeChunk*(デフォルト 60)を指定して変更できます。
+
+## /document/v1/ API の使用
+
+ドキュメントエクスポートを始めるには、いくつかの ID をリストして *namespace* と *document type* を特定します。[/document/v1/](/ja/reference/api/document-v1) の ENDPOINT にアクセスします。1 つの CLUSTER に限定してください。[コンテント・クラスター](/ja/reference/applications/services/content)を参照:
+
+```bash
+$ curl \
+  --cert data-plane-public-cert.pem \
+  --key data-plane-private-key.pem \
+  "$ENDPOINT/document/v1/?cluster=$CLUSTER"
+```
+
+ID のみをエクスポートするには、[fieldset](/ja/schemas/documents#fieldsets) を使用します:
+
+```bash
+$ curl \
+  --cert data-plane-public-cert.pem \
+  --key data-plane-private-key.pem \
+  "$ENDPOINT/document/v1/?cluster=$CLUSTER&fieldSet=%5Bid%5D"
+```
+
+*id:open:doc::open/documentation/schemas.html* のような ID から、次を抽出します
+
+- NAMESPACE: open
+- DOCTYPE: doc
+
+スクリプトの例:
+
+```bash expandable
+#!/bin/bash
+
+set -x
+
+# The ENDPOINT must be a regional endpoint, do not use '*.g.vespa-app.cloud/'
+ENDPOINT="https://vespacloud-docsearch.vespa-team.aws-us-east-1c.z.vespa-app.cloud"
+NAMESPACE=open
+DOCTYPE=doc
+CLUSTER=documentation
+
+continuation=""
+idx=0
+
+while
+  ((idx+=1))
+  echo "$continuation"
+  printf -v out "%05g" $idx
+  filename=${NAMESPACE}-${DOCTYPE}-${out}.data.gz
+  echo "Fetching data..."
+  token=$( curl -s \
+           --cert data-plane-public-cert.pem \
+           --key data-plane-private-key.pem \
+           "${ENDPOINT}/document/v1/${NAMESPACE}/${DOCTYPE}/docid?wantedDocumentCount=1000&concurrency=4&cluster=${CLUSTER}&${continuation}" \
+           | tee >( gzip > ${filename} ) | jq -re .continuation )
+do
+  continuation="continuation=${token}"
+done
+```
+
+1 回のレスポンスで返されるドキュメントが少ない場合は、*wantedDocumentCount*(デフォルト 1、最大 1024)を指定して、(まだそれだけのドキュメントが残っていれば)レスポンスあたりのドキュメント数の下限を設定できます。
+
+*concurrency*(デフォルト 1、最大 100)を指定するとスループットが向上しますが、リソース使用量が増えます。これによりレスポンスあたりのドキュメント数も増えるため、多数の大きなドキュメントが同一レスポンスで返すためにバッファーされると、HTTP コンテナーで過剰なメモリー使用につながる*可能性*があります。

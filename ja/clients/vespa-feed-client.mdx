@@ -1,0 +1,145 @@
+---
+title: "vespa-feed-client"
+sidebarTitle: "Java フィードクライアント"
+---
+
+- [HTTP/2](/ja/performance/http2) 上で [Document v1](/ja/writing/document-v1-api-guide) を使用してドキュメント操作をフィードするための Java ライブラリおよびコマンドライン・クライアント。
+- リトライと動的スロットリングを備えた、非同期・高性能な Java 実装。
+- フィード操作の JSON 配列に加え、[JSONL](https://jsonlines.org)（1 行につき 1 つの操作 JSON）をサポート。
+
+## インストール
+
+### Java ライブラリ
+
+Java ライブラリは、Maven Central の [Maven JAR アーティファクト](https://search.maven.org/search?q=g:com.yahoo.vespa%20a:vespa-feed-client)として入手できます。最低でも JDK17 が必要です。
+
+このクライアントを使用したサンプル・アプリケーションは [client-java](https://github.com/vespa-engine/sample-apps/blob/master/examples/clients/client-java/README.md) にあります。
+
+### コマンドライン・クライアント
+
+2 つの選択肢があります:
+
+- [_vespa-clients_/_vespa_](/ja/operations/self-managed/build-install) RPM パッケージをインストールする。
+- Maven Central から [vespa-feed-client **zip** アーティファクト](https://search.maven.org/artifact/com.yahoo.vespa/vespa-feed-client-cli)をダウンロードする。
+
+ダウンロード例:
+
+```bash
+$ F_REPO="https://repo1.maven.org/maven2/com/yahoo/vespa/vespa-feed-client-cli" && \
+  F_VER=$(curl -Ss "${F_REPO}/maven-metadata.xml" | sed -n 's/.*<release>\(.*\)<.*>/\1/p') && \
+  curl -SsLo vespa-feed-client-cli.zip ${F_REPO}/${F_VER}/vespa-feed-client-cli-${F_VER}-zip.zip && \
+  unzip -o vespa-feed-client-cli.zip
+```
+
+## Vespa でフィード・エンドポイントを有効にする
+
+要件:
+
+- [コンテナーで Document API を有効にする必要があります](/ja/reference/applications/services/container#document-api)。
+
+[TLS](/ja/reference/applications/services/http#ssl) 上の HTTP/2 はオプションですが、セキュリティの観点から推奨されます。
+
+TLS を使用した _services.xml_ の例:
+
+```xml highlight= {4-13}
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0">
+    <container version="1.0" id="default">
+        <http>
+            <server id="default" port="443">
+                <ssl>
+                    <private-key-file>/path/to/private-key.pem</private-key-file>
+                    <certificate-file>/path/to/certificate.pem</certificate-file>
+                    <ca-certificates-file>/path/ca-certificates.pem</ca-certificates-file>
+                </ssl>
+            </server>
+        </http>
+        <document-api/>
+    </container>
+</services>
+
+```
+
+TLS を使用しない _services.xml_ の例:
+
+```xml highlight= {4}
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0">
+    <container version="1.0" id="default">
+        <document-api/>
+    </container>
+</services>
+```
+
+## クライアントの使用
+
+プログラマティック API の Javadoc は [javadoc.io](https://javadoc.io/doc/com.yahoo.vespa/vespa-feed-client-api) で入手できます。使用方法については `$ vespa-feed-client --help` の出力を参照してください。
+
+帯域幅テストには `--speed-test` を使用します。
+
+### Java の例
+
+Maven（または依存関係管理に Maven を使用する他のビルドシステム）に _vespa-feed-client_ を依存関係として追加します:
+
+```
+<dependency>
+    <groupId>com.yahoo.vespa</groupId>
+    <artifactId>vespa-feed-client</artifactId>
+    <version>8.689.26</version>
+</dependency>
+```
+
+コード例は GitHub の [vespa-feed-client ソースコード](https://github.com/vespa-engine/vespa/tree/master/vespa-feed-client-api/src/test/java/ai/vespa/feed/client/examples)に掲載されています。
+
+- [JsonFileFeederExample.java](https://github.com/vespa-engine/vespa/blob/master/vespa-feed-client-api/src/test/java/ai/vespa/feed/client/examples/JsonFileFeederExample.java)
+- [JsonStreamFeederExample.java](https://github.com/vespa-engine/vespa/blob/master/vespa-feed-client-api/src/test/java/ai/vespa/feed/client/examples/JsonStreamFeederExample.java)
+- [SimpleExample.java](https://github.com/vespa-engine/vespa/blob/master/vespa-feed-client-api/src/test/java/ai/vespa/feed/client/examples/SimpleExample.java)
+
+### コマンドラインの例
+
+TLS 上の HTTP/2:
+
+```bash
+$ vespa-feed-client \
+  --connections 4 \
+  --certificate cert.pem --private-key key.pem --ca-certificates ca.pem \
+  --file /path/to/json/file \
+  --endpoint https://container-endpoint:443/
+```
+
+入力は、Vespa フィードクライアント向けに[こちら](../reference/schemas/document-json-format#document-operations)で説明されている形式に従った、正しい JSON 配列、または一連の JSON フィード操作（[JSONL](https://jsonlines.org)）のいずれかである必要があります。
+
+TLS を使用しない HTTP/2:
+
+```bash
+$ vespa-feed-client \
+  --connections 4 \
+  --file /path/to/json/file \
+  --endpoint http://container-endpoint:8080/
+```
+
+## マルチワーカー・パイプライン向けのチューニング
+
+よくあるパターンは、[Apache Beam](https://beam.apache.org/) のトポロジー（例: [Google Cloud Dataflow](https://docs.cloud.google.com/dataflow/docs/overview)）からフィードするケースです。ワーカー数と接続設定のバランスを取ることが重要です。
+
+各ワーカーがそれぞれ独自の `FeedClient` インスタンスを初期化するため、デフォルト設定では接続数が多くなりすぎることがあります。この例では、ワーカーが 128 個、Vespa コンテナー・ノードが 10 台あると仮定します。デフォルト（エンドポイントごとに 8 接続、接続ごとに最大 128 ストリーム）では、128 個のワーカーが 1,024 の接続を開きます。各接続はエンドポイントへの TLS ハンドシェイクを必要とするため、これはコンテナー CPU オーバーヘッドの主要な原因となります。
+
+ワーカーごとの推奨構成（[Javadoc](https://javadoc.io/doc/com.yahoo.vespa/vespa-feed-client-api/latest/ai/vespa/feed/client/package-summary.html)）:
+
+```java
+FeedClient client = FeedClientBuilder.create(endpoint)
+    .setConnectionsPerEndpoint(1)
+    .setMaxStreamPerConnection(maxStreams)
+    .setInitialInflightFactor(factor)
+    .build();
+```
+
+- `setConnectionsPerEndpoint(1)`: ワーカーごとに 1 接続とすると合計 128 接続となり、10 台のコンテナー・ノードには十分すぎるほどです。 
+- `setMaxStreamPerConnection(maxStreams)`: 目標フィードレートとワーカーの総数に基づいて計算します。例えば、目標が 128 ワーカー全体で 50k ドキュメント/秒の場合、各ワーカーは約 390 ドキュメント/秒が必要です。ドキュメントあたりの典型的なレイテンシーが 5〜10 ms であれば、各ワーカーには約 2〜4 の同時ストリームが必要です。 
+- `setInitialInflightFactor(factor)`: 動的スロットラーは低いインフライト数から始まり、ランダムウォークによりゆっくりと増加していきます。フィードジョブの開始時に立ち上がりが遅いと感じる場合は、この値を大きく（例: 4〜8）設定して、最適なインフライトレベルに近い状態から開始するようにします。このファクターは最小インフライト（2 x connectionsPerEndpoint x endpoints）に乗算されるため、1 接続でファクター 8 の場合、2 ではなく 16 インフライトから開始します。 
+
+<Danger>
+ **重要:** 各ワーカーは単一の `FeedClient` インスタンスを作成し、ワーカーのライフタイム全体で再利用する必要があります。バッチごとやドキュメントグループごとに新しいインスタンスを作成すると、接続の再利用が無効になり、スロットラーが収束できなくなります。
+</Danger>
+
+また、接続処理と安定性に関する最新の改善を得るため、vespa-feed-client 8.657 以降を使用してください。

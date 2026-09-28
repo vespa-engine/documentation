@@ -1,0 +1,278 @@
+---
+title: "nativeRank リファレンス"
+sidebarTitle: "nativeRank"
+---
+
+_nativeRank_ 特徴量は、許容できるパフォーマンスで計算される妥当なテキストランキングスコアを生成するもので、[first phase](/ja/ranking/phased-ranking) のランキングの有力な候補です。_nativeRank_ 特徴量は、_nativeFieldMatch_、_nativeProximity_、_nativeAttributeMatch_ の各特徴量によって計算された正規化スコアの線形結合です。これらの特徴量はすべて以下で詳しく説明します。特徴量の設定方法については、[設定プロパティ](#configuration-properties)のセクションを参照してください。
+
+## nativeFieldMatch
+
+_nativeFieldMatch_ 特徴量は、用語がフィールドに出現する回数と、フィールド内のどれだけ早い位置に出現するかを見ることで、クエリー用語が検索対象のインデックス・フィールドにどれだけよくマッチするかを捉えます。用語の重要度(significance)と重み(weight)も考慮され、珍しい用語は一般的な用語よりも高いランク寄与を与えます。
+
+_nativeFieldMatch_ のスコアは次のように計算されます。
+
+$$
+\text{nativeFieldMatch} =
+\frac{
+\left(
+\sum_{i=1}^{n}
+\text{termSignificance}_i \times \text{termWeight}_i
+\right)
+\left(
+\sum_{j=1}^{m}
+\text{fieldWeight}_j
+\left(
+\text{firstOccImp}_j \times \text{firstOccBoost}_{ij}
++
+(1 - \text{firstOccImp}_j) \times \text{numOccBoost}_{ij}
+\right)
+\right)
+}{
+\left(
+\sum_{i=1}^{n}
+\text{termSignificance}_i \times \text{termWeight}_i
+\right)
+\left(
+\sum_{j=1}^{m}
+\text{fieldWeight}_j \times \text{fmMaxTable}_j
+\right)
+}
+$$
+
+ここで、_n_ はインデックス・フィールドで検索されるクエリー用語の数、_m_ はクエリー用語 _i_ が検索するフィールドの数、_firstOccImpj_ はフィールド _j_ の _firstOccurrenceImportance_ であり、_firstOccBoostij_、_numOccBoostij_、_fmMaxTablej_ は以下に示すとおりです。
+
+$$
+\text{firstOccBoost}_{ij} = \text{firstOccurrenceTable}_j\left[\frac{\text{firstOcc}_{ij} \times \text{tableSize}_j}{\max(6, \text{fieldLength}_j)}\right]
+$$
+
+ここで、_firstOccurrenceTablej_ はフィールド _j_ に設定されたブーストテーブル(通常は expdecay 関数。下記の[ブーストテーブル](#boost-tables)のセクションを参照)、_firstOccij_ はフィールド _j_ におけるクエリー用語 _i_ の最初の出現位置、_tableSizej_ はブーストテーブルのサイズです。
+
+$$
+\text{numOccBoost}_{ij} = \text{occurrenceCountTable}_j\left[\frac{\text{numOccs}_{ij} \times \text{tableSize}_j}{\max(6, \text{fieldLength}_j)}\right]
+$$
+
+ここで、_occurrenceCountTablej_ はフィールド _j_ に設定されたブーストテーブル(通常は loggrowth 関数。下記の[ブーストテーブル](#boost-tables)のセクションを参照)、_numOccsij_ はフィールド _j_ におけるクエリー用語 _i_ の出現回数、_tableSizej_ はブーストテーブルのサイズです。
+
+$$
+\text{fmMaxTable}_j = \text{firstOccImp}_j \times \max(\text{firstOccurrenceTable}_j) + (1 - \text{firstOccImp}_j) \times \max(\text{occurrenceCountTable}_j)
+$$
+
+ここで、\(\max(\text{boostTable}_j)\) はそのテーブル内の最大値です。テーブル正規化がオフの場合、_fmMaxTablej_ は 1 になります([設定プロパティ](#configuration-properties)のセクションのプロパティ _nativeRank.useTableNormalization_ を参照)。
+
+_nativeFieldMatch_ のデフォルトの動作は、スコアの計算時に、すべてのインデックス・フィールドを検索するすべてのクエリー用語を考慮するというものです。計算は次のように、指定したインデックス・フィールドのセットに限定できます。
+
+`nativeFieldMatch(f1, f2)`
+
+この場合、インデックス・フィールド _f1_ と _f2_ を検索するクエリー用語のみが考慮されます。
+
+## nativeProximity
+
+_nativeProximity_ 特徴量は、クエリー用語のペアにおける用語間の単語距離を見ることで、マッチしたクエリー用語が検索対象のインデックス・フィールド内でどれだけ近くに出現するかを捉えます。互いに近い 2 つのクエリー用語は、遠く離れた 2 つの用語よりも高いスコアを与えるべきです。
+
+_nativeProximity_ のスコアは次のように計算されます。
+
+$$
+\text{nativeProximity} =
+\frac{
+\left(
+\sum_{j=1}^{m}
+\text{fieldWeight}_j
+\right)
+\left(
+\sum_{ab}
+\text{termPairWeight}_{ab}
+\left(
+\text{proxImp}_j \times \text{proxTable}_j[\text{dist}_{ab} - 1]
++
+(1 - \text{proxImp}_j) \times \text{revProxTable}_j[\text{dist}_{ba} - 1]
+\right)
+\right)
+}{
+\left(
+\sum_{j=1}^{m}
+\text{fieldWeight}_j
+\right)
+\left(
+\sum_{ab}
+\text{termPairWeight}_{ab} \times \text{pMaxTable}_j
+\right)
+}
+$$
+
+ここで、_m_ はインデックス・フィールドの数、_ab_ はフィールド _j_ で検索される用語ペア、_proxImpj_ はフィールド _j_ の _proximityImportance_、_proxTablej_ はフィールド _j_ の順方向近接ブーストテーブル、_distab_ はフィールド _j_ におけるクエリー用語 _a_ と _b_ の出現間の最小距離(_a_ が _b_ より前に出現)、_revProxTablej_ はフィールド _j_ の逆方向近接ブーストテーブル、_distba_ はフィールド _j_ におけるクエリー用語 _b_ と _a_ の出現間の最小距離(_b_ が _a_ より前に出現)であり、_termPairWeightab_ と _pMaxTablej_ は以下に示すとおりです。
+
+各フィールド _j_ について、このフィールドで検索されるすべてのクエリー用語を考慮し、用語ペアのセットを生成します。_slidingWindowSize_ パラメーターは、生成されるペアの数を決定します。用語 _a b c d_ に対してサイズ 3 のスライディングウィンドウを使用すると、まず用語 _a b c_、次に用語 _b c d_、最後に用語 _c d_ を考慮します。生成されるペアは _ab_、_ac_、_bc_、_bd_、_cd_ です。
+
+$$
+\text{termPairWeight}_{ab} = \text{connectedness}_{ab} \times (\text{termSignificance}_a \times \text{termWeight}_a + \text{termSignificance}_b \times \text{termWeight}_b)
+$$
+
+$$
+\text{connectedness}_{ac} = \frac{\min(\text{connectedness}_{ab}, \text{connectedness}_{bc})}{\text{dist}_{ac}}
+$$
+
+ここで、_distac_ はクエリー内の用語 _a_ と _c_ の間の距離です。
+
+$$
+\text{pMaxTable}_j = \text{proxImp}_j \times \max(\text{proxTable}_j) + (1 - \text{proxImp}_j) \times \max(\text{revProxTable}_j)
+$$
+
+ここで、\(\max(\text{boostTable}_j)\) はそのテーブル内の最大値です。テーブル正規化がオフの場合、_pMaxTablej_ は 1 になります([設定プロパティ](#configuration-properties)のセクションのプロパティ _nativeRank.useTableNormalization_ を参照)。
+
+_nativeProximity_ のデフォルトの動作は、スコアの計算時に、すべてのインデックス・フィールドと、これらのフィールドを検索するすべてのクエリー用語ペアを考慮するというものです。計算は次のように、指定したインデックス・フィールドのセットに限定できます。
+
+`nativeProximity(f1, f2)`
+
+この場合、インデックス・フィールド _f1_ と _f2_ を検索するクエリー用語ペアのみが考慮されます。
+
+多値フィールドの場合、ランクプロファイルでそのフィールドに [element-gap](/ja/reference/schemas/schemas#rank-element-gap) を設定すると、隣接する要素間の距離計算が可能になります。
+
+## nativeAttributeMatch
+
+_nativeAttributeMatch_ 特徴量は、クエリー用語が検索対象の属性フィールドにどれだけよくマッチするかを捉え、次のように計算されます。
+
+$$
+\text{nativeAttributeMatch} =
+\frac{
+\left(
+\sum_{i=1}^{n}
+\text{termWeight}_i \times \text{attributeWeight}_j \times \text{sign}(w_{ij}) \times \text{weightTable}_j[abs(w_{ij})]
+\right)
+}{
+\left(
+\sum_{i=1}^{n}
+\text{termWeight}_i \times \text{attributeWeight}_j \times \max(\text{weightTable}_j)
+\right)
+}
+$$
+
+ここで、_n_ は属性フィールドで検索されるクエリー用語の数、_weightTablej_ は属性 _j_ のブーストテーブル、\(\max(\text{weightTable}_j)\) はそのテーブル内の最大値(テーブル正規化がオフの場合は 1)、\(\text{sign}(w_{ij})\) は \(w_{ij}\) の符号です。\(w_{ij}\) は属性の型に依存します。
+
+- **Weighted set**: 属性 _j_ において、キー(クエリー用語 _i_ で表される)に関連付けられた重みに等しくなります。
+- **Array**: 属性 _j_ におけるクエリー用語 _i_ の出現回数に等しくなります。
+- **Single**: 1 に等しくなります。
+
+_nativeAttributeMatch_ のデフォルトの動作は、スコアの計算時に、すべての属性フィールドを検索するすべてのクエリー用語を考慮するというものです。計算は次のように、指定した属性フィールドのセットに限定できます。
+
+`nativeAttributeMatch(a1, a2)`
+
+この場合、属性フィールド _a1_ と _a2_ を検索するクエリー用語のみが考慮されます。
+
+## nativeRank
+
+_nativeRank_ 特徴量は、他の 3 つの特徴量の単なる線形結合であり、次のように計算されます。
+
+$$
+\text{nativeRank} =
+\frac{
+\text{fmw} \times \text{nativeFieldMatch} + \text{pw} \times \text{nativeProximity} + \text{amw} \times \text{nativeAttributeMatch}
+}{
+\text{fmw} + \text{pw} + \text{amw}
+}
+$$
+
+ここで、_fmw_ は _fieldMatchWeight_、_pw_ は _proximityWeight_、_amw_ は _attributeMatchWeight_ です。
+
+nativeRank スコアの計算時のデフォルトの動作は、定義されたすべてのインデックス・フィールドと属性フィールドを検索するすべてのクエリー用語を考慮するというものです。しかし多くの場合、ランクスコアの計算で関心があるのはこれらのフィールドのサブセットだけです。次のようにパラメーターリストにフィールド名を指定することで、フィールドのサブセットに対して _nativeRank_ をセットアップできます。
+
+```yaml
+first-phase {
+    expression: nativeRank(title,body,tags)
+}
+```
+
+この場合、2 つのインデックス・フィールド(_title_ と _body_)と 1 つの属性フィールド(_tags_)があり、_nativeRank_ 特徴量は _nativeFieldMatch(title,body)_、_nativeProximity(title,body)_、_nativeAttributeMatch(tags)_ の各特徴量に基づいて計算されます。フィールドのサブセットを指定すると、nativeRank スコアの計算にかかる CPU コストも削減されることに注意してください。
+
+## 変数
+
+上記の式で使用される共通の変数の一覧です。
+
+- _attributeWeightj_: 属性フィールド _j_ の重み。この重みの設定方法については、[スキーマリファレンス](/ja/reference/schemas/schemas#weight)を参照してください。デフォルト値は 100 です。
+- _connectednessab_: クエリー用語 _a_ と _b_ の間の connectedness。
+- _fieldLengthj_: フィールド _j_ の単語数での長さ。
+- _fieldWeightj_: インデックス・フィールド _j_ の重み。この重みの設定方法については、[スキーマリファレンス](/ja/reference/schemas/schemas#weight)を参照してください。デフォルト値は 100 です。
+- _termSignificancei_: クエリー用語 _i_ の重要度(significance)。
+- _termWeighti_: クエリー用語 _i_ の重み。
+
+## 設定プロパティ
+
+すべての nativeRank 系特徴量に対するすべての設定プロパティの包括的な一覧です。
+
+- `nativeFieldMatch(fieldName)` -> `averageFieldLength`: 指定されたドキュメントにおけるフィールドの実際の長さ。設定すると、すべてのドキュメントについて、nativeFieldMatch の式における真のフィールド長がこれに置き換えられます。
+- `nativeFieldMatch(fieldName)` -> `firstOccurrenceTable`: 指定されたフィールドにおける最初の出現位置に対するブーストの計算に使用されるテーブル。
+- `nativeFieldMatch(fieldName)` -> `occurrenceCountTable`: 指定されたフィールドにおける出現回数に対するブーストの計算に使用されるテーブル。
+- `nativeFieldMatch(fieldName)` -> `firstOccurrenceImportance`: 指定されたフィールドに使用される重要度の値。
+- `nativeProximity` -> `proximityTable`: フィールドにおける順方向近接ブーストの計算に使用されるテーブル。
+- `nativeProximity(fieldName)` -> `proximityTable`: 指定されたフィールドにおける順方向近接ブーストの計算に使用されるテーブル。
+- `nativeProximity` -> `reverseProximityTable`: フィールドにおける逆方向近接ブーストの計算に使用されるテーブル。
+- `nativeProximity(fieldName)` -> `reverseProximityTable`: 指定されたフィールドにおける逆方向近接ブーストの計算に使用されるテーブル。
+- `nativeProximity` -> `proximityImportance`: 指定されたフィールドに使用される重要度の値。
+- `nativeProximity` -> `slidingWindowSize`: 用語ペアの生成時に使用されるスライディングウィンドウのサイズ。
+    <Warning>
+    **非推奨:** elementGap ランクプロパティは非推奨で、Vespa 9 で削除される予定です。
+    </Warning>
+- nativeProximity -> `elementGap.fieldName`: 多値フィールドにおける隣接要素間の位置のギャップ。代わりに [element-gap](/ja/reference/schemas/schemas#rank-element-gap) ランク設定を使用してください。
+- `nativeAttributeMatch` -> `weightTable`: 属性フィールドにおけるマッチに対するブーストの計算に使用されるテーブル。
+- `nativeAttributeMatch` -> `weightTable.attributeName`: 指定された属性におけるマッチに対するブーストの計算に使用されるテーブル。
+- `nativeRank` -> `fieldMatchWeight`: _nativeFieldMatch_ からのスコアをどれだけ重み付けするか。
+- `nativeRank` -> `proximityWeight`: _nativeProximity_ からのスコアをどれだけ重み付けするか。テーブル正規化がオフの場合、デフォルト値は 100.0 です。
+- `nativeRank` -> `attributeMatchWeight`: _nativeAttributeMatch_ からのスコアをどれだけ重み付けするか。
+- `nativeRank` -> `useTableNormalization`: nativeRank 系特徴量にテーブル正規化を使用するかどうか。テーブル正規化をオフにするには、このプロパティを _false_ に設定します
+
+たとえば、インデックス・フィールド _content_ の _occurrenceCountTable_ と _reverseProximityTable_ をオーバーライドするには、sd ファイルのランクプロファイルに次を追加します。
+
+```bash
+rank-properties {
+    nativeFieldMatch(content).occurrenceCountTable: "linear(0,0)"
+    nativeProximity(content).reverseProximityTable: "linear(0,0)"
+}
+```
+
+rank-properties の詳細については、[検索定義](/ja/reference/schemas/schemas#rank-properties)のリファレンスを参照してください。
+
+### ブーストテーブル
+
+nativeRank 系特徴量では、次のブーストテーブルがサポートされています。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>関数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>expdecay(w,t)</td>
+      <td><code>{`w * exp(-x/t)`}</code></td>
+      <td>指数減衰関数を表します。_w_ は振幅を制御する重みで、_t_ は傾きを制御するチューニングパラメーターです。</td>
+    </tr>
+    <tr>
+      <td>loggrowth(w,t,s)</td>
+      <td><code>{`w * log(1 + (x/s)) + t`}</code></td>
+      <td>対数増加関数を表します。_w_ は振幅を制御する重み、_t_ はオフセットを制御するチューニングパラメーター、_s_ は変数 _x_ への感度を制御するスケールパラメーターです</td>
+    </tr>
+    <tr>
+      <td>linear(w,t)</td>
+      <td><code>{`w * x + t`}</code></td>
+      <td>線形関数を表します。_w_ は傾きを制御し、_t_ はオフセットを制御します。</td>
+    </tr>
+  </tbody>
+</table>
+
+パラメーター _w_、_t_、_s_ は、テーブルの内容と同じく浮動小数点数です。デフォルトのテーブルサイズは 256 で、x は区間 [0,255] にあります。このデフォルトサイズは、テーブル名にオプションの最後のパラメーターを指定することでオーバーライドできます。たとえば、_linear(1.5,0,512)_ を使用すると、区間 [0,511] のすべての x について関数 \(1.5 \times x + 0\) を評価した結果が格納された、サイズ 512 のテーブルが得られます。
+
+### ランクタイプ
+
+_nativeRank_ では、_about_(デフォルト)、_identity_、_tags_、_empty_ という 4 つの定義済みランクタイプがサポートされています。各タイプは、nativeRank 系特徴量で使用されるブーストテーブルのセットに関連付けられています。これらのタイプの詳細については、[ランクタイプ](/ja/reference/ranking/rank-types)のドキュメントを参照してください。
+
+sd ファイルをセットアップする際は、フィールドに定義済みのランクタイプのいずれかを使用するか、そのフィールドに使用するブーストテーブルを rank-properties のセットとして明示的に指定します。何も指定しない場合は、_about_ タイプに関連付けられたブーストテーブルが使用されます。_nativeFieldMatch_ と _nativeProximity_ の _about_ ブーストテーブルはテキストマッチ用にすでに最適化されていますが、_nativeAttributeMatch_ のブーストテーブルはデータに依存するため、ユースケースごとに最適化する必要があります。
+
+## nativeRank の制限
+
+nativeRank 特徴量は、純粋なテキストマッチのスコアリング特徴量です。特に、クエリーにマッチしたドキュメントについて、次の概念は考慮されません。
+
+- 静的なランクや、数値に基づくその他の関連度への寄与。この概念を最終的な関連度スコアに取り込むには、ランキング式で _attribute_ 特徴量を使用してください。 
+- クエリーに関連付けられた位置と相関する、マッチの地理的な位置。これを考慮するには、ランキング式で _distance_ または _closeness_ 特徴量を使用してください。 
+- マッチしたドキュメントの古さ。これを考慮するには、ランキング式で _freshness_ 特徴量を使用してください。

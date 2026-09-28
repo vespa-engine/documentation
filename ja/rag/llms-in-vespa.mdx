@@ -1,0 +1,381 @@
+---
+title: "Vespa における大規模言語モデル"
+sidebarTitle: "Vespa の LLM"
+---
+
+大規模言語モデル(LLM)は、人間のようなテキストを生成する AI システムであり、チャットボットやコンテンツ生成などのさまざまなアプリケーションを支えています。Vespa では、クエリー処理とデータ取り込みを担う Vespa のプロセッシング・チェーン構造に統合することで、LLM を用いて検索の関連度を高めたり、検索結果に基づいて動的なコンテンツを作成したり、自然言語を理解したりできます。これにより、Vespa は LLM の深い言語的・意味的な能力をさまざまな段階に適用し、ドキュメントのエンリッチメント、クエリー理解、要約、質問応答といったタスクを向上させることができます。
+
+Vespa は、検索拡張生成(retrieval-augmented generation, RAG)に理想的に適しています。この手法により、モデルは学習データを超えた関連性の高い最新の情報にリアルタイムでアクセスでき、Vespa の出力を文脈に即したものにできます。詳細については、[Vespa における検索拡張生成](/ja/rag/rag)を参照してください。
+
+Vespa アプリケーション内から LLM へのクライアント接続を設定することの利点は、Vespa からレスポンスが返された後にクライアントから API 呼び出しを行う場合と比較して、余分なネットワークホップを排除できることです。これはエンドユーザーにとってより低いレイテンシを意味します。エージェント型アプリケーションやリランキングなどで複数の LLM 呼び出しを活用したい場合、この重要性はさらに増します。
+
+Vespa は 3 つの方法で LLM をサポートしています:
+
+1. [**外部 LLM**](/ja/rag/external-llms): Vespa は、
+<a href="https://platform.openai.com/docs/guides/text-generation/chat-completions-api" data-proofer-ignore>OpenAI 互換 API</a> を提供する任意の外部 LLM プロバイダーに接続できます。
+2. [**ローカル LLM**](/ja/rag/local-llms): Vespa は、Vespa アプリケーション自体の中で LLM を実行できます。
+これにより、カスタマイズされたモデルを使用でき、アプリケーションの外にデータを送信することを避けられます。
+これは、厳格なデータプライバシー要件を持つアプリケーションや、特定のモデル設定を必要とするアプリケーションに特に有用です。
+3. [**カスタム言語モデル**](/ja/rag/llms-in-vespa#custom-language-model-components): Vespa は、OpenAI の API に基づかないものを含め、任意の言語モデルをサポートするように拡張できます。これにより、さまざまな LLM を Vespa アプリケーションに柔軟に統合できます。
+
+このドキュメントでは、外部 LLM とローカル LLM の両方に共通する機能に焦点を当てます。
+それぞれのタイプの設定の詳細については、各セクションを参照してください。
+
+すぐに始めるには、[RAG サンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)をご覧ください。
+外部 LLM サービスまたはローカル LLM を使用して、RAG のために Vespa をセットアップする方法を示しています。
+
+### LLM の使用
+
+<Info>
+**注:** この機能は Vespa バージョン 8.327 以降で利用できます
+</Info>
+
+Vespa は、LLM への接続に使用されるクライアントと、これらのクライアントを使用するコンポーネントを区別します。たとえば、LLM への単一のクライアント接続を設定し、この接続を[ドキュメント・エンリッチメント](/ja/rag/document-enrichment)と検索拡張生成(RAG)の両方に使用できます。
+
+<Frame>
+![LLM/RAG サーチャー](/assets/img/llm-rag-searcher.svg)
+</Frame>
+`services.xml` にクライアント接続を追加した後、検索拡張生成などのさまざまなタスクに同じクライアントを使用できます。これを行うには、それらを使用するサーチャーまたはドキュメント・プロセッサーを設定する必要があります。クライアント・コンポーネントを使用するシンプルなサーチャーの例が `LLMSearcher` で、次のように設定できます:
+
+```xml
+<services version="1.0">
+  <container id="default" version="1.0">
+
+    ...
+
+    <component id="openai" class="ai.vespa.llm.clients.OpenAI">
+      {/* Configure as required */}
+    </component>
+
+    <search>
+      <chain id="llm" inherits="vespa">
+        <searcher id="ai.vespa.search.llm.LLMSearcher">
+          <config name="ai.vespa.search.llm.llm-searcher">
+            <providerId>openai</providerId>
+          </config>
+        </searcher>
+      </chain>
+    </search>
+
+    ...
+
+  </container>
+</services>
+```
+
+これは、`LLMSearcher` を含む新しい[サーチ・チェーン](/ja/reference/applications/services/search#chain)を設定します。このサーチャーは、クエリーと共に送信されたプロンプトを使用して LLM 接続を呼び出す責務を持ちます。
+
+`providerId` 設定パラメータに注意してください。これは、コンポーネント指定で与えられた `id` と一致する必要があります。これを使用して、必要なだけのクライアントとサーチャー、およびそれらの組み合わせを設定できます。`providerId` を指定しない場合、サーチャーは最初に利用可能な LLM 接続を使用します。
+
+このサーチャー自体は多くの機能を提供するわけではなく、クエリーと共に送信されたプロンプトを使用して LLM サービスを呼び出すだけです。このサーチャーは、プロンプトがクエリーパラメータ `prompt` で渡されることを想定しています。たとえば、Vespa CLI を使用する場合:
+
+```sh
+$ vespa query \
+    --header="X-LLM-API-KEY:..." \
+    searchChain=llm \
+    prompt="what was the manhattan project?"
+```
+
+ここではまず、OpenAI API への API キーを渡しています。これにはご自身の OpenAI キーを用意する必要があります。`searchChain` パラメータは、`services.xml` で設定した `llm` チェーンを選択します。最後に、`prompt` パラメータが言語モデルに送信される内容を決定します。
+
+`prompt` クエリーパラメータが指定されていない場合、`LLMSearcher` は `query` クエリーパラメータの使用を試みることに注意してください。
+
+上記のコマンドを実行すると、次のような結果が得られます:
+
+```json expandable
+{
+ "root": {
+   "id": "token_stream",
+   "relevance": 1.0,
+   "fields": {
+     "totalCount": 0
+   },
+   "children": [
+     {
+       "id": "event_stream",
+       "relevance": 1.0,
+       "children": [
+         {
+           "id": "1",
+           "relevance": 1.0,
+           "fields": {
+             "token": "The"
+           }
+         },
+         {
+           "id": "2",
+           "relevance": 1.0,
+           "fields": {
+             "token": " Manhattan"
+           }
+         },
+         {
+           "id": "3",
+           "relevance": 1.0,
+           "fields": {
+             "token": " Project"
+           }
+         },
+         {
+           "id": "4",
+           "relevance": 1.0,
+           "fields": {
+             "token": " was"
+           }
+         },
+         ...
+    ]
+  }
+}
+```
+
+### Server-Sent Events によるストリーミング
+
+上記を実行すると、基盤となる LLM からレスポンス全体が生成されるまで待つ必要があります。LLM は一度に 1 トークンずつ生成するため、これにはしばらく時間がかかることがあります。トークンが到着するたびにストリーミングするには、`format` クエリーパラメータを追加して `sse`(Server-Sent Events)レンダラーを使用します:
+
+```sh
+$ vespa query \
+    --header="X-LLM-API-KEY:..." \
+    searchChain=llm \
+    prompt="what was the manhattan project?" \
+    format=sse
+
+The Manhattan Project was a research and development project during World War II that produced the first nuclear weapons. It was led by the United States with the support of the United Kingdom and Canada, and aimed to develop the technology necessary to build an atomic bomb. The project culminated in the bombings of the Japanese cities of Hiroshima and Nagasaki in August 1945.
+```
+
+Vespa CLI はこのフォーマットを理解し、トークンが到着するたびにストリーミングします。
+基盤となるフォーマットは [Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events.html) であり、
+Vespa からの出力は次のようになります:
+
+```sh
+$ vespa query \
+    --format=plain \
+    --header="X-LLM-API-KEY:..." \
+    searchChain=llm \
+    prompt="what was the manhattan project?" \
+    format=sse
+
+event: token
+data: {"token":"The"}
+
+event: token
+data: {"token":" Manhattan"}
+
+event: token
+data: {"token":" Project"}
+
+event: token
+data: {"token":" was"}
+
+event: token
+data: {"token":" a"}
+
+...
+```
+
+ここで Vespa CLI の `--format=plain` を使用して、Vespa から送信された内容をそのまま出力していることに注意してください。
+
+これらのイベントは、[HTML 仕様](https://html.spec.whatwg.org/multipage/server-sent-events.html#server-sent-events)に記載されているように `EventSource` を使用して消費できます。フォーマットはかなりシンプルなので、任意の方法で処理してもかまいません。各 `data` 要素にはパースが必要な小さな JSON オブジェクトが含まれており、実際のトークンを含む単一の `token` 要素を持ちます。
+
+エラーもこのようなイベントで送信されます:
+
+```sh
+$ vespa query \
+    --header="X-LLM-API-KEY: banana" \
+    prompt="what was the manhattan project?" \
+    searchChain=llm \
+    format=sse
+
+event: error
+data: {
+    "source": "openai",
+    "error": 401,
+    "message": "{    \"error\": {        \"message\": \"Incorrect API key provided: banana. You can find your API key at https://platform.openai.com/account/api-keys.\",        \"type\": \"invalid_request_error\",        \"param\": null,        \"code\": \"invalid_api_key\"    }}"
+}
+```
+
+### LLM パラメータ
+
+LLM サービスには通常、設定可能な推論パラメータのセットがあります。たとえば次のようなパラメータです:
+
+- `model` - OpenAI の場合、`gpt-4o` や `gpt-4o-mini` などの任意の有効なモデル
+- `temperature` - モデルの temperature を設定する
+- `maxTokens` - 生成するトークンの最大数を設定する
+
+これらのパラメータは[ローカル LLM](/ja/rag/local-llms) と[外部 LLM](/ja/rag/external-llms) の両方に共通ですが、それぞれが追加の推論パラメータもサポートしています。これらの詳細については、各セクションを参照してください。
+
+推論パラメータを指定するには、クエリーと共にこれらを渡します:
+
+```sh
+$ vespa query \
+    --header="X-LLM-API-KEY: ..." \
+    prompt="what was the manhattan project?" \
+    searchChain=llm \
+    format=sse \
+    llm.model=gpt-4 \
+    llm.maxTokens=10
+```
+
+これらのパラメータには `llm` がプレフィックスとして付いていることに注意してください。これは、`services.xml` で異なるプロパティ・プレフィックスを設定することで、複数の LLM サーチャーを個別に制御できるようにするためです。例:
+
+```xml
+<chain id="rag" inherits="vespa">
+  <searcher id="ai.vespa.search.llm.RAGSearcher">
+    <config name="ai.vespa.search.llm.llm-searcher">
+      <providerId>openai</providerId>
+      <propertyPrefix>rag</propertyPrefix>
+    </config>
+  </searcher>
+  <searcher id="ai.vespa.search.llm.LLMSearcher">
+    <config name="ai.vespa.search.llm.llm-searcher">
+      <providerId>openai</providerId>
+      <propertyPrefix>llm</propertyPrefix>
+    </config>
+  </searcher>
+</chain>
+```
+
+ここでは、異なる `propertyPrefix` を設定した 2 つの LLM サーチャーを持つチェーンを設定しています。サーチャーはこれを使用して、それぞれに固有のプロパティを取得します。これにはプロンプトも含まれます。したがって、最初のサーチャーのプロンプトは `rag.prompt` となり、2 番目は `llm.prompt` となります。
+
+この `propertyPrefix` が設定されていない場合、デフォルトは `llm` となり、すべての LLM サーチャーが同じパラメータを共有することに注意してください。
+
+また、`prompt` はクエリーでプレフィックスを付ける必要はありませんが、その他のパラメータには必要であることにも注意してください。
+
+異なる LLM サービスを使用している場合、クエリーと共に送信される API キーにも同様に `propertyPrefix` を付けることで区別できます。
+
+### 検索拡張生成(RAG)
+
+上記では、`LLMSearcher` を使用して、事前に指定されたプロンプトで LLM を呼び出しました。Vespa は、検索結果に基づいてプロンプトを構築する `RAGSearcher` を提供しています。これにより、まず Vespa でコンテンツを検索し、その結果を使用してレスポンスを生成するという柔軟な方法が可能になります。
+
+詳細については、[Vespa における RAG](/ja/rag/rag) を参照してください。
+
+### 構造化出力
+
+Vespa の `OpenAI` および `LocalLLM` クライアントは、[構造化出力](https://platform.openai.com/docs/guides/structured-outputs)を返すように設定することもできます。
+これは、クエリーで `llm.json_schema` を指定することで行います。(`propertyPrefix=llm` で `LLMSearcher` または `RAGSearcher` を使用していると仮定します。)
+
+これはさまざまなユースケースで役立ちます。たとえば、出力のモデレーションを適用したり、異なるスタイルや言語でレスポンスを提供したりすることが挙げられます。
+
+```json expandable
+{
+    "type": "object",
+    "properties": {
+        "answer-short": {
+            "type": "string"
+        },
+        "answer-short-french": {
+            "type": "string",
+            "description": "exact translation of short answer in French language"
+        },
+        "answer-short-eli5": {
+            "type": "string",
+            "description": "explain the answer like I am 5 years old"
+        }
+    },
+    "required": [
+        "answer-short",
+        "answer-short-french",
+        "answer-short-eli5"
+    ],
+    "additionalProperties": false
+}
+```
+
+`json_schema` は、`llm.json_schema` パラメータを使用してクエリーと共に渡すことができます:
+
+```sh
+$ vespa query \
+    --timeout 60 \
+    --header="X-LLM-API-KEY:<YOUR_API_KEY>" \
+    query="what was the manhattan project?" \
+    hits=5 \
+    searchChain=openai \
+    format=sse \
+    llm.json_schema="{\"type\":\"object\",\"properties\":{\"answer-short\":{\"type\":\"string\"},\"answer-short-french\":{\"type\":\"string\",\"description\":\"exact translation of short answer in French language\"},\"answer-short-eli5\":{\"type\":\"string\",\"description\":\"explain the answer like I am 5 years old\"}},\"required\":[\"answer-short\",\"answer-short-french\",\"answer-short-eli5\"],\"additionalProperties\":false}" \
+    traceLevel=1
+```
+
+たとえば `gpt-4o-mini` を使用すると、次のような結果が返されます
+```json
+{
+    "answer-short": "The Manhattan Project was a World War II research and development program that produced the first atomic bombs, led by the United States with help from the UK and Canada, overseen by Major General Leslie Groves and physicist Robert Oppenheimer.",
+    "answer-short-french": "Le Projet Manhattan était un programme de recherche et développement de la Seconde Guerre mondiale qui a produit les premières bombes atomiques, dirigé par les États-Unis avec l'aide du Royaume-Uni et du Canada, sous la supervision du général Leslie Groves et du physicien Robert Oppenheimer.",
+    "answer-short-eli5": "The Manhattan Project was a secret and important project during World War II where scientists worked together to make the first big bombs that could make huge explosions, which changed the world."
+}
+```
+
+これは、取り込み時の自動的な[ドキュメント・エンリッチメント](/ja/rag/document-enrichment)にも活用できます。このアプローチでは、`json_schema` は Vespa のスキーマ(およびプロンプト)に基づいて自動的に生成されます。
+
+### クエリー・プロファイル
+
+上記のすべてでは、各クエリーと共にパラメータを送信していました。Vespa は[クエリー・プロファイル](/ja/querying/query-profiles)をサポートしていることに触れておく価値があります。これは、名前付きの検索パラメータのコレクションです。これにより、クライアントは多数のパラメータを管理・送信する必要がなくなり、クライアントを変更することなくユースケースのリクエストパラメータを変更できるようになります。
+
+### カスタム言語モデル・コンポーネント
+
+Vespa では、独自の言語モデル・コンポーネントを作成することもできます。これは、[llama.cpp](https://github.com/ggml-org/llama.cpp) によるローカル LLM として[サポートされていない](/ja/rag/local-llms#valid-llm-models)言語モデルを使用したい場合や、OpenAI API と互換性のない外部 LLM サービスを使用したい場合に役立ちます。
+
+独自の言語モデル・コンポーネントを作成するには、`ai.vespa.llm.LanguageModel` インターフェースを実装する必要があります。
+最小限の例を以下に示します:
+
+```java expandable
+// Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+package ai.vespa.test;
+
+import ai.vespa.llm.InferenceParameters;
+import ai.vespa.llm.completion.Completion;
+import ai.vespa.llm.completion.Prompt;
+
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
+
+public class MockLanguageModel implements ai.vespa.llm.LanguageModel {
+    private final MockLanguageModelConfig config;
+
+    public MockLanguageModel(MockLanguageModelConfig config) {
+        this.config = config;
+    }
+
+    @Override
+    public List<Completion> complete(Prompt prompt, InferenceParameters params) {
+        var stringBuilder = new StringBuilder();
+
+        for (int i = 0; i < config.repetitions(); i++) {
+            stringBuilder.append(prompt.asString());
+            
+            if (i < config.repetitions() - 1) {
+                stringBuilder.append(" ");
+            }
+        }
+
+        return List.of(Completion.from(stringBuilder.toString().trim()));
+    }
+
+    @Override
+    public CompletableFuture<Completion.FinishReason> completeAsync(Prompt prompt,
+                                                                    InferenceParameters params,
+                                                                    Consumer<Completion> consumer) {
+        throw new UnsupportedOperationException();
+    }
+}
+```
+
+また、[コンフィグ定義](/ja/applications/configuring-components#config-definition)を作成することで、`services.xml` ファイルを通じてコンポーネントを設定可能にすることもできます。
+
+最小限のコンフィグ定義の例:
+
+```txt
+# Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
+namespace=ai.vespa.test
+package=ai.vespa.test
+
+repetitions int default=1
+```
+
+独自のコンポーネントの作成方法の詳細については、[開発者ガイド](/ja/applications/developer-guide)も参照してください。
+
+### Java での独自サーチャーの作成
+
+上記の例では `LLMSearcher` [クラス](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/ai/vespa/search/llm/LLMSearcher.java)を使用しています。接続コンポーネントを明示的に[インジェクション](/ja/applications/dependency-injection)するか、`LLMSearcher` をサブクラス化することで、Java で独自の LLM サーチャーを簡単に作成できます。独自のコンポーネントの作成の詳細については、[サーチャー開発](/ja/applications/searchers)または[ドキュメント・プロセッサー開発](/ja/applications/document-processors)を参照してください。
+
+この機能を使用するために、Java で独自のコンポーネントを作成する必要はないことに注意してください。

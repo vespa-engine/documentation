@@ -1,0 +1,57 @@
+---
+title: "BM25 ランク・フィーチャー"
+---
+
+[bm25 ランク・フィーチャー](/ja/reference/ranking/rank-features#bm25)は、検索クエリーに対するテキストドキュメントの関連度を推定するために使用される [Okapi BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ランキング関数を実装しています。これは、[インデックスされた文字列フィールド](/ja/reference/schemas/schemas#indexing-index)に対して動作する、純粋なテキストのランキング・フィーチャーです。このフィーチャーは計算コストが低く、[nativeRank](/ja/ranking/nativerank) の約 3〜4 倍高速でありながら、品質面でも良好なランクスコアを提供します。テキストドキュメントをランキングする際の第 1 フェーズのランキング関数に使用するのに適した候補です。
+
+## ランキング関数
+
+*bm25* フィーチャーは、ターム $q_{1} , . . . , q_{n}$ を持つクエリーが、ドキュメント *D* 内のインデックスされた文字列フィールド *t* にどれだけよくマッチするかのスコアを計算します。スコアは次のように計算されます:
+
+$$
+\sum_{i}^{n} I D F \left(\right. q_{i} \left.\right) \cdot \frac{f \left(\right. q_{i} , D \left.\right) \cdot \left(\right. k_{1} + 1 \left.\right)}{f \left(\right. q_{i} , D \left.\right) + k_{1} \cdot \left(\right. 1 - b + b \cdot \frac{f i e l d _ l e n}{a v g _ f i e l d _ l e n} \left.\right)}
+$$
+
+この関数の構成要素は次のとおりです:
+
+- $I D F \left(\right. q_{i} \left.\right)$: フィールド *t* におけるクエリーターム *i* の[逆文書頻度](https://en.wikipedia.org/wiki/Tf%E2%80%93idf#Inverse_document_frequency)（*IDF*）。これは次のように計算されます:
+	$$
+	l o g \left(\right. 1 + \frac{N - n \left(\right. q_{i} \left.\right) + 0.5}{n \left(\right. q_{i} \left.\right) + 0.5} \left.\right)
+	$$
+	*N* はコンテントノード上のドキュメントの総数です。この場合に BM25 が使用するローカルな値は、[num_docs_indexed](/ja/reference/ranking/rank-features#num_docs_indexed) ランク・フィーチャーとして公開されています。$n \left(\right. q_{i} \left.\right)$ は、フィールド *t* についてクエリーターム *i* を含むドキュメントの数で、そのフィールドに存在するインデックスごとに計算されます。計算にはインデックス間の最大値が使用され、これは通常、最も大きい[ディスクインデックス](/ja/content/proton#index)に由来します。
+	*IDF* はコンテントノードおよびインデックスごとに計算されるため、わずかな差異が生じる場合があります。すべてのコンテントノードで同じ *IDF* を使用するには、[アノテーション](/ja/reference/querying/yql#annotations)を使用して、各クエリータームの *significance* として設定してください。
+- $f \left(\right. q_{i} , D \left.\right)$: ドキュメント *D* のフィールド *t* におけるクエリーターム *i* の出現回数（ターム頻度）。複数値フィールドの場合は、すべての要素にわたる出現回数の合計を使用します。
+- f i e l d __ l e n : ドキュメント *D* におけるフィールド *t* のフィールド長（単語数）。複数値フィールドの場合は、すべての要素にわたるフィールド長の合計を使用します。
+- a v g _ f i e l d _ l e n: コンテントノード上のドキュメントにおけるフィールド *t* の平均フィールド長。[rank-properties](/ja/reference/ranking/rank-feature-configuration#bm25) を使用して設定できます。
+- $k_{1}$: 単一のクエリータームがドキュメント *D* のスコアに与える影響を制限するために使用されるパラメーター。値を大きくすると、そのタームの出現回数が増えたときに、単一タームによるスコアが相対的により大きく上昇し続けられるようになります。デフォルト値は 1.2 です。[rank-properties](/ja/reference/ranking/rank-feature-configuration#bm25) を使用して設定できます。
+- $b$: 平均フィールド長と比較したフィールド *t* のフィールド長の影響を制御するために使用されるパラメーター。デフォルト値は 0.75 です。[rank-properties](/ja/reference/ranking/rank-feature-configuration#bm25) を使用して設定できます。
+
+## 例
+
+次の例では、インデックスされた文字列フィールド *content* と、*bm25* ランク・フィーチャーを使用するランクプロファイルがあります。bm25 フィーチャーでフィールドを使用できるようにするには、フィールド定義の [index](/ja/reference/schemas/schemas#index) セクションで *enable-bm25* フラグを設定して有効化する必要があることに注意してください。
+
+```js
+schema example {
+  document example {
+    field content type string {
+      indexing: index | summary
+      index: enable-bm25
+    }
+  }
+  rank-profile default {
+    first-phase {
+      expression {
+        bm25(content)
+      }
+    }
+  }
+}
+```
+
+ドキュメントのフィード後に *enable-bm25* フラグを有効にした場合、[proton](/ja/content/proton) は *bm25* で使用するポスティングリストを準備するために、[メモリインデックスのフラッシュ](/ja/content/proton#memory-index-flush)に続いて[ディスクインデックスのフュージョン](/ja/content/proton#disk-index-fusion)を実行します。
+
+各コンテントノードで [custom component state API](/ja/content/proton#custom-component-state-api) を使用し、`pending_urgent_flush` を調べることで、準備がまだ進行中かどうかを判断できます:
+
+```bash
+/state/v1/custom/component/documentdb/mydoctype/subdb/ready/index
+```

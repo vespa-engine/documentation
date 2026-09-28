@@ -1,0 +1,38 @@
+---
+title: "Vespa Cloud Enclave の AWS アーキテクチャー"
+sidebarTitle: "AWS アーキテクチャー"
+---
+
+テナントの AWS アカウント内の各 Vespa Cloud Enclave は、Vespa Cloud の[ゾーン](../zones.html)に対応します。テナントの AWS アカウント内では、1 つの Enclave は 1 つの [VPC](https://docs.aws.amazon.com/vpc/latest/userguide/what-is-amazon-vpc.html) に収められます。
+
+<Frame>
+![Enclave のアーキテクチャー](/assets/img/vespa-cloud-enclave-aws.png)
+</Frame>
+
+#### EC2 インスタンス、ロード・バランサー、S3 バケット
+
+Vespa Cloud ゾーン内の Configuration Server は、デプロイされている Vespa アプリケーションに基づいて、EC2 インスタンス(図中の「Vespa Hosts」)の作成または破棄を決定します。Configuration Server はまた、デプロイされた Vespa アプリケーションとの通信に必要な Network Load Balancer もセットアップします。
+
+各 Vespa Host は、S3 バケット(「Log Archive」)へ定期的にログを同期します。このバケットは Enclave に対して「ローカル」であり、テナントの AWS アカウント内で Terraform モジュールによってプロビジョニングされます。
+
+#### ネットワーキング
+
+Enclave の VPC はネットワーク的に厳しく制限されています。Vespa Host はパブリック IPv4 アドレスを持たず、VPC 内に [NAT ゲートウェイ](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html)はありません。Vespa Host はパブリック IPv6 アドレスを持ち、アウトバウンド接続を行うことができます。インバウンド接続は許可されません。アウトバウンド IPv6 接続は、Configuration Server との通信のブートストラップと、運用メトリクスを Vespa Cloud に報告するために使用されます。
+
+Vespa Host が起動すると、Configuration Server への暗号化トンネルをセットアップします。セットアップ後、Configuration Server と Vespa Host の間のすべての通信はこのトンネル上で行われます。
+
+### セキュリティー
+
+Vespa Cloud の運用チームは、顧客アカウントに属するリソースへの直接アクセス権を*持ちません*。可能なアクセスは、Vespa 自体を稼働させるために必要な管理 API を通じたもののみです。たとえばインシデントのデバッグなどで必要になった場合、直接アクセスはテナント自身によってのみ Vespa チームに付与できます。詳細は [`ssh` サブモジュール](https://registry.terraform.io/modules/vespa-cloud/enclave/aws/latest/submodules/ssh)のドキュメントを参照してください。
+
+Enclave と Vespa Cloud Configuration Server の間のすべての通信は、証明書に埋め込まれた識別情報を用いた [mTLS](https://en.wikipedia.org/wiki/Mutual_authentication#mTLS) によって暗号化・認証・認可されます。mTLS 通信は [Athenz](https://www.athenz.io/) サービスによって実現されています。
+
+保存されるすべてのデータは、[KMS](https://docs.aws.amazon.com/kms/latest/developerguide/overview.html) を使用して保存時に暗号化されます。すべての鍵は、テナントの AWS アカウント内でテナントによって管理されます。
+
+テナントの AWS アカウント内にプロビジョニングされるリソースは、テナントが実行する Terraform モジュールによって、あるいは Vespa Cloud ゾーン内のオーケストレーション・サービスによってプロビジョニングされます。
+
+リソースは、Terraform モジュールで定義された [`provision_policy`](https://github.com/vespa-cloud/terraform-aws-enclave/blob/main/modules/provision/main.tf) AWS IAM ポリシー・ドキュメントを使用して、Vespa Cloud Configuration Server によってプロビジョニングされます。
+
+Enclave を対象にアプリケーションをデプロイできるのは、その AWS アカウントを登録したテナントのみです。
+
+Vespa Cloud のセキュリティーに関するより一般的な情報は、[ホワイトペーパー](/ja/security/whitepaper)を参照してください。

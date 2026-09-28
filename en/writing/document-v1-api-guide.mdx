@@ -400,7 +400,7 @@ Read more about [document IDs](/en/schemas/documents).
 
 ## Request size limit
 
-Starting from version 8.577.16, Vespa returns 413 (Content too large) as a response to POST and PUT requests that are above the request size limit. To avoid this, automatically check document size and truncate or split large documents before feeding. For optimal performance, it is recommended to keep the document size below 10 MB.
+Starting from Vespa 8.577, Vespa returns 413 (Content too large) as a response to POST and PUT requests that are above the request size limit. To avoid this, automatically check document size and truncate or split large documents before feeding. For optimal performance, it is recommended to keep the document size below 10 MB.
 
 ## Backpressure
 
@@ -461,3 +461,61 @@ Do not use group or number modifiers with regular indexed mode document types. T
     </tr>
   </tbody>
 </table>
+
+## Batch update example
+
+Use [update where](/en/reference/api/document-v1#update-where) to update a set of documents (or all documents). As this walks the corpus for documents to update, it is similar to *visit* - see above.
+
+A simple example of slimming a mixed tensor by deleting values in a mapped dimension:
+
+```bash expandable
+#!/bin bash
+set -eo pipefail
+
+endpoint="https://a8701234.bd2c5678.z.vespa-app.cloud"
+cluster="music"
+timeout="31516000"
+selection="true"
+namespace="mynamespace"
+documenttype="music"
+curlTimeout="$((timeout > 60 ? 60 : timeout))"
+url="$endpoint/document/v1/$namespace/$documenttype/docid/?cluster=$cluster&selection=$selection&timeout=$curlTimeout"
+
+auth=" -H 'Authorization: Bearer vespa_cloud_Ddph12348g7iPHvaG1OltkggABCDAoehAZ576PwB3xU'"
+# alternative auth using MTLS:
+# auth=" --key my-key --cert my-cert"
+
+method=" -X PUT"
+data=" --data '{ \"fields\": {
+        \"embeddings\": {
+            \"remove\": {
+                \"addresses\": [
+                    {\"chunk\": \"1\"},
+                    {\"chunk\": \"2\"}
+                ]
+            }
+        }
+    }
+} '"
+curl="curl $method -sS $auth $data"
+
+function update {
+  documents=0
+  continuation=""
+  json=""
+  while
+    # inspect these files for exact counts:
+    printf -v filename "output-%012g.json" $documents
+    json="$(eval "$curl '$url$continuation'" | tee $filename | jq '{ documentCount, continuation, message }')"
+    message="$(jq -re .message <<< $json)" && echo "Failed update: $message" >&2 && exit 1
+    documentCount="$(jq -re .documentCount <<< $json)" && ((documents += $documentCount))
+    token="$(jq -re .continuation <<< $json)"
+  do
+    echo "$documentCount documents updated; continuing at $token"
+    continuation="&continuation=$token"
+  done
+  echo "$documents documents total updated" >&2
+}
+
+update
+```

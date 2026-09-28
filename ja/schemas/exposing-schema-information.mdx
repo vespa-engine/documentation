@@ -1,0 +1,117 @@
+---
+title: "スキーマ情報の公開"
+description: "アプリケーションによっては、スキーマに関する情報をデータプレーンのクライアントに公開する必要があります。このドキュメントでは、そのための API をアプリケーションに追加する方法を説明します。"
+---
+
+知っておくべきことは 2 つです:
+
+- アプリケーションは、[ハンドラー](/ja/applications/request-handlers)を実装することで任意のカスタム API を公開できます。
+- デプロイされたスキーマに関する情報は、コンポーネント `com.yahoo.search.schema.SchemaInfo` から取得できます。
+
+この情報をもとに、次の手順でスキーマ情報を公開する API を追加できます。
+
+<Steps>
+<Step title="アプリケーション・パッケージが Java コンポーネントを含められることを確認する">
+
+Java コンポーネントを含むアプリケーション・パッケージは、Maven のレイアウトに従う必要があります。アプリケーション・パッケージのルートに `pom.xml` と `src/main` があれば問題ありません。そうでない場合は、先へ進む前に、[album-recommendation.java](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java) サンプルアプリから pom.xml をコピーし、ファイルをこのレイアウトに従うように移動して変換してください。
+
+</Step>
+<Step title="スキーマ情報を公開するハンドラーを追加する">
+
+次のハンドラーを(任意のパッケージに)追加します:
+
+```java expandable
+package ai.vespa.example;
+
+import com.yahoo.container.jdisc.HttpRequest;
+import com.yahoo.container.jdisc.HttpResponse;
+import com.yahoo.container.jdisc.ThreadedHttpRequestHandler;
+import com.yahoo.jdisc.Metric;
+import com.yahoo.search.schema.SchemaInfo;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.Charset;
+import java.util.concurrent.Executor;
+
+public class SchemaInfoHandler extends ThreadedHttpRequestHandler {
+
+    private final SchemaInfo schemaInfo;
+
+    public SchemaInfoHandler(Executor executor, Metric metric, SchemaInfo schemaInfo) {
+        super(executor, metric);
+        this.schemaInfo = schemaInfo;
+    }
+
+    @Override
+    public HttpResponse handle(HttpRequest httpRequest) {
+        // Creating JSON, handling different paths etc. left as an exercise for the reader
+        StringBuilder response = new StringBuilder();
+        for (var schema : schemaInfo.schemas().values()) {
+            response.append("schema: " + schema.name() + "\n");
+            for (var field : schema.fields().values())
+                response.append("  field: " + field.name() + "\n");
+        }
+        return new Response(200, response.toString());
+    }
+
+    private static class Response extends HttpResponse {
+
+        private final byte[] data;
+
+        Response(int code, byte[] data) {
+            super(code);
+            this.data = data;
+        }
+
+        Response(int code, String data) {
+            this(code, data.getBytes(Charset.forName(DEFAULT_CHARACTER_ENCODING)));
+        }
+
+        @Override
+        public String getContentType() {
+            return "application/json";
+        }
+
+        @Override
+        public void render(OutputStream outputStream) throws IOException {
+            outputStream.write(data);
+        }
+
+    }
+
+    private static class ErrorResponse extends Response {
+        ErrorResponse(int code, String message) {
+            super(code, "{\"error\":\"" + message + "\"}");
+        }
+    }
+
+}
+```
+
+</Step>
+<Step title="新しい API ハンドラーをコンテナー・クラスターに追加する">
+
+`services.xml` ファイルの `<container>` 配下に、次を追加します:
+
+```xml
+<handler id="ai.vespa.example.SchemaInfoHandler" bundle="[your pom.xml artifactId]">
+    <binding>http://*/schema/v1/*</binding>
+</handler>
+```
+
+</Step>
+<Step title="変更したアプリケーションをデプロイする">
+```sh
+$ mvn install
+$ vespa deploy
+```
+
+</Step>
+<Step title="動作を確認する">
+```sh
+$ vespa curl "schema/v1/"
+```
+
+</Step>
+</Steps>
