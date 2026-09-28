@@ -47,11 +47,43 @@ Below are sample changes to the schema for different use cases, or examples of o
   <tbody>
     <tr>
       <td><strong>clear field</strong></td>
-      <td>To clear a field, do a partial update of all documents with the value, say an empty string.<br/> <br/> It is also possible to use reindexing, but there is a twist - intuitively, this would work:<br/><br/>  <code>{`field artist type string {`}</code><br/>  <code>{`indexing: "" | summary | index`}</code><br/> <code>{`}`}</code><br/><br/>  However, the reset only works for <a href="/en/reference/schemas/schemas#schema" aria-label="synthetic fields">synthetic fields</a>.<br/><br/>  A solution is to deploy a <a href="/en/applications/document-processors" aria-label="document processor">document processor</a> that empties the field, to the default indexing chain - then trigger a reprocessing.</td>
+      <td>
+
+To clear a field, do a partial update of all documents with the value, say an empty string.<br/> <br/> It is also possible to use reindexing, but there is a twist - intuitively, this would work:
+
+```sd
+field artist type string {
+    indexing: "" | summary | index
+}
+```
+
+  However, the reset only works for <a href="/en/reference/schemas/schemas#schema" aria-label="synthetic fields">synthetic fields</a>.<br/><br/>  A solution is to deploy a <a href="/en/applications/document-processors" aria-label="document processor">document processor</a> that empties the field, to the default indexing chain - then trigger a reprocessing.
+
+      </td>
     </tr>
     <tr>
       <td><strong>change indexing settings</strong></td>
-      <td>As reindexing takes time, a field's data can be in one state or another, while the queries to it have the most current state. This is OK for many changes and applications. <br/><br/> If not, it is possible to reindex to a new field for a more atomic change. Add a <em>synthetic field</em> outside the <em>document definition</em> and pipe the content of the current field to it:  <br/><br/> <code>{`search mydocs {`}</code> <br/> <code>{`field title_non_stemmed type string {`}</code>   <br/><code>{`indexing: input title | index | summary`}</code>  <br/><code>{`stemming: none`}</code> <br/><code>{`}`}</code> <br/><code>{`document mydocs {`}</code> <br/><code>{`field title type string`}</code> <br/><code>{`{`}</code>  <br/><code>{`indexing: index | summary`}</code>  <br/><code>{`}`}</code>  <br/><br/>Once reindexing is completed, switch queries to use the new field. This solution naturally increases memory and disk requirements in the transition.<br/><br/>  Going back to using the original field with the new settings can be done by changing the index settings for the original field, wait for reindexing to be finished and start using the original field again in queries, then remove the temporary synthetic field.</td>
+      <td>
+
+As reindexing takes time, a field's data can be in one state or another, while the queries to it have the most current state. This is OK for many changes and applications. <br/><br/> If not, it is possible to reindex to a new field for a more atomic change. Add a <em>synthetic field</em> outside the <em>document definition</em> and pipe the content of the current field to it:  
+
+```sd
+search mydocs {
+
+    field title_non_stemmed type string {
+        indexing: input title | index | summary
+        stemming: none
+    }
+
+    document mydocs {
+        field title type string {
+            indexing: index | summary
+        }
+```
+
+Once reindexing is completed, switch queries to use the new field. This solution naturally increases memory and disk requirements in the transition.<br/><br/>  Going back to using the original field with the new settings can be done by changing the index settings for the original field, wait for reindexing to be finished and start using the original field again in queries, then remove the temporary synthetic field.
+
+      </td>
     </tr>
   </tbody>
 </table>
