@@ -1,0 +1,354 @@
+---
+title: "ランキング入門"
+---
+
+[vespa-documentation-search](https://github.com/vespa-cloud/vespa-documentation-search) の公開されている[クエリー API](/ja/querying/query-api) を使用して、Vespa における[ランキング](/ja/basics/ranking)の仕組みを学びましょう。この記事では、ランキング定義である `rank-profiles` をさまざまに呼び出す一連のクエリーを紹介します。
+
+ランキングとは、クエリーに対してドキュメントにスコアを付けるユーザー定義の計算です。ここでは [doc.sd](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/application/schemas/doc.sd) で設定されています。[スキーマのドキュメント](/ja/reference/schemas/schemas)も参照してください。このスキーマには、Vespa のランキングを学ぶための(作為的な)ランキング関数のセットが含まれています。
+
+
+## ドキュメント・フィーチャーのみを使用したランキング
+
+シンプルなものから始めましょう: _クエリーに関係なく、すべてのドキュメントをそこへの被リンク(in-link)数でスコアリングする_。つまり、どのようなクエリーでも、被リンクが最も多いドキュメントを結果セットの先頭に返します(これらのクエリーはクリックできます!):
+
+[`yql=select * from doc where true&ranking=inlinks`](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlinks&_gl=1*2d8dpa*_gcl_au*MjA3MzE0NDM4Ny4xNzc4ODIyODQ4)
+
+クエリー結果で `relevance` と呼ばれるスコアは、`expression` で設定されているとおり、ドキュメント内の `inlinks` アトリビュート配列のサイズです:
+
+
+```js
+rank-profile inlinks {
+    first-phase {
+        expression: attribute(inlinks).count
+    }
+    summary-features {
+        attribute(inlinks).count
+    }
+}
+```
+
+結果の `inlinks` のエントリ数を数えて `relevance` と比較してみてください。同じになるはずです。このランキング式はクエリーからのフィーチャーを一切使用せず、[ドキュメント・フィーチャー](/ja/reference/ranking/rank-features#document-features)である `attribute(inlinks).count` のみを使用していることに注目してください。
+
+
+## ランキングで使用される値の観察
+
+ランキング式を開発する際には、入力値を観察できると便利です。[summary-features](/ja/reference/schemas/schemas#summary-features) を使用して入力値を出力します。この実験では、別のランク関数を使用します。引き続き被リンクを数えますが、古いドキュメントには低いスコアを付けます:
+
+$$
+\text{num\_inlinks} \times {\text{decay\_const}}^{\frac{\text{doc\_age\_seconds}}{3600}}
+$$
+
+
+注:
+- `now` [ランキング・フィーチャー](/ja/reference/ranking/rank-features#now)の使用
+- [ランキング式](/ja/reference/ranking/ranking-expressions)の数学関数である `pow` の使用
+- より良いコードを書くための定数と関数の使用
+
+[`yql=select * from doc where true&ranking=inlinks_age`](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlinks_age)
+
+
+```js expandable
+rank-profile inlinks_age {
+    first-phase {
+        expression: rank_score
+    }
+    summary-features {
+        attribute(inlinks).count
+        attribute(last_updated)
+        now
+        doc_age_seconds
+        age_decay
+        num_inlinks
+        rank_score
+    }
+    constants {
+        decay_const: 0.9
+    }
+    function doc_age_seconds() {
+        expression: now - attribute(last_updated)
+    }
+    function age_decay() {
+        expression: pow(decay_const, doc_age_seconds/3600)
+    }
+    function num_inlinks() {
+        expression: attribute(inlinks).count
+    }
+    function rank_score() {
+        expression: num_inlinks * age_decay
+    }
+}
+```
+
+クエリー結果では、被リンクが 27 件で経過時間が 9703 秒のドキュメントの relevance が 20.32 になっていることが観察できます(ドキュメントの経過時間はクエリー時刻によって変わります):
+
+```js expandable
+"relevance": 20.325190122213748,
+...
+"summaryfeatures": {
+    "attribute(inlinks).count": 27.0,
+    "attribute(last_updated)": 1.615971522E9,
+    "now": 1.615981225E9,
+    "rankingExpression(age_decay)": 0.7527848193412499,
+    "rankingExpression(doc_age_seconds)": 9703.0,
+    "rankingExpression(num_inlinks)": 27.0,
+    "rankingExpression(rank_score)": 20.325190122213748,
+}
+```
+
+`summary-features` を使用すると、ランキング式の検証と開発が簡単になります。
+
+
+## クエリー・フィーチャーによるランキング
+
+類似したドキュメントを見つけたいとして、ドキュメントの類似性を「同じ単語数を持つこと」と定義するとしましょう。ほとんどの観点から見て、これは貧弱な類似度関数です。より良い関数は後述します。
+
+ドキュメントには `term_count` フィールドがあります。そこで、単語数のための [input.query()](/ja/reference/api/query#ranking.features) を追加しましょう:
+
+[`yql=select * from doc where true &ranking=term_count_similarity&input.query(q_term_count)=1000`](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true;&ranking=term_count_similarity&input.query(q_term_count)=1000&_gl=1*2d8dpa*_gcl_au*MjA3MzE0NDM4Ny4xNzc4ODIyODQ4)
+
+
+$$ 
+1 - \frac{fabs(attribute(term\_count) - query(q\_term\_count))}{1 + attribute(term\_count) + query(q\_term\_count)} 
+$$
+
+
+```js
+rank-profile term_count_similarity {
+    first-phase {
+        expression {
+            1 -
+            fabs(    attribute(term_count) - query(q_term_count) ) /
+                (1 + attribute(term_count) + query(q_term_count) )
+        }
+    }
+    summary-features {
+        attribute(term_count)
+        query(q_term_count)
+    }
+}
+```
+
+このランク関数は、ドキュメントを [0-1> の範囲でスコアリングします。1 に近いほど類似しています:
+
+```js
+"relevance": 0.9985029940119761,
+...    
+"summaryfeatures": {
+    "attribute(term_count)": 1003.0,
+    "query(q_term_count)": 1000.0,
+}
+```
+
+ここでの重要な学びは、`input.query()` を使用して、ランキング・フィーチャーをクエリーで渡す方法です。より多くのクエリー・フィーチャーには別の名前を使用します。
+
+
+## クエリー・テンソルによるランキング
+
+もう一つの類似度関数として、被リンクの重複が考えられます。inlinks の [weightedset](/ja/reference/schemas/schemas#weightedset) を[テンソル](/ja/reference/schemas/schemas#tensor)にマッピングし、同じ型のテンソルでクエリーを実行し、テンソル積を使用してスカラーを作成してランクスコアとします。[mapped](/ja/reference/ranking/tensor#general-literal-form) クエリー・テンソルを使用します。ドキュメント名がテンソル内のアドレスとなり、各被リンクに値 1 を使用します:
+
+```js
+{
+    {links:/en/query-profiles.html}:1,
+    {links:/en/page-templates.html}:1,
+    {links:/en/overview.html}:1
+}
+```
+
+
+<Warning>
+**重要:**
+
+Vespa はクエリー・テンソルを見ただけではその型を知ることができません。[inputs](/ja/reference/schemas/schemas#inputs) を使用して設定する必要があります。
+</Warning>
+
+
+被リンクのデータは weightedset で表現されているため、[tensorFromWeightedSet](/ja/reference/ranking/rank-features#tensorFromWeightedSet(source,dimension)) ランク・フィーチャーを使用して、_links_ という名前のテンソルに変換します:
+
+```js
+rank-profile inlink_similarity  {
+    inputs {
+        query(links) tensor<float>(links{})
+    }
+    first-phase {
+        expression: sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
+    }
+    summary-features {
+        query(links)
+        tensorFromWeightedSet(attribute(inlinks), links)
+    }
+}
+```
+
+[`yql=select * from doc where true&ranking=inlink_similarity&input.query(links)={{links:/en/query-profiles.html}:1,{links:/en/page-templates.html}:1,{links:/en/overview.html}:1}`](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20true&ranking=inlink_similarity&input.query(links)=%7B%20%7Blinks:/en/query-profiles.html%7D:1,%20%7Blinks:/en/page-templates.html%7D:1,%20%7Blinks:/en/overview.html%7D:1%20%7D&_gl=1*j8zfax*_gcl_au*MjA3MzE0NDM4Ny4xNzc4ODIyODQ4)
+
+relevance と summary-features を確認します:
+
+
+```js expandable
+"relevance": 2.0
+...
+"summaryfeatures": {
+  "query(links)": {
+    "type": "tensor<float>(links{})",
+    "cells": [
+      { "address": { "links": "/en/query-profiles.html" }, "value": 1 },
+      { "address": { "links": "/en/page-templates.html" }, "value": 1 },
+      { "address": { "links": "/en/overview.html" },       "value": 1 } ]
+  },
+  "tensorFromWeightedSet(attribute(inlinks),links)": {
+    "type": "tensor(links{})",
+    "cells": [
+      { "address": { "links": "/en/page-templates.html" },             "value": 1 },
+      { "address": { "links": "/en/jdisc/container-components.html" }, "value": 1 },
+      { "address": { "links": "/en/query-profiles.html" },             "value": 1 } ]
+  }
+}
+```
+
+
+ここでは、テンソルは 1 つのディメンションを持つのでベクトルです。したがって、テンソル積の合計はドット積になります。すべての値が 1 なので、すべての積は 1 となり、合計は 2 になります:
+
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>ドキュメント</th>
+      <th>クエリー</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>/en/jdisc/container-components.html</td>
+      <td></td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>/en/overview.html</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>/en/page-templates.html</td>
+      <td>/en/page-templates.html</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>/en/query-profiles.html</td>
+      <td>/en/query-profiles.html</td>
+      <td>1</td>
+    </tr>
+  </tbody>
+</table>
+
+
+クエリー・テンソルの値を変えて、ランクスコアの違いを見てみましょう。リンクに異なる重みを設定できます。
+
+まとめ: 2 つのリンクのリストを比較する問題は、2 つの出現ベクトルを掛け合わせ、共起を合計し、その合計でランキングするという数値的な問題に変換されます:
+
+```js
+sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
+```
+
+
+注:
+- クエリー・テンソルは大きくなることがあります。アプリケーションは通常、[サーチャー](/ja/applications/searchers)を使用してコード内でテンソルを作成します。[例](/ja/ranking/ranking-expressions-features#query-feature-types)も参照してください。
+- ここではドキュメントのテンソルを weighted set から作成していますが、変換を避けるために、ドキュメント内のテンソルに保存する方が良い方法です。
+
+
+## リトリーバルとランキング
+
+このガイドではここまで、_すべての_ ドキュメントに対してランキング関数を実行してきました。これは多くのアプリケーションにとって有効なユースケースです。しかし、ドキュメントのランキングは一般に CPU コストが高いため、候補セットを減らして最適化するとパフォーマンスが向上します。テキスト・マッチングを使用し、[計算されたランク・フィーチャー](/ja/reference/api/query#ranking.listfeatures)をダンプするクエリーの例:
+
+[`yql=select * from doc where title contains "document"&ranking.listFeatures`](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22document%22&ranking.listFeatures&_gl=1*1jqth3v*_gcl_au*MjA3MzE0NDM4Ny4xNzc4ODIyODQ4)
+
+結果ごとに計算されるランク・フィーチャーの**長い**リストを確認してください。ただし、このクエリーはタイトルに "document" を含むドキュメントでフィルターしているため、フィーチャーはマッチする少数のドキュメントに対してのみ計算されます。
+
+このようなフィルターの実行が _ドキュメント・リトリーバル_ です。もう一つの良い例が Web 検索です。ユーザーのクエリーの語を使用して(数十億のドキュメントから)候補セットを低コストで _リトリーブ_ し、その後、はるかに小さくなった候補セットに 1 つ以上の _ランキング関数_ を適用して、ランキングされたトップ 10 を生成します。別の見方をすると:
+- リトリーバル(リコール)フェーズでは、_すべての関連ドキュメントを見つける_
+- ランキング・フェーズでは、_関連ドキュメントのみを表示する_。
+
+それでも、リトリーバル後の候補セットは大きくなる可能性があり、クエリーがすべてのドキュメントにヒットすることもあります。多くのアプリケーションでは、すべての候補をランキングすることは不可能です。
+
+ランキングを 2 つのフェーズに分割することも最適化の一つです。低コストなランキング式を使用して、最も有望でない候補をふるい落としてから、最上位の候補にリソースの大半を費やします。要するに、候補セットが縮小するにつれて、ドキュメントごとにより多くの計算能力を使用します:
+
+<Frame>
+  <img src="/assets/img/retrieval-ranking.svg" width="584" height="auto" alt="リトリーバルとランキング"/>
+</Frame>
+
+同じクエリーを、明示的なランクスコアのカットオフも行う二段階の rank-profile でもう一度試してみましょう:
+
+[`yql=select * from doc where title contains "attribute"&ranking=inlinks_twophase`](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20title%20contains%20%22attribute%22&ranking=inlinks_twophase&_gl=1*1jqth3v*_gcl_au*MjA3MzE0NDM4Ny4xNzc4ODIyODQ4)
+
+
+```js
+rank-profile inlinks_twophase inherits inlinks_age {
+    first-phase {
+        total-keep-rank-count : 50
+        rank-score-drop-limit : 10
+        expression            : num_inlinks
+    }
+    second-phase {
+        expression            : rank_score
+    }
+}
+```
+
+
+rank-profile の `inherits` の使用が、関数を一度定義して複数の rank-profile で使用するスマートな方法であることに注目してください。詳細は[スキーマの継承](/ja/schemas/inheritance-in-schemas)をお読みください。ここで、`num_inlinks` と `rank_score` は、先ほど使用した rank profile で定義されています:
+
+
+```js
+function num_inlinks() {
+        expression: attribute(inlinks).count
+    }
+```
+
+
+結果では、_rankingExpression(num_inlinks)_ が 10.0 以下のドキュメントが一つもないことが観察できます。つまり、そのようなドキュメントはすべて `rank-score-drop-limit` によって最初のランキング・フェーズで除外されたということです。通常、`rank-score-drop-limit` は使用されません。`total-keep-rank-count` の方が重要だからです。詳細は[リファレンス](/ja/reference/schemas/schemas#rank-score-drop-limit)をお読みください。
+
+動的な閾値には、`query(threshold)` のようなランキング・フィーチャーを渡し、`if` 文を使用してスコアが閾値を超えているかどうかをチェックします。下回っている場合は -1(`rank-score-drop-limit` より低い値)を割り当てて除外させます。詳細は[ランキング式](/ja/ranking/ranking-expressions-features#the-if-function-and-string-equality-tests)をお読みください。
+
+二段階ランキングはパフォーマンスの最適化です。このガイドは機能についてのものなので、以降の例では 1 つのランキング・フェーズのみを使用します。詳細は [first-phase](/ja/reference/schemas/schemas#firstphase-rank) をお読みください。
+
+
+## リトリーバル: AND、OR、weakAnd
+
+このガイドでは、リトリーバル・フェーズのクエリー演算子について深くは扱いません。詳細は [query-api](/ja/querying/query-api) を参照してください。
+
+_"vespa documents about ranking and retrieval"_ のようなクエリーを考えてみましょう。これらの語を AND で結合したクエリーは、ドキュメント・コーパスの 3% 未満にしかヒットせず、ランキングとリトリーバルに関するドキュメントの一部を取りこぼします:
+
+[`yql=select * from doc where (default contains "vespa"AND default contains "documents"AND default contains "about"AND default contains "ranking"AND default contains "and"AND default contains "retrieval")`](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20AND%20default%20contains%20%22documents%22%20AND%20default%20contains%20%22about%22%20AND%20default%20contains%20%22ranking%22%20AND%20default%20contains%20%22and%22%20AND%20default%20contains%20%22retrieval%22)&_gl=1*1jqth3v*_gcl_au*MjA3MzE0NDM4Ny4xNzc4ODIyODQ4)
+
+一方、語を OR で結合すると 95% 以上のドキュメントにヒットし、リトリーバル・フェーズで無関係なドキュメントを除外できません: [`yql=select * from doc where (default contains "vespa"OR default contains "documents"OR default contains "about"OR default contains "ranking"OR default contains "and"OR default contains "retrieval")`](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20(default%20contains%20%22vespa%22%20OR%20default%20contains%20%22documents%22%20OR%20default%20contains%20%22about%22%20OR%20default%20contains%20%22ranking%22%20OR%20default%20contains%20%22and%22%20OR%20default%20contains%20%22retrieval%22)&_gl=1*n39r85*_gcl_au*MjA3MzE0NDM4Ny4xNzc4ODIyODQ4)
+
+"weak AND" を使用すると、リトリーバル・フェーズにおけるヒットが少なすぎる(AND)または多すぎる(OR)という問題に対処できます。これは、最も関連性の低い候補を以降の評価から除外する、_最適化された OR_ と考えることができます。最も関連性の低い候補を見つけるために、シンプルなスコアリング関数が使用されます:
+
+```bash
+    rank_score = sum_n(term(n).significance * term(n).weight)
+```
+
+[weakAnd](/ja/reference/querying/yql#weakand) のポイントは最悪の候補を早期に除外することなので、_totalCount_ は近似値です:
+
+[`yql=select * from doc where{scoreThreshold: 0, totalTargetHits: 10}weakAnd(default contains "vespa", default contains "documents", default contains "about", default contains "ranking", default contains "and", default contains "retrieval")`](https://api.search.vespa.ai/search/?yql=select%20*%20from%20doc%20where%20%7BscoreThreshold:%200,%20totalTargetHits:%2010%7DweakAnd(%20default%20contains%20%22vespa%22,%20default%20contains%20%22documents%22,%20default%20contains%20%22about%22,%20default%20contains%20%22ranking%22,%20default%20contains%20%22and%22,%20default%20contains%20%22retrieval%22)&_gl=1*1psdofr*_gcl_au*MjA3MzE0NDM4Ny4xNzc4ODIyODQ4)
+
+これはフィルタリング(リトリーバル)とランキングの区別を少し曖昧にすることに注意してください。ここでは `weakAnd` が、後のランク・フェーズのために候補数を最適化するべく、フィルタリングとランキングの**両方**を行っています。デフォルトの rank-profile が使用されます:
+
+```js
+rank-profile documentation inherits default {
+    inputs {
+        query(titleWeight): 2.0
+        query(contentsWeight): 1.0
+    }
+    first-phase {
+        expression: query(titleWeight) * bm25(title) + query(contentsWeight) * bm25(content)
+    }
+}
+```
+
+ここではテキスト・マッチングのランク・フィーチャーを使用していることに注目してください。これは、同じくテキスト・マッチングのフィーチャーを使用する weakAnd のスコアリング関数とよく適合します。
+
+詳細は [wand のドキュメント](/ja/ranking/wand)をお読みください。
+
+## 次のステップ
+- 最終結果セットのカスタム再ランキングについては、[サーチャーでの再ランキング](/ja/ranking/reranking-in-searcher)をお読みください。

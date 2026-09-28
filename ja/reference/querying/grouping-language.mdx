@@ -1,0 +1,1143 @@
+---
+title: "グルーピング言語リファレンス"
+sidebarTitle: "Grouping"
+---
+
+グルーピングの例と入門については、まず[Vespaグルーピングガイド](/ja/querying/grouping)をお読みください。本ページはVespaグルーピングのリファレンスです。
+
+また、グルーピング式で[マルチバリュー](/ja/querying/searching-multivalue-fields)・アトリビュート(doubleの配列など)を使用するとパフォーマンスに影響することにも注意してください。このような操作は、より多くのデータが評価されるため、特に処理対象のヒット集合が大きい場合に、メモリー帯域幅のボトルネックに達する可能性があります。
+
+## グループ
+
+カスタム式を使用してクエリー結果をグループ化します(`group`句を使用):
+
+- 数値または文字列の定数(例:`group(1)`や`group("all")`)。これはすべてを含む1つのバケットを作成します
+- ドキュメントの[アトリビュート](/ja/content/attributes)
+- 別の式に対する関数(`xorbit`、`md5`、`cat`、`xor`、`and`、`or`、`add`、`sub`、`mul`、`div`、`mod`)、またはその他の任意の[式](#expressions)
+- 式のデータ型は、一般的なプログラミング言語が異なるデータ型のオペランド同士の算術を解決するのと同様に、ベストエフォートで解決されます
+- 任意の式の結果は、スカラーまたは1次元配列のいずれかです
+  - `add(<array>)`は、すべての要素を加算してスカラーを生成します
+  - `add(<arrayA>, <arrayB>)`は、各要素同士を加算し、サイズが`max(|<arrayA>|, |<arrayB>|)`の新しい配列を生成します
+
+グループは(`each`および`group`操作を使用して)サブグループを含むことができ、任意のレベルまでネストできます。
+
+複数の並列な`each`句または`all`句を使用して、同じグループレベルの下に複数のサブグルーピングや出力を作成でき、それぞれに[as(mylabel)](#labels)を使用してラベルを付けることができます。
+
+結果をグループ化すると、_出力(outputs)_、_グループリスト(group lists)_、_ヒットリスト(hit lists)_ を含む _グループ(groups)_ が生成されます。グループリストにはサブグループが含まれ、ヒットリストには所属するグループの一部であるヒットが含まれます。
+
+グループの識別情報は、その _id_ によって保持されます。long、double、stringなどのスカラーの識別情報は _id_ から直接取得できますが、バケット集約に使用される範囲の識別情報は、サブノードの _from_ と _to_ に分離されます。[結果フォーマットのリファレンス](/ja/reference/querying/default-result-format)を参照してください。
+
+### マルチバリュー・アトリビュート
+
+[マルチバリュー](/ja/querying/searching-multivalue-fields)・アトリビュートとは、[weighted set](/ja/reference/schemas/schemas#weightedset)、[配列](/ja/reference/schemas/schemas#array)、または[マップ](/ja/reference/schemas/schemas#map)のことです。ほとんどのグルーピング関数は、マルチバリュー・アトリビュートの要素を、あたかもそれぞれが別々のドキュメント内の個別の値であるかのように、単純に個別に処理します。構造体の配列やマップに対してグループ化する場合は、構造を保持するためにスコーピングが使用されます。配列/マップの各エントリーは、個別のサブドキュメントとして扱われます。_マップ_ アトリビュート・フィールドでグループ化する場合、次の構文を使用できます。
+
+マップのキーでグループ化:
+
+```bash
+all( group(mymap.key) each(output(count())) )
+```
+
+マップのキーでグループ化し、その後マップの値でグループ化:
+
+```bash
+all( group(mymap.key) each( group(mymap.value) each(output(count())) ))
+```
+
+キー _my\_key_ の値でグループ化:
+
+```bash
+all( group(my_map{"my_key"}) each(output(count())) )
+```
+
+マップ要素 _my\_key_ で参照される構造体フィールド _my\_field_ でグループ化:
+
+```bash
+all( group(my_map{"my_key"}.my_field) each(output(count())) )
+```
+
+キーは(上記のように)直接指定することも、キー・ソース・アトリビュートを介して間接的に指定することもできます。キーは、ドキュメントごとにキー・ソース・アトリビュートから取得されます。キー・ソース・アトリビュートは単一値であり、マップのキー型と同じデータ型である必要があることに注意してください:
+
+```bash
+all( group(my_map{attribute(my_key_source)}) each(output(count())) )
+```
+
+整数の配列フィールドでグループ化:
+
+```bash
+all( group(my_array) each(output(count())) )
+```
+
+構造体の配列 _my\_array_ 内の構造体フィールド _my\_field_ でグループ化:
+
+```bash
+all( group(my_array.my_field) each(output(count())) )
+```
+
+[テンソル](/ja/reference/schemas/schemas#tensor)はグルーピングでは使用できません。
+
+## グループのフィルタリング
+
+マルチバリュー・アトリビュートでグループ化する場合、特定の値のみが収集されるようにグループをフィルタリングすると便利なことがあります。これは、フィルターを追加することで実現できます。`filter`句は、フィルター _述語(predicate)_ を取ります:
+
+- [regex("regular expression", input-expression)](#regex-filter)
+- [range(min-limit, max-limit, input-expression)](#range-filter)
+- [range(min-limit, max-limit, input-expression, bool, bool)](#range-filter)
+- [istrue(input-expression)](#istrue-filter)
+- [not _述語_](#logical-predicates-filter)
+- [_述語_ and _述語_](#logical-predicates-filter)
+- [_述語_ or _述語_](#logical-predicates-filter)
+
+### Regexフィルター
+
+正規表現を使用して入力をマッチさせ、マッチしたドキュメントのみをグルーピングに含めます。入力は通常、「group」句と同じ式になります。例:
+
+```bash
+all( group(my_array) filter(regex("foo.*", my_array)) ...)
+```
+
+ここでは、_my\_array_ 内の「foo」プレフィックスで始まる値のみがグループに収集され、それ以外はすべて無視されます。[こちらの例](/ja/querying/grouping#structured-grouping)も参照してください。
+
+Regexフィルタリングは、任意のフィールド型の文字列表現に対して機能します。たとえば、regex(true)とregex(false)を使用してブール値でフィルタリングすることもできます。
+
+### Rangeフィルター
+
+フィールド値が下限と上限の間にあるドキュメントをマッチさせるには、`range`フィルターを使用します。例:
+
+```bash
+all( group(some_field) filter(range(1990, 2012, year)) ...)
+```
+ここでは、下限は境界値を _含み_(year ≥ 1990)、上限は境界値を _含みません_(year \< 2012)。末尾のオプションのbool値を使用して、下限と上限をそれぞれ含めるかどうかを制御します。最初のboolは下限を境界値込みに設定し、2番目のboolは上限を境界値込みに設定します。
+```bash
+all( group(some_field) filter(range(1990, 2012, year, true, true)) ...)
+```
+ここでは、下限と上限の両方が境界値を含みます。
+### IsTrueフィルター
+
+ブール式を使用してフィルタリングするには、`istrue`を使用します。式は、ブール・アトリビュートなど、ブール値に評価されるものでなければなりません。例:
+
+```bash
+all( group(some_field) filter(istrue(my_bool_attribute)) ...)
+```
+ここでは、_my\_bool\_attribute_ がtrueに評価されるドキュメントのみがグルーピングに含まれます。
+### 論理述語
+
+別のフィルター式を否定するには、`not`を使用します。これは単一のサブフィルターを取り、そのサブフィルターがマッチしない場合にマッチします。例:
+
+```bash
+all( group(my_field) filter( not regex("bar.*", my_other_field)) ...)
+```
+2つのサブフィルターの論理和を取るには、`or`を使用します。結合されたフィルターは、いずれかのサブフィルターがtrueに評価される場合にマッチします。例:
+```bash
+all( group(my_field) filter( regex("bar.*", my_field) or regex("baz.*", my_third_field) ) ...)
+```
+2つのサブフィルターの論理積を取るには、`and`を使用します。結合されたフィルターは、すべてのサブフィルターがtrueに評価される場合にのみマッチします。例:
+```bash
+all( group(my_field) filter( regex("bar.*", my_other_field) and regex("baz.*", my_third_field) ) ...)
+```
+これらの論理述語をネストして、複雑なフィルター条件を作成できます。フィルター式は _一般的な優先順位_ の規則に従います:`not`は`and`より先に評価され、`and`は`or`より先に評価されます。同じ優先順位の演算子は、左から右へ評価されます。必要に応じて、括弧`(...)`を使用して異なるグループ化を強制します。例:
+```bash
+all(
+    group(my_field)
+    filter( (regex("bar.*", some_field) or regex("baz.*", other_field)) and not regex(".*foo", some_field))
+    each(...)
+)
+```
+
+## Order / max
+
+グルーピングの各レベルでは、そのグループの順序付け方法を指定できます(`order`を使用):
+
+- 順序付けには、使用可能な任意の集約関数を使用できます
+- マルチレベルのグルーピングにより、プライマリーの集約値が等しい場合でも厳密な順序付けが可能です
+- 順序付けは昇順または降順のいずれかで、順序付けのレベルごとに指定します
+- グループは[ロケールを考慮したソート](#uca)を使用してソートされます
+
+`max`を使用して各レベルで返されるグループ数を制限し、`order`で指定された順序の最初の _n_ 個のグループのみを返します:
+
+- `order`は、次の集約関数についてはマージ操作後のグループの順序を変更します:`count`、`avg`、` sum`
+- `order`は、`max`または`min`が使用されている場合、マージ操作後のグループの順序を**変更しません**
+- デフォルトの順序である`-max(relevance())`は、[precision](#precision)の使用を**必要としません**
+
+## Continuations
+
+グルーピング結果のページネーションは、`continuations`によって管理されます。これらは不透明(opaque)なオブジェクトであり、組み合わせて、クエリーのグルーピング・ステップの`continuations`アノテーションとして再送信することで、結果リストの前のページや次のページに移動できます。
+
+すべてのルート・グループには、`select`ごとに1つの _this_ continuationが含まれます。このcontinuationは現在のビューを表し、唯一のcontinuationとして送信された場合、それを含んでいた結果とまったく同じ結果を再現します。
+
+グループリストおよびヒットリストごとに、0個または1個の _prev_/_next_ continuationがあります。これらを任意の数だけ送信して、対応するリストの次/前のページを取得できます
+
+1つのクエリーで任意の数のcontinuationを組み合わせることができますが、最初のものは常に _this_ continuationでなければなりません。たとえば、あるリストの次のページと、別のリストの前のページに同時に移動することもできます。
+
+<Info>
+ **注:** 同じグループリストまたはヒットリストに対して複数のcontinuationオブジェクトが指定された場合、最後に指定されたものが有効になります。これは、continuationが指定された順に処理され、衝突するcontinuationを置き換えるためです。
+</Info>
+
+プログラムからグルーピングを扱う場合は、[RootGroup](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/grouping/result/RootGroup.html)、[GroupList](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/grouping/result/GroupList.html)、[HitList](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/grouping/result/HitList.html)の各結果オブジェクト内にある[Continuation](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/grouping/Continuation.html)オブジェクトを見つけてください。これらを[GroupingRequest](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/grouping/GroupingRequest.html)のcontinuationリストに追加し直すことで、ページネーションを行うことができます。
+
+例については[グルーピングガイド](/ja/querying/grouping#pagination)を参照してください。
+
+## ラベル
+
+`each`キーワードを使用して作成されたリストには、`each(...) as(mylabel)`という構文でラベルを割り当てることができます。each句によって作成される出力は、このラベルで識別されます。
+
+```bash
+all(group(year) each(output(count())) as(by_year))
+```
+
+個々の出力集約関数にも、`output(...)`内の集約関数に`as(mylabel)`を追加することでラベルを割り当てることができます。これは、グループリストではなく、集約結果にラベルを付けます。
+
+```bash
+all(group(author) output(count() as(authors_cardinality)))
+```
+
+## エイリアス
+
+グルーピング式には _エイリアス_ のタグを付けることができます。エイリアスを使用すると、式をそのまま繰り返すことなく再利用できます。
+
+```bash
+all(group(a) alias(myalias, count()) each(output($myalias)))
+```
+ は、次と等価です
+```bash
+all(group(a) each(output(count())))
+```
+。
+```bash
+all(group(a) order($myalias=count()) each(output($myalias)))
+```
+ は、次と等価です
+```bash
+all(group(a) order(count()) each(output(count())))
+```
+。
+## Precision
+
+式の評価中に各コンテント・ノードから返される中間グループの数です。これにより、さらに評価するグループを選択する際に、コンテナー・ノードが考慮できるデータが増えます:`each(...) precision(1000)` 数値を大きくすると帯域幅のコストが増えますが、場合によっては精度が向上します。
+
+## クエリー・パラメーター
+
+グルーピングに関連する _クエリー・パラメーター_ は次のとおりです。説明は[クエリーAPIリファレンス](/ja/reference/api/query#parameters)を参照してください。
+
+- [select](/ja/reference/api/query#select)
+- [groupingSessionCache](/ja/reference/api/query#groupingsessioncache)
+- [grouping.defaultMaxGroups](/ja/reference/api/query#grouping.defaultmaxgroups)
+- [grouping.defaultMaxHits](/ja/reference/api/query#grouping.defaultmaxhits)
+- [grouping.globalMaxGroups](/ja/reference/api/query#grouping.globalmaxgroups)
+- [grouping.defaultPrecisionFactor](/ja/reference/api/query#grouping.defaultprecisionfactor)
+
+## グルーピング・セッション・キャッシュ
+
+<Danger>
+ **重要:** グルーピング・セッション・キャッシュは、グルーピング式がデフォルトの順序付けを使用している場合に**のみ有用**です。**欠点**は、グルーピング式で`max`が指定されている場合、`count`などの集約値に不正確さが生じる可能性があることです。これが問題になるかどうかをテストし、問題になる場合は`precision`パラメーターを調整して正しいカウントが得られるようにすることを推奨します。
+</Danger>
+
+セッション・キャッシュは、マルチレベルのグルーピング式を使用する際に、中間のグルーピング結果をコンテント・ノードに保存します。これにより、精度が低下する可能性はあるものの、グルーピングを高速化できます。これによって、クエリーとグルーピング式は1回だけ実行されるようになります。
+
+マルチレベルのグルーピング式がある場合、検索クエリーは通常、レベルごとに再実行されます。この方式の欠点は、コストの高いランキング関数を使用すると、クエリーに本来必要な時間よりも長い時間がかかることです。
+
+## 集約関数
+
+グルーピングの各レベルでは、そのグループに属するすべてのドキュメントに対して収集する集約のセットを指定します(`output`操作を使用):
+
+- グループ内のドキュメント(指定されたサマリー・クラスを使用して取得)
+- グループ内のドキュメント数
+- 式のsum、average、min、max、xor、または標準偏差
+- 式の値の複数の分位数(quantile)
+
+すべての引数が数値の場合、結果の型は引数の型を見て解決されます。すべての引数がlongであれば、結果はlongになります。少なくとも1つの引数がdoubleであれば、結果はdoubleになります。
+
+`order`を使用する場合、グループのソートをより細かく制御するために、集約関数を式の中で使用することもできます。ただし、アトリビュートを引数に取る式では、その式が集約関数で囲まれていない限り機能しません。
+
+マルチバリュー・アトリビュートに対するsum、maxの使用について:`output(sum(myarray))`のような操作を行うと、各ドキュメント内の各要素値に対してsumが実行されます。結果は、値の合計の合計になります。同様に、`max(myarray)`は、すべてのドキュメントのすべての要素の中の最大要素を返します。以下同様です。
+
+分位数を計算するには、目的の分位数の値を(カンマ区切りで)角括弧内に列挙し、その後にカンマと式(フィールドなど)を続けます:
+
+```bash
+all( group(city) each(output(quantiles([0.5], delivery_days) as(median_delivery_days) ) ) )
+```
+これは中央値を計算します。または
+```bash
+all( group(city) each(output(quantiles([0.5, 0.9], delivery_days))) )
+```
+これは、都市ごとの配達日数の中央値(p50)と90パーセンタイル(p90)を計算します。分位数は[KLL Sketch](https://datasketches.apache.org/docs/KLL/KLLSketch.html)を使用して計算されるため、近似値であることに注意してください。
+
+マップや配列などのマルチバリュー・フィールドはグルーピングに使用できます。ただし、そのようなフィールドに対してsum()などの集約関数を使用すると、誤解を招く結果になることがあります。文字列から整数へのマップ(`map<string, int>`)があり、文字列がグルーピングに使用する何らかのキーであると仮定します。次の式は、すべてのキーの値の合計を返します:
+
+```bash
+all( group(mymap.key) each(output(sum(mymap.value))) )
+```
+
+これは、期待されるような各キー内の値の合計ではありません。ただし、次の式を実行すれば、特定のキー内の値の合計を得ることは可能です:
+
+```
+all( group("my_group") each(output(sum(mymap{"foo"}))) )
+```
+
+その他の例については、[構造体型およびマップ型に対するグルーピング](https://github.com/vespa-engine/system-test/blob/master/tests/search/struct_and_map_types/struct_and_map_grouping.rb)のシステムテストを参照してください。
+
+### グループリストの集約関数
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>count</td>
+      <td>(<code>{`group`}</code>によって生成された)一意なグループの数をカウントします。<code>{`count`}</code>は<code>{`max`}</code>とは独立して動作すること、およびこのカウントはcount-distinct問題のアルゴリズムであるHyperLogLog++を使用した推定値であることに注意してください</td>
+      <td>なし</td>
+      <td>Long</td>
+    </tr>
+  </tbody>
+</table>
+| 
+### グループの集約関数
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>count</td>
+      <td>呼び出されるたびにlongのカウンターをインクリメントします</td>
+      <td>なし</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>sum</td>
+      <td>選択されたすべてのドキュメントにわたって引数を合計します</td>
+      <td>Numeric</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>avg</td>
+      <td>選択されたすべてのドキュメントにわたって平均を計算します</td>
+      <td>Numeric</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>min</td>
+      <td>選択されたドキュメントの最小値を保持します</td>
+      <td>Numeric</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>max</td>
+      <td>選択されたドキュメントの最大値を保持します</td>
+      <td>Numeric</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>xor</td>
+      <td>選択されたすべてのドキュメントの値(その最下位64ビット)のXORを取ります</td>
+      <td>Any</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>stddev</td>
+      <td>選択されたすべてのドキュメントにわたって母標準偏差を計算します</td>
+      <td>Numeric</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>quantiles</td>
+      <td>式の値の1つまたは複数の分位数を計算します。分位数は0以上1以下の数値でなければなりません。</td>
+      <td>[Numeric+], Expr</td>
+      <td>[&#123;"quantile":Double,"value":Double&#125;+]</td>
+    </tr>
+  </tbody>
+</table>
+
+
+### ヒットの集約関数
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>summary</td>
+      <td>要求された<a href="/ja/reference/schemas/schemas#document-summary" aria-label="summary class">サマリー・クラス</a>のサマリーを生成します</td>
+      <td>サマリー・クラスの名前</td>
+      <td>Summary</td>
+    </tr>
+  </tbody>
+</table>
+
+## 式
+
+### 算術式
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>add</td>
+      <td>引数同士を加算します</td>
+      <td>Numeric+</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>+</td>
+      <td>左の引数と右の引数を加算します</td>
+      <td>Numeric, Numeric</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>mul</td>
+      <td>引数同士を乗算します</td>
+      <td>Numeric+</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>&#42;</td>
+      <td>左の引数と右の引数を乗算します</td>
+      <td>Numeric, Numeric</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>sub</td>
+      <td>最初の引数から2番目の引数を減算し、その結果から3番目を減算し、以下同様に続けます</td>
+      <td>Numeric+</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>-</td>
+      <td>左の引数から右の引数を減算します</td>
+      <td>Numeric, Numeric</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>div</td>
+      <td>最初の引数を2番目の引数で除算し、その結果を3番目で除算し、以下同様に続けます</td>
+      <td>Numeric+</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>/</td>
+      <td>左の引数を右の引数で除算します</td>
+      <td>Numeric, Numeric</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>mod</td>
+      <td>最初の引数を2番目の引数で剰余演算し、その結果を3番目で剰余演算し、以下同様に続けます</td>
+      <td>Numeric+</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>%</td>
+      <td>左の引数を右の引数で剰余演算します</td>
+      <td>Numeric, Numeric</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>neg</td>
+      <td>引数を符号反転します</td>
+      <td>Numeric</td>
+      <td>Numeric</td>
+    </tr>
+    <tr>
+      <td>-</td>
+      <td>右の引数を符号反転します</td>
+      <td>Numeric</td>
+      <td>Numeric</td>
+    </tr>
+  </tbody>
+</table>
+
+### ビット演算式
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>and</td>
+      <td>引数を順にANDします</td>
+      <td>Long+</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>or</td>
+      <td>引数を順にORします</td>
+      <td>Long+</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>xor</td>
+      <td>引数を順にXORします</td>
+      <td>Long+</td>
+      <td>Long</td>
+    </tr>
+  </tbody>
+</table>
+
+### 文字列式
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>strlen</td>
+      <td>引数のバイト数をカウントします</td>
+      <td>String</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>strcat</td>
+      <td>引数を順に連結します</td>
+      <td>String+</td>
+      <td>String</td>
+    </tr>
+  </tbody>
+</table>
+
+### 型変換式
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>todouble</td>
+      <td>引数をdoubleに変換します</td>
+      <td>Any</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>tolong</td>
+      <td>引数をlongに変換します</td>
+      <td>Any</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>tostring</td>
+      <td>引数をstringに変換します</td>
+      <td>Any</td>
+      <td>String</td>
+    </tr>
+    <tr>
+      <td>toraw</td>
+      <td>引数をrawに変換します</td>
+      <td>Any</td>
+      <td>Raw</td>
+    </tr>
+  </tbody>
+</table>
+
+### rawデータ式
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>cat</td>
+      <td>引数のバイナリー表現を連結します</td>
+      <td>Any+</td>
+      <td>Raw</td>
+    </tr>
+    <tr>
+      <td>md5</td>
+      <td>引数のバイナリー表現に対してMD5を実行し、最下位の「width」ビットを保持します</td>
+      <td>Any, Numeric(width)</td>
+      <td>Raw</td>
+    </tr>
+    <tr>
+      <td>xorbit</td>
+      <td>引数のバイナリー表現に対して「width」ビットのXORを実行します。widthは8の倍数に切り上げられます</td>
+      <td>Any, Numeric(width)</td>
+      <td>Raw</td>
+    </tr>
+  </tbody>
+</table>
+
+### アクセサー式
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>relevance</td>
+      <td>ドキュメントの計算されたランクを返します</td>
+      <td>なし</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>&lt;attribute-name&gt;</td>
+      <td>指定された名前のアトリビュートの値を返します</td>
+      <td>なし</td>
+      <td>Any</td>
+    </tr>
+    <tr>
+      <td>array.at</td>
+      <td>配列要素へのアクセスです。式<code>{`array.at(myarray, idx)`}</code>は、<code>{`idx`}</code>式を評価してそれを配列のインデックスとして使用することで、ドキュメントごとに1つの値を返します。この式を使用して、<code>{`output(sum(array.at(myarray, 0)))`}</code>のようなより大きな式を構築できます。この例は、各ドキュメントの配列の最初の要素を合計します。<br/>- <code>{`idx`}</code>式は<code>{`[0, size(myarray)-1]`}</code>の範囲に制限されます<br/>- 配列サイズより大きい場合は、最後の要素が返されます<br/>- 0より小さい場合は、最初の要素が返されます</td>
+      <td>Array, Numeric</td>
+      <td>Any</td>
+    </tr>
+    <tr>
+      <td>interpolatedlookup</td>
+      <td colSpan={3}>ソート済み配列の中で、式より小さい要素の数をカウントします。式の値が要素値の間にある場合は線形補間を行います。<code>{`interpolatedlookup(myarray, expr)`}</code>操作は、汎用的なグラフ/関数のルックアップを目的としています。<code>{`myarray`}</code>内のデータは、昇順にソートされた数値でなければなりません。この操作は、配列の先頭からスキャンして、要素値がルックアップ引数<code>{`expr`}</code>の値と等しくなる(または、それより大きくなる)位置を見つけ、その位置のインデックスを返します。<br/> ルックアップ引数の値が連続する2つの配列要素値の間にある場合、返される位置は、それぞれのインデックス間の線形補間になります。戻り値は常に、配列の有効なインデックス値の範囲<code>{`[0, size(myarray)-1]`}</code>内になります。<br/>各ドキュメントで<code>{`myarray`}</code>が<code>{`array<double>`}</code>型のソート済み配列であると仮定します:式<code>{`interpolatedlookup(myarray, 4.2)`}</code>は、まずルックアップ引数(ここでは定数式4.2)を評価し、次にドキュメント内の<code>{`myarray`}</code>の内容を確認する、ドキュメント単位の式になります。スキャンは最初の要素から開始され、配列内で4.2より大きい要素値に達するまで続きます。これは次のことを意味します:<br/>- 配列の最初の要素が4.2より大きい場合、式は0を返します<br/>- 配列の最初の要素がちょうど4.2の場合でも、式は0を返します<br/>- 配列の最初の要素が1.7で、&#42;&#42;2番目&#42;&#42;の要素値がちょうど4.2の場合、式は2番目の要素のインデックスである1.0を返します<br/>- 配列の&#42;&#42;すべて&#42;&#42;の要素が4.2より小さい場合、最後の有効な配列インデックス<code>{`size(myarray)-1`}</code>が返されます<br/>- 配列の最初の5つの要素の値がルックアップ引数より小さく、ルックアップ引数が5番目と6番目の要素のちょうど中間にある場合、5番目と6番目の要素の配列インデックスの中間である4.5が返されます<br/>- 同様に、配列の要素が<code>{`{0, 1, 2, 4, 8}`}</code>のとき、ルックアップ引数として「5」を渡すと3.25が返されます(<code>{`indexOf(4)==3`}</code>と<code>{`indexOf(8)==4`}</code>の間の線形補間)<br/></td>
+    </tr>
+  </tbody>
+</table>
+
+
+
+### バケット式
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>fixedwidth</td>
+      <td>最初の引数の値を、2番目の引数に等しい幅を持つ連続したバケットにマッピングします</td>
+      <td>Any, Numeric</td>
+      <td>NumericBucketList</td>
+    </tr>
+    <tr>
+      <td>predefined</td>
+      <td>最初の引数の値を、指定されたバケットにマッピングします。<br/>- <code>{`bucket`}</code>の幅の定義には、標準的な数学の開始/終了指定子を使用できます。<code>{`(`}</code>と<code>{`)`}</code>は、デフォルトでは<code>{`[`}</code>と<code>{`>`}</code>として評価されます。<br/>- バケットは、開始/終了指定子の型(<code>{`string`}</code>、<code>{`long`}</code>、<code>{`double`}</code>、または<code>{`raw`}</code>)を引き継ぎます。値は、これらの指定子と比較される前にこの型に変換されます(たとえば、<code>{`long`}</code>型のバケットでは<code>{`double`}</code>値は最も近い整数に丸められます)。<br/>- 終了指定子は省略できます。バケット<code>{`bucket(3)`}</code>/<code>{`bucket[3]`}</code>は<code>{`bucket[3,4>`}</code>と同じです。これは文字列式でも許可されており、<code>{`bucket("c")`}</code>は<code>{`bucket["c", "c ">`}</code>と同一です。</td>
+      <td>Any, Bucket+</td>
+      <td>BucketList</td>
+    </tr>
+  </tbody>
+</table>
+
+### 時刻式
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>time.dayofmonth</td>
+      <td>指定されたタイムスタンプの日(1-31)を返します</td>
+      <td>Long</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>time.dayofweek</td>
+      <td>指定されたタイムスタンプの曜日(0-6)を返します(月曜日が0)</td>
+      <td>Long</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>time.dayofyear</td>
+      <td>指定されたタイムスタンプの年間通算日(0-365)を返します</td>
+      <td>Long</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>time.hourofday</td>
+      <td>指定されたタイムスタンプの時(0-23)を返します</td>
+      <td>Long</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>time.minuteofhour</td>
+      <td>指定されたタイムスタンプの分(0-59)を返します</td>
+      <td>Long</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>time.monthofyear</td>
+      <td>指定されたタイムスタンプの月(1-12)を返します</td>
+      <td>Long</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>time.secondofminute</td>
+      <td>指定されたタイムスタンプの秒(0-59)を返します</td>
+      <td>Long</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>time.year</td>
+      <td>指定されたタイムスタンプの西暦年(例:2009)を返します</td>
+      <td>Long</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>time.date</td>
+      <td>指定されたタイムスタンプの日付(例:2009-01-10)を返します</td>
+      <td>Long</td>
+      <td>Long</td>
+    </tr>
+  </tbody>
+</table>
+
+### リスト式
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>size</td>
+      <td>引数がリストの場合、要素数を返します。そうでない場合は1を返します</td>
+      <td>Any</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>sort</td>
+      <td>引数がリストの場合、引数の要素を昇順にソートします。そうでない場合はNOPです</td>
+      <td>Any</td>
+      <td>Any</td>
+    </tr>
+    <tr>
+      <td>reverse</td>
+      <td>引数がリストの場合、引数の要素を逆順にします。そうでない場合はNOPです</td>
+      <td>Any</td>
+      <td>Any</td>
+    </tr>
+  </tbody>
+</table>
+
+### その他の式
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>zcurve.x</td>
+      <td>指定された<a href="https://en.wikipedia.org/wiki/Z-order_curve" aria-label="zcurve">zcurve</a>エンコードされた2次元点のX成分を返します。「position」型のすべてのフィールドには付随する「&lt;fieldName&gt;_zcurve」アトリビュートがあり、この式を使用してデコードできます。例:<code>{`zcurve.x(foo_zcurve)`}</code></td>
+      <td>Long</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>zcurve.y</td>
+      <td>指定されたzcurveエンコードされた2次元点のY成分を返します</td>
+      <td>Long</td>
+      <td>Long</td>
+    </tr>
+    <tr>
+      <td>geo_distance</td>
+      <td><a href="/ja/reference/schemas/schemas#position" aria-label="position">position</a>フィールドから指定された点までの大圏距離を計算します。単位サフィックス<code>{`.km`}</code>または<code>{`.miles`}</code>で出力の単位を選択します。<code>{`position`}</code>フィールドと<code>{`array<position>`}</code>フィールドの両方で機能します。配列の場合、ドキュメント内のすべての位置における最小距離が返されます。<pre><code>{`( group(fixedwidth(geo_distance(attribute(location), 63.4, 10.4).km, 10)) each(output(count())) )`}</code></pre> Vespa 8.664.22 以降で利用可能です。</td>
+      <td>Attribute(position), Double(lat), Double(lng)</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>uca</td>
+      <td><a href="https://www.unicode.org/reports/tr10/" aria-label="unicode collation algorithm">Unicode照合アルゴリズム</a>を使用してアトリビュート文字列を変換します。グループはロケールを考慮したソートでソートされます。それぞれ、デフォルトの強度値とPRIMARYの強度値を使用した例:<pre><code>{`( group(s) order(max(uca(s, "sv"))) each(output(count())) )`}</code></pre> <pre><code>{`( group(s) order(max(uca(s, "sv", "PRIMARY"))) each(output(count())) )`}</code></pre></td>
+      <td>Any, Locale(String), Strength(String)</td>
+      <td>Raw</td>
+    </tr>
+  </tbody>
+</table>
+
+### 単一引数の標準数学式
+ これらは、Javaの[Math](https://docs.oracle.com/javase/8/docs/api/java/lang/Math.html)クラスにある標準の数学関数です。
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>math.exp</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.log</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.log1p</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.log10</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.sqrt</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.cbrt</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.sin</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.cos</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.tan</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.asin</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.acos</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.atan</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.sinh</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.cosh</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.tanh</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.asinh</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.acosh</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.atanh</td>
+      <td>&amp;nbsp;</td>
+      <td>Double</td>
+      <td>Double</td>
+    </tr>
+  </tbody>
+</table>
+
+### 2引数の標準数学式
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>math.pow</td>
+      <td>X^Yを返します。</td>
+      <td>Double, Double</td>
+      <td>Double</td>
+    </tr>
+    <tr>
+      <td>math.hypot</td>
+      <td>XとYが与えられたとき、斜辺の長さsqrt(X^2 + Y^2)を返します</td>
+      <td>Double, Double</td>
+      <td>Double</td>
+    </tr>
+  </tbody>
+</table>
+
+## フィルター
+
+### 文字列フィルター
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>regex</td>
+      <td>フィールドを正規表現文字列に対してマッチさせます。</td>
+      <td>String, Expression</td>
+      <td>Bool</td>
+    </tr>
+  </tbody>
+</table>
+
+### 数値フィルター
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>range</td>
+      <td>フィールドが下限と上限の間にある場合にマッチします。</td>
+      <td>Numeric, Numeric, Expression, Bool?, Bool?</td>
+      <td>Bool</td>
+    </tr>
+  </tbody>
+</table>
+
+### ブール・フィルター
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>istrue</td>
+      <td>ブール式がtrueに評価される場合にマッチします。</td>
+      <td>Expression</td>
+      <td>Bool</td>
+    </tr>
+  </tbody>
+</table>
+
+### 述語フィルター
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>説明</th>
+      <th>引数</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>and</td>
+      <td>引数間の論理<code>{`and`}</code>です。</td>
+      <td>Filter, Filter</td>
+      <td>Bool</td>
+    </tr>
+    <tr>
+      <td>not</td>
+      <td>引数に対する論理<code>{`not`}</code>です。</td>
+      <td>Filter</td>
+      <td>Bool</td>
+    </tr>
+    <tr>
+      <td>or</td>
+      <td>引数間の論理<code>{`or`}</code>です。</td>
+      <td>Filter, Filter</td>
+      <td>Bool</td>
+    </tr>
+  </tbody>
+</table>
+
+## グルーピング言語の文法
+
+```bash expandable
+request ::= "all(" operations ")"
+group ::= ( "all" | "each") "(" operations ")" ["as" "(" identifier ")"]
+operations ::= ["group" "(" exp ")"]
+               ( ( "alias" "(" identifier "," exp ")" ) |
+                 ( filter ) |
+                 ( "max" "(" ( number | "inf" ) ")" ) |
+                 ( "order" "(" expList | aggrList ")" ) |
+                 ( "output" "(" aggrList ")" ) |
+                 ( "precision" "(" number ")" ) )*
+               group*
+aggrList ::= aggr ( "," aggr )*
+aggr ::= ( ( "count" "(" ")" ) |
+                 ( "sum" "(" exp ")" ) |
+                 ( "avg" "(" exp ")" ) |
+                 ( "max" "(" exp ")" ) |
+                 ( "min" "(" exp ")" ) |
+                 ( "xor" "(" exp ")" ) |
+                 ( "stddev" "(" exp ")" ) |
+                 ( "quantiles" "(" "[" number ( "," number )* "]" "," exp ")" ) |
+                 ( "summary" "(" [identifier] ")" ) )
+               ["as" "(" identifier ")"]
+expList ::= exp ( "," exp )*
+exp ::= ( "+" | "-") ( "$" identifier ["=" math] ) | ( math ) | ( aggr )
+filter ::= ( "filter" | "keep" ) "(" filterExp ")"
+filterExp ::= filterAnd ( "or" filterAnd )*
+filterAnd ::= filterNot ( "and" filterNot )*
+filterNot ::= "not" filterNot | filterPrim
+filterPrim ::= ( "(" filterExp ")" ) |
+               ( "regex" "(" string "," exp ")" ) |
+               ( "range" "(" number "," number "," exp ["," boolean "," boolean] ")" ) |
+               ( "istrue" "(" exp ")" )
+math ::= value [( "+" | "-" | "*" | "/" | "%" ) value]
+value ::= ( "(" exp ")" ) |
+               ( "add" "(" expList ")" ) |
+               ( "and" "(" expList ")" ) |
+               ( "cat" "(" expList ")" ) |
+               ( "div" "(" expList ")" ) |
+               ( "docidnsspecific" "(" ")" ) |
+               ( "fixedwidth" "(" exp "," number ")" ) |
+               ( "geo_distance" "(" "attribute" "(" attributeName ")" "," number "," number ")" "." ( "km" | "miles" ) ) |
+               ( "interpolatedlookup" "(" attributeName "," exp ")") |
+               ( "math" "." (
+                              (
+                                "exp" | "log" | "log1p" | "log10" | "sqrt" | "cbrt" |
+                                "sin" | "cos" | "tan" | "asin" | "acos" | "atan" |
+                                "sinh" | "cosh" | "tanh" | "asinh" | "acosh" | "atanh"
+                              ) "(" exp ")" |
+                              ( "pow" | "hypot" ) "(" exp "," exp ")"
+                            )) |
+               ( "max" "(" expList ")" ) |
+               ( "md5" "(" exp "," number "," number ")" ) |
+               ( "min" "(" expList ")" ) |
+               ( "mod" "(" expList ")" ) |
+               ( "mul" "(" expList ")" ) |
+               ( "or" "(" expList ")" ) |
+               ( "predefined" "(" exp "," "(" bucket ( "," bucket )* ")" ")" ) |
+               ( "reverse" "(" exp ")" ) |
+               ( "relevance" "(" ")" ) |
+               ( "sort" "(" exp ")" ) |
+               ( "strcat" "(" expList ")" ) |
+               ( "strlen" "(" exp ")" ) |
+               ( "size" "(" exp")" ) |
+               ( "sub" "(" expList ")" ) |
+               ( "time" "." ( "date" | "year" | "monthofyear" | "dayofmonth" | "dayofyear" | "dayofweek" |
+                              "hourofday" | "minuteofhour" | "secondofminute" ) "(" exp ")" ) |
+               ( "todouble" "(" exp ")" ) |
+               ( "tolong" "(" exp ")" ) |
+               ( "tostring" "(" exp ")" ) |
+               ( "toraw" "(" exp ")" ) |
+               ( "uca" "(" exp "," string ["," string] ")" ) |
+               ( "xor" "(" expList ")" ) |
+               ( "xorbit" "(" exp "," number ")" ) |
+               ( "zcurve" "." ( "x" | "y" ) "(" exp ")" ) |
+               ( attributeName "." "at" "(" number ")") |
+               ( attributeName )
+bucket ::= "bucket" ( "(" | "[" | "<" )
+                        ( "-inf" | rawvalue | number | string )
+                        ["," ( "inf" | rawvalue | number | string )]
+                        ( ")" | "]" | ">" )
+rawvalue ::= "{" ( ( string | number ) "," )* "}"
+```

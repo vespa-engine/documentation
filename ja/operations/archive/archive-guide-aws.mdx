@@ -1,0 +1,118 @@
+---
+title: "AWS アーカイブガイド"
+---
+
+<Note>
+**Note:** 
+
+このガイドは Vespa Cloud を利用しているテナント向けです。テナントが **Enclave** を利用している場合、アーカイブバケットはお客様自身のクラウドアカウント内にあり、直接アクセスできます。代わりに [Enclave アーカイブガイド](/ja/operations/enclave/archive)を参照してください。
+</Note>
+
+Vespa Cloud は、ログデータ、ヒープダンプ、Java Flight Recorder のセッションを AWS S3 のバケットにエクスポートします。このガイドでは、このデータへのアクセス方法を説明します。データへのアクセスは、テナントが管理する AWS アカウントを通じて行う必要があります。このデータにアクセスするためのデータ通信は、この AWS アカウントに課金されます。
+
+開始するには、以下のリソースが必要です:
+
+- AWS アカウント
+- その AWS アカウント内の IAM Role
+- [AWS コマンドラインクライアント](https://aws.amazon.com/cli/)
+
+アクセスは、Vespa Cloud Console のテナントアカウント画面から設定します。「archive」タブを選択し、**AWS** セクションを展開します。
+
+## IAM Role の登録
+
+<Frame>
+![AWS アーカイブのアコーディオン](/assets/img/archive-aws-expanded-dropdown.png)
+</Frame>
+
+**Configure access to your cloud archive** をクリックして、設定ダイアログを開きます。
+
+## アクセスの設定
+
+<Frame>
+![AWS アクセス設定](/assets/img/archive-aws-configure-access.png)
+</Frame>
+
+**Step 1** で、S3 バケットへのアクセスを許可する IAM Role の ARN（例: `arn:aws:iam::123456789012:role/my-iam-role`）を入力し、**Save** をクリックします。Vespa Cloud は、その Role に対して S3 バケットへのアクセスを許可します。
+
+**Step 2** では、IAM Role にアタッチする必要のあるポリシーが生成されます。ポリシーをコピーして、お客様の AWS アカウント内の IAM Role にアタッチしてください。AWS では、Vespa Cloud の AWS アカウント（ステップ 1）とテナントの AWS アカウント（ステップ 2）の両方でパーミッションを登録する必要があります。他の要件がある場合は、同等の独自ポリシーを作成してください。詳細については、[AWS のドキュメント](https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_manage-attach-detach.html)を参照してください。
+
+## AWS CLI を使用したファイルへのアクセス
+
+<Frame>
+![AWS ログのダウンロード](/assets/img/archive-aws-access-logs.png)
+</Frame>
+
+パーミッションが付与されると、その IAM Role でアーカイブバケットの内容にアクセスできるようになります。任意の AWS S3 クライアントが利用できますが、AWS コマンドラインクライアントは手軽に使えるツールです。アーカイブページには、データが保存されているすべてのバケットが一覧表示されます。通常、テナントがアプリケーションを持つ zone ごとに 1 つのバケットがあります。
+
+ネットワークトラフィックが正しい AWS アカウントに課金されるようにするため、`--request-payer=requester` パラメーターは必須です。
+
+`aws cli` のインストールおよび使用方法については [access-log-lambda](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/access-log-lambda/README.md) を参照してください。図のようにログをダウンロードしたり、例えばオブジェクトを一覧表示したりできます:
+
+```bash
+$ aws s3 ls --profile=archive --request-payer=requester \
+  s3://vespa-cloud-data-prod.aws-us-east-1c-9eb633/vespa-team/
+
+        PRE album-rec-searcher/
+        PRE cord-19/
+        PRE vespacloud-docsearch/
+```
+
+上記の例では、S3 バケット名は *vespa-cloud-data-prod.aws-us-east-1c-9eb633*、テナント名は *vespa-team* です（その prod zone における例）。アーカイブはテナント単位で行われ、ログファイルは通常、次のようなキーで保存されます:
+
+```bash
+/vespa-team/vespacloud-docsearch/default/h2946a/logs/access/JsonAccessLog.default.20210629100001.zst
+```
+
+したがって、このオブジェクトの URI は次のようになります:
+
+```bash
+s3://vespa-cloud-data-prod.aws-us-east-1c-9eb633/vespa-team/vespacloud-docsearch/default/h2946a/logs/access/JsonAccessLog.default.20210629100001.zst
+```
+
+オブジェクトは生成され次第エクスポートされます。アクセスログファイルは圧縮され、少なくとも 1 時間に 1 回エクスポートされます。
+
+ファイルへのアクセスに問題がある場合は、次を実行して
+
+```bash
+aws sts get-caller-identity
+```
+
+アクセスが許可された Role を正しく引き受けている（assume している）ことを確認してください。
+
+## Lambda での処理
+
+Lambda 関数を使用してログを処理する場合は、アクセス／キー／Role の問題を切り分けるために、まずオブジェクトを一覧表示する最小限の関数を作成してください:
+
+```js expandable
+const aws = require("aws-sdk");
+const s3 = new aws.S3({ apiVersion: "2006-03-01" });
+
+const findRelevantKeys = ({ Bucket, Prefix }) => {
+  console.log(`Finding relevant keys in bucket ${Bucket}`);
+  return s3
+    .listObjectsV2({ Bucket: Bucket, Prefix: Prefix, RequestPayer: "requester" })
+    .promise()
+    .then((res) =>
+      res.Contents.map((content) => ({ Bucket, Key: content.Key }))
+    )
+    .catch((err) => Error(err));
+};
+
+exports.handler = async (event, context) => {
+  const options = { Bucket: "vespa-cloud-data-prod.aws-us-east-1c-9eb633", Prefix: "MY-TENANT-NAME/" };
+  return findRelevantKeys(options)
+    .then((res) => {
+      console.log("response: ", res);
+      return { statusCode: 200 };
+    })
+    .catch((err) => ({ statusCode: 500, message: err }));
+};
+```
+
+<Note>
+**Note:** 
+
+オブジェクトにアクセスする際は、必ず `RequestPayer: "requester"` を設定してください。転送コストはリクエスト側に課金されます。
+</Note>
+
+上記で S3 のログファイルが一覧表示できたら、ログデータを展開して処理する関数の書き方について [access-log-lambda](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/access-log-lambda/README.md) を確認してください。

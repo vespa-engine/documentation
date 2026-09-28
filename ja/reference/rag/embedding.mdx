@@ -1,0 +1,856 @@
+---
+title: "埋め込みリファレンス"
+sidebarTitle: "Embedding"
+---
+[エンベッダー](/ja/rag/embedding)のリファレンス設定です。
+
+## モデル設定リファレンス
+
+エンベッダーのモデルには [model](/ja/reference/applications/config-files#model) 型の設定を使用します。この設定は `model-id`、`url`、`path` の各属性を受け付けます。これらのうち複数を単一の設定値として指定でき、デプロイ環境に応じていずれか1つが使用されます:
+
+- `model-id` が指定されており、アプリケーションが Vespa Cloud にデプロイされている場合は、`model-id` が使用されます。
+- そうでない場合、`url` が指定されていれば、それが使用されます
+- それ以外の場合は、`path` が使用されます。
+
+`path` を使用する場合、モデルファイルはアプリケーション・パッケージ内で提供する必要があります。
+
+## Huggingface エンベッダー
+
+任意の [Huggingface トークナイザー](https://huggingface.co/docs/tokenizers/index)(多言語トークナイザーを含む)を使用してトークンを生成し、それを ONNX モデル形式で提供されたトランスフォーマーモデルへの入力とするエンベッダーです。
+
+Huggingface エンベッダーは、[services.xml](/ja/reference/applications/services/services) の `container` タグ内で設定します:
+
+```xml
+<container id="default" version="1.0">
+    <component id="hf-embedder" type="hugging-face-embedder">
+        <transformer-model path="my-models/model.onnx"/>
+        <tokenizer-model path="my-models/tokenizer.json"/>
+        <prepend>
+          <query>query:</query>
+          <document>passage:</document>
+        </prepend>
+    </component>
+    ...
+</container>
+```
+
+### プライベートモデルハブ
+
+[プライベートな Huggingface モデルハブ](https://huggingface.co/docs/hub/en/repositories-settings#private-repositories)でホストされているモデルを使用することもできます。
+
+適切な権限を持つ API キーを Huggingface から取得し、[Vespa シークレットストア](/ja/security/secret-store)に追加します。シークレットをコンテナーの `<secrets>` に追加し、Huggingface モデルの設定でそれを参照します:
+
+```xml
+<container id="default" version="1.0">
+  <secrets>
+    <myPrivateHubApiKey vault="my-vault" name="my-secret-name" />
+  </secrets>
+  <component id="hf-embedder" type="hugging-face-embedder">
+      <transformer-model url="my-url" secret-ref="myPrivateHubApiKey"/>
+      <tokenizer-model url="my-url" secret-ref="myPrivateHubApiKey"/>
+  </component>
+</container>
+```
+
+### Huggingface エンベッダーのリファレンス設定
+
+[エンベッダー ONNX パラメーター](#embedder-onnx-reference-config)に加えて:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+      <th>型</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>transformer-model</td>
+      <td>1つ</td>
+      <td>トランスフォーマー ONNX モデルファイルを指すために使用します</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>tokenizer-model</td>
+      <td>1つ</td>
+      <td>Huggingface トークナイザー設定ファイル <code>{`tokenizer.json`}</code> を指すために使用します</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>max-tokens</td>
+      <td>1つ</td>
+      <td>トランスフォーマーモデルが受け付けるトークンの最大数</td>
+      <td>数値</td>
+      <td>512</td>
+    </tr>
+    <tr>
+      <td>transformer-input-ids</td>
+      <td>1つ</td>
+      <td>トランスフォーマー入力 ID の名前または識別子</td>
+      <td>文字列</td>
+      <td>input_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-attention-mask</td>
+      <td>1つ</td>
+      <td>トランスフォーマーのアテンションマスクの名前または識別子</td>
+      <td>文字列</td>
+      <td>attention_mask</td>
+    </tr>
+    <tr>
+      <td>transformer-token-type-ids</td>
+      <td>1つ</td>
+      <td>トランスフォーマーのトークンタイプ ID の名前または識別子。モデルが <code>{`token_type_ids`}</code> を使用しない場合は <code>{`<transformer-token-type-ids/>`}</code> を使用します</td>
+      <td>文字列</td>
+      <td>token_type_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-output</td>
+      <td>1つ</td>
+      <td>トランスフォーマー出力の名前または識別子</td>
+      <td>文字列</td>
+      <td>last_hidden_state</td>
+    </tr>
+    <tr>
+      <td>pooling-strategy</td>
+      <td>1つ</td>
+      <td>単一のベクトル表現を得るために ONNX モデルの出力ベクトルをどのようにプーリングするか。有効な値は <code>{`mean`}</code>、<code>{`cls`}</code>、<code>{`none`}</code> です</td>
+      <td>文字列</td>
+      <td>mean</td>
+    </tr>
+    <tr>
+      <td>normalize</td>
+      <td>1つ</td>
+      <td>出力埋め込みベクトルを単位長(長さ 1)に正規化するかどうかを示す真偽値。<code>{`prenormalized-angular`}</code> の <a href="/ja/reference/schemas/schemas#distance-metric" aria-label="distance-metric">distance-metric</a> に有用です</td>
+      <td>真偽値</td>
+      <td>false</td>
+    </tr>
+    <tr>
+      <td>prepend</td>
+      <td>任意</td>
+      <td>トークン化と推論の前にテキスト入力の先頭に付加される指示です。特定のプロンプト指示で学習されたモデルに有用です。指示は入力テキストの先頭に付加されます。<br/><br/> • 要素 <code>{`<query>`}</code> - 任意のクエリー用先頭付加指示。<br/> • 要素 <code>{`<document>`}</code> - 任意のドキュメント用先頭付加指示。 <br/><br/><code>{`<prepend>`}</code><br/> <code>{`<query>query:</query>`}</code><br/> <code>{`<document>passage:</document>`}</code> <br/><code>{`</prepend>`}</code></td>
+      <td>任意の <code>{`<query> <document>`}</code> 要素。</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+## Bert エンベッダー
+
+Bert エンベッダーは、[services.xml](/ja/reference/applications/services/services) の `container` タグ内で設定します:
+
+```xml
+<container version="1.0">
+  <component id="myBert" type="bert-embedder">
+    <transformer-model path="models/e5-small-v2.onnx"/>
+    <tokenizer-vocab url="https://huggingface.co/intfloat/e5-small-v2/raw/main/vocab.txt"/>
+  </component>
+</container>
+```
+
+### Bert エンベッダーのリファレンス設定
+
+[エンベッダー ONNX パラメーター](#embedder-onnx-reference-config)に加えて:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+      <th>型</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>transformer-model</td>
+      <td>1つ</td>
+      <td>トランスフォーマー ONNX モデルファイルを指すために使用します</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>tokenizer-vocab</td>
+      <td>1つ</td>
+      <td>有効な wordpiece トークンを含む Huggingface の <code>{`vocab.txt`}</code> トークナイザーファイルを指すために使用します。<code>{`tokenizer.json`}</code> 形式はサポートしていません。</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>max-tokens</td>
+      <td>1つ</td>
+      <td>入力で許可されるトークンの最大数</td>
+      <td>整数</td>
+      <td>384</td>
+    </tr>
+    <tr>
+      <td>transformer-input-ids</td>
+      <td>1つ</td>
+      <td>トランスフォーマー入力 ID の名前または識別子</td>
+      <td>文字列</td>
+      <td>input_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-attention-mask</td>
+      <td>1つ</td>
+      <td>トランスフォーマーのアテンションマスクの名前または識別子</td>
+      <td>文字列</td>
+      <td>attention_mask</td>
+    </tr>
+    <tr>
+      <td>transformer-token-type-ids</td>
+      <td>1つ</td>
+      <td>トランスフォーマーのトークンタイプ ID の名前または識別子。モデルが <code>{`token_type_ids`}</code> を使用しない場合は <code>{`<transformer-token-type-ids/>`}</code> を使用します</td>
+      <td>文字列</td>
+      <td>token_type_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-output</td>
+      <td>1つ</td>
+      <td>トランスフォーマー出力の名前または識別子</td>
+      <td>文字列</td>
+      <td>output_0</td>
+    </tr>
+    <tr>
+      <td>transformer-start-sequence-token</td>
+      <td>1つ</td>
+      <td>シーケンス開始トークン</td>
+      <td>数値</td>
+      <td>101</td>
+    </tr>
+    <tr>
+      <td>transformer-end-sequence-token</td>
+      <td>1つ</td>
+      <td>シーケンス開始トークン</td>
+      <td>数値</td>
+      <td>102</td>
+    </tr>
+    <tr>
+      <td>pooling-strategy</td>
+      <td>1つ</td>
+      <td>単一のベクトル表現を得るために ONNX モデルの出力ベクトルをどのようにプーリングするか。有効な値は <code>{`mean`}</code> と <code>{`cls`}</code> です</td>
+      <td>文字列</td>
+      <td>mean</td>
+    </tr>
+  </tbody>
+</table>
+
+## colbert エンベッダー
+
+colbert エンベッダーは、[services.xml](/ja/reference/applications/services/services) の `container` タグ内で設定します:
+
+```xml
+<container version="1.0">
+  <component id="colbert" type="colbert-embedder">
+    <transformer-model path="models/colbertv2.onnx"/>
+    <tokenizer-model url="https://huggingface.co/colbert-ir/colbertv2.0/raw/main/tokenizer.json"/>
+    <max-query-tokens>32</max-query-tokens>
+    <max-document-tokens>256</max-document-tokens>
+  </component>
+</container>
+```
+
+Vespa の colbert 実装は、WordPiece トークン化を使用するトランスフォーマーモデルのデフォルト設定で動作します。
+
+### colbert エンベッダーのリファレンス設定
+
+[エンベッダー ONNX パラメーター](#embedder-onnx-reference-config)に加えて:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+      <th>型</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>transformer-model</td>
+      <td>1つ</td>
+      <td>トランスフォーマー ColBERT ONNX モデルファイルを指すために使用します</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>tokenizer-model</td>
+      <td>1つ</td>
+      <td>Huggingface トークナイザー設定ファイル <code>{`tokenizer.json`}</code> を指すために使用します</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>max-tokens</td>
+      <td>1つ</td>
+      <td>transformer-model が扱えるトークン列の最大長</td>
+      <td>数値</td>
+      <td>512</td>
+    </tr>
+    <tr>
+      <td>max-query-tokens</td>
+      <td>1つ</td>
+      <td>ColBERT クエリートークン埋め込みの最大数。クエリーはこの長さまでパディングされます。max-tokens より小さくなければなりません</td>
+      <td>数値</td>
+      <td>32</td>
+    </tr>
+    <tr>
+      <td>max-document-tokens</td>
+      <td>1つ</td>
+      <td>ColBERT ドキュメントトークン埋め込みの最大数。ドキュメントはパディングされません。max-tokens より小さくなければなりません</td>
+      <td>数値</td>
+      <td>512</td>
+    </tr>
+    <tr>
+      <td>transformer-input-ids</td>
+      <td>1つ</td>
+      <td>トランスフォーマー入力 ID の名前または識別子</td>
+      <td>文字列</td>
+      <td>input_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-attention-mask</td>
+      <td>1つ</td>
+      <td>トランスフォーマーのアテンションマスクの名前または識別子</td>
+      <td>文字列</td>
+      <td>attention_mask</td>
+    </tr>
+    <tr>
+      <td>transformer-mask-token</td>
+      <td>1つ</td>
+      <td>ColBERT クエリーのパディングに使用されるマスクトークン ID</td>
+      <td>数値</td>
+      <td>103</td>
+    </tr>
+    <tr>
+      <td>transformer-start-sequence-token</td>
+      <td>1つ</td>
+      <td>シーケンス開始トークン ID</td>
+      <td>数値</td>
+      <td>101</td>
+    </tr>
+    <tr>
+      <td>transformer-end-sequence-token</td>
+      <td>1つ</td>
+      <td>シーケンス終了トークン ID</td>
+      <td>数値</td>
+      <td>102</td>
+    </tr>
+    <tr>
+      <td>transformer-pad-token</td>
+      <td>1つ</td>
+      <td>パディングシーケンストークン ID</td>
+      <td>数値</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>query-token-id</td>
+      <td>1つ</td>
+      <td>colbert クエリートークンマーカー ID</td>
+      <td>数値</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>document-token-id</td>
+      <td>1つ</td>
+      <td>colbert ドキュメントトークンマーカー ID</td>
+      <td>数値</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>transformer-output</td>
+      <td>1つ</td>
+      <td>トランスフォーマー出力の名前または識別子</td>
+      <td>文字列</td>
+      <td>contextual</td>
+    </tr>
+  </tbody>
+</table>
+
+Vespa の colbert-embedder は、`query-token-id` に `[unused0]`(トークン ID 1)を、` document-token-id`ドキュメントマーカーに `[unused1]`(トークン ID 2)を使用します。ドキュメントの句読点文字はフィルタリングされます(設定不可)。次の文字が除去されます ``!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~``。
+
+### splade エンベッダーのリファレンス設定
+
+[エンベッダー ONNX パラメーター](#embedder-onnx-reference-config)に加えて:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+      <th>型</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>transformer-model</td>
+      <td>1つ</td>
+      <td>トランスフォーマー ONNX モデルファイルを指すために使用します</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>tokenizer-model</td>
+      <td>1つ</td>
+      <td>Huggingface トークナイザー設定ファイル <code>{`tokenizer.json`}</code> を指すために使用します</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>term-score-threshold</td>
+      <td>1つ</td>
+      <td>スパース性を高めるための任意のしきい値。スコアがこの値より低いトークン/タームは保持されません。</td>
+      <td>数値</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>max-tokens</td>
+      <td>1つ</td>
+      <td>トランスフォーマーモデルが受け付けるトークンの最大数</td>
+      <td>数値</td>
+      <td>512</td>
+    </tr>
+    <tr>
+      <td>transformer-input-ids</td>
+      <td>1つ</td>
+      <td>トランスフォーマー入力 ID の名前または識別子</td>
+      <td>文字列</td>
+      <td>input_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-attention-mask</td>
+      <td>1つ</td>
+      <td>トランスフォーマーのアテンションマスクの名前または識別子</td>
+      <td>文字列</td>
+      <td>attention_mask</td>
+    </tr>
+    <tr>
+      <td>transformer-token-type-ids</td>
+      <td>1つ</td>
+      <td>トランスフォーマーのトークンタイプ ID の名前または識別子。モデルが <code>{`token_type_ids`}</code> を使用しない場合は <code>{`<transformer-token-type-ids/>`}</code> を使用します</td>
+      <td>文字列</td>
+      <td>token_type_ids</td>
+    </tr>
+    <tr>
+      <td>transformer-output</td>
+      <td>1つ</td>
+      <td>トランスフォーマー出力の名前または識別子</td>
+      <td>文字列</td>
+      <td>logits</td>
+    </tr>
+  </tbody>
+</table>
+
+<Tooltip tip="This content is applicable to Vespa Cloud deployments.">`Vespa Cloud`</Tooltip>
+
+## VoyageAI エンベッダー
+
+[VoyageAI](https://www.voyageai.com/) API を使用して埋め込みを生成するエンベッダーです。
+
+VoyageAI エンベッダーは、[services.xml](/ja/reference/applications/services/services) の `container` タグ内で設定します:
+
+```xml
+<container id="default" version="1.0">
+    <component id="voyage" type="voyage-ai-embedder">
+        <model>voyage-law-2</model>
+        <api-key-secret-ref>voyage_api_key</api-key-secret-ref>
+        <dimensions>1024</dimensions>
+        <endpoint>https://api.voyageai.com/v1/embeddings</endpoint>
+        <truncate>true</truncate>
+        <batching max-size="16" max-delay="200ms"/>
+    </component>
+</container>
+```
+
+### VoyageAI エンベッダーのリファレンス設定
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+      <th>型</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>model</td>
+      <td>1つ</td>
+      <td>&#42;&#42;必須&#42;&#42;。使用する VoyageAI モデル。汎用、特化型、<a href="https://docs.voyageai.com/docs/contextualized-chunk-embeddings" aria-label="contextualized">コンテキスト化</a>、<a href="https://docs.voyageai.com/docs/multimodal-embeddings" aria-label="multimodal">マルチモーダル</a>の各モデルを含む利用可能なモデルの完全な一覧については、<a href="https://docs.voyageai.com/docs/embeddings" aria-label="VoyageAI embeddings documentation">VoyageAI 埋め込みドキュメント</a>を参照してください。</td>
+      <td>文字列</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>dimensions</td>
+      <td>1つ</td>
+      <td>&#42;&#42;必須&#42;&#42;。出力埋め込みベクトルの次元数。スキーマ内のテンソル・フィールド定義と一致する必要があります。有効な値は <code>{`256`}</code>、<code>{`512`}</code>、<code>{`1024`}</code>、<code>{`1536`}</code>、<code>{`2048`}</code> です。モデルごとの次元サポートについては、<a href="https://docs.voyageai.com/docs/embeddings" aria-label="VoyageAI embeddings documentation">VoyageAI 埋め込みドキュメント</a>を参照してください。</td>
+      <td>整数</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>api-key-secret-ref</td>
+      <td>1つ</td>
+      <td>&#42;&#42;必須&#42;&#42;。VoyageAI API キーを含む、Vespa の<a href="/ja/security/secret-store" aria-label="secret store">シークレットストア</a>内のシークレットへの参照。</td>
+      <td>文字列</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>endpoint</td>
+      <td>任意</td>
+      <td>VoyageAI API エンドポイントの URL。</td>
+      <td>文字列</td>
+      <td>https://api.voyageai.com/v1/embeddings</td>
+    </tr>
+    <tr>
+      <td>truncate</td>
+      <td>任意</td>
+      <td>モデルの上限を超える入力テキストを切り詰めるかどうか。有効にすると、テキストは自動的に切り詰められます。無効にすると、長すぎるテキストを含むリクエストは失敗します。</td>
+      <td>真偽値</td>
+      <td>true</td>
+    </tr>
+    <tr>
+      <td>quantization</td>
+      <td>任意</td>
+      <td>埋め込みベクトルの出力量子化形式。有効な値は <code>{`auto`}</code>、<code>{`float`}</code>、<code>{`int8`}</code>、<code>{`binary`}</code> です。<code>{`auto`}</code> に設定すると、エンベッダーはスキーマ内の宛先テンソルの次元数とセル型から適切な量子化を推測します。<code>{`float`}</code> 値は <code>{`bfloat16`}</code> の宛先テンソルにも適用されます。<code>{`binary`}</code> 量子化を使用する場合、宛先テンソル・フィールドは、エンベッダー設定で指定した次元数の 1/8 の次元を持つ <code>{`int8`}</code> セル型を使用する必要があります(例: 1024 次元 → <code>{`tensor<int8>(x[128])`}</code>)。量子化オプションの詳細については <a href="https://docs.voyageai.com/docs/flexible-dimensions-and-quantization#quantization" aria-label="VoyageAI quantization documentation">VoyageAI 量子化ドキュメント</a>を、Vespa におけるバイナリ量子化の詳細については<a href="/ja/rag/binarizing-vectors" aria-label="binarizing vectors">ベクトルのバイナリ化</a>を参照してください。</td>
+      <td>文字列</td>
+      <td>auto</td>
+    </tr>
+    <tr>
+      <td>batching</td>
+      <td>任意</td>
+      <td>同時に発生した複数の埋め込みリクエストを単一の VoyageAI API 呼び出しに動的にバッチ処理できるようにします。有効にすると、エンベッダーは同時リクエストを収集して単一のバッチとして送信し、API 呼び出し回数を減らしてスループットを向上させます。 <br/><br/>• <code>{`max-size`}</code> — 単一のバッチに含めるリクエストの最大数。 <br/>• <code>{`max-delay`}</code> — 部分的なバッチを送信するまでに、バッチが満杯になるのを待つ最大時間(例: <code>{`200ms`}</code>)。</td>
+      <td>要素</td>
+      <td>無効</td>
+    </tr>
+  </tbody>
+</table>
+
+## OpenAI エンベッダー
+
+`Vespa 8.678` 以降で利用可能
+
+[OpenAI](https://platform.openai.com/docs/guides/embeddings) の埋め込み API を使用して埋め込みを生成するエンベッダーです。
+
+OpenAI エンベッダーは、[services.xml](/ja/reference/applications/services/services) の `container` タグ内で設定します:
+
+```xml
+<container id="default" version="1.0">
+    <component id="openai" type="openai-embedder">
+        <model>text-embedding-3-small</model>
+        <api-key-secret-ref>openai_api_key</api-key-secret-ref>
+        <dimensions>1536</dimensions>
+        <endpoint>https://api.openai.com/v1/embeddings</endpoint>
+    </component>
+</container>
+```
+
+### OpenAI エンベッダーのリファレンス設定
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+      <th>型</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>model</td>
+      <td>1つ</td>
+      <td>&#42;&#42;必須&#42;&#42;。使用する OpenAI モデル。例えば <code>{`text-embedding-3-small`}</code> や <code>{`text-embedding-3-large`}</code> です。利用可能なモデルの完全な一覧については、<a href="https://platform.openai.com/docs/guides/embeddings" aria-label="OpenAI embeddings documentation">OpenAI 埋め込みドキュメント</a>を参照してください。</td>
+      <td>文字列</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>dimensions</td>
+      <td>1つ</td>
+      <td>&#42;&#42;必須&#42;&#42;。出力埋め込みベクトルの次元数。スキーマ内のテンソル・フィールド定義と一致する必要があります。宛先テンソル・フィールドは <code>{`float`}</code> または <code>{`bfloat16`}</code> のセル型を使用する必要があります — OpenAI API は量子化をサポートしていません。</td>
+      <td>整数</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>api-key-secret-ref</td>
+      <td>任意</td>
+      <td>OpenAI API キーを含む、Vespa の<a href="/ja/security/secret-store" aria-label="secret store">シークレットストア</a>内のシークレットへの参照。未設定の場合、リクエストは <code>{`Authorization`}</code> ヘッダーなしで送信されます。</td>
+      <td>文字列</td>
+      <td>"" (認証なし)</td>
+    </tr>
+    <tr>
+      <td>endpoint</td>
+      <td>任意</td>
+      <td>OpenAI API エンドポイントの URL。特定の OpenAI 互換 API を対象にする場合に設定します。</td>
+      <td>文字列</td>
+      <td>https://api.openai.com/v1/embeddings</td>
+    </tr>
+    <tr>
+      <td>batching</td>
+      <td>任意</td>
+      <td>同時に発生した複数の埋め込みリクエストを単一の OpenAI API 呼び出しに動的にバッチ処理できるようにします。有効にすると、エンベッダーは同時リクエストを収集して単一のバッチとして送信し、API 呼び出し回数を減らしてスループットを向上させます。<br/><br/> • <code>{`max-size`}</code> — 単一のバッチに含めるリクエストの最大数。 <br/>• <code>{`max-delay`}</code> — 部分的なバッチを送信するまでに、バッチが満杯になるのを待つ最大時間(例: <code>{`200ms`}</code>)。</td>
+      <td>要素</td>
+      <td>無効</td>
+    </tr>
+    <tr>
+      <td>prepend</td>
+      <td>任意</td>
+      <td>埋め込みリクエストを送信する前にテキスト入力の先頭に付加される文字列。タスク固有のプレフィックスを想定する、OpenAI 互換の指示チューニング済みモデルに有用です。<br/><br/> • 要素 <code>{`<query>`}</code> - 任意のクエリー用先頭付加指示。 <br/>• 要素 <code>{`<document>`}</code> - 任意のドキュメント用先頭付加指示。 <br/><br/><code>{`<prepend>`}</code><br/> <code>{`<query>query: </query>`}</code><br/> <code>{`<document>passage: </document>`}</code><br/> <code>{`</prepend>`}</code></td>
+      <td>任意の <code>{`<query> <document>`}</code> 要素。</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+## Mistral エンベッダー
+
+`Vespa 8.678` 以降で利用可能
+
+[Mistral](https://docs.mistral.ai/capabilities/embeddings/overview/) の埋め込み API を使用して埋め込みを生成するエンベッダーです。
+
+Mistral エンベッダーは、[services.xml](/ja/reference/applications/services/services) の `container` タグ内で設定します:
+
+```xml
+<container id="default" version="1.0">
+    <component id="mistral" type="mistral-embedder">
+        <model>mistral-embed</model>
+        <api-key-secret-ref>mistral_api_key</api-key-secret-ref>
+        <dimensions>1024</dimensions>
+        <quantization>auto</quantization>
+    </component>
+</container>
+```
+
+### Mistral エンベッダーのリファレンス設定
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+      <th>型</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>model</td>
+      <td>1つ</td>
+      <td>&#42;&#42;必須&#42;&#42;。使用する Mistral モデル。例えば <code>{`mistral-embed`}</code> や <code>{`codestral-embed`}</code> です。利用可能なモデルの完全な一覧については、<a href="https://docs.mistral.ai/capabilities/embeddings/overview/" aria-label="Mistral embeddings documentation">Mistral 埋め込みドキュメント</a>を参照してください。</td>
+      <td>文字列</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>api-key-secret-ref</td>
+      <td>1つ</td>
+      <td>&#42;&#42;必須&#42;&#42;。Mistral API キーを含む、Vespa の<a href="/ja/security/secret-store" aria-label="secret store">シークレットストア</a>内のシークレットへの参照。</td>
+      <td>文字列</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>dimensions</td>
+      <td>1つ</td>
+      <td>&#42;&#42;必須&#42;&#42;。出力埋め込みベクトルの次元数。スキーマ内のテンソル・フィールド定義と一致する必要があります。モデルごとの次元サポートについては、<a href="https://docs.mistral.ai/capabilities/embeddings/overview/" aria-label="Mistral embeddings documentation">Mistral 埋め込みドキュメント</a>を参照してください。</td>
+      <td>整数</td>
+      <td>N/A</td>
+    </tr>
+    <tr>
+      <td>quantization</td>
+      <td>任意</td>
+      <td>埋め込みベクトルの出力量子化形式。有効な値は <code>{`auto`}</code>、<code>{`float`}</code>、<code>{`int8`}</code>、<code>{`binary`}</code> です。<code>{`auto`}</code> の解決方法と、<code>{`int8`}</code> および <code>{`binary`}</code> に必要な宛先テンソルのレイアウトの詳細については、<a href="#voyageai-embedder-reference-config" aria-label="VoyageAI embedder reference config">VoyageAI エンベッダーのリファレンス設定</a>の <code>{`quantization`}</code> の行を参照してください。すべての Mistral モデルが <code>{`int8`}</code> と <code>{`binary`}</code> の量子化をサポートしているわけではないことに注意してください — モデルごとのサポートについては <a href="https://docs.mistral.ai/capabilities/embeddings/overview/" aria-label="Mistral embeddings documentation">Mistral 埋め込みドキュメント</a>を参照してください。</td>
+      <td>文字列</td>
+      <td>auto</td>
+    </tr>
+    <tr>
+      <td>batching</td>
+      <td>任意</td>
+      <td>同時に発生した複数の埋め込みリクエストを単一の Mistral API 呼び出しに動的にバッチ処理できるようにします。有効にすると、エンベッダーは同時リクエストを収集して単一のバッチとして送信し、API 呼び出し回数を減らしてスループットを向上させます。<br/><br/>• <code>{`max-size`}</code> — 単一のバッチに含めるリクエストの最大数。 <br/>• <code>{`max-delay`}</code> — 部分的なバッチを送信するまでに、バッチが満杯になるのを待つ最大時間(例: <code>{`200ms`}</code>)。</td>
+      <td>要素</td>
+      <td>無効</td>
+    </tr>
+  </tbody>
+</table>
+
+## Huggingface トークナイザー・エンベッダー
+
+Huggingface トークナイザー・エンベッダーは、[services.xml](/ja/reference/applications/services/services) の `container` タグ内で設定します:
+
+```xml
+<container version="1.0">
+    <component id="tokenizer" type="hugging-face-tokenizer">
+      <model url="https://huggingface.co/bert-base-uncased/raw/main/tokenizer.json"/>
+    </component>
+  </container>
+```
+
+### Huggingface トークナイザーのリファレンス設定
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+      <th>型</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>model</td>
+      <td>1つ以上</td>
+      <td>Huggingface トークナイザー設定ファイル <code>{`tokenizer.json`}</code> を指すために使用します。<code>{`language`}</code> もサポートしていますが、これはドキュメントの言語に応じて異なるトークン化を行いたい場合にのみ関係します。任意の言語で(つまりデフォルトとして)使用するモデルには "unknown" を使用します。</td>
+      <td><a href="#model-config-reference" aria-label="model-type">model-type</a></td>
+      <td>N/A</td>
+    </tr>
+  </tbody>
+</table>
+
+## エンベッダー ONNX リファレンス設定
+
+Vespa は、埋め込みモデルの推論を高速化するために [ONNX Runtime](https://onnxruntime.ai/) を使用します。これらのパラメーターは [Bert エンベッダー](#bert-embedder)と [Huggingface エンベッダー](#huggingface-embedder)の両方で有効です。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>名前</th>
+      <th>出現回数</th>
+      <th>説明</th>
+      <th>型</th>
+      <th>デフォルト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>onnx-execution-mode</td>
+      <td>1つ</td>
+      <td>低レベルの ONNX 実行モデル。有効な値は <code>{`parallel`}</code> または <code>{`sequential`}</code> です。CPU での推論にのみ関係します。スレッディングについては <a href="https://onnxruntime.ai/docs/performance/tune-performance/threading.html" aria-label="ONNX runtime documentation">ONNX ランタイムのドキュメント</a>を参照してください。</td>
+      <td>文字列</td>
+      <td>sequential</td>
+    </tr>
+    <tr>
+      <td>onnx-interop-threads</td>
+      <td>1つ</td>
+      <td>低レベルの ONNX 設定。CPU での推論にのみ関係します。</td>
+      <td>数値</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>onnx-intraop-threads</td>
+      <td>1つ</td>
+      <td>低レベルの ONNX 設定。CPU での推論にのみ関係します。</td>
+      <td>数値</td>
+      <td>4</td>
+    </tr>
+    <tr>
+      <td>onnx-gpu-device</td>
+      <td>1つ</td>
+      <td>モデルを実行する GPU デバイス。<a href="/ja/operations/self-managed/vespa-gpu-container" aria-label="configuring GPU for Vespa container image">Vespa コンテナーイメージの GPU 設定</a>を参照してください。インスタンスに利用可能な GPU がある場合でもモデルに GPU を使用しないようにするには <code>{`-1`}</code> を使用します。</td>
+      <td>数値</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+
+## SentencePiece エンベッダー
+
+[SentencePiece](https://github.com/google/sentencepiece) のネイティブ Java 実装です。SentencePiece はスペースに依存せずにテキストをチャンクに分割するため、スペルミスに対して頑健であり、CJK 言語でも機能します。Huggingface モデルとのより良い互換性のためには、これよりも [Huggingface トークナイザー・エンベッダー](#huggingface-tokenizer-embedder)を優先してください。
+
+これは[カスタムコンポーネント](/ja/applications/components)と組み合わせて使用するのに適しており、また生成されたテンソルを[ランキング](/ja/basics/ranking)で使用することもできます。
+
+[SentencePiece エンベッダー](https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/sentencepiece/SentencePieceEmbedder.java)を使用するには、[services.xml](/ja/reference/applications/services/services) に追加します:
+
+```xml
+<container version="1.0">
+    <component id="mySentencePiece"
+             class="com.yahoo.language.sentencepiece.SentencePieceEmbedder"
+             bundle="linguistics-components">
+      <config name="language.sentencepiece.sentence-piece">;
+          <model>
+              <item>
+                <language>unknown</language>
+                <path>model/en.wiki.bpe.vs10000.model</path>
+              </item>
+          </model>
+        </config>
+    </component>
+  </container>
+```
+
+SentencePiece の設定で利用可能なオプションについては、[完全な設定定義](https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/resources/configdefinitions/language.sentencepiece.sentence-piece.def)を参照してください。
+
+## WordPiece エンベッダー
+
+BERT モデルと共によく使用される [WordPiece](https://github.com/google-research/bert#tokenization) のネイティブ Java 実装です。Huggingface モデルとのより良い互換性のためには、これよりも [Huggingface トークナイザー・エンベッダー](#huggingface-tokenizer-embedder)を優先してください。
+
+これは[カスタムコンポーネント](/ja/applications/components)と組み合わせて使用するのに適しており、また生成されたテンソルを[ランキング](/ja/basics/ranking)で使用することもできます。
+
+[WordPiece エンベッダー](https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/java/com/yahoo/language/wordpiece/WordPieceEmbedder.java)を使用するには、[services.xml](/ja/reference/applications/services/services) の `container` タグ内に追加します:
+
+```xml
+<container version="1.0">
+    <component id="myWordPiece">
+             class="com.yahoo.language.wordpiece.WordPieceEmbedder"
+             bundle="linguistics-components">
+      <config name="language.wordpiece.word-piece">
+        <model>
+          <item>
+            <language>unknown</language>
+            <path>models/bert-base-uncased-vocab.txt</path>
+          </item>
+        </model>
+      </config>
+    </component>
+  </container>
+```
+
+WordPiece の設定で利用可能なオプションについては、[完全な設定定義](https://github.com/vespa-engine/vespa/blob/master/linguistics-components/src/main/resources/configdefinitions/language.wordpiece.word-piece.def)を参照してください。
+
+WordPiece はカスタムコンポーネントと組み合わせて使用するのに適しており、また生成されたテンソルを[ランキング](/ja/basics/ranking)で使用することもできます。
+
+## Java からのエンベッダーの使用
+
+カスタム Java コンポーネント([Searcher](/ja/applications/searchers) や[ドキュメントプロセッサー](/ja/applications/document-processors#document-processors)など)を書く場合は、他のコンポーネントと同様に、設定済みのエンベッダーを[コンストラクターで注入して](/ja/applications/dependency-injection)使用します:
+
+```java
+class MyComponent {
+  @Inject
+  public MyComponent(ComponentRegistry<Embedder> embedders) {
+    // embedders contains all the embedders configured in your services.xml
+  }
+}
+```
+
+カスタム Searcher でエンベッダーを使用する具体的な例については、[LLMSearcher](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/java/ai/vespa/cloud/docsearch/LLMSearcher.java) を参照してください。
+
+## カスタムエンベッダー
+
+Vespa は、テキストの埋め込みを提供できるコンポーネントを定義するための Java インターフェース [com.yahoo.language.process.Embedder](https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/process/Embedder.java) を提供しています。
+
+アプリケーションでカスタムエンベッダーを定義して Vespa から使用できるようにするには([クエリーテキストの埋め込み](/ja/rag/embedding#embedding-a-query-text)を参照)、このインターフェースを実装し、[コンポーネント](/ja/applications/developer-guide#developing-components)として [services.xml](/ja/reference/applications/services/container) に追加します:
+
+```xml
+<container version="1.0">
+    <component id="myEmbedder"
+      class="com.example.MyEmbedder"
+      bundle="the name in artifactId in pom.xml">
+        <config name='com.example.my-embedder'>
+            <model model-id="minilm-l6-v2"/>
+            <vocab path="files/vocab.txt"/>
+            <myValue>foo</myValue>
+        </config>
+    </component>
+</container>
+```

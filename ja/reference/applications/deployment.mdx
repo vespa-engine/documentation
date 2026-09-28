@@ -1,0 +1,910 @@
+---
+title: "deployment.xml リファレンス"
+sidebarTitle: "deployment.xml"
+---
+
+
+*deployment.xml* は、アプリケーションをどのようにデプロイするかを制御します。
+
+*deployment.xml* は、[アプリケーション・パッケージ](/ja/basics/applications)のルートに配置され、[自動アプリケーションデプロイ](/ja/operations/automated-deployments)の際に、アプリケーションをどの環境およびリージョンに、どのアプリケーションインスタンスとしてデプロイするかを指定します。
+
+デプロイは、`test` および `staging` 環境を経て、*deployment.xml* に列挙された `prod` 環境へと進行します。
+
+シンプルな例:
+
+```xml
+<deployment version="1.0">
+    <prod>
+        <region>aws-us-east-1c</region>
+        <region>aws-us-west-2a</region>
+    </prod>
+</deployment>
+```
+
+より複雑な例:
+
+```xml expandable
+<deployment version="1.0">
+    <instance id="beta">
+        <prod>
+            <region>aws-us-east-1c</region>
+        </prod>
+    </instance>
+    <instance id="default">
+        <block-change revision="false"
+                      days="mon,wed-fri"
+                      hours="16-23"
+                      time-zone="UTC" />
+        <backup frequency="7d" granularity="cluster" />
+        <prod>
+            <region>aws-us-east-1c</region>
+            <delay hours="3" minutes="7" seconds="13" />
+            <parallel>
+                <region>aws-us-west-1c</region>
+                <steps>
+                    <region>aws-eu-west-1a</region>
+                    <delay hours="3" />
+                    <test>aws-us-west-2a</test>
+                </steps>
+            </parallel>
+        </prod>
+        <endpoints>
+            <endpoint container-id="my-container-service">
+                <region>aws-us-east-1c</region>
+            </endpoint>
+        </endpoints>
+    </instance>
+    <endpoints>
+        <endpoint id="my-weighted-endpoint"
+                  container-id="my-container-service"
+                  region="aws-us-east-1c">
+          <instance weight="1">beta</instance>
+        </endpoint>
+    </endpoints>
+</deployment>
+```
+
+一部の要素は、`<deployment>` ルートの直下、**または**、1 つ以上の `<instance>` タグが列挙されている場合はその配下の*いずれか*に宣言できます。こうした要素については、配置可能な場所の説明に太字の**または**を付けています。
+
+## deployment
+
+ルート要素です。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>version</td>
+      <td>はい</td>
+      <td>1.0</td>
+    </tr>
+    <tr>
+      <td>major-version</td>
+      <td>いいえ</td>
+      <td>このアプリケーションが有効なメジャーバージョン番号。</td>
+    </tr>
+    <tr>
+      <td>cloud-account</td>
+      <td>いいえ</td>
+      <td><a href="/ja/operations/enclave/enclave" aria-label="Vespa Cloud Enclave">Vespa Cloud Enclave</a> でデプロイする先のアカウント。</td>
+    </tr>
+  </tbody>
+</table>
+
+## instance
+
+`<deployment>` または `<parallel>`(ルートの直接の子孫でなければなりません)の中に配置します。アプリケーションのインスタンスを表します。複数のインスタンスを同じゾーンに同時にデプロイできます。`<instance>` が指定されていない場合、冒頭のシンプルな例のように、ルートのすべての子要素は暗黙的に `id="default"` の `<instance>` の子要素となります。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>id</td>
+      <td>はい</td>
+      <td>インスタンスの一意な名前。</td>
+    </tr>
+    <tr>
+      <td>tags</td>
+      <td>いいえ</td>
+      <td>スペース区切りのタグ。<a href="/ja/operations/deployment-variants" aria-label="deployment variants">デプロイメント・バリアント</a>を作成する際に参照できます。</td>
+    </tr>
+    <tr>
+      <td>cloud-account</td>
+      <td>いいえ</td>
+      <td><a href="/ja/operations/enclave/enclave" aria-label="Vespa Cloud Enclave">Vespa Cloud Enclave</a> でデプロイする先のアカウント。親の cloud-account の指定を上書きします。</td>
+    </tr>
+  </tbody>
+</table>
+
+## block-change
+
+`<deployment>`、**または** `<instance>` の中に配置します。これは、一致する時間帯において、変更が本番環境にデプロイされるのをブロックします。ただし、ブロック中でも変更のテストは実行されます。
+
+デフォルトでは、アプリケーションのリビジョン変更と Vespa プラットフォームの変更(アップグレード)の両方がブロックされます。`revision` および `version` 属性を使うと、いずれか一方の変更だけをブロックできます。
+
+以下の属性は任意の組み合わせで指定できます。ある日付における変更は、すべての条件が満たされた場合にブロックされます。無効な `<block-change>` タグ(すなわち、実際の日付に決して一致しない条件を含むもの)はシステムによって拒否されます。
+
+このタグは、`<test>` および `<staging>` タグの後、`<prod>` の前に配置しなければなりません。複数回宣言できます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>revision</td>
+      <td>いいえ、デフォルトは <code>{`true`}</code></td>
+      <td><code>{`false`}</code> に設定すると、アプリケーションのデプロイを許可します</td>
+    </tr>
+    <tr>
+      <td>version</td>
+      <td>いいえ、デフォルトは <code>{`true`}</code></td>
+      <td><code>{`false`}</code> に設定すると、Vespa プラットフォームのアップグレードを許可します</td>
+    </tr>
+    <tr>
+      <td>maintenance</td>
+      <td>いいえ、デフォルトは <code>{`false`}</code></td>
+      <td><code>{`true`}</code> に設定すると、Vespa のメンテナンス操作を禁止します。これはベストエフォートであり、メンテナンスは(セキュリティ上の理由などで)依然として発生する場合があります。メンテナンスのブロックウィンドウは、1 週間で計算して少なくとも 10% の時間、つまり週あたり少なくとも 17 時間は開いている必要があります。</td>
+    </tr>
+    <tr>
+      <td>days</td>
+      <td>いいえ、デフォルトは <code>{`mon-sun`}</code></td>
+      <td>このブロックが有効な曜日のリスト。単一の曜日、または開始曜日と終了曜日をダッシュで区切った曜日区間(両端を含む)を、カンマ区切りで列挙します。各曜日は英語名または 3 文字の省略形で指定します。</td>
+    </tr>
+    <tr>
+      <td>hours</td>
+      <td>いいえ、デフォルトは <code>{`0-23`}</code></td>
+      <td>このブロックが有効な時間のリスト。単一の時間、または開始時間と終了時間をダッシュで区切った時間区間(両端を含む)を、カンマ区切りで列挙します。各時間は 0 から 23 の範囲の数値で指定します。</td>
+    </tr>
+    <tr>
+      <td>time-zone</td>
+      <td>いいえ、デフォルトは UTC</td>
+      <td>hours 属性を解釈するために使用するタイムゾーンの名前。タイムゾーンは完全名、または曖昧さがない場合は短縮形で指定します。指定可能な値の完全な仕様は <a href="https://docs.oracle.com/javase/8/docs/api/java/time/ZoneId.html#of-java.lang.String-" aria-label="ZoneId.of">ZoneId.of</a> を参照してください。</td>
+    </tr>
+    <tr>
+      <td>from-date</td>
+      <td>いいえ</td>
+      <td>このブロックの開始日(この日を含む)(ISO-8601、<code>{`YYYY-MM-DD`}</code>)。</td>
+    </tr>
+    <tr>
+      <td>to-date</td>
+      <td>いいえ</td>
+      <td>このブロックの終了日(この日を含む)(ISO-8601、<code>{`YYYY-MM-DD`}</code>)。</td>
+    </tr>
+  </tbody>
+</table>
+
+以下の例は、PST タイムゾーンにおいて、週末のすべての変更をブロックし、営業時間外のリビジョンをブロックします:
+
+```xml
+<block-change days="sat-sun"
+              hours="0-23"
+              time-zone="America/Los_Angeles"/>
+<block-change revision="false"
+              days="mon-fri,sat,sun"
+              hours="0-8,16-23"
+              time-zone="America/Los_Angeles"/>
+```
+
+メンテナンス操作*のみ*をブロックするには、`revision` と `version` はデフォルトが `true` であるため、明示的に `false` に設定する必要があります。以下の例は、営業時間中のメンテナンスをブロックしつつ、アプリケーションのデプロイとプラットフォームのアップグレードは常に許可します:
+
+```xml
+<block-change maintenance="true"
+              revision="false"
+              version="false"
+              hours="8-15"
+              time-zone="America/Los_Angeles"/>
+```
+
+以下の例は、次の変更をブロックします:
+
+- 2022-03-01 以降の日曜日のすべての変更
+- 2022-02-10 から 2022-02-15 の間の 16 時から 23 時のすべての変更
+- 2022-01-05 までのすべての変更
+
+```xml
+<block-change days="sun"
+              from-date="2022-03-01"
+              time-zone="America/Los_Angeles"/>
+<block-change hours="16-23"
+              from-date="2022-02-10"
+              to-date="2022-02-15"
+              time-zone="America/Los_Angeles"/>
+<block-change to-date="2022-01-05"
+              time-zone="America/Los_Angeles"/>
+```
+
+## backup
+
+`<deployment>`、**または** `<instance>` の中に配置します。本番のコンテント・クラスターのスケジュールされたバックアップを設定します。この要素が存在する場合、指定された頻度でバックアップが作成されます。`<test>` および `<staging>` タグの後、`<prod>` の前に配置しなければなりません。
+
+なお、この要素を追加しても、最初のバックアップがすぐに作成されるわけではありません。クラスターが最初のバックアップの対象となるのは、コンテントノードが少なくとも 1 回分の `frequency` 間隔にわたって稼働し続けた後であり、以降のバックアップは設定された頻度で作成されます。詳細は[自動バックアップ](/ja/operations/data-management#backup)を参照してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>frequency</td>
+      <td>はい</td>
+      <td>接尾辞 <code>{`h`}</code>(時間)または <code>{`d`}</code>(日)を付けた正の整数。例: <code>{`24h`}</code>、<code>{`7d`}</code>。最小値は 24h です。</td>
+    </tr>
+    <tr>
+      <td>granularity</td>
+      <td>いいえ、デフォルトは <code>{`cluster`}</code></td>
+      <td>• <code>{`cluster`}</code>: クラスター内のすべてのコンテントノード<br/><br/> • <code>{`group`}</code>: 単一グループ内のすべてのコンテントノード</td>
+    </tr>
+  </tbody>
+</table>
+
+バックアップの実行はサービスの可用性には影響しませんが、パフォーマンス面でのコストがかかります。`granularity` を使用して、バックアップ速度と復元速度のトレードオフを制御できます。
+
+- `cluster` バックアップは、データの整合性を確保するために各コンテントノードを一時的にサスペンドする必要があるため、より時間がかかります。ただし、復元にはコンテントの再分配が実質的にゼロで済みます。
+- `group` バックアップは、グループ全体を同時にサスペンドしてバックアップするため、より高速です。ただし、復元にはクラスターのトポロジーによっては大量のコンテントの再分配が必要になる場合があります。
+  
+ほとんどの状況では、`cluster` バックアップを推奨します。
+
+[ブロックウィンドウ](#block-change)は、指定された期間中に新しいバックアップが開始されるのも防ぎます。ただし、利用可能な時間が短すぎてフルバックアップが完了しない場合、処理はブロックウィンドウを超えて継続します。[詳細を読む](/ja/operations/data-management#backup)。
+
+## resource-tags
+
+`<deployment>`、**または** `<instance>` の中に配置します。テナントのクラウドアカウント内でプロビジョニングされるクラウドリソース(仮想マシンおよびアタッチされたディスク)に適用するカスタムタグを指定します。`cloud-account` が設定されている [Vespa Cloud Enclave](/ja/operations/enclave/enclave) のデプロイでのみ利用可能です。一般的にコスト追跡やリソース管理に使用されます。
+
+`<deployment>` レベルで宣言されたタグはすべてのインスタンスに適用されます。`<instance>` レベルのタグはデプロイメントレベルのタグとマージされ、キーが競合した場合はインスタンスレベルの値が優先されます。
+
+```xml
+<deployment version="1.0" cloud-account="aws:123456789012">
+    <resource-tags>
+        <tag key="cost-center" value="engineering"/>
+        <tag key="env" value="${environment}"/>
+    </resource-tags>
+
+    <instance id="prod">
+        <resource-tags>
+            <tag key="cost-center" value="search-team"/>
+        </resource-tags>
+        <prod>
+            <region>aws-us-east-1c</region>
+        </prod>
+    </instance>
+</deployment>
+```
+
+`<resource-tags>` 要素は、1 つ以上の `<tag>` 子要素を含みます。各 `<tag>` には 2 つの必須属性があります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>key</td>
+      <td>はい</td>
+      <td>タグのキー。空であってはなりません。使用可能な文字と最大長は対象クラウドによって異なります。下記の<a href="#resource-tags-per-cloud-rules" aria-label="per-cloud rules">クラウドごとのルール</a>を参照してください。<code>{`vai_`}</code> プレフィックスは内部利用のために予約されています。</td>
+    </tr>
+    <tr>
+      <td>value</td>
+      <td>はい</td>
+      <td>タグの値。空であってはなりません。<a href="#resource-tags-template-variables" aria-label="template variables">テンプレート変数</a>を含めることができます。使用可能な文字と最大長は対象クラウドによって異なります。下記の<a href="#resource-tags-per-cloud-rules" aria-label="per-cloud rules">クラウドごとのルール</a>を参照してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+インスタンスあたりのタグの最大数(デプロイメントレベルとインスタンスレベルのタグをマージした後)はクラウドによって異なります。下記の[クラウドごとのルール](#resource-tags-per-cloud-rules)を参照してください。
+
+**クラウドごとのルール。** 使用可能な文字と長さの制限はクラウドプロバイダーによって異なります。単一のデプロイメントが複数のクラウドにまたがる場合があるため、タグはデプロイ時に各対象クラウドのルールに照らして検証されます。あるタグが AWS では有効でも GCP では無効な場合、デプロイは AWS のリージョンでは成功しますが、GCP のリージョンでは失敗します。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>制約</th>
+      <th>AWS</th>
+      <th>Azure</th>
+      <th>GCP</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>キーの文字</td>
+      <td><code>{`[a-zA-Z0-9 +-=._:/@]`}</code></td>
+      <td>Unicode、ただし <code>{`< > % & \\ ? /`}</code> を除く</td>
+      <td><code>{`[a-z][a-z0-9_-]*`}</code>(小文字の英字で始まる必要があります)</td>
+    </tr>
+    <tr>
+      <td>値の文字</td>
+      <td><code>{`[a-zA-Z0-9 +-=._:/@]`}</code></td>
+      <td>制限なし</td>
+      <td><code>{`[a-z0-9_-]*`}</code></td>
+    </tr>
+    <tr>
+      <td>キーの最大長</td>
+      <td>128</td>
+      <td>512</td>
+      <td>63</td>
+    </tr>
+    <tr>
+      <td>値の最大長</td>
+      <td>256</td>
+      <td>256</td>
+      <td>63</td>
+    </tr>
+    <tr>
+      <td>タグの最大数</td>
+      <td>50</td>
+      <td>50</td>
+      <td>64</td>
+    </tr>
+  </tbody>
+</table>
+
+**テンプレート変数。** タグの値では、以下のテンプレート変数を参照できます。解決された値は、クラウドにかかわらず常に小文字化されます。テンプレート変数のプレースホルダーは、クラウドごとの文字ルールのチェック時には除外されるため、値のリテラル部分のみが検証されます。未知の変数を参照するとデプロイは失敗します。変数は組み合わせて使用できます。例: `value="${environment}-${clustertype}"`。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>変数</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`\${tenant}`}</code></td>
+      <td>テナント名。例: <code>{`mytenant`}</code>。</td>
+    </tr>
+    <tr>
+      <td><code>{`\${application}`}</code></td>
+      <td>アプリケーション名。例: <code>{`myapp`}</code>。</td>
+    </tr>
+    <tr>
+      <td><code>{`\${instance}`}</code></td>
+      <td>インスタンス名。例: <code>{`default`}</code>、<code>{`beta`}</code>。</td>
+    </tr>
+    <tr>
+      <td><code>{`\${environment}`}</code></td>
+      <td>デプロイメント環境。例: <code>{`prod`}</code>、<code>{`dev`}</code>。</td>
+    </tr>
+    <tr>
+      <td><code>{`\${region}`}</code></td>
+      <td>デプロイメント・リージョン。例: <code>{`aws-us-east-1c`}</code>。</td>
+    </tr>
+    <tr>
+      <td><code>{`\${clustername}`}</code></td>
+      <td><a href="/ja/reference/applications/services/services" aria-label="services.xml">services.xml</a> のクラスター ID。例: <code>{`default`}</code>、<code>{`music`}</code>。</td>
+    </tr>
+    <tr>
+      <td><code>{`\${clustertype}`}</code></td>
+      <td>Vespa のクラスタータイプ: <code>{`container`}</code>、<code>{`content`}</code>、または <code>{`admin`}</code>。</td>
+    </tr>
+  </tbody>
+</table>
+
+**リコンシリエーション。** タグは仮想マシンとアタッチされたディスクに適用されます。*deployment.xml* でタグが変更、追加、または削除されると、既存のリソースはバックグラウンドのリコンシリエーション・プロセスによって更新されます。以前 Vespa Cloud によって適用されたものの、もはや列挙されていないタグはリソースから削除されます。テナントがクラウドコンソールで手動で追加したタグは保持されます。
+
+## upgrade
+
+`<deployment>` または `<instance>` の中に配置します。アプリケーション、またはそのインスタンスの 1 つをアップグレードする際の戦略を決定します。デフォルトでは、アプリケーションのリビジョン変更はプラットフォームのアップグレードとは独立してデプロイされ、アプリケーションのリビジョンは進行中のプラットフォームアップグレードに追いつき、追い越すことができます。この動作を変更するには、以下の `rollout` 属性を参照してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>rollout</td>
+      <td>いいえ、デフォルトは <code>{`simultaneous`}</code></td>
+      <td>• <code>{`separate`}</code>: リビジョンがプラットフォームアップグレードに追いついた場合、アップグレード単独が失敗しない限り、リビジョンは後ろに留まります。<br/><br/> • <code>{`leading`}</code>: リビジョンがプラットフォームアップグレードに追いついた場合、両者は融合して一緒にロールアウトされます。<br/><br/>• <code>{`simultaneous`}</code> はデフォルトであり、リビジョンのロールアウトを優先します。リビジョン変更はプラットフォームアップグレードとは独立してデプロイされます。リビジョンがプラットフォームアップグレードに追いつくと、合流し、その後アップグレードを追い越します。</td>
+    </tr>
+    <tr>
+      <td>revision-target</td>
+      <td>いいえ、デフォルトは <code>{`latest`}</code></td>
+      <td>• <code>{`latest`}</code> はデフォルトです。新しいリビジョンをインスタンスにロールアウトする際、利用可能な最新のリビジョンが選択されます。<br/><br/> • <code>{`next`}</code> は速度と引き換えに変更を小さくします。新しいリビジョンをインスタンスにロールアウトする際、次に利用可能なリビジョンが選択されます。<br/><br/> インスタンスにとって利用可能なリビジョンとは、まだデプロイされていないリビジョン、または以前のインスタンスでロールアウト済みのリビジョンです。</td>
+    </tr>
+    <tr>
+      <td>revision-change</td>
+      <td>いいえ、デフォルトは <code>{`when-failing`}</code></td>
+      <td>• <code>{`always`}</code> は最も積極的な設定です。新しく利用可能になったリビジョンは、現在ロールアウト中のものを常に置き換えることができます。<br/><br/> • <code>{`when-failing`}</code> はデフォルトです。新しく利用可能になったリビジョンは、現在ロールアウト中のものが失敗している場合にそれを置き換えることができます。<br/><br/> • <code>{`when-clear`}</code> は最も保守的な設定です。新しく利用可能になったリビジョンが、現在ロールアウト中のものを置き換えることは決してありません。<br/><br/> リビジョンのターゲットは、<a href="#block-change" aria-label="revision block window">リビジョンのブロックウィンドウ</a>内で自動的に変更されることはありませんが、手動での介入によりいつでも設定できます。</td>
+    </tr>
+    <tr>
+      <td>max-risk</td>
+      <td>いいえ、デフォルトは <code>{`0`}</code></td>
+      <td><code>{`revision-change="when-clear"`}</code> および <code>{`revision-target="next"`}</code> と組み合わせた場合にのみ使用できます。新しいリビジョンターゲットごとにロールアウトする&#42;リスク&#42;の最大量。デフォルトの <code>{`0`}</code> では常に次のビルドが選択されますが、より高い値にすると、累積リスクがここで設定された値を超えない限り、中間のビルドをスキップできます。</td>
+    </tr>
+    <tr>
+      <td>min-risk</td>
+      <td>いいえ、デフォルトは <code>{`0`}</code></td>
+      <td>設定された <code>{`max-risk`}</code> 以下でなければなりません。新しいリビジョンのロールアウトを開始するための&#42;リスク&#42;の最小量。デフォルトの <code>{`0`}</code> では、何かが準備でき次第すぐに新しいリビジョンがロールアウトされますが、より高い値にすると、システムは十分な累積リスクが利用可能になるまで待機します。これは、些細な変更で時間のかかるデプロイプロセスをブロックしないようにするために使用できます。</td>
+    </tr>
+    <tr>
+      <td>max-idle-hours</td>
+      <td>いいえ、デフォルトは <code>{`8`}</code></td>
+      <td><code>{`min-risk`}</code> が指定され、かつ <code>{`0`}</code> より大きい場合にのみ使用できます。新しいリビジョンをロールアウトする前に、十分な累積リスクが利用可能になるのを待つ最大時間数。</td>
+    </tr>
+  </tbody>
+</table>
+
+## test
+
+意味は配置される場所によって異なります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>親要素</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`<deployment>`}</code> <code>{`<instance>`}</code></td>
+      <td>存在する場合、prod ゾーンへのデプロイがなくても、アプリケーションは <a href="/ja/operations/environments#test" aria-label="`test`"><code>{`test`}</code></a> 環境にデプロイされ、そこでシステムテストが実行されます。また、指定された場合、システムテストはアプリケーションのテストパッケージに&#42;必ず&#42;含まれていなければなりません。<a href="/ja/operations/production-deployment" aria-label="getting to production">本番環境への移行</a>のガイドを参照してください。<br/><br/>  <code>{`<instance>`}</code> 要素内に存在する場合、そのインスタンスの本番デプロイが進行する前に、その特定のインスタンスに対するシステムテストが実行されます。それ以外の場合は、任意のインスタンスに対する過去のシステムテストで十分です。</td>
+    </tr>
+    <tr>
+      <td><code>{`<prod>`}</code> <code>{`<parallel>`}</code> <code>{`<steps>`}</code></td>
+      <td>存在する場合、この要素に含まれる id の本番リージョンに対して本番テストが実行されます。テストは、対応する <a href="#region" aria-label="region">region</a> 要素の&#42;後&#42;に置かなければなりません。指定された場合、本番テストはアプリケーションのテストパッケージに&#42;必ず&#42;含まれていなければなりません。<a href="/ja/operations/production-deployment" aria-label="getting to production">本番環境への移行</a>のガイドを参照してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>cloud-account</td>
+      <td>いいえ</td>
+      <td><a href="/ja/operations/automated-deployments#system-tests" aria-label="system tests">システムテスト</a>専用: <a href="/ja/operations/enclave/enclave" aria-label="Vespa Cloud Enclave">Vespa Cloud Enclave</a> でデプロイする先のアカウント。親の cloud-account の指定を上書きします。<a href="/ja/operations/automated-deployments#production-tests" aria-label="production tests">本番テスト</a>では cloud account を指定しては&#42;なりません&#42;。本番テストは常に対応するデプロイメントのアカウントで実行されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+## staging
+
+`<deployment>` または `<instance>` の中に配置します。存在する場合、prod ゾーンへのデプロイがなくても、アプリケーションは [`staging`](/ja/operations/environments#staging) 環境にデプロイされ、そこでテストされます。`<instance>` 要素内に存在する場合、そのインスタンスの本番デプロイが進行する前に、その特定のインスタンスに対するステージングテストが実行されます。それ以外の場合は、任意のインスタンスに対する過去のステージングテストで十分です。指定された場合、ステージングテストはアプリケーションのテストパッケージに*必ず*含まれていなければなりません。[本番環境への移行](/ja/operations/production-deployment)のガイドを参照してください。  
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>cloud-account</td>
+      <td>いいえ</td>
+      <td><a href="/ja/operations/enclave/enclave" aria-label="Vespa Cloud Enclave">Vespa Cloud Enclave</a> でデプロイする先のアカウント。親の cloud-account の指定を上書きします。</td>
+    </tr>
+  </tbody>
+</table>
+
+## prod
+
+`<deployment>`、**または** `<instance>` の中に配置します。存在する場合、`test` および `staging` 環境でのデプロイとテストの後、アプリケーションはこの要素内に列挙された本番リージョンに、指定されたインスタンスとしてデプロイされます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>cloud-account</td>
+      <td>いいえ</td>
+      <td><a href="/ja/operations/enclave/enclave" aria-label="Vespa Cloud Enclave">Vespa Cloud Enclave</a> でデプロイする先のアカウント。親の cloud-account の指定を上書きします。</td>
+    </tr>
+  </tbody>
+</table>
+
+## region
+
+`<prod>`、`<parallel>`、`<steps>`、または `<group>` の中に配置します。アプリケーションは、`name` 属性で識別される本番[リージョン](/ja/operations/zones)にデプロイされます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>はい</td>
+      <td>リージョン識別子。例: <code>aws-us-east-1c</code>。利用可能なリージョンの一覧は<a href="/ja/operations/zones" aria-label="zones">ゾーン</a>を参照してください。リージョン名が要素本体に指定されている場合を<em>除き</em>必須ですが、その形式は <a href="#availability-zone" aria-label="availability-zone"><code>&lt;availability-zone&gt;</code></a> 子要素の指定とは併用できません。</td>
+    </tr>
+    <tr>
+      <td>fraction</td>
+      <td>いいえ</td>
+      <td>このリージョンがグループ内にある場合のみ: グループ内での分数によるメンバーシップ。</td>
+    </tr>
+    <tr>
+      <td>cloud-account</td>
+      <td>いいえ</td>
+      <td><a href="/ja/operations/enclave/enclave" aria-label="Enclave">Enclave</a> でデプロイする先のアカウント。親の cloud-account の指定を上書きします。</td>
+    </tr>
+  </tbody>
+</table>
+
+### availability-zone
+
+`<region>` の中に配置します。要素本体は、[ゾーン](/ja/operations/zones)に列挙されているアベイラビリティゾーン識別子のいずれかでなければなりません。複数のアベイラビリティゾーンをサポートする本番リージョンにデプロイする際は、少なくとも 1 つのアベイラビリティゾーンを*必ず*指定しなければなりません。アプリケーションインスタンスは、レジリエンシーのために、これらのアベイラビリティゾーン全体に均等に分散配置されます。詳細は[アベイラビリティゾーン](/ja/operations/az)を参照してください。
+
+例:
+
+```xml
+<region name="aws-us-east-1">
+    <availability-zone>use1-az1</availability-zone>
+    <availability-zone>use1-az2</availability-zone>
+</region>
+```
+
+## dev
+
+`<deployment>` の中に配置します。[dev 環境](/ja/operations/environments)のデプロイ設定を制御するために任意で使用します。これを使用して、別のクラウドアカウント、タグ、プライベートエンドポイントを指定できます。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>tags</td>
+      <td>いいえ</td>
+      <td>スペース区切りのタグ。<a href="/ja/operations/deployment-variants" aria-label="deployment variants">デプロイメント・バリアント</a>を作成する際に参照できます。</td>
+    </tr>
+    <tr>
+      <td>cloud-account</td>
+      <td>いいえ</td>
+      <td><a href="/ja/operations/enclave/enclave" aria-label="Vespa Cloud Enclave">Vespa Cloud Enclave</a> でデプロイする先のアカウント。親の cloud-account の指定を上書きします。</td>
+    </tr>
+  </tbody>
+</table>
+
+## delay
+
+`<deployment>`、`<instance>`、`<prod>`、`<parallel>`、または `<steps>` の中に配置します。先行するすべてのステップの完了後、後続のステップが進行する前に経過しなければならない遅延を導入します。これは、変更を追加のゾーンにデプロイする前にエラーを発見するための猶予時間を設けたり、本番デプロイメントについてしばらく高レベルのメトリクスを収集してから本番テストで評価したりするのに役立ちます。デプロイメント仕様全体での最大合計遅延は 48 時間です。遅延は、`hours`、`minutes`、`seconds` 属性の任意の組み合わせで指定します。
+
+## parallel
+
+`<deployment>`、`<prod>`、または `<steps>` の中に配置します。含まれるステップを並列に実行します。`<deployment>` 内の場合はインスタンスを、それ以外の場合はプリミティブなステップ(デプロイ、テスト、遅延)またはそれらの直列の連なり([steps](#steps) を参照)を並列に実行します。複数の `<parallel>` 要素を指定できます。以下の例では、まず `us-west-1` にデプロイし、次に `us-east-3` と `us-central-1` に同時にデプロイし、最後に、両方の並列デプロイが完了した後に `eu-west-1` にデプロイします:
+
+```xml
+<region>us-west-1</region>
+<parallel>
+    <region>us-east-3</region>
+    <region>us-central-1</region>
+</parallel>
+<region>eu-west-1</region>
+```
+
+## steps
+
+`<parallel>` の中に配置します。含まれる並列ステップまたはプリミティブなステップ(デプロイ、テスト、遅延)を直列に実行します。以下の例では、並列に:
+
+<Steps>
+<Step>
+`us-east-3` にデプロイし、
+</Step>
+<Step>
+`us-west-1` にデプロイした後、1 時間遅延し、`us-west-1` のテストを実行し、
+</Step>
+<Step>
+2 時間遅延します。
+</Step>
+</Steps>
+
+したがって、この並列ブロックは、両方のデプロイが完了し、2 番目のデプロイのテストが成功し、ブロックの実行開始から少なくとも 2 時間が経過した時点で完了となります。
+
+```xml
+<parallel>
+    <region>us-east-3</region>
+    <steps>
+        <region>us-west-1</region>
+        <delay hours="1" />
+        <test>us-west-1</test>
+    </steps>
+    <delay hours="2" />
+</parallel>
+```
+
+## tester
+
+`<test>`、`<staging>`、`<prod>` の中に配置します。システムテスト、ステージングテスト、本番検証テストの実行に使用されるテスター・アプリケーションコンテナーのコンテナー設定を指定します。
+
+この中で許可される要素は [`<nodes>`](/ja/reference/applications/services/services#nodes) です。
+
+```xml
+<staging>
+    <tester>
+        <nodes count="1">
+            <resources vcpu="8" memory="32Gb" disk="30Gb" />
+        </nodes>
+    </tester>
+</staging>
+```
+
+## endpoints (グローバル)
+
+`<instance>` が宣言されていない `<deployment>` の中、**または** `<instance>` の中に配置します。これにより、1 つ以上の [`<endpoint>`](#endpoint-global) 要素による*グローバル*エンドポイントと、クラウドネイティブなプライベートネットワーク設定のための[ゾーンエンドポイント](#endpoint-zone)および[プライベートエンドポイント](#endpoint-private)要素を指定できます。
+
+## endpoints (dev)
+
+`<dev>` の中に配置します。これにより、[dev](/ja/operations/environments#dev) デプロイメントに対するクラウドネイティブなプライベートネットワーク設定のための[ゾーンエンドポイント](#endpoint-zone)要素を指定できます。なお、[プライベートエンドポイント](#endpoint-private)は `prod` でのみサポートされています。
+
+## endpoint (グローバル)
+
+`<endpoints>` または `<group>` の中に配置します。このアプリケーションのグローバルエンドポイントを指定します。各エンドポイントは、そのエンドポイント内で宣言されたリージョンを指します。リージョンが指定されていない場合、エンドポイントはデフォルトで `<prod>` 要素内に宣言されたリージョンを指します。以下の例は、すべてのリージョンへのデフォルトエンドポイントと、US リージョンのみを指す *us* エンドポイントを作成します。
+
+```xml
+<endpoints>
+    <endpoint container-id="my-container-service"/>
+    <endpoint id="us" container-id="my-container-service">
+        <region>aws-us-east-1c</region>
+        <region>aws-us-west-2a</region>
+    </endpoint>
+</endpoints>
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>id</td>
+      <td>いいえ</td>
+      <td>エンドポイントの識別子。生成されるエンドポイント名の一部になります。指定されていない場合、そのエンドポイントはアプリケーションのデフォルトのグローバルエンドポイントになります。</td>
+    </tr>
+    <tr>
+      <td>container-id</td>
+      <td>はい</td>
+      <td>グローバルエンドポイントへのリクエストの転送先となる<a href="/ja/reference/applications/services/container" aria-label="container cluster">コンテナー・クラスター</a>の id。</td>
+    </tr>
+  </tbody>
+</table>
+
+グローバルエンドポイントは、アクティブなゾーンをローテーションに保つために、Route 53 とヘルスチェックを使用して実装されています。高度な設定については [BCP](#bcp) を参照してください。
+
+## endpoint (ゾーン)
+
+`<endpoints>` または `<group>` の中に、`type='zone'` を付けて配置します。パブリックなゾーンエンドポイントを無効化するために使用します。*非パブリックのエンドポイントはグローバルエンドポイントでは使用できません。グローバルエンドポイントは、構成するすべてのエンドポイントがパブリックであることを必要とします。* この例では、明示的に有効化されている `region-1` を除くすべてのリージョンで、`my-container` コンテナー・クラスターのパブリックなゾーンエンドポイントを無効化します。エンドポイントの可視性を変更すると、サービスが短時間利用できなくなります。
+
+```xml
+<endpoints>
+    <endpoint type='zone' container-id='my-container' enabled='false' />
+    <endpoint type='zone' container-id='my-container' enabled='true'>
+        <region>region-1</region>
+    </endpoint>
+</endpoints>
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>type</td>
+      <td>はい</td>
+      <td>プライベートエンドポイントは <code>{`type='zone'`}</code> で指定します。</td>
+    </tr>
+    <tr>
+      <td>container-id</td>
+      <td>はい</td>
+      <td>パブリックエンドポイントを無効化する対象の<a href="/ja/reference/applications/services/container" aria-label="container cluster">コンテナー・クラスター</a>の id。</td>
+    </tr>
+    <tr>
+      <td>enabled</td>
+      <td>いいえ</td>
+      <td>このコンテナー・クラスターのパブリックエンドポイントを有効にするかどうか。デフォルトは <code>{`true`}</code>。</td>
+    </tr>
+  </tbody>
+</table>
+
+## endpoint (プライベート)
+
+`<endpoints>` または `<group>` の中に、`type='private'` を付けて配置します。このアプリケーションのプライベートエンドポイント・サービスを指定します。各サービスは、そのエンドポイント内で宣言されたリージョンで起動されます。リージョンが指定されていない場合、サービスは、宣言された[アクセスタイプ](#allow)のいずれかをサポートする、`<prod>` 要素内に宣言されたすべてのリージョンで起動されます。以下の例は、2 つの特定のリージョンにプライベートエンドポイントを作成します。
+
+```xml
+<endpoints>
+    <endpoint type='private' container-id='my-container'>
+        <region>aws-us-east-1c</region>
+        <allow with='aws-private-link' arn='arn:aws:iam::123123123123:root' />
+    </endpoint>
+    <endpoint type='private' container-id='my-container'>
+        <region>gcp-us-central1-f</region>
+        <allow with='gcp-service-connect' project='user-project' />
+    </endpoint>
+</endpoints>
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>type</td>
+      <td>はい</td>
+      <td>プライベートエンドポイントは <code>{`type='private'`}</code> で指定します。</td>
+    </tr>
+    <tr>
+      <td>container-id</td>
+      <td>はい</td>
+      <td>プライベートエンドポイント・サービスへのリクエストの転送先となる<a href="/ja/reference/applications/services/container" aria-label="container cluster">コンテナー・クラスター</a>の id。</td>
+    </tr>
+    <tr>
+      <td>auth-method</td>
+      <td>いいえ</td>
+      <td>この<a href="/ja/operations/private-endpoints" aria-label="private endpoint">プライベートエンドポイント</a>で使用する認証方式。   <code>{`mtls`}</code> または <code>{`token`}</code> のいずれかでなければなりません。指定されていない場合のデフォルトは mTLS です。</td>
+    </tr>
+  </tbody>
+</table>
+
+## allow
+
+`<endpoint type='private'>` の中に配置します。URN で識別されるプリンシパルが、宣言されたプライベートエンドポイント・サービスへの接続を設定することを許可します。この要素は、追加の URN ごとに繰り返し記述しなければなりません。エンドポイント・サービスは、互換性のあるタイプの許可された URN のみを考慮し、互換性のあるアクセスタイプと URN の組み合わせが少なくとも 1 つ指定されている場合にのみ作成されます:
+
+- AWS デプロイメントの場合、`aws-private-link` と *ARN* を指定します。
+- GCP デプロイメントの場合、`gcp-service-connect` と*プロジェクト ID* を指定します
+
+```xml
+<endpoint type='private' container-id="my-container">
+    <allow with='aws-private-link' arn='arn:aws:iam::123123123123:root' />
+    <allow with='aws-private-link' arn='arn:aws:iam::321321321321:role/my-role' />
+    <allow with='aws-private-link' arn='arn:aws:iam::321321321321:user/my-user' />
+    <allow with='gcp-service-connect' project='my-project' />
+</endpoint>
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>with</td>
+      <td>はい</td>
+      <td>プライベートエンドポイントのアクセスタイプ。<code>{`aws-private-link`}</code> または <code>{`gcp-service-connect`}</code> でなければなりません。</td>
+    </tr>
+    <tr>
+      <td>arn</td>
+      <td>場合による</td>
+      <td><code>{`aws-private-link`}</code> と共に指定しなければなりません。詳細は <a href="https://docs.aws.amazon.com/vpc/latest/privatelink/configure-endpoint-service.html" aria-label="AWS documentation">AWS のドキュメント</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>project</td>
+      <td>場合による</td>
+      <td><code>{`gcp-service-connect`}</code> と共に指定しなければなりません。詳細は <a href="https://cloud.google.com/vpc/docs/configure-private-service-connect-services" aria-label="GCP documentation">GCP のドキュメント</a>を参照してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+## bcp
+
+`<instance>` または `<deployment>` の中に配置します。このインスタンスの BCP(Business Continuity Planning、事業継続計画)の構造を定義します。あるゾーンの障害時に、どのゾーンがどのゾーンを引き継ぐか、そしてどれだけ速くそのキャパシティを準備しなければならないかを定義します。オートスケーリングはこの情報を使用して、各ゾーンの理想的な CPU 負荷を決定します。この要素が定義されていない場合、すべてのリージョンが他のすべてのリージョンのトラフィックを均等な割合でカバーし、そのキャパシティを常に準備しておくものと想定されます。
+
+bcp 要素がルートに指定され、かつ明示的なインスタンスが使用されている場合、その bcp 要素は、自身に bcp 要素を含まないすべてのインスタンスのデフォルトになります。BCP 要素が group 要素を含まない場合、その要素が使用されているインスタンスのすべてのリージョンからなる単一のグループを暗黙的に定義します。
+
+BCP 設定が正しいことを検証する手順については、[BCP テスト](https://cloud.vespa.ai/en/reference/bcp-test.html?_gl=1*1lsxxnq*_gcl_au*ODE0ODM4MTI2LjE3Nzk3MjQ3OTY)を参照してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>deadline</td>
+      <td>いいえ</td>
+      <td>あるリージョンが到達不能になってから、同じ BCP グループ内の他のリージョンがそのトラフィックを処理できるようになるまでの最大時間。数値に 'm'、'h'、'd'(分、時間、日)を付けて指定します。デフォルトの deadline は 0 です: リージョンは常に BCP トラフィックを即座に処理できるキャパシティを持っていなければなりません。<br/><br/>  deadline を指定することで、オートスケーリングは、対象のクラスターにおいて deadline より速くトラフィックを処理できる規模まで拡張できると予測される場合、BCP キャパシティのための追加リソースをプロビジョニングするコストを回避できます。<br/><br/>  これは、自身で deadline を指定していないすべてのグループに使用されるデフォルトの deadline です。</td>
+    </tr>
+  </tbody>
+</table>
+
+例:
+
+```xml
+<bcp>
+    <group deadline="15m">
+        <endpoint id="foo" container-id="bar"/>
+        <region>us-east1</region>
+        <region>us-east2</region>
+        <region fraction="0.5">us-central1</region>
+    </group>
+    <group>
+        <region>us-west1</region>
+        <region>us-west2</region>
+        <region fraction="0.5">us-central1</region>
+    </group>
+</bcp>
+```
+
+## group
+
+`<bcp>` の中に配置します。BCP グループを定義します: リージョン障害時にメンバー同士が互いをカバーし合うリージョンの集合です。
+
+グループ内の各リージョンは、(オートスケーリングの範囲が設定されている場合、許容される範囲で)グループ内の他の任意の 1 つのリージョンがダウンした場合に対応できる十分なリソースをプロビジョニングします。そのリージョンのトラフィックは、グループ内の残りのリージョンに均等に再ルーティングされるものと想定されます。つまり、グループにメンバーが 1 つしかない場合、そのメンバーの障害に対応するためのリソースはプロビジョニングされません。グループに 2 つのメンバーがある場合、それぞれが他方の実際のトラフィックを処理できる十分なリソースのプロビジョニングを目指します。グループに 3 つのメンバーがある場合、それぞれは、他の 2 つのうちトラフィックが最も多いリージョンで観測されたトラフィックの半分を処理できるようにプロビジョニングします。
+
+リージョンは複数のグループに分数のメンバーシップで所属できます。この場合、残りのメンバーのトラフィックのうちその割合分だけを処理し、逆もまた同様です。あるリージョンのグループ間でのメンバーシップの合計は、常にちょうど 1 でなければなりません。
+
+グループは、グループ内のリージョンメンバーに対するグローバルエンドポイントを定義することもできます。これは、エンドポイントを別途定義し、そのエンドポイントの下にグループのリージョンを繰り返し記述するのとまったく同じです。グループ配下のエンドポイントには、明示的な region サブ要素を含めることはできません。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>属性</th>
+      <th>必須</th>
+      <th>値</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>deadline</td>
+      <td>いいえ</td>
+      <td>この BCP グループの deadline。BCP 要素の deadline を参照してください。</td>
+    </tr>
+  </tbody>
+</table>

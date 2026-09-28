@@ -1,0 +1,360 @@
+---
+title: "ニュース検索とレコメンデーションのチュートリアル - アプリケーション、フィード、クエリー"
+---
+
+これは、パーソナライズされたニュース・レコメンデーションのための Vespa アプリケーションをセットアップするチュートリアルシリーズの第 2 部です。シリーズの構成は次のとおりです:
+
+1. [はじめに](/ja/learn/tutorials/news-1-deploy-an-application)
+2. [基本的なニュース検索アプリケーション](/ja/learn/tutorials/news-2-basic-feeding-and-query) - アプリケーション・パッケージ、フィード、クエリー
+3. [ニュース検索](/ja/learn/tutorials/news-3-searching) - ソート、グルーピング、ランキング
+4. [ユーザーとニュース記事の埋め込み生成](/ja/learn/tutorials/news-4-embeddings)
+5. [ニュース・レコメンデーション](/ja/learn/tutorials/news-5-recommendation) - 部分更新(ニュース埋め込み)、ANN、フィルタリング
+6. [Searcher を使ったニュース・レコメンデーション](/ja/learn/tutorials/news-6-recommendation-with-searchers) - カスタム Searcher、ドキュメント・プロセッサー
+7. [親子関係を使ったニュース・レコメンデーション](/ja/learn/tutorials/news-7-recommendation-with-parent-child) - 親子関係、テンソル・ランキング
+8. 高度なニュース・レコメンデーション - 幕間 - ランキングモデルの学習
+9. 高度なニュース・レコメンデーション - 機械学習モデル
+
+このパートでは、前のパートで作成した最小限の Vespa アプリケーションをベースに構築を進めます。まず、このチュートリアル全体で使用する [Microsoft News Dataset](https://msnews.github.io/)(MIND)を見ていきます。これを使って検索スキーマをセットアップし、アプリケーションをデプロイして、いくつかのデータをフィードします。最後に基本的なクエリーをいくつか実行してから、チュートリアルの次のパートであるコンテンツの検索に進みます。
+
+参考として、このチュートリアルの最終状態は、`news` サンプルアプリケーションの [app-2-feed-and-query](https://github.com/vespa-engine/sample-apps/tree/master/news/app-2-feed-and-query) サブディレクトリにあります。
+
+
+## Microsoft News Dataset
+
+このチュートリアルシリーズでは、[Microsoft News Dataset](https://msnews.github.io/)(MIND)を使用します。これはニュース・レコメンデーション研究のための大規模データセットです。160,000 以上の記事、1,500 万のインプレッションログ、100 万のユーザーが含まれています。このチュートリアルでは、データセット全体は使用しません。チュートリアルを進めやすくするために、5,000 ユーザーのみを含む、はるかに小さな DEMO 部分を使用します。もちろん、読者は自身の判断でデータセット全体を使用しても構いません。
+
+[MIND データセットの説明](https://github.com/msnews/msnews.github.io/blob/master/assets/doc/introduction.md)には、このデータセットの内容の紹介があります。このチュートリアルでは、特に次の 2 種類のデータを使用します:
+
+- ニュース記事のコンテンツ。タイトル、要約、ニュースカテゴリー、タイトルと要約から抽出されたエンティティなどのデータが含まれます。
+- インプレッション。ユーザーに表示されたニュース記事のリストで、ユーザーがクリックしたかどうかのラベルが付いています。
+
+まずは検索アプリケーションの開発から始めるので、最初はニュースコンテンツに焦点を当てます。インプレッションデータは、このシリーズの後半でレコメンデーションシステムの構築を始める際に使用します。
+
+まずはデータのダウンロードから始めましょう。`news` サンプルアプリのディレクトリが出発点になります。MIND データセットは [Hugging Face](https://huggingface.co/datasets/yjw1029/MIND) でホストされており、無料アカウントとデータセットの利用規約への同意が必要です。
+
+### データセットの利用規約に同意する
+
+1. [huggingface.co](https://huggingface.co) にログインします
+2. [MIND データセットのページ](https://huggingface.co/datasets/yjw1029/MIND)に移動します
+3. **Agree and access repository** をクリックして規約に同意します
+
+### Hugging Face アクセストークンを作成する
+
+1. [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) に移動します
+2. **New token** をクリックし、名前を付けて、**Read** ロールを選択し、トークンをコピーします
+
+### データセットをダウンロードする
+
+トークンを環境変数として設定します:
+
+```bash
+$ export HF_TOKEN=hf_your_token_here
+```
+
+次に、**news** サンプルアプリのディレクトリからダウンロードスクリプトを実行します:
+
+```bash
+$ ./bin/download-mind.sh small
+```
+
+引数はダウンロードするデータセットを指定します。ここでは `small` データセットをダウンロードしますが、`small` と `large` が有効なオプションです。学習用と検証用の両方の部分が `mind` というディレクトリにダウンロードされます。`train` と `dev` の両方のデータセットがダウンロードされます。
+
+データを見てみると、`mind/train/news.tsv` には次のようなタブ区切りの行があります:
+
+```
+N16680  travel  traveltripideas The Most Beautiful Natural Wonder in Every State        While humans have built some impressive, gravity-defying, and awe-inspiring marvels   here are the most photographed structures in the world   the natural world may have us beat.      https://www.msn.com/en-us/travel/traveltripideas/the-most-beautiful-natural-wonder-in-every-state/ss-AAF8Brj?ocid=chopendata    []      []
+```
+
+ここには、ニュース記事の id、カテゴリー、サブカテゴリー、タイトル、要約、記事コンテンツへの URL が含まれています。最後の 2 つのフィールドには、タイトルと要約から識別されたエンティティが含まれます。このニュース記事には、そのようなエンティティはありません。
+
+なお、ニュース記事の本文コンテンツは URL から取得できます。データセットのリポジトリには、これをダウンロードするためのツールが含まれています。このチュートリアルではこのデータは使用しませんが、自由にダウンロードしてください。
+
+このデータを検索可能にする Vespa アプリケーションの構築を始めましょう。Vespa アプリケーションを格納するために、`news` サンプルアプリのディレクトリの下に `my-app` ディレクトリを作成します:
+
+```bash
+$ mkdir -p my-app/schemas
+```
+
+
+## アプリケーション・パッケージ
+
+![Vespa の概要](/assets/img/vespa-overview.svg)
+
+Vespa の[アプリケーション・パッケージ](/ja/basics/applications)は、Vespa システムの動作を定義する設定ファイルと Java プラグインの集合です。使用する機能、利用可能なドキュメント型、ランキングの方法、フィードおよびインデックス作成時のデータ処理方法を定義します。スキーマ(例:`news.sd`)はアプリケーション・パッケージの必須要素であり、もう 1 つ必要なファイルは `services.xml` です。
+
+これらのファイルは前のパートでも触れましたが、その時点では詳しく説明していませんでした。ここでは、サービスの仕様から順に見ていきます。
+
+
+### サービス仕様
+
+[services.xml](/ja/reference/applications/services/services) ファイルは、Vespa アプリケーションを構成するサービス、すなわちどのサービスを実行し、サービスごとに何ノード使用するかを定義します。次の内容を `news/my-app/services.xml` に書き込みます:
+
+```xml expandable
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
+
+    <container id="default" version="1.0">
+        <search />
+        <document-api />
+        <nodes count="1" />
+    </container>
+
+    <content id="mind" version="1.0">
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="news" mode="index" />
+        </documents>
+        <nodes count="1" />
+    </content>
+
+</services>
+```
+
+ここではかなり多くのことが設定されています:
+
+- `<container>` は、ドキュメント、クエリー、結果の処理を行うステートレスな[コンテナー・クラスター](/ja/applications/containers)を定義します
+- `<search>` は[クエリー・エンドポイント](/ja/querying/query-api)をセットアップします。デフォルトのポートは 8080 です。
+- `<document-api>` は、フィードとビジットのための[ドキュメント・エンドポイント](/ja/reference/api/document-v1)をセットアップします。
+- `<nodes count="1" />` はサービスのノード数を定義します。(コンテナー・クラスターのセットアップの詳細は[リファレンス](/ja/reference/applications/services/container)を参照してください。)
+- `<content>` はステートフルなコンテント・クラスターです
+- `<redundancy>` は各ドキュメントのコピーをいくつ保存するかを示します。
+- `<documents>` は*スキーマ*内のドキュメント型を割り当てます。コンテント・クラスターの容量はノード数を増やすことで拡張できます。[エラスティシティ](/ja/content/elasticity)を参照してください。(コンテント・クラスターのセットアップの詳細は[リファレンス](/ja/reference/applications/services/content)も参照してください。)
+
+
+### スキーマ
+
+データの観点では、Vespa は[ドキュメント](/ja/schemas/documents)という概念で動作します。ドキュメントは、システム内の検索可能な単一のアイテム(ニュース記事、写真、ユーザーなど)を表します。各ドキュメント型は、[スキーマ](/ja/basics/schemas)を通じて Vespa の設定で定義する必要があります。スキーマ内のドキュメント型は、リレーショナルデータベースのテーブル定義に似たものと考えてください。名前、特定の型、いくつかのオプションのプロパティを持つフィールドの集合で構成されます。Vespa にフィードするデータはスキーマの構造と一致しなければならず、検索時に返される結果もこの形式になります。Vespa には動的なフィールド作成のサポートはなく、Vespa のドキュメント・スキーマは強く型付けされていると言えます。
+
+上記の `services.xml` ファイルで言及した `news` ドキュメント型は、スキーマで定義されます。スキーマはアプリケーション・パッケージの `schemas` ディレクトリの下にあり、`services.xml` で言及されているドキュメント型と同じ名前で**なければなりません**。
+
+上で説明した MIND データセットを踏まえ、スキーマを次のようにセットアップします。次の内容を `news/my-app/schemas/news.sd` に書き込みます:
+
+```sd expandable
+schema news {
+    document news {
+        field news_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field category type string {
+            indexing: summary | attribute
+        }
+        field subcategory type string {
+            indexing: summary | attribute
+        }
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field abstract type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field body type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: index | summary
+        }
+        field date type int {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field clicks type int {
+            indexing: summary | attribute
+        }
+        field impressions type int {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: title, abstract, body
+    }
+
+}
+```
+
+`document` は `schema` と呼ばれる別の要素の中に包まれています。これらの要素に続く名前(ここでは `news`)は、両方でまったく同じでなければなりません。
+
+このドキュメントには複数のフィールドが含まれています。各フィールドには `string`、`int`、`tensor` などの[型](/ja/reference/schemas/schemas#field)があります。フィールドにはプロパティもあります。たとえば、プロパティ `indexing` はフィールドの*インデックス作成パイプライン*を設定し、インデックス作成時に Vespa が入力をどのように扱うかを定義します。[インデックス言語](/ja/reference/writing/indexing-language)を参照してください。インデックス作成パイプラインの各部分はパイプ文字「|」で区切られます:
+
+- `index:` このフィールドの検索インデックスを作成します。
+- `attribute:` このフィールドを[アトリビュート](/ja/content/attributes)としてメモリに保存します。[ソート](/ja/reference/querying/sorting-language)、[クエリー](/ja/querying/query-api)、[ランキング](/ja/basics/ranking)、[グルーピング](/ja/querying/grouping)に使用します。
+- `summary:` このフィールドを結果セットの[ドキュメント・サマリー](/ja/querying/document-summaries)に含められるようにします。
+
+ここでは [index](/ja/reference/schemas/schemas#index) プロパティも使用しています。これは Vespa がフィールドをどのようにインデックスするかのパラメーターを設定します。`title`、`abstract`、`body` フィールドについては、テキスト検索のための [bm25 ランキング](/ja/reference/ranking/rank-features#bm25)と互換性のあるインデックスをセットアップするように Vespa を設定します。
+
+
+## アプリケーション・パッケージのデプロイ
+
+上記の 2 つの必須ファイルが揃ったので、アプリケーション・パッケージをデプロイする準備ができました。次のような構成になっていることを確認してください(`tree` がインストールされていない場合は `ls` を使用してください):
+
+```
+my-app/
+├── schemas
+│   └── news.sd
+└── services.xml
+```
+
+前の[ニュースのチュートリアル](/ja/learn/tutorials/news-1-deploy-an-application)でまだ実施していない場合は、Vespa の設定変数を設定します。`tenant-name` の代わりに、[Vespa Cloud コンソール](https://console.vespa-cloud.com/)で確認できる自分のテナント名を使用してください:
+
+```bash
+$ vespa config set target cloud
+$ vespa config set application tenant-name.news
+```
+
+Vespa Cloud にログインします:
+
+```bash
+$ vespa auth login
+```
+
+データプレーンへのアクセスのために、アプリケーション・パッケージにセキュリティ認証情報を追加します:
+
+```bash
+$ vespa auth cert my-app -f
+```
+
+最後に、アプリケーション・パッケージを Vespa Cloud にデプロイします:
+
+```bash
+$ vespa deploy --wait 600 my-app
+```
+
+
+## データのフィード
+
+Vespa にフィードするデータは、ドキュメント型のスキーマと一致しなければなりません。ダウンロードした MIND データは、Vespa にフィードする前に、有効な Vespa JSON [ドキュメントフォーマット](/ja/reference/schemas/document-json-format)に変換する必要があります:
+
+```bash
+$ python3 src/python/convert_to_vespa_format.py mind
+```
+
+引数は、上記でダウンロードしたデータの場所で、`mind` ディレクトリにありました。このスクリプトは、そのディレクトリに `vespa.json` という新しいファイルを作成します。これにはデータセット内の全 28,603 件のニュース記事が含まれています。このファイルを Vespa にフィードできるようになりました。前のパートで説明した方法を使用します:
+
+```bash
+$ vespa feed mind/vespa.json
+```
+
+`vespa feed` は、ドキュメント操作の JSON 配列、または 1 行につき 1 つの Vespa ドキュメント JSON 形式の操作を含む JSONL を読み込みます。フィードジョブが完了すると、65,238 件すべてのドキュメントが検索可能になります。簡単なクエリーで確認してみましょう:
+
+```bash
+$ vespa query -v 'yql=select * from news where true' 'hits=0'
+```
+
+[Document V1 API](/ja/writing/document-v1-api-guide) を使用してドキュメント ID でドキュメントを取得することで、特定のドキュメントがインデックスされていることを確認できます:
+
+```bash
+$ vespa document -v get id:news:news::N10864
+```
+
+
+## 最初のクエリー
+
+Vespa での検索は、次のような HTTP(S) GET または HTTP(S) POST リクエストで行います:
+
+```
+<host:port>/search?yql=select..&hits=1...
+```
+
+または JSON POST で:
+
+```json
+{
+    "yql" : "select ..",
+    "hits" : 2
+}
+```
+
+唯一の必須パラメーターはクエリーで、`yql=<yql query>` または `query=<simple-query>` のいずれかを使用します。詳細は [Query API](/ja/querying/query-api) を参照してください。
+
+次のクエリーを考えてみましょう: `select * from news where default contains "music"`
+
+上記のスキーマでは、フィールド `title`、`abstract`、`body` が `fieldset default` に含まれているため、これらのフィールドの 1 つ以上に「music」という単語を含むドキュメントがこのクエリーにマッチします。GET クエリーで試してみましょう:
+
+```bash
+$ vespa query -v 'yql=select * from news where default contains "music"'
+```
+
+または POST JSON クエリーでも実行できます。値は前述の `vespa query -v` コマンドで確認できます。コンテンツタイプは `application/json` に変更する必要があります。また、`vespa status` を使ってクラウドインスタンスの URL を確認することもできます:
+
+```bash
+$ curl --key /path/to/key \
+     --cert /path/to/cert \
+     -H 'Content-Type: application/json' \
+     --data '{"yql" : "select * from sources * where default contains \"music\""}' \
+     'https://your-vespa-url.vespa-app.cloud/search/' | python3 -m json.tool
+```
+
+<Note>
+[Query Builder](https://github.com/vespa-engine/vespa/tree/master/client/js/app#query-builder) アプリケーションを試してみてください!
+</Note>
+
+出力を見る際は、次の点に注意してください:
+
+- 出力内の `documentid` フィールドと、それが Vespa にデータをフィードした際の各 put 操作に割り当てた値と一致していること。
+- 各ヒットには relevance という名前のプロパティがあり、事前定義されたデフォルトのランキング関数を使用して、そのドキュメントがクエリーにどの程度マッチしているかを示します。ランキングは完全に制御可能です。ランキングと順序付けについては後で詳しく説明します。ヒットはこの値で(降順に)ソートされます。
+- 複数のヒットが同じ relevance スコアを持つ場合、それらの内部的な順序は未定義です。ただし、ドキュメントが再インデックスされない限り、内部的な順序は変わりません。
+- `&trace.level=3` を追加すると、クエリー解析の詳細と実行プランをダンプできます。[クエリー・トレーシング](/ja/querying/query-api#query-tracing)を参照してください。
+- トップレベルの `totalCount` フィールドには、クエリーに*マッチした*ドキュメントの数が含まれます。
+- `coverage` 要素にも注目してください。これは、検索対象となったドキュメント数とノード数を示します。カバレッジが低下している場合もあります。[グレースフル・デグラデーション](/ja/performance/graceful-degradation)を参照してください。
+
+URI の長さの制限(64 Kb)があるため、本番環境では GET より HTTP POST を優先してください。
+
+
+### クエリーの例
+
+```bash
+$ vespa query -v 'yql=select title from news where title contains "music"'
+```
+
+これも単一の語「music」の検索ですが、今回は明示的に `title` フィールド内を検索しています。つまり、`title` フィールドに「music」という単語を含むドキュメントのみをマッチさせたいということです。予想どおり、このクエリーのヒット数は、`fieldset default` を検索した前のクエリーよりも少なくなります。また、select のスコープを絞り、title のみを返すようにしていることにも注目してください。
+
+```bash
+$ vespa query -v 'yql=select title from news where default contains "music" and default contains "festival"'
+```
+
+これは、「music」と「festival」の 2 つの語を `AND` 演算で組み合わせたクエリーです。どちらか一方だけでなく、両方の語にマッチするドキュメントを見つけます。
+
+```bash
+$ vespa query -v \
+  'yql=select title from news where userQuery()' \
+  'query=music festival' \
+  'type=all'
+```
+
+これは YQL の [userQuery()](/ja/reference/querying/yql#userquery) を Vespa の[シンプルクエリー言語](/ja/reference/querying/simple-query-language)と組み合わせたものです。この場合、ドキュメントは「music」と「festival」の両方にマッチする必要があります。
+
+```bash
+$ vespa query -v \
+  'yql=select title from news where userQuery()' \
+  'query=music festival -beer' \
+  'type=any'
+```
+
+上記ではクエリータイプを all から any に変更しているため、いずれか(または両方)の語にマッチするすべてのドキュメントが返されます。ただし、「beer」という語を含むドキュメントは除外されます。マッチしてランキングされるヒット数が増えると、クエリー実行の計算量が増加することに注意してください。any/or のようなタイプのクエリーの評価を高速化する方法については、[Vespa での WAND の使用](/ja/ranking/wand)を参照してください。
+
+```bash
+$ vespa query -v \
+  'yql=select title from news where userQuery()' \
+  'query=music festival' \
+  'type=phrase' \
+  'default-index=title'
+```
+
+上記では `type=phrase` を使って検索しており、タイトル内で正確なフレーズ「music festival」がマッチすることを要求します。
+
+```bash
+$ vespa query -v \
+  'yql=select title from news where rank(userQuery(), title contains "festival")' \
+  'query=music'
+```
+
+デフォルトのフィールドセットで「music」を検索し、タイトルに festival を含むドキュメントをブーストします。[rank()](/ja/reference/querying/yql#rank) クエリー演算子を使うと、最初のオペランドで検索(リトリーブ)を行い、2 番目のオペランド引数についてマッチのランキング・フィーチャーを計算できます。2 番目以降のオペランドは再現率(どのドキュメントがクエリーにマッチするか)には影響しませんが、精度(結果の順序付け)の調整に使用できます。ランキングについては、チュートリアルの次のパートで詳しく説明します。
+
+
+## まとめ
+
+これで、検索可能なデータを持つ Vespa アプリケーションが動作するようになりました。[チュートリアルの次のパート](/ja/learn/tutorials/news-3-searching)では、結果のソート、グルーピング、ランキングを用いた検索を探っていきます。

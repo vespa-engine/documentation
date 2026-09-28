@@ -1,0 +1,151 @@
+---
+title: "Vespaにおける外部LLM"
+sidebarTitle: "外部LLMの使用"
+---
+
+VespaでのLLMの使用の概要については、[VespaにおけるLarge Language Models](/ja/rag/llms-in-vespa) を参照してください。
+
+Vespaは、OpenAI互換APIと統合するためのクライアントを提供しています。
+これには
+[OpenAI](https://platform.openai.com/docs/overview)、
+[Google Gemini](https://ai.google.dev/)、
+[Anthropic](https://www.anthropic.com/api)、
+[Cohere](https://docs.cohere.com/docs/compatibility-api)、
+[Together.ai](https://docs.together.ai/docs/openai-api-compatibility) などが含まれますが、これらに限りません。
+たとえば
+[VLLM](https://docs.vllm.ai/en/latest/getting_started/quickstart.html#quickstart-online) や
+[llama-cpp-server](https://llama-cpp-python.readthedocs.io/en/latest/server/) を使って、独自のOpenAI互換サーバーをホストすることもできます。
+
+<Info>
+**注:** これは現在ベータ機能であるため、変更される可能性があります。
+</Info>
+
+### OpenAIクライアントの設定
+
+OpenAIのChatGPTのようなLLMサービスへの接続をセットアップするには、アプリケーションの
+[services.xml](/ja/reference/applications/services/services) でコンポーネントを定義する必要があります:
+
+```xml
+<services version="1.0">
+    <container id="default" version="1.0">
+
+        ...
+
+        <component id="openai" class="ai.vespa.llm.clients.OpenAI">
+
+            {/* Optional configuration: */}
+            <config name="ai.vespa.llm.clients.llm-client">
+                <apiKeySecretRef> ... </apiKeySecretRef>
+                {/* endpoint example: https://openai-compatible-api.com/v1/ */}
+                <endpoint> ... </endpoint>
+            </config>
+
+        </component>
+
+        ...
+
+    </container>
+</services>
+```
+
+利用可能な設定パラメーターの完全な一覧は、[llm-client config定義ファイル](https://github.com/vespa-engine/vespa/blob/master/model-integration/src/main/resources/configdefinitions/llm-client.def)を参照してください。
+
+これにより、[Searcher](/ja/learn/glossary#searcher) や [ドキュメント・プロセッサー](/ja/learn/glossary#document-processor)で使用できるクライアント・コンポーネントがセットアップされます。
+
+### APIキーの設定
+
+Vespaは、クライアントが使用するAPIキーを設定するためのいくつかのオプションを提供しています。
+
+1. [Vespa Cloudのシークレット・ストア](/ja/security/secret-store)を使用してAPIキーを保存します。
+   これは、`apiKeySecretRef` 設定パラメーターに、シークレット・ストア内のシークレットの名前を設定することで行います。Vespa Cloudユーザーには、この方法をお勧めします。
+2. セルフマネージドのVespaでは、環境変数経由でシークレットを提供できます。
+   `apiKeySecretRef` 設定パラメーターを設定し、シークレットを `VESPA_SECRET_<SECRET_REF>` という名前の環境変数として公開します。ここで `<SECRET_REF>` は、シークレット参照名を大文字のスネーク・ケースに変換したものです。たとえば、`apiKeySecretRef` が `myApiKey` に設定されている場合、環境変数の名前は
+   `VESPA_SECRET_MY_API_KEY` にする必要があります。
+3. Vespaクエリーの `X-LLM-API-KEY` HTTPヘッダーでAPIキーを提供します。
+
+異なる設定で複数の接続をセットアップできます。たとえば、タスクごとに異なるLLMを実行したい場合があります。接続を区別するには、コンポーネント指定の `id` 属性を変更します。どのタスクにどのLLMを使用するかを制御するためにこれがどのように使われるかは、後ほど説明します。
+
+念のため補足すると、VespaにはカスタムLLMをローカルで実行するオプションもあります。詳細については、
+[アプリケーションでLLMを実行する](/ja/rag/local-llms)を参照してください。
+
+### 推論パラメーター
+
+推論パラメーターの設定については、[LLMパラメーター](/ja/rag/llms-in-vespa#llm-parameters)の一般的な説明を参照してください。
+
+OpenAIクライアントには、クエリーとともに送信できる以下の推論パラメーターもあります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>パラメーター (Vespa)</th>
+      <th>パラメーター (OpenAI)</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`maxTokens`}</code></td>
+      <td><code>{`max_completion_tokens`}</code></td>
+      <td>チャット補完で生成できるトークンの最大数。</td>
+    </tr>
+    <tr>
+      <td><code>{`temperature`}</code></td>
+      <td><code>{`temperature`}</code></td>
+      <td>0から2の間の数値。0.8のような高い値は出力をよりランダムにし、0.2のような低い値は出力をより集中的で決定的にします。</td>
+    </tr>
+    <tr>
+      <td><code>{`topP`}</code></td>
+      <td><code>{`top_p`}</code></td>
+      <td>temperatureサンプリングの代替手段。モデルは、top_pの確率質量(0-1)を持つトークンを考慮します。0.1という値は、上位10%の確率を構成するトークンのみが考慮されることを意味します。</td>
+    </tr>
+    <tr>
+      <td><code>{`seed`}</code></td>
+      <td><code>{`seed`}</code></td>
+      <td>指定した場合、システムは決定的にサンプリングしようと試みるため、同じseedでリクエストを繰り返すと類似の結果が返されるはずです。決定性は保証されません。</td>
+    </tr>
+    <tr>
+      <td><code>{`npredict`}</code></td>
+      <td><code>{`n`}</code></td>
+      <td>各入力メッセージに対して生成するチャット補完の選択肢の数。すべての選択肢にわたって生成されたトークン数に基づいて課金されることに注意してください。</td>
+    </tr>
+    <tr>
+      <td><code>{`frequencypenalty`}</code></td>
+      <td><code>{`frequency_penalty`}</code></td>
+      <td>-2.0から2.0の間の数値。正の値は、それまでのテキストにおける出現頻度に基づいて新しいトークンにペナルティを課し、繰り返しの可能性を減らします。負の値は繰り返しを促します。</td>
+    </tr>
+    <tr>
+      <td><code>{`presencepenalty`}</code></td>
+      <td><code>{`presence_penalty`}</code></td>
+      <td>-2.0から2.0の間の数値。正の値は、それまでのテキストに出現しているかどうかに基づいて新しいトークンにペナルティを課し、モデルが新しいトピックについて話す可能性を高めます。負の値は、プロンプトの内容の繰り返しを促します。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+クエリーとともに送信されたパラメーターは、`services.xml` でクライアント・コンポーネントに指定された設定をオーバーライドします。
+
+OpenAIのAPIを使用していない場合、パラメーターは上記の説明とは異なる扱いを受ける可能性があることに注意してください。
+
+
+### 他のOpenAI互換プロバイダーへの接続
+
+デフォルトでは、このクライアントはOpenAIのサービスに接続しますが、`endpoint` 設定パラメーターを変更することで、任意の [OpenAIチャット補完互換API](https://platform.openai.com/docs/guides/text-generation/chat-completions-api) に対して使用できます。
+
+### FAQ
+
+<AccordionGroup>
+<Accordion title="自分のLLMがOpenAIクライアントと互換性があるかどうかは、どうすれば分かりますか?">
+OpenAIクライアントは、OpenAIチャット補完APIを実装しているあらゆるLLMと互換性があります。LLMプロバイダーのドキュメントで、このAPIをサポートしているかどうかを確認できます。
+</Accordion>
+<Accordion title="OpenAIが提供するResponsesを使用できますか?">
+[Responses](https://platform.openai.com/docs/api-reference/responses/create)
+
+いいえ。現在は [Chat Completion API](https://platform.openai.com/docs/api-reference/chat) のみがサポートされています。
+</Accordion>
+<Accordion title="OpenAIクライアントをリランキングに使用できますか?">
+はい。ただし現時点では、OpenAIクライアントを使って結果をリランキングする[カスタムSearcher](/ja/applications/searchers)を実装する必要があります。
+</Accordion>
+<Accordion title="OpenAIクライアントをエンベディングの取得に使用できますか?">
+いいえ。現在は [Chat Completion API](https://platform.openai.com/docs/api-reference/chat) のみがサポートされています。
+</Accordion>
+</AccordionGroup>

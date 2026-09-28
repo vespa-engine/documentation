@@ -1,0 +1,81 @@
+---
+title: "GCP アーカイブ・ガイド"
+sidebarTitle: "アーカイブ・ガイド GCP"
+---
+
+<Note>
+**注:** 
+
+このガイドは Vespa Cloud を使用するテナント向けです。テナントが **Enclave** を使用している場合、アーカイブ・バケットはお客様自身のクラウド・アカウント内にあり、直接アクセスできます — 代わりに [Enclave アーカイブ・ガイド](/ja/operations/enclave/archive)を参照してください。
+</Note>
+
+Vespa Cloud は、ログ・データ、ヒープ・ダンプ、Java Flight Recorder のセッションを Google Cloud Storage のバケットにエクスポートします。このガイドでは、このデータへのアクセス方法を説明します。データへのアクセスは、テナントが管理する GCP プロジェクトを通じて行います。このデータにアクセスするためのデータ通信量は、この GCP プロジェクトに課金されます。
+
+開始するには次のリソースが必要です:
+
+- GCP プロジェクト
+- Google ユーザー・アカウント
+- [gcloud コマンドライン・インターフェース](https://cloud.google.com/sdk/docs/install)
+
+アクセスは、Vespa Cloud コンソールのテナント・アカウント画面で設定します。「archive」タブを選択し、**GCP** セクションを展開します。
+
+## IAM プリンシパルの登録
+
+<Frame>
+![GCP アーカイブのアコーディオン](/assets/img/archive-gcp-expanded-dropdown.png)
+</Frame>
+
+**Configure access to your cloud archive** をクリックして、設定ダイアログを開きます。
+
+## Vespa Cloud リソースへのアクセス許可
+
+<Frame>
+![GCP アクセス設定](/assets/img/archive-gcp-configure-access.png)
+</Frame>
+
+サポートされているプレフィックスを持つ[プリンシパル](https://cloud.google.com/iam/docs/overview)を入力し、**Save** をクリックします。Vespa Cloud は、そのプリンシパルに Cloud Storage バケットへのアクセスを許可します。
+
+サポートされているプリンシパルのプレフィックス:
+
+- `user:` — Google アカウント、例: `user:email@example.com`
+- `serviceAccount:` — サービス・アカウント、例: `serviceAccount:my-app@project.iam.gserviceaccount.com`
+- `group:` — Google グループ、例: `group:admins@example.com`
+- `domain:` — Google Workspace または Cloud Identity のドメイン、例: `domain:example.com`
+
+## Gcloud CLI を使用したファイルへのアクセス
+
+<Frame>
+![GCP ログのダウンロード](/assets/img/archive-gcp-access-logs.png)
+</Frame>
+
+権限が付与されると、その GCP メンバーはアーカイブ・バケットの内容にアクセスできます。任意の Cloud Storage クライアントが利用できますが、`gsutil` コマンドライン・クライアントが手軽なツールです。archive ページには、データが保存されているすべてのバケットが一覧表示されます。通常、テナントがアプリケーションを持つゾーンごとに 1 つのバケットです。
+
+ネットワーク・トラフィックが正しい GCP プロジェクトに課金されるようにするため、`-u user-project` パラメーターは必須です。
+
+```bash
+$ gsutil -u my-project ls \
+  gs://vespa-cloud-data-prod.gcp-us-central1-f-73770f/vespa-team/
+        gs://vespa-cloud-data-prod.gcp-us-central1-f-73770f/vespa-team/album-rec-searcher/
+        gs://vespa-cloud-data-prod.gcp-us-central1-f-73770f/vespa-team/cord-19/
+        gs://vespa-cloud-data-prod.gcp-us-central1-f-73770f/vespa-team/vespacloud-docsearch/
+```
+
+上記の例では、バケット名は *vespa-cloud-data-prod.gcp-us-central1-f-73770f*、テナント名は(その特定の prod ゾーンにおいて)*vespa-team* です。アーカイブはテナント単位で行われ、ログ・ファイルは通常、次のようなキーで保存されます:
+
+```bash
+/vespa-team/vespacloud-docsearch/default/h7644a/logs/access/JsonAccessLog.20221011080000.zst
+```
+
+したがって、このオブジェクトの URI は次のとおりです:
+
+```bash
+gs://vespa-cloud-data-prod.gcp-us-central1-f-73770f/vespa-team/vespacloud-docsearch/default/h2946a/logs/access/JsonAccessLog.default.20210629100001.zst
+```
+
+オブジェクトは生成されるとエクスポートされます - アクセス・ログ・ファイルは圧縮され、少なくとも 1 時間に 1 回エクスポートされます。
+
+<Note>
+**注:** 
+
+オブジェクトにアクセスする際は、必ずユーザー・プロジェクトを設定してください - 転送コストはリクエスターに課金されます。
+</Note>

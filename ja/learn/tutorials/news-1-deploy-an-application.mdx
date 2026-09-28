@@ -1,0 +1,181 @@
+---
+title: "ニュース検索・レコメンデーション・チュートリアル - Vespa Cloudをはじめる"
+---
+
+このシリーズの目標は、Vespa Cloud上にパーソナライズされたニュース・レコメンデーションのためのVespaアプリケーションをセットアップすることです。シンプルなニュース検索システムから始め、チュートリアルの各パートを進めながら段階的に機能を追加していきます。
+
+パートの構成は次のとおりです:
+
+1. [はじめに](/ja/learn/tutorials/news-1-deploy-an-application) - このパート
+2. [基本的なニュース検索アプリケーション](/ja/learn/tutorials/news-2-basic-feeding-and-query) - アプリケーション・パッケージ、フィード、クエリー
+3. [ニュース検索](/ja/learn/tutorials/news-3-searching) - ソート、グルーピング、ランキング
+4. [ユーザーとニュース記事のエンベディング生成](/ja/learn/tutorials/news-4-embeddings)
+5. [ニュース・レコメンデーション](/ja/learn/tutorials/news-5-recommendation) - 部分更新(ニュースのエンベディング)、ANN、フィルタリング
+6. [Searcherを使ったニュース・レコメンデーション](/ja/learn/tutorials/news-6-recommendation-with-searchers) - カスタムSearcher、ドキュメント・プロセッサー
+7. [parent-childを使ったニュース・レコメンデーション](/ja/learn/tutorials/news-7-recommendation-with-parent-child) - parent-child、テンソル・ランキング
+
+このパートでは、最小限のVespaアプリケーションから始めて、Vespa Cloud上でアプリケーションをデプロイして実行するための基本操作に慣れていきます。チュートリアルの次のパートから、アプリケーションの開発を始めます。
+
+
+<Warning>
+**前提条件:**
+
+- Vespa Cloudのアカウント - 持っていない場合は[テナント](https://console.vespa-cloud.com/)を作成してください。
+- [Vespa CLI](/ja/clients/vespa-cli) をインストールするための [Homebrew](https://brew.sh/)。または [Githubリリース](https://github.com/vespa-engine/vespa/releases)からVespa CLIをダウンロードします。
+- データセットをVespa JSONに変換するためのPython3。
+- データセットをダウンロードするための `curl`。
+- パート6で使用する [Java 17](https://openjdk.org/projects/jdk/17/)。
+- パート6で使用する [Apache Maven](https://maven.apache.org/install.html)。
+</Warning>
+
+
+このシリーズの今後のパートでは、いくつか追加のPython依存関係が必要になります。ニュースとユーザーのベクトル表現を学習し、ランキングで使用する機械学習モデルを学習するために [PyTorch](https://pytorch.org/) を使用します。
+
+
+## Vespa CLIのインストール
+
+このチュートリアルでは [Vespa-CLI](/ja/clients/vespa-cli) を使用します。Vespa CLIはVespa.aiの公式コマンドライン・クライアントです。ランタイム依存関係のない単一のバイナリで、Linux、macOS、Windowsで利用できます。
+
+```bash
+$ brew install vespa-cli
+```
+
+このチュートリアルでは、設定変数についてローカルとグローバルのどちらのVespa CLI設定モードも使用できます。複数の異なるVespaアプリケーションを扱う場合は一般的にローカル設定モードの使用が推奨されますが、このチュートリアルのほとんどのパートでは同じ設定値を使用するため、グローバル設定モードのほうが簡単です。グローバル設定モードは、このチュートリアル・シリーズの各パートで同じVespa設定を再適用する必要がないため便利です:
+
+```bash
+$ vespa config set default_config_scope global
+```
+
+
+## 最小限のVespaアプリケーション
+
+このチュートリアルには[付随するサンプル・アプリケーション](https://github.com/vespa-engine/sample-apps/tree/master/news)があります。チュートリアル全体を通して、このアプリケーションのサポート・コードを使用します。また、各チュートリアルの最終状態は、各 `app-...` サブディレクトリーにあります。
+
+まず、サンプル・アプリケーションをクローンします:
+
+```bash
+$ vespa clone -f news news && cd news
+```
+
+上記のコマンドは、Vespaの[サンプル・アプリ・リポジトリー](https://github.com/vespa-engine/sample-apps/)から `news` ディレクトリーをダウンロードし、その内容を `news` というフォルダーに配置します。vespa-cliユーティリティーのドキュメントを見るには `--help` を使用します:
+
+```bash
+$ vespa clone --help
+```
+
+`news` ディレクトリーには、事前設定されたアプリケーション・パッケージがいくつか用意されています。`app-1-getting-started` ディレクトリーには最小限のVespaアプリケーションが含まれています。そこには2つのファイルがあります:
+
+- `services.xml` - アプリケーションを構成するサービスを定義します
+- `schemas/news.sd` - 検索可能なコンテンツのスキーマを定義します。
+
+これらのファイルについては、チュートリアルの次のパートで改めて説明します。
+
+
+## Vespa Cloud用にVespa CLIを設定する
+
+Vespa CLIをVespa Cloudを使用するように設定し、アプリケーション名を設定します。`tenant-name` を [console.vespa-cloud.com](https://console.vespa-cloud.com) で作成したテナント名に置き換えてください:
+
+```bash
+$ vespa config set target cloud
+$ vespa config set application tenant-name.news
+```
+
+通常はアプリケーションごとにローカル設定を使用するほうが良いのですが、このチュートリアルでは、チュートリアルの各パートで設定値を設定し直さなくて済むように、グローバル設定を使用します。
+
+Vespa Cloudで認証します:
+
+```bash
+$ vespa auth login
+```
+
+ブラウザーの指示に従って認証を完了してください。
+
+次に、アプリケーションに[データ・プレーン・アクセス](/ja/security/guide#data-plane)用の証明書を追加します:
+
+```bash
+$ vespa auth cert app-1-getting-started
+```
+
+
+## Vespa Cloudへのデプロイ
+
+このアプリケーションには今のところ大した内容はありませんが、基本操作に慣れるために、とにかくVespa Cloudにデプロイしてみましょう。初回のデプロイメントは、ノードがプロビジョニングされる間、数分かかることがあります:
+
+```bash
+$ vespa deploy --wait 600 app-1-getting-started
+```
+
+このコマンドはアプリケーションをアップロードし、内容を検証します。アプリケーションに何か問題があれば、このステップは失敗の説明とともに失敗します。そうでなければ、アプリケーションはライブ状態に切り替わります。
+
+アプリケーションの新しいバージョンができたときは、同じコマンドを実行してアプリケーションをデプロイします。ほとんどの場合、サービスを再起動する必要はありません。Vespaがシステムの再設定を行います。
+
+チュートリアルの今後のパートでは、この方法でアプリケーションの変更を頻繁にデプロイしていきます。
+
+
+## Vespaへのフィード
+
+検索できるようにするには、その前にデータをインデックスしなければなりません。これは「フィード」と呼ばれ、チュートリアルの次のパートで詳しく説明します。今は、すべてが正常に動作していることをテストするために、1件のテスト・ドキュメントをフィードします:
+
+```bash
+$ vespa feed doc.json
+```
+
+`-v` オプションを付けると、vespa-cliがHTTPリクエストを表示します:
+
+```bash
+$ vespa document -v doc.json
+```
+
+[Vespa document api](/ja/writing/document-v1-api-guide) を直接使ってフィードすることもできます。
+
+フィード操作がVespaによって確認応答されると、その操作は検索で見えるようになります。
+
+
+## Vespaへのクエリー
+
+vespa-cliのクエリー実行機能を使ってエンドポイントにクエリーを実行できます。これは [Vespa query api](/ja/querying/query-api) を使用してVespaにクエリーします。コマンドに `-v` を含めると、使用される正確なエンドポイントとURLリクエスト・パラメーターを確認できます。
+
+```bash
+$ vespa query -v 'yql=select * from news where true'
+```
+
+この例では [YQL (Vespa Query Language)](/ja/querying/query-language) を使用して、タイプ `news` のすべてのドキュメントを検索します。このクエリー・リクエストは `1` 件の結果を返します。これは上記でフィードしたドキュメントです。
+
+```bash
+$ vespa query \
+  'yql=select * from news where userQuery()' \
+  'query=hello world' \
+  'default-index=title'
+```
+
+こちらは、タイトルからhelloまたはworldを検索する別のクエリー言語の例です。
+
+```bash
+$ vespa query \
+  'yql=select * from news where title contains phrase("hello","world")'
+```
+
+こちらは、タイトルからフレーズ "hello world" を検索する別のクエリー言語の例です。[チュートリアルの次のパート](/ja/learn/tutorials/news-2-basic-feeding-and-query)では、さらに多くのクエリー例に加えて、結果のランキングとグルーピングも紹介します。
+
+
+## ドキュメントの削除
+
+インデックスからドキュメントを削除するには、次を実行します:
+
+```bash
+$ vespa document -v remove id:news:news::1
+```
+
+お疲れさまでした!
+
+
+## Vespa Cloudアプリケーションの管理
+
+[devゾーン](/ja/operations/environments#dev)のアプリケーション・インスタンスは、デフォルトでは最後のデプロイメントから14日間実行され続けます。これは[コンソール](https://console.vespa-cloud.com/)で制御できます。
+
+[Vespa Cloudコンソール](https://console.vespa-cloud.com)は、アプリケーション・インスタンスの削除にも使用できます。
+
+
+## まとめ
+
+これでシンプルなアプリケーションが稼働しているはずです。[チュートリアルの次のパート](/ja/learn/tutorials/news-2-basic-feeding-and-query)では、この土台の上に構築を進めていきます。

@@ -1,0 +1,299 @@
+---
+title: "プライベートエンドポイント"
+---
+
+Vespa Cloud では、アプリケーションクラスターにプライベートエンドポイントサービスをセットアップして、同じクラウドプロバイダー上に併設された自身の VPC からの専用アクセスを可能にできます。これは、AWS デプロイメントでは AWS の [PrivateLink](https://docs.aws.amazon.com/vpc/latest/privatelink/what-is-privatelink.html) を通じて、GCP デプロイメントでは GCP の [Private Service Connect](https://cloud.google.com/vpc/docs/private-service-connect) を通じてサポートされています。このガイドでは、[AWS PrivateLink](#aws-private-link) または [GCP Private Service Connect](#gcp-private-service-connect) のいずれかに必要な設定手順を順を追って説明します。
+
+プライベートエンドポイントは、[prod 環境](/ja/operations/environments#prod)のゾーンでのみサポートされています。
+
+プライベートエンドポイントを追加しても、そのクラスターの既存のパブリックエンドポイントは無効に*なりません*。`enabled="false"` を指定した `"zone"` タイプのエンドポイント(`<endpoint type="zone" container-id="my-container" enabled="false" />`)を追加して明示的にパブリックエンドポイントを無効にしない限り、両方とも到達可能なままです。
+
+<Note>
+**注:** 
+
+プライベートエンドポイントはデフォルトで mTLS 認証を使用し、トークンベース認証は明示的に有効にする必要があります。[プライベートエンドポイントの認証方式の設定](#authentication-methods)を参照してください。
+</Note>
+
+## AWS PrivateLink必要な情報:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>項目</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;IAM アカウント番号&#42;&#42;</td>
+      <td>AWS アカウントの数値識別子です。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;VPC ID&#42;&#42;</td>
+      <td>サービスエンドポイントへの接続元となる AWS VPC の識別子です。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;AWS リージョン名&#42;&#42;</td>
+      <td>接続元の AWS リージョンの名前です。接続できるのは同じリージョン内のサービス、または、パブリックエンドポイントが無効な場合は同じ AWS アベイラビリティゾーン内のサービスのみであることに注意してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+手順:
+
+<Steps>
+<Step title="Vespa Cloud のコンテナー・クラスターにプライベートエンドポイントサービスを設定する">
+[deployment.xml](/ja/reference/applications/deployment#endpoint-private) に `<endpoint type="private" />` を追加し、アカウントの指定された ARN を使用したコンテナー・クラスターへのアクセスを許可します。この例では、`123123123123` アカウント配下のすべてのロールとユーザーが、`<prod>` タグの下に列挙された各リージョンで、`my-container` クラスター上のエンドポイントサービスに接続できるようにしています。
+
+有効な ARN の詳細と、よりきめ細かなアクセス制御については、[エンドポイントサービスの設定](https://docs.aws.amazon.com/vpc/latest/privatelink/configure-endpoint-service.html)を参照してください。
+
+この例では、[`"zone"` タイプのエンドポイント](/ja/reference/applications/deployment#endpoint-zone)宣言を追加してパブリックのゾーンエンドポイントを無効にする方法も示しています。これはオプションの手順であり、プライベートサービスのセットアップには必須ではありません。
+	```xml
+	<deployment version="1.0">
+	    <prod>
+	        <region>region-1</region>
+	        <region>region-2</region>
+	    </prod>
+	    <endpoints>
+	        <endpoint type="zone" container-id="my-container" enabled="false" />
+	        <endpoint type="private" container-id="my-container">
+	            <allow with="aws-private-link" arn="arn:aws:iam::123123123123:root" />
+	        </endpoint>
+	    </endpoints>
+	</deployment>
+	```
+
+アプリケーション・パッケージをビルドしてデプロイし、指定したリージョンへのデプロイが完了するまで待ちます。
+<Warning>
+**重要:** 
+
+上記の例では、パブリックエンドポイントを無効に設定し、プライベートエンドポイントを追加しています。この変更は*同じ*デプロイメントで行ってください。プライベートエンドポイントが稼働した*後で*パブリックエンドポイントを無効にすると、ロードバランサーの再作成に伴い、プライベートエンドポイントも無効化されて再作成されます。この事態が発生した場合は、正しいロードバランサーを作成するために、この手順をもう一度実行してください。
+</Warning>
+</Step>
+<Step title="エンドポイントサービスのサービス ID を確認する">
+Console でアプリケーションのエンドポイントタブに移動し、接続したいデプロイメントのサービス ID を確認します。あわせて、エンドポイントへの接続アクセスが正しい ARN に付与されていることも確認してください。
+
+<Frame>
+![VPC エンドポイントのサービス ID](/assets/img/vpc-1.png)
+</Frame>
+</Step>
+<Step title="VPC インターフェイスエンドポイントを作成する">
+自身の VPC に [VPC エンドポイントを作成](https://docs.aws.amazon.com/cli/latest/reference/ec2/create-vpc-endpoint.html)します。これがエントリーポイントとなり、AWS のプライベートネットワークを通じて Vespa アプリケーションに接続を転送します。この例では、VPC の ID が `vpc-123` で AWS リージョン `us-east-1` にあり、Console で確認したエンドポイントサービスのサービス ID が `com.amazonaws.vpce.us-east-1.vpce-svc-321` であると仮定します。
+	
+```bash
+$ aws ec2 create-vpc-endpoint \
+  --region us-east-1 \
+  --vpc-id vpc-123 \
+  --service-name com.amazonaws.vpce.us-east-1.vpce-svc-321 \
+  --vpc-endpoint-type Interface \
+  --private-dns-enabled | jq .
+```
+
+以下の項目で検証に使用するため、`VpcEndpointId` フィールドの値を控えておいてください。オプションのセキュリティグループやサブネット ID もここで指定しますが、簡潔にするためここでは省略しています。代わりに AWS コンソールから VPC エンドポイントを作成する場合は、「Enable DNS names」を必ずチェックしてください!
+</Step>
+<Step title="VPC エンドポイントが Vespa クラスターに接続されていることを確認する">
+Console のエンドポイントタブに戻り、ページを更新します。新しく作成したインターフェイスエンドポイントと、コンテナー・クラスター上のエンドポイントサービスとの接続を表す新しいエントリーが表示されるはずです。これが上の画像の「CONNECTED ENDPOINTS」です。ID が上記の `VpcEndpointId` フィールドの値と一致することを確認してください。状態が `open` になれば接続の準備は完了です。
+</Step>
+<Step title="VPC 内から Vespa クラスターに到達できることを確認する">
+指定したコンテナー・クラスターのゾーンエンドポイントは、VPC エンドポイントへの接続を許可された任意の AWS リソースに対して、プライベート DNS を通じて解決されるようになっているはずです。これを確認する最も簡単な方法は、自身のゾーンエンドポイントを使用して、VPC 内から次の Python 3.9 の Lambda を実行することです。
+
+```bash
+from socket import gethostbyname
+from urllib.request import urlopen
+
+def lambda_handler(event, context):
+    return {
+        'statusCode': 200,
+        'body': urlopen('https://badc0ffee.deadbeef.z.vespa-app.cloud/status.html').read(),
+        'ip': gethostbyname('badc0ffee.deadbeef.z.vespa-app.cloud')
+    }
+```
+
+あるいは、VPC 内のホストからいくつかのコマンドを実行します。
+
+```bash
+$ host my-container.my-app.my-tenant.region-1.z.vespa-app.cloud
+$ curl https://my-container.my-app.my-tenant.region-1.z.vespa-app.cloud/status.html
+```
+
+どちらの場合も、IP はプライベート IP レンジのいずれかに含まれ、Vespa コンテナー・エンドポイントからの HTTP レスポンスは `OK` になるはずです。
+</Step>
+</Steps>
+
+<Note>
+**注:** 
+
+Enclave ユーザーは、複数の AZ にまたがって接続された高可用性の PrivateLink エンドポイントをセットアップできます。ガイダンスについては [Vespa サポート](https://vespa.ai/support/)にお問い合わせください。
+</Note>
+
+## GCP Private Service Connect前提条件:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>項目</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;有効化された GCP API&#42;&#42;</td>
+      <td>&#42;Compute Engine&#42;、&#42;Service Directory&#42;、&#42;Cloud DNS&#42; の各 API がすべて GCP アカウントで有効になっている必要があります:<br/><br/><code>{`$ gcloud services enable compute.googleapis.com`}</code><br/> <code>{`$ gcloud services enable dns.googleapis.com`}</code><br/> <code>{`$ gcloud services enable servicedirectory.googleapis.com`}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;GCP プロジェクト名&#42;&#42;</td>
+      <td>&#42;resonant-diode-123456&#42; のような、GCP アカウントの文字列識別子です</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;VPC のネットワーク名とサブネットワーク名&#42;&#42;</td>
+      <td>コンシューマーエンドポイントを作成するネットワークとサブネットワークの名前です。</td>
+    </tr>
+  </tbody>
+</table>
+
+手順:
+
+<Steps>
+<Step title="Vespa Cloud のコンテナー・クラスターにプライベートエンドポイントサービスを設定する">
+
+[deployment.xml](/ja/reference/applications/deployment#endpoint-private) に `<endpoint type="private"/>` を追加し、指定されたプロジェクト ID の GCP アカウントからコンテナー・クラスターへのアクセスを許可します。以下の例では、`private-test` アカウント配下に作成されたコンシューマーエンドポイントが、`<prod>` タグの下に列挙された各リージョンで、`my-container` クラスター上のエンドポイントサービスに接続できるようにしています。
+
+この例では、[`"zone"` タイプのエンドポイント](/ja/reference/applications/deployment#endpoint-zone)宣言を追加してパブリックのゾーンエンドポイントを無効にする方法も示しています。これはオプションの手順であり、プライベートサービスのセットアップには必須ではありません
+	```xml
+	<deployment version="1.0">
+	    <prod>
+	        <region>region-1</region>
+	        <region>region-2</region>
+	    </prod>
+	    <endpoints>
+	        <endpoint type="zone" container-id="my-container" enabled="false" />
+	        <endpoint type="private" container-id="my-container">
+	            <allow with="gcp-service-connect" project="private-test" />
+	        </endpoint>
+	    </endpoints>
+	</deployment>
+	```
+	アプリケーション・パッケージをビルドしてデプロイし、指定したリージョンへのデプロイが完了するまで待ちます。
+</Step>
+<Step title="エンドポイントサービスのサービス ID を確認する">
+Console でアプリケーションのエンドポイントタブに移動し、接続したいデプロイメントのサービス ID を確認します。あわせて、エンドポイントへの接続アクセスが正しいプロジェクトに付与されていることも確認してください。
+
+<Frame>	
+![VPC エンドポイントのサービス ID](/assets/img/vpc-2.png)
+</Frame>
+
+</Step>
+<Step title="サービスコンシューマーエンドポイントを作成する">
+
+自身の VPC に[サービスコンシューマーエンドポイントを作成](https://cloud.google.com/vpc/docs/configure-private-service-connect-services)します。これがエントリーポイントとなり、GCP のプライベートネットワークを通じて Vespa アプリケーションに接続を転送します。この例では、プロジェクト名は `test-project` で、GCP リージョン `us-central1` にある `test-network` という VPC ネットワークを持ち、エンドポイントを収容する `test-subnet` というサブネットがあり、その背後に `test-address` という名前のアドレスがあります。エンドポイントサービスのサービス ID(Console で確認)は `projects/vespa-external/regions/us-central1/serviceAttachments/scsa-xxxxxx` です。最後に、エンドポイントの名前は `badc0ffee`、Service Directory の名前空間は `my-tenant-my-app` です。このガイドの最後の項目にある、生成されるエンドポイント名についての説明を参照してください。
+
+ネットワークを作成します(まだ存在しない場合):
+
+```bash
+$ gcloud compute networks create test-network
+```
+
+サブネットを作成します(まだ存在しない場合):
+
+```bash
+$ gcloud compute networks subnets create test-subnet \
+    --region=us-central1 \
+    --network=test-network \
+    --range=10.10.0.0/24
+```
+
+VPC 内のクライアントのために、エンドポイントに使用される IP アドレスを作成します。
+
+```bash
+$ gcloud compute addresses create test-address \
+    --region=us-central1 \
+    --subnet=test-subnet
+```
+
+上記の IP へのトラフィックを Vespa Cloud のサービスエンドポイントに転送するフォワーディングルールを作成します。
+
+```bash
+$ gcloud compute forwarding-rules create badc0ffee \
+    --region=us-central1 \
+    --network=test-network \
+    --address=test-address \
+    --target-service-attachment=projects/vespa-external/regions/us-central1/serviceAttachments/scsa-xxxxxx \
+    --service-directory-registration=projects/test-project/locations/us-central1/namespaces/my-tenant-my-app
+```
+
+以下の検証手順のために、作成されたリソースの ID を控えておいてください。
+</Step>
+<Step tiitle="VPC エンドポイントが Vespa クラスターに接続されていることを確認する">
+
+Console のエンドポイントタブに戻り、ページを更新します。新しく作成したインターフェイスエンドポイントと、コンテナー・クラスター上のエンドポイントサービスとの接続を表す新しいエントリーが表示されるはずです。これが上の画像の「CONNECTED ENDPOINTS」です。ID が上で作成したフォワーディングルールのリソース ID と一致することを確認してください。状態が `open` になれば接続の準備は完了です。
+</Step>
+<Step title="VPC 内から Vespa クラスターに到達できることを確認する">
+
+指定したコンテナー・クラスターの生成されたエンドポイント名(最後の項目を参照)は、VPC 内のプライベート DNS を通じて解決されるようになっているはずです。これを確認する最も簡単な方法は、VPC 内の指定したサブネットの中でインスタンスを起動し、そこからいくつかのコマンドを実行することです。
+
+```bash
+$ host badc0ffee.deadbeef.z.vespa-app.cloud
+$ curl https://badc0ffee.deadbeef.z.vespa-app.cloud/status.html
+```
+
+解決された IP アドレスは先ほど作成したアドレスのものになり、`curl` コマンドは単に `OK` を出力するはずです。
+
+エンドポイントの解決に失敗する場合は、[GCP のトラブルシューティングドキュメント](https://cloud.google.com/vpc/docs/configure-private-service-connect-services#troubleshooting)を参照してください。
+</Step>
+<Step title="Private Service Connect で生成されるエンドポイント">
+コンシューマーエンドポイントが *Service Directory* の名前空間付きで作成されると、GCP はそのエンドポイントのプライベート DNS レコードを自動的に作成します。Vespa のアプリケーション・コンテナーは特定のドメイン名に一致する Web 証明書を持っているため、エンドポイントの(上で作成した)IP アドレスの代わりにこの DNS レコードを使用する必要があります。残念ながら、コンシューマーエンドポイントの最終的なエンドポイント名を当方で設定することはできません。プライベートエンドポイントサービスに対して設定できるのはドメイン名の*サフィックス*のみで、GCP は*このサフィックスの前にエンドポイントのリソース名を付加した*プライベート DNS レコードを生成します。また、これらのエンドポイントの Service Directory 名前空間は、ドメイン名サフィックスと*一対一である必要もあります*。そうでない場合、自動セットアップは失敗します。
+
+Vespa Cloud が使用するドメイン名サフィックスは `[<tenant-and-app-anonymous-id>.].z.vespa-app.cloud` です。したがって、Service Directory の名前空間として `<tenant>-<application>` のペアを使用することをお勧めします。これにより、GCP が要求する(上記参照)サフィックスと名前空間の一対一のマッピングが保証されます。
+
+Vespa Cloud の Web 証明書(上記参照)は、当方がサービスに設定するドメインサフィックスの直下の任意の子孫に一致します。したがって、Service Directory を使用すれば、どのようなエンドポイントリソース名でも、Web 証明書に一致するプライベート DNS レコードが生成されます。さらに、Vespa Cloud が生成するゾーンエンドポイントは、ランダムで一意なクラスター・インスタンス・リージョン ID で構成されています。この同じ ID を GCP のエンドポイントリソース名として使用すると(例のように)、GCP がセットアップするプライベート DNS のドメイン名と、Vespa Cloud が生成し当社のコンソールで確認できるエンドポイント名が同一になります。
+</Step>
+</Steps>
+
+## プライベートエンドポイント認証の設定
+
+オプションの `auth-method` 属性を使用して、プライベートエンドポイントで mTLS 認証またはトークンベース認証のいずれかを使用するように設定できます。この属性が設定されていない場合、デフォルトで mTLS が使用されます。この属性は `private` タイプのエンドポイントでのみ許可され、`mtls` または `token` のいずれかである必要があります。
+
+<Note>
+**注:** 
+
+同時に有効にできる認証方式は 1 つだけです。トークン認証を有効にすると、そのプライベートエンドポイントの mTLS 認証は無効になり、逆もまた同様です。
+</Note>
+
+#### トークンベース認証の例
+
+```xml
+<deployment version="1.0">
+    <prod>
+        <region>region-1</region>
+        <region>region-2</region>
+    </prod>
+    <endpoints>
+        <endpoint type="private" auth-method='token'>
+            <allow with="aws-private-link" arn="arn:aws:iam::123123123123:root" />
+        </endpoint>
+    </endpoints>
+</deployment>
+```
+
+#### 既存のデプロイメントの認証方式の変更
+
+プライベートエンドポイントを持つ既存のデプロイメントがある場合、認証方式を変更するには、接続をすべて削除し、[検証オーバーライド](/ja/reference/applications/validation-overrides)を使用して再デプロイする必要があります。
+
+<Steps>
+<Step>
+上で設定した VPC インターフェイスエンドポイント(AWS)またはサービスコンシューマーエンドポイント(GCP)を削除します
+</Step>
+<Step>
+`deployment.xml` でエンドポイントの認証方式を変更します
+</Step>
+<Step>
+`zone-endpoint-change` 検証オーバーライドを使用してデプロイします:
+    ```xml
+    <validation-overrides>
+        <allow until="2023-04-31" comment="Change private endpoint authentication">
+            zone-endpoint-change
+        </allow>
+    </validation-overrides>
+    ```
+</Step>
+</Steps>

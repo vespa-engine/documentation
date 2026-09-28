@@ -1,0 +1,1066 @@
+---
+title: "ハイブリッド・テキスト検索チュートリアル"
+---
+
+
+ハイブリッド検索は、検索品質を向上させるために複数の検索手法を組み合わせるものです。このチュートリアルでは、検索を構成する 2 つの中核的な要素を区別して扱います:
+
+- **リトリーバル(検索)**: 大規模なコーパスから潜在的に関連性のあるドキュメントのサブセットを特定すること。[BM25](/ja/ranking/bm25) のような従来の字句ベースの手法はこれに優れており、最新の埋め込みベースの[ベクトル検索](/ja/querying/vector-search-intro)アプローチも同様です。
+- **ランキング**: 取得したドキュメントを関連度順に並べ替えて結果を洗練させること。Vespa の柔軟な[ランキング・フレームワーク](/ja/basics/ranking)により、複雑なスコアリングの仕組みを実現できます。
+
+このチュートリアルでは、字句ベースと埋め込みベースの両アプローチの強みを活かした、Vespa によるハイブリッド検索アプリケーションの構築方法を示します。[BEIR](https://github.com/beir-cellar/beir) ベンチマークの [NFCorpus](https://ir-datasets.com/nfcorpus.html) データセットを使用し、Vespa のクエリー言語とランキング機能を用いてさまざまなハイブリッド検索テクニックを探ります。
+
+主な目的は、[BM25](/ja/ranking/bm25) [^1] のようなシンプルなテキスト・スコアリング機能と、テキスト埋め込みモデルを組み合わせたベクトル検索を組み合わせるテキスト検索アプリを構築することです。Vespa の [embedder](/ja/rag/embedding#huggingface-embedder) 機能を使用して、Vespa 内でテキスト埋め込みを取得する方法を示します。このガイドでは、テキスト埋め込みモデルとして [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) を使用します。これは実行が高速でメモリー・フットプリントが小さい、小型のモデルです。
+
+
+<Warning>
+**前提条件:**
+
+- x86\_64 または arm64 上の Linux、macOS、または Windows 10 Pro で、[Podman Desktop](https://podman.io/) または [Docker Desktop](https://www.docker.com/products/docker-desktop/) がインストールされ、エンジンが実行中であること。
+	- あるいは、Podman デーモンを起動します:
+    
+    ```bash
+    $ podman machine init --memory 6000
+    $ podman machine start
+    ```
+	- システム制限やその他の設定については [Docker コンテナー](/ja/operations/self-managed/docker-containers)を参照してください。
+- Haswell(2013 年)より古い CPU については、[CPU サポート](/ja/operations/self-managed/cpu-support)を参照してください。
+- メモリー: Docker/Podman 専用に最低 4 GB の RAM。[メモリーに関する推奨事項](/ja/operations/self-managed/node-setup#memory-settings)。
+- ディスク: `NO_SPACE` を回避してください。vespaengine/vespa コンテナー・イメージとデータ用の余裕分のディスク容量が必要です。[詳細はこちら](/ja/writing/feed-block)。
+- [Vespa CLI](/ja/clients/vespa-cli) をインストールするための [Homebrew](https://brew.sh/)、または [Github releases](https://github.com/vespa-engine/vespa/releases) から Vespa CLI をダウンロード。
+- Python3
+- `curl`
+</Warning>
+
+
+## vespa-cli と ir_datasets のインストール
+
+このチュートリアルでは、Vespa のデプロイ、フィード、クエリーの実行に [Vespa-CLI](/ja/clients/vespa-cli) を使用します。また、NFCorpus 関連性データセットの取得には [ir-datasets](https://ir-datasets.com/) を使用します。 
+```bash
+$ pip3 install --ignore-installed vespacli ir_datasets ir_measures requests
+```
+
+
+[nfcorpus](https://ir-datasets.com/beir.html#beir/nfcorpus) のドキュメントをすぐに確認できます:
+
+
+```bash
+$ ir_datasets export beir/nfcorpus docs --format jsonl | head -1
+```
+
+
+出力は次のとおりです:
+
+
+```json expandable
+{"doc_id": "MED-10", "text": "Recent studies have suggested that statins, an established drug group in the prevention of cardiovascular mortality, could delay or prevent breast cancer recurrence but the effect on disease-specific mortality remains unclear. We evaluated risk of breast cancer death among statin users in a population-based cohort of breast cancer patients. The study cohort included all newly diagnosed breast cancer patients in Finland during 1995–2003 (31,236 cases), identified from the Finnish Cancer Registry. Information on statin use before and after the diagnosis was obtained from a national prescription database. We used the Cox proportional hazards regression method to estimate mortality among statin users with statin use as time-dependent variable. A total of 4,151 participants had used statins. During the median follow-up of 3.25 years after the diagnosis (range 0.08–9.0 years) 6,011 participants died, of which 3,619 (60.2%) was due to breast cancer. After adjustment for age, tumor characteristics, and treatment selection, both post-diagnostic and pre-diagnostic statin use were associated with lowered risk of breast cancer death (HR 0.46, 95% CI 0.38–0.55 and HR 0.54, 95% CI 0.44–0.67, respectively). The risk decrease by post-diagnostic statin use was likely affected by healthy adherer bias; that is, the greater likelihood of dying cancer patients to discontinue statin use as the association was not clearly dose-dependent and observed already at low-dose/short-term use. The dose- and time-dependence of the survival benefit among pre-diagnostic statin users suggests a possible causal effect that should be evaluated further in a clinical trial testing statins’ effect on survival in breast cancer patients.", "title": "Statin Use and Breast Cancer Survival: A Nationwide Cohort Study from Finland", "url": "http://www.ncbi.nlm.nih.gov/pubmed/25329299"}
+```
+
+
+NFCorpus のドキュメントには 4 つのフィールドがあります:
+
+- `doc_id` と `url`
+- `text` と `title`
+
+私たちが関心を持つのは title と text であり、この 2 つのフィールドを横断して検索できるようにしたいと考えています。また、[ランキング](/ja/basics/ranking)の精度を評価するために `doc_id` も保存する必要があります。上記の出力を [Vespa JSON ドキュメント](/ja/reference/schemas/document-json-format)形式に変換する小さなスクリプトを作成します。`convert.py` ファイルを作成してください:
+
+
+```python
+import sys
+import json
+
+for line in sys.stdin:
+  doc = json.loads(line)
+  del doc['url']
+  vespa_doc = {
+    "put": "id:hybrid-search:doc::%s" % doc['doc_id'],
+    "fields": {
+      **doc
+    }
+  }
+  print(json.dumps(vespa_doc))
+```
+
+```bash
+Paste the above into file convert.py
+```
+
+このスクリプトを使って、ドキュメント・ダンプを Vespa JSON 形式に変換します。次のコマンドで、データセット全体を Vespa JSON 形式に変換します:
+
+
+```bash
+$ ir_datasets export beir/nfcorpus docs --format jsonl | python3 convert.py > vespa-docs.jsonl
+```
+
+
+次に、ドキュメントをインデックスするための Vespa アプリケーション・パッケージとスキーマを作成します。
+
+## Vespa アプリケーション・パッケージの作成
+
+[Vespa アプリケーション・パッケージ](/ja/basics/applications)は、Vespa システムの動作をまとめて定義する設定ファイルとオプションの Java コンポーネントのセットです。ハイブリッド・テキスト検索アプリケーションを作成するために必要な最小限のファイル一式、`doc.sd` と `services.xml` を定義しましょう。
+
+
+```bash
+$ mkdir -p app/schemas
+```
+
+
+
+### スキーマ
+[スキーマ](/ja/basics/schemas)はドキュメント・タイプの設定です。1 つの Vespa アプリケーションは、ドキュメント・タイプを持つ複数のスキーマを持つことができます。このアプリケーションでは、`doc` というスキーマを定義します。これはアプリケーション・パッケージのディレクトリ内の `schemas/doc.sd` という名前のファイルに保存する必要があります。
+
+次の内容を `app/schemas/doc.sd` に書き込んでください:
+
+
+```js expandable
+schema doc {
+    document doc {
+        field language type string {
+            indexing: "en" | set_language 
+        }
+        field doc_id type string {
+            indexing: attribute | summary
+            match: word
+        }
+        field title type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+        field text type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+    }
+    fieldset default {
+        fields: title, text
+    }
+    
+    field embedding type tensor<bfloat16>(v[384]) {
+        indexing: input title." ".input text | embed | attribute
+        attribute {
+            distance-metric: angular
+        }
+    }
+  
+    rank-profile bm25 {
+        first-phase {
+            expression: bm25(title) + bm25(text)
+        }
+    }
+
+    rank-profile semantic {
+        inputs {
+            query(e) tensor<bfloat16>(v[384])
+        }
+        first-phase {
+            expression: closeness(field, embedding)
+        }
+    }
+}
+```
+
+```bash
+Paste the above into file app/schemas/doc.sd
+```
+
+ ここでは多くのことが行われています。詳しく見ていきましょう。
+
+#### ドキュメント・タイプとフィールド
+`document` セクションには、ドキュメントのフィールド、その型、そして Vespa がそれらをどのようにインデックスし、[マッチ](/ja/reference/schemas/schemas#match)させるかが含まれます。
+
+フィールドのプロパティ `indexing` は、フィールドの _インデキシング・パイプライン_ を設定します。詳細については、[スキーマ - インデキシング](/ja/basics/schemas#document-fields)を参照してください。[string](/ja/reference/schemas/schemas#string) データ型は非構造化テキストと構造化テキストの両方を表し、[index と attribute](/ja/querying/text-matching#index-and-attribute) には大きな違いがあります。上記のスキーマでは、わかりやすさのために `attribute` および `index` プロパティのデフォルトの `match` モードを明示しています。
+
+`index: enable-bm25` を含めることで、`title` と `text` に対して [BM25](/ja/ranking/bm25) を有効にしていることに注意してください。language フィールドは、NFCorpus データセットに含まれない唯一のフィールドです。データセットが英語であるため、その値を "en" にハードコードしています。`set_language` を使用することで自動言語検出を回避し、他のテキスト・フィールドを処理する際にこの値を使用します。詳細は[リンギスティクス](/ja/linguistics/linguistics)を参照してください。
+
+#### 複数フィールドを横断してマッチさせるためのフィールドセット
+
+[Fieldset](/ja/reference/schemas/schemas#fieldset) を使用すると、複数のフィールドを横断して検索できます。`fieldset` を定義しても、インデキシングやストレージのオーバーヘッドは追加されません。フィールドセットでグループ化された string フィールドは、同じ [match](/ja/reference/schemas/schemas#match) 設定と[言語処理](/ja/linguistics/linguistics)設定を共有する必要があります。これは、フィールドまたはフィールドセットを検索するクエリー処理が *1 種類* の変換のみを使用するためです。
+
+#### 埋め込み推論
+`embedding` ベクトル・フィールドは、384 個の値を持つ単一の名前付きディメンション(`v`)を持つ[テンソル](/ja/ranking/tensor-user-guide)型です。
+
+```js
+field embedding type tensor<bfloat16>(v[384]) {
+    indexing: input title." ".input text | embed arctic | attribute
+    attribute {
+        distance-metric: angular
+    }
+}
+```
+`indexing` 式は、`embed` 推論呼び出しへの入力(この例では title フィールドと text フィールドの連結)を作成します。データセットが小さいため、より高速な(ただし近似的な)ベクトル検索のための [HNSW](/ja/querying/approximate-nn-hnsw) データ構造を構築する `index` は指定していません。このガイドでは、テキスト埋め込みモデルとして [snowflake-arctic-embed-xs](https://huggingface.co/Snowflake/snowflake-arctic-embed-xs) を使用します。このモデルはコサイン類似度で学習されており、これは nearestNeighbor 検索における Vespa の `angular` [distance-metric](/ja/reference/schemas/schemas#distance-metric) に対応します。
+
+#### マッチしたドキュメントの順序を決定するランキング
+スコア計算とランキング・フェーズの名前付きコレクションである[ランク・プロファイル](/ja/basics/ranking)は、数多く定義できます。
+
+この出発点では、2 つのシンプルな rank-profile を用意しています:
+- [BM25](/ja/ranking/bm25) を使用する `bm25` rank-profile。Vespa の[ランキング式](/ja/ranking/ranking-expressions-features)を使用して、2 つのフィールドレベルの BM25 スコアを合計します。
+- Vespa の nearestNeighbor クエリー・オペレーター(ベクトル検索)と組み合わせて使用する `semantic` rank-profile。
+
+どちらのプロファイルも、単一の[ランキング・フェーズ](/ja/ranking/phased-ranking)を指定しています。
+
+### サービス仕様
+
+[services.xml](/ja/reference/applications/services/services.html) は、Vespa アプリケーションを構成するサービス、つまりどのサービスを実行し、サービスごとに何ノード使用するかを定義します。次の内容を `app/services.xml` に書き込んでください:
+
+
+```xml expandable
+<services version="1.0">
+
+    <container id="default" version="1.0">
+        <search />
+        <document-processing />
+        <document-api />
+        <component id="arctic" type="hugging-face-embedder">
+            <transformer-model url="https://huggingface.co/Snowflake/snowflake-arctic-embed-xs/resolve/main/onnx/model_quantized.onnx"/>
+            <tokenizer-model url="https://huggingface.co/Snowflake/snowflake-arctic-embed-xs/raw/main/tokenizer.json"/>
+            <pooling-strategy>cls</pooling-strategy>
+            <prepend>
+                <query>Represent this sentence for searching relevant passages: </query>
+            </prepend>
+        </component>
+    </container>
+
+    <content id="content" version="1.0">
+        <min-redundancy>1</min-redundancy>
+        <documents>
+            <document type="doc" mode="index" />
+        </documents>
+    </content>
+</services>
+```
+```xml
+Paste the above into file app/services.xml
+```
+
+上記の要素に関する補足:
+
+- `<container>` は、ドキュメント、クエリー、結果の処理を行う[コンテナー・クラスター](/ja/applications/containers)を定義します。
+- `<search>` は[クエリー・エンドポイント](/ja/querying/query-api)を設定します。デフォルトのポートは 8080 です。
+- `<document-api>` は、フィード用の[ドキュメント・エンドポイント](/ja/reference/api/document-v1)を設定します。
+- `hugging-face-embedder` タイプの `<component>` は、アプリケーション・パッケージ内の embedder を設定します。これには、モデル・ファイルの取得元、prepend の指定、プーリング戦略が含まれます。詳細およびサポートされているその他の embedder については、[huggingface-embedder](/ja/rag/embedding#huggingface-embedder) を参照してください。
+- `<content>` は、ドキュメントの保存方法と検索方法を定義します。
+- `<min-redundancy>` は、各ドキュメントの保持するコピー数を示します。
+- `<documents>` は、_スキーマ_ 内のドキュメント・タイプをコンテント・クラスターに割り当てます。
+  
+
+## アプリケーション・パッケージのデプロイ
+
+アプリケーション・パッケージの作成が完了したら、デプロイできます。[Vespa クイックスタート・ガイド](/ja/basics/deploy-an-application-local)と同様の設定を使用します。
+
+Vespa コンテナーを起動します:
+
+
+```bash
+$ docker run --detach --name vespa-hybrid --hostname vespa-container \ --publish 8080:8080 --publish 19071:19071 \ vespaengine/vespa
+```
+
+
+2 つのポートを公開している点に注目してください。8080 はドキュメントの書き込みとクエリーを行うデータプレーンで、19071 はアプリケーションをデプロイできるコントロールプレーンです。データプレーンのポートは、アプリケーションをデプロイするまでは非アクティブであることに注意してください。
+
+ローカル・コンテナーを使用するように Vespa CLI を設定します: 
+```bash
+$ vespa config set target local
+```
+
+
+コンテナーの起動には少し時間がかかる場合があります。`vespa status` を使用して、設定サービスが実行中であることを確認してください。
+
+
+```bash
+$ vespa status deploy --wait 300
+```
+
+
+次に、`app` ディレクトリから Vespa アプリケーションをデプロイします:
+
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+
+
+## データのフィード
+
+Vespa にフィードするデータは、スキーマのドキュメント・タイプと一致している必要があります。このステップでは、snowflake arctic 埋め込みモデルを使用して Vespa 内で埋め込み推論を実行します。`services.xml` の `component` 定義とスキーマ内の `embed` 呼び出しを思い出してください。
+
+
+```bash
+$ vespa feed -t http://localhost:8080 vespa-docs.jsonl
+```
+
+
+出力は次のようになります(レートはマシンのハードウェアによって異なる場合があります):
+
+
+```json expandable
+{
+  "feeder.operation.count": 3633,
+  "feeder.seconds": 148.515,
+  "feeder.ok.count": 3633,
+  "feeder.ok.rate": 24.462,
+  "feeder.error.count": 0,
+  "feeder.inflight.count": 0,
+  "http.request.count": 3633,
+  "http.request.bytes": 2985517,
+  "http.request.MBps": 0.020,
+  "http.exception.count": 0,
+  "http.response.count": 3633,
+  "http.response.bytes": 348320,
+  "http.response.MBps": 0.002,
+  "http.response.error.count": 0,
+  "http.response.latency.millis.min": 316,
+  "http.response.latency.millis.avg": 787,
+  "http.response.latency.millis.max": 1704,
+  "http.response.code.counts": {
+    "200": 3633
+  }
+}
+```
+
+
+注目点:
+
+- `feeder.ok.rate` はスループットです(このステップには埋め込み推論が含まれることに注意してください)。埋め込み推論のパフォーマンスの詳細については、[embedder-performance](/ja/rag/embedding#embedder-performance) を参照してください。この場合、埋め込み推論が全体のインデキシング・スループットのボトルネックとなっています。
+- `http.response.code.counts` は `feeder.ok.count` と一致します。このデータセットには 3633 件のドキュメントがあります。`429` レスポンスが観測された場合でも、これらは無害であることに注意してください。リソース競合のため、Vespa がクライアントにフィード速度を落とすよう要求しているものです。
+
+
+## サンプル・クエリー 
+[Vespa クエリー言語](/ja/querying/query-language)を使用してこのデータに対して検索を実行するさまざまな方法を示すために、いくつかのサンプル・クエリーを実行してみましょう。
+
+
+```bash
+$ ir_datasets export beir/nfcorpus/test queries --fields query_id text | head -1
+```
+
+```bash
+PLAIN-2	Do Cholesterol Statin Drugs Cause Breast Cancer?
+```
+
+
+上記のコマンドでパイプ関連のエラーが表示された場合は、無視して問題ありません。
+
+ここで、`PLAIN-2` は最初のテスト・クエリーのクエリー ID です。このテスト・クエリーを使用して、Vespa へのクエリーの実行を示します。
+
+### BM25 スコアリングによる字句検索
+
+次のクエリーは [weakAnd](/ja/ranking/wand) を使用します。ここで `totalTargetHits` は、設定可能な[ランキング・フェーズ](/ja/ranking/phased-ranking)に何件のドキュメントを渡したいかのヒントです。`text` を使用したクエリーの詳細については、[テキスト検索チュートリアル](/ja/learn/tutorials/text-search#querying-the-data)を参照してください。
+
+
+```bash
+vespa query \
+  'yql=select * from doc where default contains ({targetHits:10}text(@user-query))' \
+  'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
+  'hits=1' \
+  'language=en' \
+  'ranking=bm25'
+```
+
+
+クエリーで取得されたドキュメントをランク付けするランク・プロファイルを指定するために、`ranking` を選択している点に注目してください。このクエリーは、次の [JSON 結果レスポンス](/ja/reference/querying/default-result-format)を返します:
+
+
+```json expandable
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 46
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 3633,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "id:doc:doc::MED-10",
+                "relevance": 25.521817426330887,
+                "source": "content",
+                "fields": {
+                    "sddocname": "doc",
+                    "documentid": "id:doc:doc::MED-10",
+                    "doc_id": "MED-10",
+                    "title": "Statin Use and Breast Cancer Survival: A Nationwide Cohort Study from Finland",
+                    "text": "Recent studies have suggested that statins, an established drug group in the prevention of cardiovascular mortality, could delay or prevent breast cancer recurrence but the effect on disease-specific mortality remains unclear. We evaluated risk of breast cancer death among statin users in a population-based cohort of breast cancer patients. The study cohort included all newly diagnosed breast cancer patients in Finland during 1995–2003 (31,236 cases), identified from the Finnish Cancer Registry. Information on statin use before and after the diagnosis was obtained from a national prescription database. We used the Cox proportional hazards regression method to estimate mortality among statin users with statin use as time-dependent variable. A total of 4,151 participants had used statins. During the median follow-up of 3.25 years after the diagnosis (range 0.08–9.0 years) 6,011 participants died, of which 3,619 (60.2%) was due to breast cancer. After adjustment for age, tumor characteristics, and treatment selection, both post-diagnostic and pre-diagnostic statin use were associated with lowered risk of breast cancer death (HR 0.46, 95% CI 0.38–0.55 and HR 0.54, 95% CI 0.44–0.67, respectively). The risk decrease by post-diagnostic statin use was likely affected by healthy adherer bias; that is, the greater likelihood of dying cancer patients to discontinue statin use as the association was not clearly dose-dependent and observed already at low-dose/short-term use. The dose- and time-dependence of the survival benefit among pre-diagnostic statin users suggests a possible causal effect that should be evaluated further in a clinical trial testing statins’ effect on survival in breast cancer patients."
+                }
+            }
+        ]
+    }
+}
+```
+
+
+このクエリーは `MED-10` を最も関連性の高いドキュメントとして取得しランク付けしています。`totalCount` はランキング・フェーズのために取得されたドキュメントの数です。この場合、約 50 件のドキュメントをファーストフェーズ・ランキングに渡しました。これは目標値より多いものの、いずれかのクエリー・タームにマッチするドキュメントの総数よりは少なくなっています。
+
+以下の例では、grammar をデフォルトの `weakAnd` から `any` に変更しており、クエリーは 1780 件、つまりインデックスされたドキュメントの約 50% にマッチします。
+
+
+```bash
+vespa query \
+  'yql=select * from doc where default contains ({targetHits:100, grammar:"any"}text(@user-query))' \
+  'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
+  'hits=1' \
+  'language=en' \
+  'ranking=bm25'
+```
+
+
+bm25 ランク・プロファイルが関連度スコア(\~25.521)を計算します。これはスキーマで次のように設定されています:
+
+
+```txt
+rank-profile bm25 {
+    first-phase {
+        expression: bm25(title) + bm25(text)
+    }
+}
+```
+
+
+つまりこの場合、`relevance` は 2 つの BM25 スコアの合計です。取得されたドキュメントは関連性がありそうです。このクエリー `PLAIN-2` の段階的な関連性評価(graded judgment)を確認できます。次のコマンドはクエリーの関連性評価をエクスポートします(関心のあるクエリー ID を grep しています):
+
+
+```bash
+$ ir_datasets export beir/nfcorpus/test qrels | grep "PLAIN-2 "
+```
+
+
+以下は上記コマンドの出力です。2 行目に注目してください。先ほど取得した `MED-10` ドキュメントは、query_id PLAIN-2 に対してグレード 2(perfect)の非常に高い関連性があると判定されています。このデータセットには段階的な関連性評価があり、グレード 1 はグレード 2 より関連性が低いことを意味します。関連性評価のないドキュメントがシステムによって取得された場合、それらは無関連(グレード 0)と見なされます。
+
+
+```bash expandable
+PLAIN-2 0 MED-2427 2
+PLAIN-2 0 MED-10 2
+PLAIN-2 0 MED-2429 2
+PLAIN-2 0 MED-2430 2
+PLAIN-2 0 MED-2431 2
+PLAIN-2 0 MED-14 2
+PLAIN-2 0 MED-2432 2
+PLAIN-2 0 MED-2428 1
+PLAIN-2 0 MED-2440 1
+PLAIN-2 0 MED-2434 1
+PLAIN-2 0 MED-2435 1
+PLAIN-2 0 MED-2436 1
+PLAIN-2 0 MED-2437 1
+PLAIN-2 0 MED-2438 1
+PLAIN-2 0 MED-2439 1
+PLAIN-2 0 MED-3597 1
+PLAIN-2 0 MED-3598 1
+PLAIN-2 0 MED-3599 1
+PLAIN-2 0 MED-4556 1
+PLAIN-2 0 MED-4559 1
+PLAIN-2 0 MED-4560 1
+PLAIN-2 0 MED-4828 1
+PLAIN-2 0 MED-4829 1
+PLAIN-2 0 MED-4830 1
+```
+
+
+### テキスト埋め込みを使用した密検索
+
+次に、埋め込みベースのリトリーバルに移ります。ここでは、設定済みのテキスト埋め込みモデルを使用してクエリー・テキストを埋め込み、厳密な `nearestNeighbor` 検索を実行します。[embed query](/ja/rag/embedding#embedding-a-query-text) を使用して、スキーマの `semantic` rank-profile で定義されている入力テンソル `query(e)` を生成します。
+
+
+```bash
+vespa query \
+  'yql=select * from doc where {targetHits:10}nearestNeighbor(embedding,e)' \
+  'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
+  'input.query(e)=embed(@user-query)' \
+  'hits=1' \
+  'ranking=semantic'
+```
+
+
+このクエリーは、次の [JSON 結果レスポンス](/ja/reference/querying/default-result-format)を返します:
+
+
+```json expandable
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 64
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 3633,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "id:doc:doc::MED-2429",
+                "relevance": 0.6061378635706601,
+                "source": "content",
+                "fields": {
+                    "sddocname": "doc",
+                    "documentid": "id:doc:doc::MED-2429",
+                    "doc_id": "MED-2429",
+                    "title": "Statin use and risk of breast cancer: a meta-analysis of observational studies.",
+                    "text": "Emerging evidence suggests that statins' may decrease the risk of cancers. However, available evidence on breast cancer is conflicting. We, therefore, examined the association between statin use and risk of breast cancer by conducting a detailed meta-analysis of all observational studies published regarding this subject. PubMed database and bibliographies of retrieved articles were searched for epidemiological studies published up to January 2012, investigating the relationship between statin use and breast cancer. Before meta-analysis, the studies were evaluated for publication bias and heterogeneity. Combined relative risk (RR) and 95 % confidence interval (CI) were calculated using a random-effects model (DerSimonian and Laird method). Subgroup analyses, sensitivity analysis, and cumulative meta-analysis were also performed. A total of 24 (13 cohort and 11 case-control) studies involving more than 2.4 million participants, including 76,759 breast cancer cases contributed to this analysis. We found no evidence of publication bias and evidence of heterogeneity among the studies. Statin use and long-term statin use did not significantly affect breast cancer risk (RR = 0.99, 95 % CI = 0.94, 1.04 and RR = 1.03, 95 % CI = 0.96, 1.11, respectively). When the analysis was stratified into subgroups, there was no evidence that study design substantially influenced the effect estimate. Sensitivity analysis confirmed the stability of our results. Cumulative meta-analysis showed a change in trend of reporting risk of breast cancer from positive to negative in statin users between 1993 and 2011. Our meta-analysis findings do not support the hypothesis that statins' have a protective effect against breast cancer. More randomized clinical trials and observational studies are needed to confirm this association with underlying biological mechanisms in the future."
+                }
+            }
+        ]
+    }
+}
+```
+
+
+このベクトルベースの検索の結果は、先ほどの疎なキーワード検索とは異なり、1 位に別の関連ドキュメントが表示されました。この場合、関連度スコアは 0.606 で、`semantic` rank-profile の `closeness` 関数によって計算されます。`targetHits` よりも多くのドキュメントが取得されている点に注意してください。
+
+```bash
+rank-profile semantic {
+        inputs {
+          query(e) tensor<bfloat16>(v[384])
+        }
+        first-phase {
+            expression: closeness(field, embedding)
+        }
+    }
+```
+
+ここで、[closeness(field, embedding)](/ja/reference/ranking/rank-features#attribute-match-features-normalized) は、クエリーとドキュメントの埋め込み間のコサイン類似度を計算するランキング・フィーチャーです。これは 2 つのベクトル間の距離の逆数を返します。距離が小さいほど closeness は高くなります。これは、Vespa が結果を関連度の降順でソートするためです。降順とは、最大のものがランク付けされたリストの先頭に表示されることを意味します。
+
+なお、埋め込みベクトルの類似度スコアは、対照損失(contrastive loss)やランキング損失によって最適化されることが多く、そのため解釈が難しい場合があります。
+
+## ランキング精度の評価 
+
+前のセクションでは、Vespa クエリー言語とランク・プロファイルを組み合わせて、2 つの異なるリトリーバルおよびランキング戦略を実装する方法を示しました。
+
+次のセクションでは、両方のモデルで 323 件のテスト・クエリーすべてを評価し、[nDCG@10](https://en.wikipedia.org/wiki/Discounted_cumulative_gain) を使用して全体的な有効性を比較します。`nDCG@10` は BEIR ベンチマークの公式評価指標であり、段階的な関連性評価を持つテスト・セットに適した指標です。
+
+この評価タスクのために、小さなスクリプトを書く必要があります。次のスクリプトは、テスト・セット内のクエリーを反復処理し、Vespa インスタンスに対してクエリーを実行して、Vespa からのレスポンスを読み取ります。その後、指標を評価して出力します。全体的な有効性は、各クエリーの `nDCG@10` 指標の平均を使用して測定されます。
+
+
+```python expandable
+import requests
+import ir_datasets
+from ir_measures import calc_aggregate, nDCG, ScoredDoc
+from enum import Enum
+from typing import List
+
+class RModel(Enum):
+    SPARSE = 1
+    DENSE = 2
+    HYBRID = 3
+
+def parse_vespa_response(response:dict, qid:str) -> List[ScoredDoc]:
+    result = []
+    hits = response['root'].get('children',[])
+    for hit in hits:
+      doc_id = hit['fields']['doc_id']
+      relevance = hit['relevance']
+      result.append(ScoredDoc(qid, doc_id, relevance))
+    return result
+
+def search(query:str, qid:str, ranking:str, 
+           hits=10, language="en", mode=RModel.SPARSE) -> List[ScoredDoc]:
+    yql = "select doc_id from doc where default contains ({targetHits:100}text(@user-query))"
+    if mode == RModel.DENSE:
+        yql = "select doc_id from doc where ({targetHits:10}nearestNeighbor(embedding, e))"
+    elif mode == RModel.HYBRID:
+        yql = "select doc_id from doc where default contains ({targetHits:100}text(@user-query)) OR ({targetHits:10}nearestNeighbor(embedding, e))"
+    query_request = {
+        'yql': yql,
+        'user-query': query, 
+        'ranking.profile': ranking,
+        'hits' : hits, 
+        'language': language
+    }
+    if mode == RModel.DENSE or mode == RModel.HYBRID:
+        query_request['input.query(e)'] = "embed(@user-query)"
+
+    response = requests.post("http://localhost:8080/search/", json=query_request)
+    if response.ok:
+        return parse_vespa_response(response.json(), qid)
+    else:
+      print("Search request failed with response " + str(response.json()))
+      return []
+
+def main():
+  import argparse
+  parser = argparse.ArgumentParser(description='Evaluate ranking models')
+  parser.add_argument('--ranking', type=str, required=True, help='Vespa ranking profile')
+  parser.add_argument('--mode', type=str, default="sparse", help='retrieval mode, valid values are sparse, dense, hybrid')
+  args = parser.parse_args()
+  mode = RModel.HYBRID
+  if args.mode == "sparse":
+    mode = RModel.SPARSE
+  elif args.mode == "dense":
+    mode = RModel.DENSE
+     
+
+  dataset = ir_datasets.load("beir/nfcorpus/test")
+  results = []
+  metrics = [nDCG@10]
+  for query in dataset.queries_iter():
+    qid = query.query_id
+    query_text = query.text
+    results.extend(search(query_text, qid, args.ranking, mode=mode))
+    
+  metrics = calc_aggregate(metrics, dataset.qrels, results)
+  print("Ranking metric NDCG@10 for rank profile {}: {:.4f}".format(args.ranking, metrics[nDCG@10]))
+
+if __name__ == "__main__":
+    main()
+```
+
+```bash
+Paste the above into file evaluate_ranking.py
+```
+
+
+その後、スクリプトを実行します: 
+```bash
+$ python3 evaluate_ranking.py --ranking bm25 --mode sparse
+```
+
+
+スクリプトは次の出力を生成します:
+
+
+```txt
+Ranking metric NDCG@10 for rank profile bm25: 0.3210
+```
+
+
+次に、同じスクリプトを使用して密なモデルを評価できます:
+
+
+```bash
+$ python3 evaluate_ranking.py --ranking semantic --mode dense
+```
+
+```txt
+Ranking metric NDCG@10 for rank profile semantic: 0.3077
+```
+
+
+なお、_平均_ `nDCG@10` スコアは 327 件のテスト・クエリーすべてにわたって計算されます。単一の指標にとどまらず、スクリプトを変更してより多くの[指標](https://ir-measur.es/en/latest/measures.html)を計算することもできます。たとえば、関連性ラベルのカットオフを 2 とした精度(precision)を含める場合は次のようにします:
+
+
+```txt
+metrics = [nDCG@10, P(rel=2)@10]
+```
+
+
+また、nDCG@10 の正確な値は実行ごとにわずかに変動する場合があることに注意してください。
+
+## ハイブリッド検索とランキング
+
+前のセクションでは、2 つの独立したリトリーバルおよびランキング戦略を示し、評価しました。次に、以下を組み合わせるハイブリッド検索テクニックを探ります:
+
+- テキスト・スコアリング手法(BM25)を用いた従来の字句ベースのキーワード・マッチング
+- テキスト埋め込みモデルを使用した埋め込みベースの検索
+
+Vespa では、リトリーバル(マッチング)と設定可能な[ランキング](/ja/basics/ranking)は区別されています。
+
+Vespa のランキング・フェーズでは、Vespa の[ランキング](/ja/basics/ranking)・フレームワークのフルパワーを使って、任意の複雑さのスコアリングを表現できます。一方、top-k リトリーバルは、Vespa の top-k クエリー・オペレーターに関連付けられたシンプルな組み込み関数に依存しています。これらの top-k オペレーターは、単純化されたスコアリング関数を使用して top-k のドキュメントを特定することで、クエリーに対してコレクション内のすべてのドキュメントをスコアリングすることを回避します。
+
+これらの top-k クエリー・オペレーターは、`index` 構造を使用してクエリー評価を高速化し、ヒューリスティクスを使ってすべてのドキュメントをスコアリングすることを回避します。ハイブリッド・テキスト検索の文脈では、以下の Vespa top-k クエリー・オペレーターが関連します:
+
+- 密な表現(テキスト埋め込み)向けの YQL `{targetHits:k}nearestNeighbor()`。スコアリング関数として設定済みの [distance-metric](/ja/reference/schemas/schemas#distance-metric) を使用します。
+- 疎な表現向けの YQL `myField contains ({targetHits:k}text(@user-query))`。デフォルトでは [weakAnd](/ja/ranking/wand) を使用します。
+
+
+AND/OR/RANK などのブーリアン・クエリー・オペレーターを使ってこれらのオペレーターを組み合わせることで、ハイブリッド検索クエリーを表現できます。さらに、[ランキング](/ja/basics/ranking)においてさまざまなシグナルを組み合わせる方法は無数にあります。
+
+
+### 最初のシンプルなハイブリッド・ランク・プロファイルの定義
+
+まず、乗算を使用して密と疎のコンポーネントを単一のスコアに組み合わせる、最初のシンプルなハイブリッド・ランク・プロファイルを追加します。
+
+
+```txt
+closeness(field, embedding) * (1 + bm25(title) + bm25(text))
+```
+
+
+- [closeness(field, embedding)](/ja/reference/ranking/rank-features#attribute-match-features-normalized) ランク・フィーチャーは、0 から 1 まで(両端を含む)の範囲に正規化されたスコアを返します
+- 各フィールドの BM25 スコアは 0 から無限大の範囲です
+
+ドキュメントがどのクエリー・タームにもマッチしない場合、BM25 スコアが 0 になるため、全体のスコアが 0 になるのを避けるためにバイアス定数(1)を追加しています。また、それぞれのスコアをデバッグできるように `match-features` も追加します。
+
+
+
+```js expandable
+schema doc {
+    document doc {
+        field language type string {
+            indexing: "en" | set_language 
+        }
+        field doc_id type string {
+            indexing: attribute | summary
+            match: word
+        }
+        field title type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+        field text type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+    }
+    fieldset default {
+        fields: title, text
+    }
+    
+    field embedding type tensor<bfloat16>(v[384]) {
+      indexing: input title." ".input text | embed | attribute
+      attribute {
+        distance-metric: angular
+      }
+    }
+  
+    rank-profile hybrid {
+        inputs {
+          query(e) tensor<bfloat16>(v[384])
+        }
+        first-phase {
+            expression: closeness(field, embedding) * (1 + (bm25(title) + bm25(text)))
+        }
+        match-features: bm25(title) bm25(text) closeness(field, embedding)
+    }
+}
+```
+
+
+次に、`app` ディレクトリから Vespa アプリケーションを再デプロイします:
+
+
+```bash
+$ vespa deploy --wait 300 app
+```
+
+
+その後、Vespa クエリー言語を使用してハイブリッド・クエリーを表現する方法を試し始めることができます。
+
+### ハイブリッド・クエリーの例
+
+以下は、Vespa クエリー言語を使用して 2 つの top-k クエリー・オペレーターを組み合わせる例を示しています。後のセクションでは、Vespa のランキング・フレームワークを使用して 2 つのリトリーバル戦略を組み合わせる方法を示します。このセクションでは、マッチしたドキュメントを Vespa の[ランキング](/ja/basics/ranking)・フェーズに渡す top-k リトリーバルの部分に焦点を当てます。
+
+#### OR オペレーターを使用したハイブリッド・クエリー
+次のクエリーは、疎な表現または密な表現の *いずれか(OR)* でクエリーにマッチするドキュメントをランキングに渡します。
+
+
+```bash
+vespa query \
+  'yql=select * from doc where default contains ({targetHits:10}text(@user-query)) or ({targetHits:10}nearestNeighbor(embedding,e))' \
+  'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
+  'input.query(e)=embed(@user-query)' \
+  'hits=1' \
+  'language=en' \
+  'ranking=hybrid'
+```
+ ランキングに取り込まれたドキュメントは、`hybrid` rank-profile によってスコアリングされます。どちらの top-k クエリー・オペレーターも、`targetHits` の設定より多くのドキュメントを渡す可能性があることに注意してください。
+
+上記のクエリーは、次の [JSON 結果レスポンス](/ja/reference/querying/default-result-format)を返します:
+
+
+```json expandable
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 87
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 3633,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "id:doc:doc::MED-10",
+                "relevance": 15.898915593367988,
+                "source": "content",
+                "fields": {
+                    "matchfeatures": {
+                        "bm25(text)": 17.35556767018612,
+                        "bm25(title)": 8.166249756144769,
+                        "closeness(field,embedding)": 0.5994655395517325
+                    },
+                    "sddocname": "doc",
+                    "documentid": "id:doc:doc::MED-10",
+                    "doc_id": "MED-10",
+                    "title": "Statin Use and Breast Cancer Survival: A Nationwide Cohort Study from Finland",
+                    "text": "Recent studies have suggested that statins, an established drug group in the prevention of cardiovascular mortality, could delay or prevent breast cancer recurrence but the effect on disease-specific mortality remains unclear. We evaluated risk of breast cancer death among statin users in a population-based cohort of breast cancer patients. The study cohort included all newly diagnosed breast cancer patients in Finland during 1995–2003 (31,236 cases), identified from the Finnish Cancer Registry. Information on statin use before and after the diagnosis was obtained from a national prescription database. We used the Cox proportional hazards regression method to estimate mortality among statin users with statin use as time-dependent variable. A total of 4,151 participants had used statins. During the median follow-up of 3.25 years after the diagnosis (range 0.08–9.0 years) 6,011 participants died, of which 3,619 (60.2%) was due to breast cancer. After adjustment for age, tumor characteristics, and treatment selection, both post-diagnostic and pre-diagnostic statin use were associated with lowered risk of breast cancer death (HR 0.46, 95% CI 0.38–0.55 and HR 0.54, 95% CI 0.44–0.67, respectively). The risk decrease by post-diagnostic statin use was likely affected by healthy adherer bias; that is, the greater likelihood of dying cancer patients to discontinue statin use as the association was not clearly dose-dependent and observed already at low-dose/short-term use. The dose- and time-dependence of the survival benefit among pre-diagnostic statin users suggests a possible causal effect that should be evaluated further in a clinical trial testing statins’ effect on survival in breast cancer patients."
+                }
+            }
+        ]
+    }
+}
+```
+
+
+ここで行われているのは、2 つの top-k クエリー・オペレーターをブーリアン OR(論理和)で組み合わせることです。`totalCount` はランキングに取り込まれたドキュメントの数です(約 90 件で、10 + 10 より多くなっています)。`relevance` は `hybrid` rank-profile によって割り当てられたスコアです。`matchfeatures` フィールドにすべてのフィーチャー・スコアが表示されている点に注目してください。これはランキングの動作をデバッグして理解するのに役立ち、フィーチャー・ロギングにも有用です。
+
+#### AND オペレーターを使用したハイブリッド・クエリー
+次の例は、2 つの top-k オペレーターを AND で組み合わせます。つまり、取得されるドキュメントは疎と密の両方の top-k オペレーターにマッチする必要があります:
+
+
+```bash
+vespa query \
+  'yql=select * from doc where default contains ({targetHits:10}text(@user-query)) and ({targetHits:10}nearestNeighbor(embedding,e))' \
+  'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
+  'input.query(e)=embed(@user-query)' \
+  'hits=1' \
+  'language=en' \
+  'ranking=hybrid'
+```
+ 疎なキーワード・クエリー・マッチングでは、デフォルトで `weakAnd` オペレーターが使用され、クエリー内の少なくとも 1 つのタームがドキュメント(検索対象のフィールドセット)にマッチする必要があります。
+
+#### rank クエリー・オペレーターを使用したハイブリッド・クエリー
+次の例は、[rank](/ja/reference/querying/yql#rank) クエリー・オペレーターを使用して 2 つの top-k オペレーターを組み合わせます。これにより、rank オペレーターの最初のオペランドのみを使用してリトリーバルを行いながら、残りのオペランドでランキング・フェーズで使用できる(マッチ)フィーチャーを計算できます。
+
+このクエリーが有意義なのは、密な表現のみでリトリーバルを行いながら、計算されたフィーチャーをランキング式で使用できるためです。これは通常、2 つの表現を組み合わせる最もリソース効率の良い方法です。
+
+
+```bash
+vespa query \
+  'yql=select * from doc where rank(({targetHits:10}nearestNeighbor(embedding,e)), default contains ({targetHits:10}text(@user-query)))' \
+  'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
+  'input.query(e)=embed(@user-query)' \
+  'hits=1' \
+  'language=en' \
+  'ranking=hybrid'
+```
+ `rank` クエリー・オペレーターのオペランドの順序を逆にして、疎な表現でリトリーバルを行い、密な表現を使用してランキング用のフィーチャーを計算することもできます。これは、HNSW インデックスを構築したくない(メモリーが増え、インデキシングが遅くなる)ものの、ランキング・フェーズでセマンティックなシグナルを使用したい場合に非常に有用です。
+
+
+```bash
+vespa query \
+  'yql=select * from doc where rank(default contains ({targetHits:10}text(@user-query)), ({targetHits:10}nearestNeighbor(embedding,e)))' \
+  'user-query=Do Cholesterol Statin Drugs Cause Breast Cancer?' \
+  'input.query(e)=embed(@user-query)' \
+  'hits=1' \
+  'language=en' \
+  'ranking=hybrid'
+```
+
+
+このハイブリッド・リトリーバルの方法では、疎な表現のみでリトリーバルを行い、密なベクトル表現を使用してランキング用のフィーチャーを計算できます。
+
+## ハイブリッド・ランキング
+
+前のセクションでは、ブーリアン・クエリー・オペレーターを使用して 2 つの top-k クエリー・オペレーターを組み合わせる方法を示しました。
+
+このセクションでは、Vespa のランキング・フレームワークを使用して 2 つのリトリーバル戦略を組み合わせる方法を示します。まず、2 つのリトリーバル戦略を組み合わせたハイブリッド・ランク・プロファイルの有効性を評価することから始めます。
+
+
+
+```bash
+$ python3 evaluate_ranking.py --ranking hybrid --mode hybrid
+```
+
+出力は次のとおりです
+
+
+```txt
+Ranking metric NDCG@10 for rank profile hybrid: 0.3330
+```
+
+
+この `nDCG@10` スコアは、いずれか一方のランキング戦略のみを使用するプロファイルよりわずかに高くなっています。
+
+次に、2 つのリトリーバル戦略を組み合わせる、より複雑なランキング式を試すことができます。2 つのリトリーバル戦略をさまざまな方法で組み合わせるランク・プロファイルをスキーマにいくつか追加します。
+
+
+```js expandable
+schema doc {
+    document doc {
+        field language type string {
+            indexing: "en" | set_language 
+        }
+        field doc_id type string {
+            indexing: attribute | summary
+            match: word
+        }
+        field title type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+        field text type string {
+            indexing: index | summary
+            match: text
+            index: enable-bm25
+        }
+    }
+    fieldset default {
+        fields: title, text
+    }
+    
+    field embedding type tensor<bfloat16>(v[384]) {
+      indexing: input title." ".input text | embed | attribute
+      attribute {
+        distance-metric: angular
+      }
+    }
+  
+    rank-profile hybrid {
+        inputs {
+          query(e) tensor<bfloat16>(v[384])
+        }
+        first-phase {
+            expression: closeness(field, embedding) * (1 + (bm25(title) + bm25(text)))
+        }
+        match-features: bm25(title) bm25(text) closeness(field, embedding)
+    }
+
+    rank-profile hybrid-sum inherits hybrid {
+        first-phase {
+            expression: closeness(field, embedding) + ((bm25(title) + bm25(text)))
+        }
+    }
+
+    rank-profile hybrid-normalize-bm25-with-atan inherits hybrid {
+        
+        function scale(val) {
+            expression: 2*atan(val/8)/(3.14159)
+        }
+        function normalized_bm25() {
+            expression: scale(bm25(title) + bm25(text)) 
+        }
+        function cosine() {
+            expression: cos(distance(field, embedding))
+        }
+        first-phase {
+            expression: normalized_bm25 + cosine
+        }
+        match-features {
+            normalized_bm25 
+            cosine 
+            bm25(title)
+            bm25(text)
+        }
+    }
+
+    rank-profile hybrid-rrf inherits hybrid-normalize-bm25-with-atan{
+
+        function bm25_score() {
+            expression: bm25(title) + bm25(text)
+        }
+        global-phase {
+            rerank-count: 100
+            expression: reciprocal_rank(bm25_score) + reciprocal_rank(cosine)
+        }
+        match-features: bm25(title) bm25(text) bm25_score cosine
+    }
+
+    rank-profile hybrid-linear-normalize inherits hybrid-normalize-bm25-with-atan{
+
+        function bm25_score() {
+            expression: bm25(title) + bm25(text)
+        }
+        global-phase {
+            rerank-count: 100
+            expression: normalize_linear(bm25_score) + normalize_linear(cosine)
+        }
+        match-features: bm25(title) bm25(text) bm25_score cosine
+    }
+}
+```
+
+```bash
+Paste the above into file app/schemas/doc.sd
+```
+
+次に、`app` ディレクトリから Vespa アプリケーションを再デプロイします:
+
+
+```bash
+vespa deploy --wait 300 app
+```
+
+新しいランク・プロファイルを詳しく見ていきましょう:
+
+- `hybrid-sum` は、加算を使用して 2 つのリトリーバル戦略を組み合わせます。これは 2 つの戦略を組み合わせるシンプルな方法です。ただし、BM25 スコアは正規化されておらず(上限がない)、closeness スコアは正規化されている(0〜1)ため、BM25 スコアが closeness スコアを支配してしまいます。
+- `hybrid-normalize-bm25-with-atan` は、正規化された BM25 スコアとコサイン類似度を使用して 2 つの戦略を組み合わせます。BM25 スコアは `atan` 関数を使用して正規化されます。
+- `hybrid-rrf` は、reciprocal rank フィーチャーを使用して 2 つの戦略を組み合わせます。これは reciprocal rank フィーチャーを使用して 2 つの戦略を組み合わせる方法です。
+- `hybrid-linear-normalize` は、線形正規化関数を使用して 2 つの戦略を組み合わせます。これは線形正規化関数を使用して 2 つの戦略を組み合わせる方法です。
+
+最後の 2 つのプロファイルは、`global-phase` を使用して上位 100 件のドキュメントを reciprocal rank および線形正規化関数で再ランク付けします。これはグローバル・フェーズでのみ実行できます。ランキングに取り込まれたすべてのドキュメントへのアクセスが必要であり、マルチノード構成ではノード間の通信と、すべてのノードにわたるスコア分布の把握が必要になるためです。加えて、各ランキング・フェーズは単一のスコアでのみドキュメントを並べ替えることができます。
+
+### 新しいランク・プロファイルの評価
+
+新しい rank-profile の追加はホット・チェンジです。アプリケーションをデプロイしたら、スクリプトを使用して新しいハイブリッド・プロファイルを評価できます:
+
+
+```bash
+$ python3 evaluate_ranking.py --ranking hybrid-sum --mode hybrid
+```
+
+```txt
+Ranking metric NDCG@10 for rank profile hybrid-sum: 0.3244
+```
+
+```bash
+$ python3 evaluate_ranking.py --ranking hybrid-normalize-bm25-with-atan --mode hybrid
+```
+
+```txt
+Ranking metric NDCG@10 for rank profile hybrid-normalize-bm25-with-atan: 0.3410
+```
+
+
+
+```bash
+$ python3 evaluate_ranking.py --ranking hybrid-rrf --mode hybrid
+```
+
+
+
+```txt
+Ranking metric NDCG@10 for rank profile hybrid-rrf: 0.3233
+```
+
+
+
+```bash
+$ python3 evaluate_ranking.py --ranking hybrid-linear-normalize --mode hybrid
+```
+
+
+
+```txt
+Ranking metric NDCG@10 for rank profile hybrid-linear-normalize: 0.3423
+```
+
+
+この特定のデータセットでは、`hybrid-normalize-bm25-with-atan` ランク・プロファイルが最も良い結果を示しましたが、その差はわずかです。これは、ハイブリッド検索とランキングが複雑な問題であり、ハイブリッド・モデルの有効性はデータセットとリトリーバル戦略に依存することも示しています。
+
+これらの結果(どれが最良か)は、あなたの特定のリトリーバル・ユースケースやデータセットにそのまま当てはまるとは限らないため、自身のデータセットでハイブリッド・モデルの有効性を評価することが重要です。
+
+自身のデータセットの関連性評価を収集する方法の詳細については、[Improving retrieval with LLM-as-a-judge](https://blog.vespa.ai/improving-retrieval-with-llm-as-a-judge/) を参照してください。
+
+### まとめ
+
+Vespa クエリー言語を使用してハイブリッド・クエリーを表現する方法と、Vespa のランキング・フレームワークを使用して 2 つのリトリーバル戦略を組み合わせる方法を示しました。また、BEIR ベンチマークに含まれるデータセットの 1 つを使用して、ハイブリッド・ランキング・モデルの有効性を評価する方法も示しました。このチュートリアルを通じて、Vespa でさまざまなリトリーバル戦略を組み合わせる方法をよく理解していただけたこと、そしてすべてのリトリーバル問題に対する唯一の万能な解決策は存在しないことが伝わっていれば幸いです。
+
+## クリーンアップ
+
+
+```bash
+$ docker rm -f vespa-hybrid
+```
+
+
+1. Robertson, Stephen and Zaragoza, Hugo and others, 2009. The probabilistic relevance framework: BM25 and beyond. Foundations and Trends in Information Retrieval.

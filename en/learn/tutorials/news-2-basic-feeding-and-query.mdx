@@ -30,7 +30,28 @@ The [MIND dataset description](https://github.com/msnews/msnews.github.io/blob/m
 
 We'll start with developing a search application, so we'll focus on the news content at first. We'll use the impression data as we begin building the recommendation system later in this series.
 
-Let's start by downloading the data. The `news` sample app directory will be our starting point. We've included a script to download the data for us:
+Let's start by downloading the data. The `news` sample app directory will be our starting point. The MIND dataset is hosted on [Hugging Face](https://huggingface.co/datasets/yjw1029/MIND) and requires a free account and acceptance of the dataset's terms of use.
+
+### Accept the dataset terms
+
+1. Log in at [huggingface.co](https://huggingface.co)
+2. Go to the [MIND dataset page](https://huggingface.co/datasets/yjw1029/MIND)
+3. Click **Agree and access repository** to accept the terms
+
+### Create a Hugging Face access token
+
+1. Go to [https://huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+2. Click **New token**, give it a name, select **Read** role, and copy the token
+
+### Download the dataset
+
+Set your token as an environment variable:
+
+```bash
+$ export HF_TOKEN=hf_your_token_here
+```
+
+Then run the download script from the **news** sample app directory:
 
 ```bash
 $ ./bin/download-mind.sh small
@@ -61,8 +82,6 @@ $ mkdir -p my-app/schemas
 
 A Vespa [application package](/en/basics/applications) is the set of configuration files and Java plugins that together define the behavior of a Vespa system: what functionality to use, the available document types, how ranking will be done and how data will be processed during feeding and indexing. The schema, e.g., `news.sd`, is a required part of an application package — the other file needed is `services.xml`.
 
-For self-hosted multi-node deployments, a `hosts.xml` file is also needed. For multi-node self-hosted deployments using `hosts.xml`, see the [multinode high availability](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) sample application.
-
 We mentioned these files in the previous part but didn't really explain them at the time. We'll go through them here, starting with the specification of services.
 
 
@@ -77,9 +96,7 @@ The [services.xml](/en/reference/applications/services/services) file defines th
     <container id="default" version="1.0">
         <search />
         <document-api />
-        <nodes>
-            <node hostalias="node1" />
-        </nodes>
+        <nodes count="1" />
     </container>
 
     <content id="mind" version="1.0">
@@ -87,9 +104,7 @@ The [services.xml](/en/reference/applications/services/services) file defines th
         <documents>
             <document type="news" mode="index" />
         </documents>
-        <nodes>
-            <node hostalias="node1" distribution-key="0" />
-        </nodes>
+        <nodes count="1" />
     </content>
 
 </services>
@@ -100,10 +115,10 @@ Quite a lot is set up here:
 - `<container>` defines the stateless [container cluster](/en/applications/containers) for document, query and result processing
 - `<search>` sets up the [query endpoint](/en/querying/query-api). The default port is 8080.
 - `<document-api>` sets up the [document endpoint](/en/reference/api/document-v1) for feeding and visiting.
-- `<nodes>` defines the nodes required per service. (See the [reference](/en/reference/applications/services/container) for more on container cluster setup).
+- `<nodes count="1" />` defines the number of nodes for the service. (See the [reference](/en/reference/applications/services/container) for more on container cluster setup).
 - `<content>` The stateful content cluster
 - `<redundancy>` denotes how many copies to store of each document.
-- `<documents>` assigns the document types in the *schema* — the content cluster capacity can be increased by adding node elements — see [elasticity](/en/content/elasticity). (See also the [reference](/en/reference/applications/services/content) for more on content cluster setup.)
+- `<documents>` assigns the document types in the *schema* — the content cluster capacity can be increased by raising the node count — see [elasticity](/en/content/elasticity). (See also the [reference](/en/reference/applications/services/content) for more on content cluster setup.)
 
 
 ### Schema
@@ -183,8 +198,29 @@ my-app/
 └── services.xml
 ```
 
+If not already done from the previous [news tutorial](/en/learn/tutorials/news-1-deploy-an-application), set Vespa configuration variables. Use your tenant name from the [Vespa Cloud console](https://console.vespa-cloud.com/) instead of `tenant-name`:
+
 ```bash
-$ vespa deploy --wait 300 my-app
+$ vespa config set target cloud
+$ vespa config set application tenant-name.news
+```
+
+Log in to Vespa Cloud:
+
+```bash
+$ vespa auth login
+```
+
+Add security credentials to the application package for data plane access:
+
+```bash
+$ vespa auth cert my-app -f
+```
+
+Finally, deploy the application package to Vespa Cloud:
+
+```bash
+$ vespa deploy --wait 600 my-app
 ```
 
 
@@ -199,7 +235,7 @@ $ python3 src/python/convert_to_vespa_format.py mind
 The argument is where to find the downloaded data above, which was in the `mind` directory. This script creates a new file in that directory called `vespa.json`. This contains all 28603 news articles in the data set. This file can now be fed to Vespa. Use the method described in the previous part:
 
 ```bash
-$ vespa feed mind/vespa.json --target http://localhost:8080
+$ vespa feed mind/vespa.json
 ```
 
 `vespa feed` reads a JSON array of document operations, or JSONL with one Vespa document JSON formatted operation per line. Once the feed job finishes, all our 65 238 documents are searchable, let us do a quick query to verify:
@@ -242,12 +278,14 @@ Given the above schema, where the fields `title`, `abstract` and `body` are part
 $ vespa query -v 'yql=select * from news where default contains "music"'
 ```
 
-or a POST JSON query (Notice the *Content-Type* header specification):
+or a POST JSON query. The values can be found by using the previous `vespa query -v` command. The content type should be changed to `application/json`. It's also possible to use `vespa status` to find the url of your cloud instance:
 
 ```bash
-$ curl -s -H "Content-Type: application/json" \
-  --data '{"yql" : "select * from sources * where default contains \"music\""}' \
-  http://localhost:8080/search/ | python3 -m json.tool
+$ curl --key /path/to/key \
+     --cert /path/to/cert \
+     -H 'Content-Type: application/json' \
+     --data '{"yql" : "select * from sources * where default contains \"music\""}' \
+     'https://your-vespa-url.vespa-app.cloud/search/' | python3 -m json.tool
 ```
 
 <Note>

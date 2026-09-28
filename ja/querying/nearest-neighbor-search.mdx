@@ -1,0 +1,349 @@
+---
+title: "最近傍検索"
+---
+
+最近傍検索(またはベクトル検索)は、高次元ベクトル空間において、与えられたクエリー点に最も近いデータ点を見つけるために使用される手法です。これは Vespa では [nearestNeighbor](../reference/querying/yql#nearestneighbor) クエリー演算子を使用してサポートされています。この演算子は、[Vespa クエリー言語](/ja/querying/query-language)を使用して他のフィルターやクエリー条件と組み合わせることができ、現代のベクトルベースの手法と[従来の情報検索](/ja/querying/text-matching)を組み合わせたハイブリッドなソリューションを簡単に作成できます。
+
+[pyvespa の例](https://vespa-engine.github.io/pyvespa/examples/pyvespa-examples#Neighbors)も参照してください。
+
+## 最小限の例
+
+最近傍検索には少なくとも次の構成要素があります: ドキュメントのベクトル、クエリーのベクトル、`closeness()` を使用する rank profile、そして `nearestNeighbor` 演算子を使用するクエリーです:
+
+```js expandable
+# Schema definition of the vector in documents
+    document doc {
+
+        field `d_vector` type tensor(d[3]) {
+            indexing: attribute | index
+            attribute {
+                distance-metric: angular
+            }
+        }
+
+    }
+
+    # Rank profile definition in schema:
+    #  - defining the q_vector type that must match the d_vector type
+    #  - using the closeness() rank feature in the ranking expression
+    rank-profile rank_docs inherits default {
+        inputs {
+            query(`q_vector`) tensor(d[3])
+        }
+        first-phase {
+            expression: `closeness`(field, d_vector)
+        }
+    }
+
+# Documents with vectors
+{
+    "put": "id:mynamespace:music::a-head-full-of-dreams",
+    "fields": {
+        "d_vector": [0,1,2]
+    }
+}
+
+# A query with
+#  - a nearestNeighbor operator with document and query vectors
+#  - selecting the rank_docs rank profile
+$ vespa query 'select * from docs where {targetHits: 3}`nearestNeighbor`(d_vector, q_vector)' \
+  `ranking=rank_docs` \
+  'input.query(q_vector)'='[1,2,3]'
+```
+
+`nearestNeighbor` クエリー演算子は、[closeness()](../reference/ranking/rank-features#closeness(dimension,name)) ランク・フィーチャーで使用される値を計算します。
+
+<Note>
+**注:**
+
+closeness(`field`, d_vector) は、closeness ランク・フィーチャーが d_vector フィールドを使用することを意味します。
+アプリケーションは複数のベクトル・フィールドを持つことができます。そのような場合には、異なる `nearestNeighbor` 演算子にラベルを割り当て、closeness() ランク・フィーチャーが(異なるフィールドを使用する)異なる演算子を参照するようにします。closeness(`label`, q) を使用するその他の例は、[最近傍検索ガイド](/ja/querying/nearest-neighbor-search-guide#using-label)を参照してください。
+</Note>
+
+テンソル型、距離メトリック、rank profile、近似最近傍検索については、このガイドで詳しく説明します。
+
+## ベクトル
+
+ベクトルは、1 つの indexed ディメンションを持つ[テンソル](../ranking/tensor-user-guide)で表現されます。384 次元の float ベクトルを表す[テンソル型](../reference/ranking/tensor#tensor-type-spec)の例:
+
+```js
+tensor(x[384])
+```
+
+ドキュメントのベクトルは、ドキュメントの[スキーマ](../reference/schemas/schemas)で定義された[テンソル・フィールド](../reference/schemas/schemas#tensor)に保存されます。1 つの indexed ディメンションを持つテンソル型(dense)は、ドキュメントごとに単一のベクトルを保存します:
+
+```js
+field doc_embedding type tensor(x[384]) {
+    indexing: attribute
+}
+```
+
+1 つ以上の mapped ディメンションと 1 つの indexed ディメンションを持つテンソル型(mixed)は、ドキュメントごとに複数のベクトルを保存します:
+
+```js
+field doc_embeddings type tensor(m{},x[384]) {
+    indexing: attribute
+}
+```
+
+同様に、クエリー・ベクトルの型は [rank-profile](../reference/schemas/schemas#rank-profile) で定義します:
+
+```js
+rank-profile my_profile {
+    inputs {
+        query(query_embedding) tensor(x[384])
+    }
+    ...
+}
+```
+
+これらすべては、2 つの引数(検索対象のドキュメント・テンソル・フィールド名と、入力クエリー・テンソル名)を取る [nearestNeighbor](../reference/querying/yql#nearestneighbor) クエリー演算子によって結び付けられます。この演算子は、テンソル・フィールドに定義された [distance-metric](#distance-metrics-for-nearest-neighbor-search) を使用して、クエリー・ベクトルに最も近いドキュメントを見つけます。ドキュメントのスキーマはベクトルを保存する複数のテンソル・フィールドを持つことができ、クエリーは異なるテンソル・フィールドを検索する複数の `nearestNeighbor` 演算子を持つことができることに注意してください。
+
+ドキュメントごとに複数のベクトルを持つ mixed テンソルで `nearestNeighbor` 演算子を使用するサポートは、`Vespa 8.144.19` で利用可能です。
+
+Vespa にベクトルを作成させる方法については、[エンベディング](../rag/embedding)を参照してください。
+
+## 最近傍検索の使用
+
+以下のセクションでは、[nearestNeighbor](../reference/querying/yql#nearestneighbor) クエリー演算子の使用方法を示します。
+
+これらの例は、完全な精度を持つ**厳密**(exact)最近傍検索を使用していますが、ブーリアン・クエリー・フィルターにマッチするすべてのドキュメントに対して距離メトリックを計算する必要があるため、大量のドキュメントに対しては計算コストが高くなります。その他の例については、[実践的な最近傍検索ガイド](/ja/querying/nearest-neighbor-search-guide)も参照してください。
+
+厳密最近傍検索は、[クエリーごとに使用するスレッド数](../performance/practical-search-performance-guide#multithreaded-search-and-ranking)にほぼ線形にスケールします。これを利用して、厳密最近傍検索を許容可能なサービング・レイテンシで実行できます。ただし、レイテンシを下げるために検索ごとにより多くのスレッドを使用することは、より大きなベクトル量や高いクエリー・スループットのアプリケーションではやはりコストが高くなります。検索を実行するスレッド数を変えても、クエリーに含まれる距離計算の回数は変わらないためです。 
+
+コスト効率の良いアプローチは、代わりに**近似**(approximate)検索を使用することです。`HNSW` を使用した**近似**最近傍検索の使用方法については、[近似最近傍検索](/ja/querying/approximate-nn-hnsw)のドキュメントを参照してください。
+
+以下の[ドキュメント・スキーマ](../basics/schemas)を使用して、Vespa のベクトル検索(最近傍検索)のサポートを説明します:
+
+```js expandable
+schema product {
+
+    document product {
+
+        field in_stock type bool {
+            indexing: summary | attribute
+            rank: filter
+            attribute: fast-search
+        }
+
+        field popularity type float {
+            indexing: summary | attribute
+        }
+
+        field text_embedding type tensor(x[384]) {
+            indexing: summary | attribute
+            attribute {
+                distance-metric: prenormalized-angular
+            }
+        }
+
+        field image_embeddings type tensor(i{},x[512]) {
+            indexing: summary | attribute
+            attribute {
+                distance-metric: angular
+            }
+        }
+
+    }
+
+}
+```
+
+`product` ドキュメント・スキーマには 4 つのフィールドがあります。[テンソル](../ranking/tensor-user-guide)型のフィールドは、ベクトル・エンベディングを表します:
+
+- `text_embedding` - 384 次元の float ベクトル。
+- `image_embeddings` - 512 次元の複数の float ベクトル。
+
+`text_embedding` フィールドは、製品説明の密なベクトル化されたエンベディング表現を保存し、`distance-metric` として [prenormalized-angular](../reference/schemas/schemas#distance-metric) を使用します。例として [Dense Retrieval using bi-encoders over Transformer models](https://blog.vespa.ai/pretrained-transformer-language-models-for-search-part-2/) を参照してください。
+
+`image_embeddings` フィールドは、製品画像の複数の密なベクトル化されたエンベディング表現を保存し、`distance-metric` として [angular](../reference/schemas/schemas#distance-metric) を使用します。例として [text to image search using CLIP with Vespa](https://blog.vespa.ai/text-image-search/) を参照してください。
+
+### 最近傍検索の距離メトリック
+
+Vespa は 6 種類の [distance-metric](../reference/schemas/schemas#distance-metric) をサポートしています:
+
+* `euclidean`
+* `angular`
+* `dotproduct`
+* `prenormalized-angular`
+* `hamming`
+* `geodegrees`
+
+distance-metric はフィールドのプロパティです。ベクトル・フィールドに `index` が設定されている場合、インデックス構造の構築時に距離メトリックが使用されるため、これは明白です。`index` がない場合、そのフィールドに追加のデータ構造は構築されず、distance-metric の設定はクエリー時の距離計算に使用されます。フィールドの値は多くの場合、特定の距離メトリックを前提として生成されるため、メトリックをフィールドのプロパティとして持つことには依然として意味があります。
+
+### 最近傍検索のための rank profile の設定
+
+最後に、最近傍検索でリトリーブされた製品をどのように[ランキング](../basics/ranking)するかを設定する必要があります:
+
+```js
+rank-profile semantic_similarity {
+    inputs {
+        query(query_embedding) tensor(x[384])
+    }
+    first-phase {
+        expression: closeness(field, text_embedding)
+    }
+}
+
+rank-profile image_similarity {
+    inputs {
+        query(image_query_embeddings) tensor(x[512]])
+    }
+    first-phase {
+        expression: closeness(field, image_embeddings)
+    }
+}
+```
+
+`rank-profile` は、クエリー入力テンソルの名前と型を指定します。クエリー入力テンソルは、ドキュメントのベクトルと同じ次元数を持ち、同じディメンション名を持つ必要があります。 
+
+クエリー・テンソルの定義を省略すると、クエリー時にエラーが発生します:
+
+```bash
+Expected a tensor value of 'query(query_embedding)' but has [...]
+```
+
+`closeness(field, text_embedding)` は、[nearestNeighbor](../reference/querying/yql#nearestneighbor) クエリー演算子によって計算される[ランク・フィーチャー](../reference/ranking/rank-features#closeness(dimension,name))です。これは [0, 1] の範囲のスコアを計算します。0 は無限の距離、1 は距離ゼロを表します。Vespa は関連度スコアの降順でヒットをソートし、通常は最も近いヒットを最上位にランキングしたいため、これは便利です。
+
+`closeness(field, image_embeddings)` [ランク・フィーチャー](../reference/ranking/rank-features#closeness(dimension,name))は、ドキュメントごとに複数のベクトルを保存するテンソル・フィールドに対して作用します。各ドキュメントについて、クエリー・ベクトルに最も近いベクトルが計算に使用されます。
+
+`first-phase` は、Vespa の[フェーズド・ランキング](../ranking/phased-ranking)サポートの一部です。フェーズド・ランキングにより、前のランキング・フェーズでランキングまたはリトリーブされた上位 k 件のベストスコアのヒットを再ランキングできます。計算されたランキング・スコアは、デフォルトの [Vespa JSON 結果フォーマット](../reference/querying/default-result-format)で `relevance` として出力されます。ヒットの `relevance` フィールドが 0.0 になる場合、通常は正しいランキング・プロファイルの指定を忘れています。 
+
+追加の[再ランキング・フェーズ](../ranking/phased-ranking)も指定した `rank-profile` の例:
+
+```js
+rank-profile image_similarity_with_reranking {
+    inputs {
+        query(image_query_embedding) tensor(x[512]])
+    }
+    first-phase {
+        expression: closeness(field, image_embeddings)
+    } 
+    second-phase {
+        total-rerank-count: 1000
+        expression: closeness(field, image_embeddings) * attribute(popularity)
+    }
+}
+```
+
+この場合、[nearestNeighbor](../reference/querying/yql#nearestneighbor) クエリー演算子によってリトリーブされたヒットは、製品の人気度もシグナルとして使用して再スコアリングされます。`popularity` フィールドの値は、`attribute(popularity)` ランク・フィーチャーで読み取れます。`second-phase` の[ランキング式](../ranking/ranking-expressions-features)は、乗算を使用して人気度を `closeness(field, image_embeddings)` ランク・フィーチャーと組み合わせます。
+
+## 製品データのインデクシング
+
+ドキュメント・スキーマを含むアプリケーション・パッケージをデプロイした後、[Vespa JSON フィード・フォーマット](../reference/schemas/document-json-format)を使用して製品データを[インデックス](../writing/reads-and-writes)できます。
+
+以下の例には 2 つのドキュメントがあります。ベクトル・エンベディングのフィールドは、[indexed テンソルの短縮形](../reference/schemas/document-json-format#tensor)と [mixed テンソルの短縮形](../reference/schemas/document-json-format#tensor)を使用しています:
+
+```json expandable
+[
+    {
+        "put": "id:shopping:product::998211",
+        "fields": {
+            "in_stock": true,
+            "popularity": 0.342,
+            "text_embedding": [
+                0.16766378547490635,
+                0.3737005826272204,
+                0.040492891373747675,
+                ..
+            ],
+            "image_embeddings": {
+                "0": [
+                    0.9147281579191466,
+                    0.5453696694173961,
+                    0.7529545687063771,
+                    ..
+                ],
+                "1": [0.3737005826272204, ..]
+            }
+        }
+    },
+    {
+        "put": "id:shopping:product::97711",
+        "fields": {
+            "in_stock": false,
+            "popularity": 0.538,
+            "text_embedding": [
+                0.03515862084651311,
+                0.24585168798559187,
+                0.6123057708571111,
+                ..
+            ],
+            "image_embeddings": {
+                "0": [
+                    0.9785931815169806,
+                    0.5697209315543527,
+                    0.5352198004501647,
+                    ..
+                ],
+                "1": [0.24585168798559187, ..]
+            }
+        }
+    }
+]
+```
+
+上記の JSON 形式のデータは、任意の [Vespa フィーディング API](../writing/reads-and-writes#api-and-utilities) を使用して Vespa にフィードできます。
+
+## nearestNeighbor クエリー演算子によるクエリー
+
+[nearestNeighbor](../reference/querying/yql#nearestneighbor) クエリー演算子は、製品データセットを検索するために使用されます。この演算子は 2 つの引数を取ります: 検索対象のドキュメント・テンソル・フィールドと、入力クエリー・テンソル名です。
+
+[targetHits](../reference/querying/yql#targethits) クエリー・アノテーションは、クエリーに関与するコンテント・ノードごとに `first-phase` ランキングに公開する結果の数を指定します。`targetHits` は必須パラメータであり、指定されていない場合クエリーは失敗します。厳密検索では、`targetHits` はコンテント・ノードごとの下限です: `targetHits` 件のヒットが実際に見つかり、その後フィルターで除外されない限り、各コンテント・ノードで少なくとも `targetHits` 件、場合によってはそれ以上のヒットが `first-phase` ランキングに公開されます。
+
+クエリー・テンソルはクエリー入力として送信され、クエリー・テンソル名は `nearestNeighbor` 演算子の 2 番目の引数で参照されます。次の例では、`nearestNeighbor` 演算子を使用して、画像の類似性に基づいて類似製品を推薦します。与えられた画像(たとえば製品検索結果ページに表示される製品画像)に対して、類似の製品画像を持つ製品を見つけることができます。
+
+最近傍検索は、`in_stock` が `true` である製品に限定されていることに注意してください。
+
+クエリー全体は、[Query API](/ja/querying/query-api#http) で [Vespa クエリー言語](/ja/querying/query-language)を使用して指定します: 
+
+```json
+{
+    "yql": "select * from product where {totalTargetHits: 100}nearestNeighbor(image_embeddings, image_query_embedding) and in_stock = true",
+    "input.query(image_query_embedding)": [
+        0.22507139604882176,
+        0.11696498718517367,
+        0.9418422036734729,
+        ..
+    ],
+    "ranking.profile": "image_similarity",
+    "hits": 10
+}
+```
+
+この YQL クエリーは、論理積 `and` を使用して、`in_stock` フィールドの制約で `nearestNeighbor` をフィルターします。 
+
+クエリー・リクエストは [hits](../reference/api/query#hits) も指定しており、これは [JSON 結果フォーマット](../reference/querying/default-result-format)を使用してクライアントに返されるヒット数を決定します。 
+
+ランキング・プロファイルによってランキングされるヒットの総数は、クエリーのフィルターと、最近傍検索アルゴリズムがどれだけ速く収束するか(厳密検索の場合)に依存します。
+
+[ranking.profile](../reference/api/query#ranking.profile) パラメータは、どのランキング・プロファイルを使用するかを制御します。この場合は、CLIP のエンベディング空間でどれだけ近いかに基づいてドキュメントを単純にランキングします。
+
+## サーチャー・コンポーネントからの最近傍検索の使用
+
+Vespa のすべてのクエリー演算子と同様に、カスタムの[サーチャー・コンポーネント](../applications/searchers)でクエリーツリーをプログラム的に構築できます。`NearestNeighborItem` の使用例については、[Billion-Scale Image Search](https://github.com/vespa-engine/sample-apps/tree/master/billion-scale-image-search) の [Centroids](https://github.com/vespa-engine/sample-apps/blob/master/billion-scale-image-search/app/src/main/java/ai/vespa/examples/Centroids.java) を参照してください。
+
+## ハミング距離によるバイナリ・エンベディングの使用
+
+以下は、`int8` テンソル値精度を使用して、128 ビットのエンベディング表現を 16 次元の dense テンソルにパックします(16 x 8 = 128 ビット):
+
+```js 
+document vector {
+    field vector type tensor(x[16]) {
+        indexing: summary | attribute
+        attribute {
+            distance-metric: hamming
+        }
+    }
+}
+rank-profile hamming-nn {
+    num-threads-per-search: 12
+    first-phase {
+        expression: closeness(field,vector)
+    }
+}
+```
+
+バイナリ・ベクトルに対するハミング距離検索は、xor と popcount の CPU 命令で実装されています。この rank-profile は、サービング・レイテンシを削減する(ただしコストは削減しない)ために [num-threads-per-search](../reference/schemas/schemas#num-threads-per-search) を指定しています。
+
+ハミング距離によるバイナリ・ベクトルの使用の詳細な入門については、ブログ記事 [Billion Scale Vector Search with Vespa](https://blog.vespa.ai/billion-scale-knn-part-two/) を参照してください。

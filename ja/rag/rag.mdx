@@ -1,0 +1,144 @@
+---
+title: "Vespa における Retrieval-Augmented Generation (RAG)"
+sidebarTitle: "Vespa における RAG"
+---
+
+Vespa での LLM 使用の入門については、[Vespa における大規模言語モデル](/ja/rag/llms-in-vespa)を参照してください。
+
+Retrieval-Augmented Generation（RAG）は、検索システムと生成モデルを組み合わせて言語モデルの出力を強化する手法です。まず Vespa のような検索システムを使用して入力クエリーに基づいて関連ドキュメントを取得し、次に LLM のような生成モデルを使用して、より文脈に即した応答を生成します。この方法により、言語モデルはトレーニングの範囲を超えた最新の知識や特定ドメインの知識にアクセスできるようになり、質問応答や動的なコンテンツ作成といったタスクの性能が向上します。
+
+Vespa では、`RAGSearcher` がまずユーザーの指定どおりにクエリーを実行し、その結果に基づいてプロンプトを作成し、言語モデルにクエリーを送って応答を生成します。
+
+手早く始めるには、外部 LLM サービスまたはローカル LLM のいずれかの使用をデモンストレーションする [RAG サンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/retrieval-augmented-generation)を確認してください。
+
+
+### RAGSearcher のセットアップ
+
+`services.xml` で、LLM 接続と `RAGSearcher` を指定します:
+
+```xml
+<services version="1.0">
+    <container id="default" version="1.0">
+
+        ...
+
+        <component id="openai" class="ai.vespa.llm.clients.OpenAI">
+            {/* Configure as required */}
+        </component>
+
+        <search>
+            <chain id="rag" inherits="vespa">
+                <searcher id="ai.vespa.search.llm.RAGSearcher">
+                    <config name="ai.vespa.search.llm.llm-searcher">
+                        <providerId>openai</providerId>
+                    </config>
+                </searcher>
+            </chain>
+        </search>
+
+        ...
+
+    </container>
+</services>
+```
+
+[Vespa における LLM](/ja/rag/llms-in-vespa) で述べたように、このチェーンは Vespa CLI を使用して呼び出せます:
+
+```bash
+$ vespa query \
+    --header="X-LLM-API-KEY:..." \
+    query="what was the manhattan project?" \
+    searchChain=rag \
+    format=sse
+```
+
+ただし、ここで `query` クエリーパラメーターを使用している点に注目してください。[Vespa における LLM](/ja/rag/llms-in-vespa) では、LLM に送るプロンプトを設定するために `prompt` パラメーターを使用しました。`RAGSearcher` でも同じことができますが、その場合、Vespa では実際のクエリーは実行されません。Vespa に検索を実行させるには、`yql` または `query` パラメーターを指定する必要があります。ここで `query` を使用すると、このテキストは、ドキュメント取得のためのクエリーテキストとしても、以下で見るように LLM に送られるプロンプト内でも使用されます。
+
+実際、`RAGSearcher` では、[BM25 に基づくテキスト検索](/ja/learn/tutorials/text-search)や高度な[近似ベクトル検索](/ja/querying/approximate-nn-hnsw)を含め、あらゆるタイプの [Vespa の検索](/ja/querying/query-api)を使用できます。これにより、RAG の検索（retrieval）部分は非常に柔軟になります。
+
+### プロンプトの制御
+
+クエリーに基づいて、Vespa はドキュメントのセットを取得します。`RAGSearcher` は、これらのドキュメントから次のようなコンテキストを作成します:
+
+```text
+field1: ...
+field2: ...
+field3: ...
+
+field1: ...
+field2: ...
+field3: ...
+
+...
+
+```
+
+ここで、`field1` などは検索から返された実際のフィールドです。例えば、[テキスト検索チュートリアル](/ja/learn/tutorials/text-search)では、`id`、`title`、`url`、`body` のフィールドで構成されるドキュメント・スキーマを定義しています。コンテキストで使用するフィールドを `title` と `body` のみに限定したい場合は、次のようなクエリーを発行できます:
+
+```bash
+$ vespa query \
+    --header="X-LLM-API-KEY:..." \
+    yql="select title,body from msmarco where userQuery()" \
+    query="what was the manhattan project?" \
+    searchChain=rag \
+    format=sse
+```
+
+LLM に送られる実際のプロンプトは、デフォルトでは次のようになります:
+
+```text
+{context}
+
+{@prompt or @query}
+```
+
+ここで、`{context}` は上記のとおりであり、`@prompt` は指定されていれば `prompt` クエリーパラメーターに、`@query` は指定されていればユーザーのクエリーに置き換えられます。つまり、`prompt` パラメーターを渡すことで実際のプロンプトをカスタマイズでき、Vespa で検索する内容と LLM に尋ねる内容を区別できます。
+
+例えば:
+
+```bash
+$ vespa query \
+    --header="X-LLM-API-KEY:..." \
+    yql="select title,body from msmarco where userQuery()" \
+    query="what was the manhattan project?" \
+    prompt="{context} @query Be as concise as possible." \
+    searchChain=rag \
+    format=sse
+```
+
+は、次のようなプロンプトになります:
+
+```text
+title: <title of first document>
+body: <body of first document>
+
+title: <title of second document>
+body: <body of second document>
+
+<rest of documents>
+
+what was the manhattan project? Be as concise as possible.
+```
+
+`prompt` に `{context}` が含まれていない場合、コンテキストは自動的にプロンプトの先頭に追加されることに注意してください。ただし、プロンプト内に `@query` が見つからない場合、それが自動的にプロンプトに追加されることはありません。
+
+Vespa から返されたすべてのドキュメントがコンテキストで使用されることに注意してください。ほとんどの LLM には、プロンプトの大きさに関する何らかの制限があります。また、LLM サービスには通常、入力と出力の両方のトークン数に基づくクエリーごとのコストがあります。コンテキストのサイズを削減するには、`hits` [クエリーパラメーター](/ja/reference/api/query#hits)を使用して結果数を制御することが重要です。また、上記のクエリーを使用して、フィールドを厳密に必要なものだけに限定してください。
+
+プロンプト、つまり LLM に実際に送られる内容をデバッグするには、`traceLevel` クエリーパラメーターを使用し、`0` より大きい値に設定します:
+
+```bash
+$ vespa query \
+    --header="X-LLM-API-KEY:..." \
+    query="what was the manhattan project?" \
+    searchChain=rag \
+    format=sse \
+    traceLevel=1
+
+event: prompt
+data: {"prompt":"<the actual prompt sent to the LLM>"}
+
+event: token
+data: {"token":"<first token of response>"}
+
+...
+```

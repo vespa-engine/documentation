@@ -1,0 +1,236 @@
+---
+title: "Kubernetes への Vespa のインストール"
+sidebarTitle: "インストール"
+description: "公式の Helm チャートを使って Vespa をデプロイする手順を順に説明します。"
+---
+
+## 要件
+
+スムーズなデプロイには、以下のツールが必要です。
+
+<CardGroup>
+  <Card title="Helm" icon="ship" href="https://helm.sh/docs/intro/install/" horizontal />
+  <Card title="kubectl" icon="terminal" href="https://kubernetes.io/docs/reference/kubectl/" horizontal />
+  <Card title="Vespa CLI" icon="command" href="/ja/clients/vespa-cli" horizontal />
+</CardGroup>
+
+以下の手順は、`kubeconfig` がアクティブな Kubernetes クラスターを指していることを前提としています。Kubernetes クラスターの作成については、[Getting Started](https://kubernetes.io/docs/setup/) ガイドを参照してください。
+
+Kubernetes 上の Vespa は、`VespaSet` と呼ばれる [Custom Resource Definition](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) (CRD) を使用します。CRD 定義を自分で管理する場合は、インストール前にクラスターへ適用してください。
+
+Vespa の実行に必要な権限は、[権限](/ja/operations/kubernetes/deployment/permissions)ページに記載されています。Helm チャートは、デフォルトの RBAC API リソース一式を自動的にクラスターへ適用します。
+
+## レジストリアクセスのセットアップ
+
+<Note>
+**注**: 
+
+Kubernetes 上の Vespa はエンタープライズ機能です。以下のイメージへのアクセスが必要です。認証 ID とトークンを受け取るには、サポートポータルからお問い合わせください。本番利用では、これらのイメージを自社のレジストリ、またはインフラストラクチャに適した既知の内部リポジトリにミラーリングすることを推奨します。
+</Note>
+
+- `VESPA_IMAGE=images.ves.pa/kubernetes/vespa`
+- `VESPA_OPERATOR_IMAGE=images.ves.pa/kubernetes/operator`
+- `HELM_CHART_REF=oci://images.ves.pa/helm/vespa-operator`
+
+このガイド全体を通してこの命名規則を使用します。3 つのイメージすべてのタグは、[Vespa バージョン](/ja/learn/releases)のリリースセマンティクスに従います。デフォルトとして最新の Vespa リリースを使用することを推奨します。これを `VESPA_VERSION` と呼びます。
+
+Vespa Operator とすべての Vespa コンポーネントは、ネームスペースにローカルです。このガイドでは、ネームスペースを `NAMESPACE` と呼びます。
+
+## Vespa Operator のデプロイ
+
+Helm チャートの OCI レジストリに認証します。認証情報はサポートチームから提供されます。
+
+```bash
+$ helm registry login images.ves.pa -u $USER -p $TOKEN
+```
+
+Helm チャートをネームスペースにインストールします。これにより Vespa Operator がデプロイされ、`VespaSet` リソース定義が適用されます。`image.repository` には、サポートチームから提供された `VESPA_OPERATOR_IMAGE` を設定します。`image.tag` は `VESPA_VERSION` を指します。
+
+```bash
+$ helm install vespa-operator $HELM_CHART_REF --namespace $NAMESPACE --create-namespace --set image.repository=$VESPA_OPERATOR_IMAGE --set image.tag=$VESPA_VERSION
+```
+
+CRD 定義のライフサイクルは個別に管理できます。ただし、その場合は Helm チャートのインストール前に、CRD 仕様を手動で Kubernetes クラスターに適用する必要があります。必要であれば、サポートチームがこの仕様を提供します。これを行うには、Helm の `--skip-crds` オプションを使用します。
+
+```bash
+$ kubectl apply vespasets.k8s.ai.vespa-v1.yaml
+$ helm install vespa-operator $HELM_CHART_REF --namespace $NAMESPACE --create-namespace --skip-crds --set image.repository $VESPA_OPERATOR_IMAGE --set image.tag $VESPA_VERSION
+```
+
+`Deployment` リソースが正常に作成され、`Vespa Operator` Pod が実行中であることを確認してください。
+
+## VespaSet のデプロイ
+
+`VespaSet` は、Vespa アプリケーションのライフサイクルを管理する [ConfigServer](/ja/operations/self-managed/configuration-server) Pod のクォーラムです。`VespaSet` リソースのいくつかの例は、Helm チャートの `samples` ディレクトリに用意されています。典型的な [Amazon Elastic Kubernetes Service](https://aws.amazon.com/eks/) (EKS) セットアップ向けの `VespaSet` の例を以下に示します。
+
+```bash
+# vespaset sample for EKS
+$ cat > vespaset.yaml <<EOF
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: vespaset-sample
+  namespace: ${NAMESPACE}
+spec:
+  version: "${VESPA_VERSION}"
+
+  configServer:
+    image: "${VESPA_OPERATOR_IMAGE}"
+    storageClass: "gp3"
+    generateRbac: false
+
+  application:
+    image: "${VESPA_IMAGE}"
+    storageClass: "gp3"
+
+  ingress:
+    endpointType: "LOAD_BALANCER"
+EOF
+
+$ kubectl apply -f vespaset.yaml
+```
+
+MiniKube 上の典型的なローカルデプロイメントの例を以下に示します。
+
+```bash
+# vespaset sample for MiniKube
+$ cat > vespaset.yaml <<EOF
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: vespaset-sample
+  namespace: ${NAMESPACE}
+spec:
+  version: "${VESPA_VERSION}"
+
+  configServer:
+    image: "${VESPA_OPERATOR_IMAGE}"
+    storageClass: "local-storage"
+    generateRbac: false
+
+  application:
+    image: "${VESPA_IMAGE}"
+    storageClass: "local-storage"
+
+  ingress:
+    endpointType: "NONE"
+EOF
+
+$ kubectl apply -f vespaset.yaml
+```
+
+`VespaSet` を適用すると、オペレーターは新しく作成されたリソースを自動的に検出し、ConfigServer のクォーラムを作成します。
+
+適用されると、ConfigServer はクォーラムに達するまで自身をブートストラップします。このプロセスにはおよそ 1 分かかります。`VespaSet` リソースがすべての ConfigServer Pod についてステータス `RUNNING` を示せば、ブートストラッププロセスは完了です。例:
+
+```bash expandable
+$ kubectl describe vespaset vespaset-sample -n $NAMESPACE
+Name:         vespaset-sample
+Namespace:    $NAMESPACE
+API Version:  k8s.ai.vespa/v1
+Kind:         VespaSet
+Spec:
+  Application:
+    Image:          192.168.49.2:5000/localhost/vespaai/kubernetes
+    Storage Class:  gp3
+  Config Server:
+    Generate Rbac:    false
+    Image:            192.168.49.2:5000/localhost/vespaai/kubernetes
+    Storage Class:    gp3
+  Ingress:
+    Endpoint Type:  NONE
+  Version:          8.643.16
+Status:
+  Bootstrap Status:
+    Pods:
+      cfg-1:
+        Last Updated:  2026-01-29T21:38:45Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.643.16
+      cfg-2:
+        Last Updated:  2026-01-29T21:38:09Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.643.16
+      cfg-3:
+        Last Updated:  2026-01-29T21:36:32Z
+        Message:       Pod is running
+        Phase:         RUNNING
+        Converged Version: 8.643.16
+  Last Transition Time:  2026-01-29T21:33:55Z
+  Message:               All configservers running
+  Phase:                 RUNNING
+Events:                  <none>
+```
+
+## Vespa アプリケーションのデプロイ
+
+クォーラムに達すると、ConfigServer のイングレスエンドポイント経由で Vespa アプリケーションをデプロイできます。はじめるには、[Vespa サンプルアプリケーション](https://github.com/vespa-engine/sample-apps)を参照してください。以下の例では、[Album Recommendation](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation) サンプルアプリケーションを使用します。
+
+Vespa CLI をセットアップして、Album Recommendation サンプルをディレクトリにダウンロードします。
+
+```bash
+$ vespa clone album-recommendation myapp && cd myapp
+```
+
+Kubernetes 上の Vespa にデプロイするアプリケーション・パッケージでは、`Node` リソースを必ず指定する必要があります。これらは Kubernetes コンテナーの[リソース要求と制限](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)に直接変換されます。[PodTemplate](/ja/operations/kubernetes/custom-overrides-podtemplate) のオーバーライドがないデフォルトのデプロイメントでは、コンテナーの requests は limits と等しくなります。
+
+以下のように、アプリケーション・パッケージ内のコンテナーおよびコンテント・クラスターの仕様を変更します:
+
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0" xmlns:deploy="vespa" xmlns:preprocess="properties">
+
+    <container id="default" version="1.0">
+        <document-api/>
+        <search/>
+
+        <nodes count="2">
+            <resources vcpu="2" memory="2Gb" disk="20Gb" />
+        </nodes>
+    </container>
+
+    <content id="music" version="1.0">
+        <min-redundancy>2</min-redundancy>
+        <documents>
+            <document type="music" mode="index" />
+        </documents>
+        <nodes count="2">
+            <resources vcpu="2" memory="2Gb" disk="20Gb" />
+        </nodes>
+    </content>
+
+</services>
+```
+
+ConfigServer のイングレスポート `19071` からローカルポート `19071` へのポートフォワーディングを有効にします。どの ConfigServer Pod でも使用できます。
+
+```bash
+$ vespa config set target local
+$ kubectl -n $NAMESPACE port-forward pod/cfg-1 19071:19071
+```
+
+アプリケーションをデプロイしてアクティベートします。
+
+```bash
+$ vespa prepare --target local
+$ while ! vespa --target local activate; do sleep 1; done
+```
+
+ConfigServer は、アプリケーション・パッケージで指定されたとおりに Container、Content、Cluster-Controller の各 Pod を作成します。`VespaSet` のステータスですべての Pod がフェーズ `RUNNING` を示せば、デプロイメントは完了とみなされます。
+
+ポートフォワーディングは、ローカルから ConfigServer にイングレスする簡単な方法です。その他のイングレスオプションについては、[外部アクセスレイヤーの構成](/ja/operations/kubernetes/ingress)ページを参照してください。
+
+## ドキュメントのフィードとクエリー
+
+ConfigServer のイングレスポートと Dataplane のイングレスポートをポートフォワーディングし、Vespa CLI を使って、ドキュメントのフィードとクエリーを行います。
+
+```bash
+$ kubectl -n $NAMESPACE port-forward pod/cfg-1 19071:19071
+$ kubectl -n $NAMESPACE port-forward pod/default-100 8080:8080
+$ vespa feed dataset/A-Head-Full-of-Dreams.json
+$ vespa query 'yql=select * from music where true limit 1'
+```
+
+利用可能なコマンドの全リストについては、[Vespa CLI ドキュメント](/ja/reference/clients/vespa-cli/vespa)を参照してください。

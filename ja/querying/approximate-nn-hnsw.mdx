@@ -1,0 +1,158 @@
+---
+title: "HNSWインデックスを使用した近似最近傍検索"
+---
+
+このドキュメントでは、テンソル・フィールドに[HNSWインデックス](../reference/schemas/schemas#index-hnsw)を追加することで、ベクトル空間における最近傍の検索を高速化する方法を説明します。最近傍検索の入門については、[最近傍検索](/ja/querying/nearest-neighbor-search)のドキュメントを参照してください。Vespaの最近傍検索の実践的な使い方については、[最近傍検索 - 実践ガイド](/ja/querying/nearest-neighbor-search-guide)を参照してください。また、Vespaにベクトルを生成させる方法については、[埋め込み（embedding）](../rag/embedding)を参照してください。
+
+Vespaは、Hierarchical Navigable Small World（HNSW）グラフアルゴリズム（[論文](https://arxiv.org/abs/1603.09320)）の改良版を実装しています。Vespaにおける実装は以下をサポートしています:
+
+* **フィルタリング** - 最近傍の検索は、クエリー・フィルターによって制約できます。[nearestNeighbor](../reference/querying/yql#nearestneighbor)クエリー演算子は、[Vespaクエリー言語](/ja/querying/query-language)を使用して、他のフィルターやクエリー・タームと組み合わせることができます。[実践ガイド](/ja/querying/nearest-neighbor-search-guide#combining-approximate-nearest-neighbor-search-with-query-filters)のクエリー例を参照してください。
+
+* **複数フィールドのベクトル・インデックス作成** - スキーマには複数のインデックス付きテンソル・フィールドを含めることができ、クエリーでそれらの任意の組み合わせを検索できます。これは、複数のモデル、複数のテキストソース、および同一エンティティに対してテキスト記述と画像の両方をインデックスするようなマルチモーダル検索をサポートするのに便利です。
+
+* **マルチベクトル・インデックス作成** - 単一のドキュメント・フィールドは、mixedテンソル（「ベクトルのマップ」）として定義することで、任意の数のベクトル値を含むことができます。ドキュメントは、クエリー・ベクトルと比較して各ドキュメント内で最も近いベクトルによって取得されます。例については[Multi-vector indexingサンプルアプリケーション](https://github.com/vespa-engine/sample-apps/tree/master/multi-vector-indexing)を参照してください。これは一般的に[複数チャンクを持つドキュメントのインデックス作成](../rag/working-with-chunks)に使用されます。[こちらのブログ記事](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/#implementation)も参照してください。
+
+* **リアルタイム・インデックス作成** - インデックス内のベクトルを真のリアルタイムでCRUD（作成、追加、更新、削除）できます。
+
+* **可変（Mutable）HNSWグラフ** - 複数のHNSWグラフを検索することによるクエリーやインデックス作成のオーバーヘッドがありません。Vespaでは、コンテント・ノードごと、テンソル・フィールドごとに1つのグラフが存在します。コンテント・ノードに対するクエリーが複数のHNSWグラフをスキャンする必要があるような、セグメント化またはパーティション化されたグラフはありません。
+
+* **マルチスレッド・インデックス作成** - *HNSW*グラフへのリアルタイムの変更を行う際にコストが高いのは、どのリンクを変更するかを見つけるためにグラフのレイヤーを検索する間の距離計算です。これらの距離計算は複数のインデックス作成スレッドによって実行されます。
+
+* **複数の値型** - ベクトル検索のコスト要因は多くの場合、低レイテンシで正確な結果を生成するために必要な、ベクトルをメモリに格納することです。コストを削減する効果的な方法は、各ベクトル値のサイズを小さくすることです。Vespaはdouble、float、bfloat16、int8、および[単一ビット値](../rag/binarizing-vectors)をサポートしています。floatからbfloat16に変更すると、精度への影響をほとんど受けずにコストを半減でき、単一ビット値はメモリとCPUの両方のコストを大幅に削減し、ランキングに使用するためにpaged属性としてディスクに格納されたより大きなベクトル値と効果的に組み合わせることができます。
+
+* **最適化されたHNSWルックアップ** - VespaのANN検索は、プレフィルタリングとポストフィルタリングの両方、ビーム探索、および距離計算前のフィルタリング（「Acorn 1」）を[サポート](https://blog.vespa.ai/tweaking-ann-parameters/)しています。これらのチューニング・パラメーターにより、あらゆるデータセットに対してパフォーマンスと精度の良いバランスを取ることが可能です。Vespaの[ANNチューニングツール](https://vespa-engine.github.io/pyvespa/examples/ann-parameter-tuning-vespa-cloud)を使用してこのプロセスを自動化できます。
+
+## Vespaの近似最近傍検索の使用
+
+[最近傍検索](/ja/querying/nearest-neighbor-search)のクエリー例では、完全な精度を持つ厳密検索を使用しています。しかし、クエリー・フィルターにマッチするすべてのドキュメントに対して距離が計算されるため、大量のドキュメントに対しては計算コストが高くなります。
+
+高速な近似マッチングを有効にするには、テンソル・フィールドの定義に`index`ディレクティブが必要です。Vespaの[ドキュメント・スキーマ](../basics/schemas)では、`HNSW`を有効にした複数のテンソル・フィールドを宣言できます。
+
+```js expandable
+field image_embeddings type tensor(i{},x[512]) {
+  indexing: summary | attribute | index
+  attribute {
+    distance-metric: angular
+  }
+  index {
+    hnsw {
+      max-links-per-node: 16
+      neighbors-to-explore-at-insert: 100
+    }
+  }
+}
+
+field text_embedding type tensor(x[384]) {
+  indexing: summary | attribute | index
+  attribute {
+    distance-metric: prenormalized-angular
+  }
+  index {
+    hnsw {
+      max-links-per-node: 24
+      neighbors-to-explore-at-insert: 200
+    }
+  }
+}
+```
+
+上記のスキーマ・スニペットでは、`image_embeddings`と`text_embedding`のテンソル・フィールドに`HNSW`インデックスを構築することで、高速な近似検索が有効になっています。`image_embeddings`はドキュメントごとに複数のベクトルをインデックスし、`text_embedding`はドキュメントごとに1つのベクトルをインデックスします。
+
+この2つのベクトル・フィールドは、異なる[distance-metric](../reference/schemas/schemas#distance-metric)と`HNSW`インデックス設定を使用しています:
+
+* `max-links-per-node` - 値を大きくすると再現率（recall）の精度が向上しますが、メモリ使用量、インデックス作成コスト、検索コストも増加します。
+* `neighbors-to-explore-at-insert` - 値を大きくすると再現率の精度が向上しますが、インデックス作成コストも増加します。
+
+これらのパラメーターの値の選択は、精度、検索パフォーマンス、メモリ使用量、インデックス作成パフォーマンスのすべてに影響します。これらのトレードオフの詳細な説明については、[Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/)を参照してください。インデックス・パラメーターの詳細については、[HNSWインデックス・リファレンス](../reference/schemas/schemas#index-hnsw)を参照してください。 
+
+### インデックス作成スループット 
+
+
+<Frame>![リアルタイム・インデックス作成のスループット](https://blog.vespa.ai/assets/2022-01-27-billion-scale-knn-part-two/throughput.png)</Frame>
+
+`HNSW`の設定はインデックス作成のスループットに影響します。`max-links-per-node`と`neighbors-to-explore-at-insert`の値を大きくすると、インデックス作成のスループットが低下します。例は[Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/)より。
+
+### メモリ使用量
+
+`max-links-per-node`の値を大きくするとメモリ使用量に影響し、値が大きいほどメモリ使用量が増加します:
+
+<Frame>![メモリフットプリント](https://blog.vespa.ai/assets/2022-01-27-billion-scale-knn-part-two/memory.png)</Frame>
+
+### 精度 
+
+<Frame>![精度](https://blog.vespa.ai/assets/2022-01-27-billion-scale-knn-part-two/ann.png)</Frame>
+
+`max-links-per-node`と`neighbors-to-explore-at-insert`の値を大きくすると、グラフの品質と再現率の精度が向上します。検索時のパラメーター[hnsw.exploreAdditionalHits](../reference/querying/yql#hnsw-exploreadditionalhits)を増やしていくと、低い方の組み合わせは約70%のrecall@10に達し、高い方の組み合わせは約92%のrecall@10に達します。精度の向上は、インデックス作成パフォーマンスとメモリ使用量への影響と比較検討する必要があります。 
+
+## 近似最近傍検索の使用 
+
+テンソル・フィールドで*HNSW*インデックスが有効になっている場合、[approximateクエリー・アノテーション](../reference/querying/yql#approximate)を使用して、近似検索と厳密（総当たり）検索のいずれかを選択できます
+
+```json
+{
+  "yql": "select * from doc where {totalTargetHits: 10, approximate:false}nearestNeighbor(image_embeddings,query_image_embedding)",
+  "hits": 10
+  "input.query(query_image_embedding)": [0.21,0.12,....],
+  "ranking.profile": "image_similarity" 
+}
+```
+
+デフォルトでは、`HNSW`インデックスが有効なテンソル・フィールドを検索する場合、`approximate`はtrueです。`approximate`パラメーターにより、近似検索を使用することによる精度の損失を定量化できます。この損失は、`approximate:false`を使用して厳密な最近傍検索を実行し、取得されたドキュメントを`approximate:true`の場合と比較してoverlap@kメトリクスを計算することで算出できます。
+
+大量のベクトルに対する厳密検索には、[クエリー・タイムアウト](../reference/api/query#timeout)の調整が必要になることに注意してください。デフォルトの[クエリー・タイムアウト](../reference/api/query#timeout)は500msであり、多数のベクトルに対する厳密検索には短すぎます。
+
+[totalTargetHits](../reference/querying/yql#totaltargethits)に加えて、グラフ検索中に（`totalTargetHits`に加えて）グラフ内のいくつの追加ノードを探索するかを制御する[hnsw.exploreAdditionalHits](../reference/querying/yql#hnsw-exploreadditionalhits)パラメーターがあります。このパラメーターは、精度の品質とクエリー・パフォーマンスのバランスを調整するために使用されます。 
+
+## 近似最近傍検索とフィルターの組み合わせ 
+
+[nearestNeighbor](../reference/querying/yql#nearestneighbor)クエリー演算子は、[Vespaクエリー言語](../reference/querying/yql)とそのクエリー演算子を使用して、他のクエリー・フィルターと組み合わせることができます。クエリー・フィルターを近似最近傍検索と組み合わせるための高レベルの戦略は2つあります:
+* [プレフィルタリング（pre-filtering）](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#pre-filtering-strategy)（デフォルト）
+* [ポストフィルタリング（post-filtering）](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#post-filtering-strategy)
+
+これらの戦略は、ランク・プロファイル内で[approximate-threshold](../reference/schemas/schemas#approximate-threshold)と[post-filter-threshold](../reference/schemas/schemas#post-filter-threshold)を使用して設定できます。詳細については、[Controlling the filtering behavior with approximate nearest neighbor search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/#controlling-the-filtering-behavior-with-approximate-nearest-neighbor-search)を参照してください。
+
+`pre-filtering`を使用する場合、クエリーのフィルター部分を評価する際に以下のクエリー演算子は含まれないことに注意してください:
+
+* [geoLocation](../reference/querying/yql#geolocation)
+* [predicate](../reference/querying/yql#predicate)
+
+これらは代わりに、近似最近傍が取得された後に、`post-filter`のように評価されます。このため、検索がランキングに公開するヒット数が、望ましい`totalTargetHits`よりも少なくなる可能性があります。
+
+Vespa 8.78以降、`pre-filter`は[クエリーごとに複数のスレッド](../performance/practical-search-performance-guide#multithreaded-search-and-ranking)を使用して評価できます。これは、`pre-filter`の評価コストが大きい、より大規模なベクトル・データセットにおいてクエリーのレイテンシを削減するために使用できます。`HNSW`インデックスの検索は、クエリーごとに常にシングルスレッドであることに注意してください。`post-filtering`を使用する場合のマルチスレッド評価は常にサポートされてきましたが、`HNSW`インデックスの検索が最初に`totalTargetHits`に基づいてドキュメント候補セットを削減するため、これはあまり重要ではありません。
+
+## 最近傍検索に関する考慮事項
+
+* **totalTargetHits**: [totalTargetHits](../reference/querying/yql#totaltargethits)パラメーターは、クエリーに参加するコンテント・ノード全体で合計いくつのヒットを[ランキング](../basics/ranking)に公開するかを指定します（[targetHits](../reference/querying/yql#targethits)を使用してノードごとに設定することもできます）。近似検索は、`totalTargetHits`件のヒットが実際に見つかりフィルターで除外されない限り、コンテント・ノード全体でちょうど`totalTargetHits`件のヒットを`first-phase`ランキングに公開します。最近傍検索は通常、[多段階ランキング（phased ranking）](../ranking/phased-ranking)パイプラインにおける効率的なリトリーバーとして使用されます。[パフォーマンス・サイジング](../performance/sizing-search)を参照してください。 
+
+* **ページネーション**: ページネーションには、標準の[hits](../reference/api/query#hits)および[offset](../reference/api/query#offset)クエリーAPIパラメーターを使用します。ページネーション・リクエスト間で結果のキャッシュは行われないため、より大きな`offset`に対するクエリーでは検索が再度実行されます。この点は、最近傍クエリー演算子を使用しない[スパース検索](../ranking/wand)と変わりません。  
+
+* **総ヒット数は正確ではありません**: 技術的には、検索可能なインデックス内のすべてのベクトルが近傍です。マッチと非マッチの間に厳密な境界はありません。[nearestNeighbor](../reference/querying/yql#nearestneighbor)クエリー演算子の厳密（`approximate:false`）および近似（`approximate:true`）のいずれの使用でも、正確な`totalCount`は生成されません。これは、[weakAnd](../reference/querying/yql#weakand)や[wand](../reference/querying/yql#wand)のようなスパースな動的枝刈り検索アルゴリズムと同じ動作です。 
+  
+* **グルーピング**のカウントは正確ではありません: [nearestNeighbor](../reference/querying/yql#nearestneighbor)検索を使用する場合、[グルーピング](/ja/querying/grouping)によるグルーピングのカウントは正確ではありません。これは、[weakAnd](../reference/querying/yql#weakand)や[wand](../reference/querying/yql#wand)のような他の動的枝刈り検索アルゴリズムと同じ動作です。グルーピングを最近傍検索と組み合わせる方法については、ブログ記事[Result diversification](https://blog.vespa.ai/result-diversification-with-vespa/)を参照してください。 
+
+## 近似最近傍検索のスケーリング
+
+### メモリ 
+
+Vespaのテンソル・フィールドは[インメモリ](../content/attributes)のデータ構造であり、`HNSW`グラフのデータ構造も同様です。大規模なベクトル・データセットの場合、主なメモリリソースの使用は、生のベクトル・フィールドのメモリ使用量に関連します。
+
+より低い精度のテンソル・セル型を使用すると、メモリフットプリントを大幅に削減できます。たとえば、`float`の代わりに`bfloat16`を使用すると、大きな精度の損失なしにメモリ使用量を50%近く節約できます。 
+
+Vespaの[テンソル・セル値型](../performance/feature-tuning#cell-value-types)には以下が含まれます:
+
+* `int8` - 値あたり1バイト。[パックされたバイナリ値](../rag/binarizing-vectors)の表現にも使用されます。
+* `bfloat16` - 値あたり2バイト。[bfloat16浮動小数点形式](https://en.wikipedia.org/wiki/Bfloat16_floating-point_format)を参照してください。
+* `float` - 値あたり4バイト。標準のfloat。
+* `double` - 値あたり8バイト。標準のdouble。
+
+### 検索レイテンシとドキュメント量
+
+`HNSW`の貪欲検索アルゴリズムは劣線形（Nをグラフ内のベクトル数とするとlog(N)に近い）です。これは、[フラットなデータ分散](../performance/sizing-search#data-distribution)を使用して水平方向にノードを追加しようとする場合に興味深い特性を持ちます。ノードあたりのドキュメント量が10分の1に削減されても、検索レイテンシは50%しか削減されません。それでも、フラットなスケーリングはドキュメント量のスケーリングに役立ち、ベクトルがノードのセットにランダムにパーティション分割されるため、インデックス作成スループットの向上にも役立ちます。 
+
+（フィルタリングや再ランキングを行わない）純粋なベクトル検索アプリケーションでは、より大きなインスタンスタイプを使用してドキュメント量をスケールアップし、ノードあたりのベクトル数を最大化するようにしてください。クエリー・スループットに対してスケールするには、[グループ化されたデータ分散](../performance/sizing-search#data-distribution)を使用してコンテンツをレプリケートします。 
+
+アプリケーションが多段階ランキング・パイプラインにおける候補取得に最近傍検索を使用する場合や、最近傍検索をフィルターと組み合わせる場合には、強い劣線形性の検索が必ずしも成り立つとは限らないことに注意してください。
+
+## HNSWの運用 
+
+`hnsw`インデックスを持つテンソル・フィールドの[distance-metric](../reference/schemas/schemas#distance-metric)を変更するには、[再起動](../reference/schemas/schemas#changes-that-require-restart-but-not-re-feed)が必要ですが、再インデックス（ベクトルの再フィード）は不要です。同様に、`max-links-per-node`および`neighbors-to-explore-at-insert`の構築パラメーターを変更する場合も再起動が必要です。

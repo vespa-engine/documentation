@@ -1,0 +1,138 @@
+---
+title: "Javaコンポーネントの設定"
+description: "どんなJavaコンポーネントでも、単純な文字列や整数から、より複雑な構造まで、何らかの設定が必要になることがあります。このような設定を保持するクラスには決まりきったボイラープレート・コードが大量に入りがちなため、設定は往々にしてキーと値の文字列ペアの集まりに堕してしまいます(例: [javax.servlet.FilterConfig](https://docs.oracle.com/javaee/6/api/javax/servlet/FilterConfig))。これを避けるため、Vespaはすべての[コンテナー](/ja/applications/containers)・コンポーネントに対して、カスタムで型安全な設定を提供しています。[開発者ガイド](/ja/applications/developer-guide)で始めて、サンプル・アプリケーション [album-recommendation-java](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java) を試してみてください。"
+---
+
+設定可能なコンポーネントの概要:
+
+- [config定義](/ja/reference/applications/config-files#config-definition-files)ファイルを作成します
+- Vespaの[バンドル・プラグイン](/ja/applications/bundles#maven-bundle-plugin)を使って、定義からconfigクラスを生成します
+- アプリケーション・コードにconfigオブジェクトを注入します
+
+アプリケーション・コードは、生成されたコードを通じて設定とやり取りします — コードと設定は常に同期しています。この設定は、*コンポーネント・インスタンスのライフタイム* にわたって一定であると想定されるすべての状態に対して使用すべきです。コードと設定の変更をプッシュして有効化するには、[デプロイ](/ja/basics/applications)を使用します。
+
+## config定義
+
+[config定義](/ja/reference/applications/config-files#config-definition-files)ファイルを作成し、アプリケーションの `src/main/resources/configdefinitions/` ディレクトリーに配置します。例: `src/main/resources/configdefinitions/my-component.def`:
+
+```text
+package=com.mydomain.mypackage
+
+myCode     int     default=42
+myMessage  string  default=""
+```
+
+## configクラスの生成
+
+configクラスの生成は *バンドル・プラグイン* によって行われます:
+
+```bash
+$ mvn generate-resources
+```
+
+生成されたconfigクラスは `target/generated-sources/vespa-configgen-plugin/` に書き込まれます。上記の例では、config定義ファイルの名前は *my-component.def* で、そのパッケージ宣言は *com.mydomain.mypackage* です。生成されるJavaクラスの完全な名前は *com.mydomain.mypackage.MyComponentConfig* になります。
+
+まずconfigクラスを生成し、*その後で* IDEで依存関係を解決してコンパイルするのがよいでしょう。
+
+## コードでconfigを使う
+
+生成されたconfigクラスは、[コンストラクター・インジェクション](/ja/applications/dependency-injection)を通じてコンポーネントから利用できるようになります。つまり、コンポーネントは生成されたクラスをコンストラクター引数の1つとして宣言できます:
+
+```java
+package com.mydomain.mypackage;
+public class MyComponent {
+    private final int code;
+    private final String message;
+    @Inject
+    public MyComponent(MyComponentConfig config) {
+        code = config.myCode();
+        message = config.myMessage();
+    }
+}
+```
+
+コンテナーがconfigインスタンスを作成して注入します。configのデフォルト値をオーバーライドするには、`src/main/application/services.xml` で次のように値を[指定](/ja/reference/applications/config-files#generic-configuration-in-services-xml)します:
+
+```xml
+<container version="1.0">
+    <component id="com.mydomain.mypackage.MyComponent">
+        <config name="com.mydomain.mypackage.my-component">
+            <myCode>132</myCode>
+            <myMessage>Hello, World!</myMessage>
+        </config>
+    </component>
+</container>
+```
+
+これにより、デプロイされた `MyComponent` のインスタンスは、対応する `MyComponentConfig` のインスタンスを使って構築されます。
+
+## 設定可能なコンポーネントのユニット・テスト
+
+生成されたconfigクラスにはビルダーAPIが用意されており、ユニット・テスト用のconfigオブジェクトを簡単に作成できます。上記の例の `MyComponent` クラスのユニット・テストをセットアップする例:
+
+```java
+import static com.mydomain.mypackage.MyComponentConfig.*;
+public class MyComponentTest {
+    @Test
+    public void requireThatMyComponentGetsConfig() {
+        MyComponentConfig config = new MyComponentConfig.Builder()
+        .myCode(668)
+        .myMessage("Neighbour of the beast")
+        .build();
+        MyComponent component = new MyComponent(config);
+        …
+    }
+}
+```
+
+ここで使用しているconfigクラスは単純なものです — [複雑な設定オブジェクトの構築](/ja/applications/unit-testing#unit-testing-configurable-components)については別の例を参照してください。
+
+## コンポーネント設定へのファイルの追加
+
+このセクションでは、コンポーネントが、機械学習モデル、[オートマトン](/ja/reference/operations/tools#vespa-makefsa)、大きなテーブルなど、ファイルに格納された大きな設定オブジェクトを必要とする場合の対処方法を説明します。先に進む前に、[プロバイダー・コンポーネント](/ja/applications/dependency-injection#special-components)の作成方法を確認してください — 大きなオブジェクトをSearcherやプロセッサーなどに組み込む代わりに、コンポーネント設定のうちリソースを大量に消費する部分を別のプロバイダー・コンポーネントに分離するほうが良い場合があります。以下で説明する手順は、どのコンポーネント・タイプにも適用できます。
+
+ファイルは、[ファイル分散](/ja/applications/deployment#file-distribution)またはURLダウンロードのいずれかを使って転送できます。ファイル分散は、ファイルがアプリケーション・パッケージに追加されている場合に使用されます。サイズ、ファイルの出所、更新頻度などの理由でそれが不便な場合、Vespaはファイルをダウンロードしてコンポーネントで利用できるようにします。どちらのタイプもconfig定義ファイルでセットアップします。ファイル分散には `path` config型を、URLダウンロードには `url` 型を使用します。また、機械学習モデルには `model` 型を使用できます。これは、Vespa Cloudで使用されるmodel-idと、セルフホスト・デプロイメントで使用されるurl/pathの両方で参照できます。詳細は[configファイル・リファレンス](/ja/reference/applications/config-files)を参照してください。
+
+次の例では、3つのタイプすべての使い方を示します。`my-component.def` という名前の次のconfig定義を想定します:
+
+```java
+package=com.mydomain.mypackage
+
+myFile path
+myUrl url
+myModel model
+```
+
+ファイルはアプリケーション・パッケージ内に存在する必要があり、パス(アプリケーション・パッケージのルートからの相対パス)を `services.xml` のコンポーネント設定で指定する必要があります:
+
+```xml
+<container version="1.0">
+    <component id="com.mydomain.mypackage.MyComponent">
+        <config name="com.mydomain.mypackage.my-component">
+            <myFile>my-files/my-file.txt</myFile>
+            <myUrl>/en/reference/query-api-reference.html</myUrl>
+            <myModel model-id="id-provided-by-Vespa-Cloud" url/path="as-above"/>
+        </config>
+    </component>
+</container>
+```
+
+これらのファイルを使用するコンポーネントの例:
+
+```java
+package com.mydomain.mypackage;
+import java.io.File;
+public class MyComponent {
+    private final File fileFromFileDistribution;
+    private final File fileFromUrlDownload;
+    public MyComponent(MyComponentConfig config) {
+        pathFromFileDistribution = config.myFile();
+        fileFromUrlDownload      = config.myUrl();
+        modelFilePath            = config.myModel();
+    }
+}
+```
+
+`myFile()` と `myModel()` のゲッターは `java.nio.Path` オブジェクトを返し、`myUrl()` のゲッターは `java.io.File` オブジェクトを返します。コンテナー・フレームワークは、コンポーネントのコンストラクターが呼び出される前に、これらのファイルが指定された場所に完全に存在することを保証します。そのため、これらのファイルには常にすぐアクセスできます。
+
+クライアントが、URLを伴う `url` または `model` config型を使用するconfigを要求すると、コンテンツはダウンロードされ、それを必要とするノード上にキャッシュされます。コンテンツを変更したい場合は、変更後のコンテンツ用の新しいURLでアプリケーション・パッケージを更新し、アプリケーションを[デプロイ](/ja/basics/applications)する必要があります。そうしないと、キャッシュされたコンテンツが引き続き使用されます。これにより、URLのコンテンツが変わった場合にアプリケーションが意図せず変更されるのを防ぎます。

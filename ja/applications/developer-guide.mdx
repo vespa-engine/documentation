@@ -1,0 +1,199 @@
+---
+title: "開発者ガイド"
+description: "このドキュメントでは、基本的な用語、Vespa Cloud Consoleの使用に関するヒント、アプリケーションのベンチマークとサイジングの方法など、アプリケーションの開発方法について説明します。基本的なサンプル・アプリケーションのデプロイについては[サンプル・アプリケーションのデプロイ](/ja/basics/deploy-an-application)を、本番デプロイを安全なルーチン作業にする方法については[自動デプロイ](/ja/operations/automated-deployments)を参照してください。"
+---
+
+
+## 手動デプロイ
+
+開発者は通常、開発中はアプリケーションを `dev` [ゾーン](/ja/operations/zones)にデプロイします。各デプロイは *テナント* によって所有され、指定された各 *インスタンス* はアプリケーションの独立したコピーです。これにより、開発者は好みに応じて、同じアプリケーションの独立したコピーで作業することも、共有されたコピーで共同作業することもできます - 詳細は[こちら](/ja/learn/tenant-apps-instances)。これらの値は、デプロイ時にVespa Cloud UIで設定するか、各種ビルド・デプロイツールで設定できます。それぞれのgetting-startedガイドを参照してください。
+
+さらに、デプロイでは、デフォルトの `dev` ゾーンの代わりに、デプロイ先として別の[ゾーン](/ja/operations/zones)を指定できます。
+
+### 自動ダウンサイジング
+
+`dev` へのデプロイは、デフォルトで1つの小さなノードにダウンスケールされるため、`services.xml` を変更することなくアプリケーションをデプロイできます。`deploy:environment="dev"` を使って自動ダウンサイジングを無効にする方法については、[パフォーマンス・テスト](#performance-testing)を参照してください。
+
+### 可用性
+
+`dev` ゾーンはサンドボックスであり、本番のサービス提供用ではありません。アップタイムの保証はありません。
+
+Vespaソフトウェアの自動アップグレードはいつでもトリガーされる可能性があり、クラスターあたりのノードが1つしかない場合(デフォルトの[自動ダウンサイジング](#auto-downsizing)の場合など)、多少のダウンタイムにつながることがあります。
+
+## パフォーマンス・テスト
+
+パフォーマンス・テストでは、自動ダウンサイジングを避けるために、`deploy:environment="dev"` を使って[リソース](/ja/reference/applications/services/services)を固定します:
+
+```xml
+<nodes deploy:environment="dev" count="1">
+    <resources vcpu="8.0"
+               memory="64Gb"
+               disk="474Gb"
+               architecture="arm64"
+               storage-type="local"/>
+</nodes>
+```
+
+詳細は[ベンチマーク](/ja/performance/benchmarking-cloud)と [services.xmlのバリアント](/ja/operations/deployment-variants)を参照してください。
+
+## コンポーネントの概要
+
+<Frame>
+![](/assets/img/vespa-overview.svg)
+</Frame>
+
+アプリケーション・パッケージには、コンテナー・クラスターで実行されるJavaコンポーネントを含めることができます。最も一般的なコンポーネント・タイプは次のとおりです:
+
+- [Searcher](/ja/applications/searchers): クエリーの変更や構築、結果の変更、複数のクエリーを発行するワークフローの実装などを行えます。
+- [Document processor](/ja/applications/document-processors): 受信した書き込み操作を変更できます。
+- [Handler](/ja/applications/request-handlers): カスタムのWebサービスAPIを実装できます。
+- [Renderer](/ja/applications/result-renderers): カスタムの結果フォーマットを定義するために使用されます。
+
+コンポーネントは依存性注入によって構築され、デプロイ時に再起動なしで安全にリロードされます。詳細は[コンテナーのドキュメント](/ja/applications/containers)を参照してください。
+
+[Javaコンポーネントを含むアプリケーションのデプロイ](/ja/basics/deploy-an-application-java)と[トラブルシューティング](/ja/operations/self-managed/admin-procedures#troubleshooting)を参照してください。
+
+## コンポーネントの開発
+
+開発サイクルは、コンポーネントの作成、アプリケーション・パッケージのVespaへのデプロイ、テストの作成、そしてその繰り返しで構成されます。以下の手順は [album-recommendation-java](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java) のファイルを参照しています:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;ビルド&#42;&#42;</td>
+      <td>Vespaのすべてのサンプル・アプリケーションは、コンポーネントのビルドに <a href="/ja/applications/bundles#maven-bundle-plugin" aria-label="bundle plugin">bundleプラグイン</a>を使用しています。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;設定&#42;&#42;</td>
+      <td>Vespaの重要な機能の1つは、コードと設定の一貫性であり、<a href="/ja/basics/applications" aria-label="application package">アプリケーション・パッケージ</a>を使ってデプロイされます。これにより、コードと設定が同期し、デプロイ時にアトミックにロードされることが保証されます。これは、config定義ファイルからconfigクラスを生成することで実現されます。したがって、Vespaおよびアプリケーションのコードでは、設定は生成されたconfigクラスを通じてアクセスされます。Mavenターゲット <code>{`generate-sources`}</code>(<code>{`mvn install`}</code> によって呼び出されます)は、<a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation-java/app/src/main/resources/configdefinitions/metal-names.def" aria-label="metal-names.def">metal-names.def</a> を使って <code>{`target/generated-sources/vespa-configgen-plugin/com/mydomain/example/MetalNamesConfig.java`}</code> を生成します。configクラスを生成すると、<a href="https://www.jetbrains.com/idea/download/" aria-label="IntelliJ IDEA">IntelliJ IDEA</a> のようなツールで解決されるようになります。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;テスト&#42;&#42;</td>
+      <td>ユニットテストの例は <a href="https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation-java/app/src/test/java/ai/vespa/example/album/MetalSearcherTest.java" aria-label="MetalSearcherTest.java">MetalSearcherTest.java</a> にあります。<code>{`testAddedOrTerm1`}</code> と <code>{`testAddedOrTerm2`}</code> は、同じテストを行う2つの方法を示しています。1つ目は <a href="/ja/querying/query-language" aria-label="YQL">YQL</a> のための最小限のsearch chainをプログラムでセットアップします。2つ目は <a href="https://javadoc.io/doc/com.yahoo.vespa/application/latest/com/yahoo/application/Application" aria-label="`com.yahoo.application.Application`"><code>{`com.yahoo.application.Application`}</code></a> を使用します。これはアプリケーション・パッケージをセットアップし、テストを簡素化します。詳細は<a href="/ja/applications/unit-testing" aria-label="unit testing">ユニットテスト</a>を参照してください。</td>
+    </tr>
+  </tbody>
+</table>
+
+## コンポーネントのデバッグ
+
+<Warning>
+**重要:**
+
+このデバッグ手順は、デバッグ・ポートが開いているエンドポイントでのみ機能します - ほとんどのマネージド・サービスでは、セキュリティ上の理由からこれを行っていません。
+</Warning>
+
+Vespa Cloudでは、プロトコルに本質的なセキュリティ対策が欠けているため、*Java Debug Wire Protocol (JDWP)* によるデバッグは許可されていません。対話的なデバッグが必要な場合は、セルフホストのVespaインストール(下記)にアプリケーションをデプロイし、手動で [*JDWP* エージェントをJVMオプションに追加](#debugging-components)してください。
+
+[Vespa Cloud Console](https://console.vespa-cloud.com/) からJVMヒープダンプまたはJava Flight Recorderの記録を要求することで、Javaコードをデバッグできます。アプリケーションのクラスター概要に移動し、任意の *container* ノードで *export JVM artifact* を選択します。この処理には最大で数分かかります。完了すると、ダンプをダウンロードする手順がConsoleに表示されます。ダウンロードしたZstandard圧縮アーカイブからファイルを展開し、無料の [JDK Mission Control](https://www.oracle.com/java/technologies/jdk-mission-control) ユーティリティを使ってダンプ/記録を調べてください。
+
+<Frame>
+![](/assets/img/jvm-dump.png)
+</Frame>
+
+セルフホストのコンテナーで実行されている [Searcher](/ja/applications/searchers) / [Document Processor](/ja/applications/document-processors) / [Component](/ja/applications/components) をデバッグするには、IDEAでリモート・デバッグ設定をセットアップします - IntelliJの例:
+
+<Steps>
+  <Step>
+  Run -> Edit Configurations...
+  </Step>
+
+  <Step>
+  `+` をクリックして新しい設定を追加します。
+  </Step>
+
+  <Step>
+  左端のペインで "Remote JVM Debug" オプションを選択します。
+  </Step>
+
+  <Step>
+  hostnameをコンテナーが実行されているホストに設定し、必要に応じてポートを変更します。
+  </Step>
+
+  <Step>
+  コンテナーの [jvmオプション](/ja/reference/applications/services/container#jvm)を、"Command line arguments for remote JVM" の値に設定します:
+
+  ```xml
+  <container id="default" version="1.0">
+      <nodes>
+          <jvm options="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005" />
+      </nodes>
+  </container>
+  ```
+  </Step>
+
+  <Step>
+  アプリケーションを再デプロイし、コンテナーを実行しているノードでVespaを再起動します。Docker/Podmanコンテナーを使用している場合は、ポートが公開されていることを確認してください。例:
+
+  ```bash
+  $ docker run --detach --name vespa --hostname vespa-container \
+    --publish 127.0.0.1:8080:8080 --publish 127.0.0.1:19071:19071 --publish 127.0.0.1:5005:5005 \
+    vespaengine/vespa
+  ```
+  </Step>
+  <Step>
+  デバッグを開始しましょう!エラーがないか *vespa.log* を確認してください。
+  </Step>
+</Steps>
+
+
+<Columns cols={2}>
+<Card title="Vespaの動画" href="https://www.youtube.com/@vespaai" img="/assets/img/video-thumbs/deploying-a-vespa-searcher.png">
+vespaengineの [YouTubeチャンネル](https://www.youtube.com/@vespaai)で *Debugging a Vespa Searcher* をご覧ください!
+</Card>
+</Columns>
+
+
+## システムテストとステージングテストの開発
+
+Vespa Cloudを使用する場合、システムテストおよびステージングテストは、`dev` ゾーンのテスト・デプロイをテスト対象として使用するのが最も簡単です。さまざまなテスト・タイプの説明については[テストの全般ガイド](/ja/applications/testing)を、該当するテストの書き方については [基本HTTPテスト](/ja/reference/applications/testing)または [Java JUnitテスト](/ja/reference/applications/testing-java)のリファレンスを参照してください。
+
+[Vespa CLI](/ja/clients/vespa-cli) を使って[基本HTTPテスト](/ja/reference/applications/testing)をデプロイ・実行する場合、CLIが `cloud` ターゲットを使用するように設定されていれば、テスト・リファレンスにあるものと同じコマンドがそのまま機能します。
+
+### Javaテストの実行
+
+Mavenと [Java JUnitテスト](/ja/reference/applications/testing-java)では、ローカルマシン上のテスト・ランタイムにAPIおよびデータプレーンの認証情報を注入するために、いくつかの追加設定が必要です:
+
+```bash
+$ mvn test \
+-D test.categories=system \
+-D dataPlaneKeyFile=data-plane-private-key.pem -D dataPlaneCertificateFile=data-plane-public-cert.pem \
+-D apiKey="$API_KEY"
+```
+
+`apiKey` は *dev* インスタンスのエンドポイントを取得するために使用されます。データプレーンの鍵と証明書のペアは、[ai.vespa.hosted.cd.Endpoint](https://github.com/vespa-engine/vespa/blob/master/cloud/tenant-cd-api/src/main/java/ai/vespa/hosted/cd/Endpoint.java) がアプリケーションのエンドポイントにアクセスするために使用します。`-D vespa.test.config` 引数がなくなっていることに注意してください。この設定はVespa Cloud APIから自動的に取得されます - そのためにAPIキーが必要なのです。
+
+[サンプル・アプリケーション](/ja/basics/deploy-an-application-local)のようにVespaをセルフホストで実行する場合、デフォルトではAPIにもコンテナーにも認証は不要です。データプレーンの鍵と証明書を指定すると、この場合の正しいSSLコンテキストはJavaのデフォルトであるため、逆にテストが失敗します。
+
+TestRuntimeが起動できることを確認してください。TestRuntimeはSSLコンテキストを初期化するため、ローカルで実行する際はデフォルトのコンテキストを使用するように設定を削除してください。*pom.xml* とIDEのデバッグ設定からプロパティを削除します。
+
+開発者は、システムテストをデバッグするために、これらのパラメーターをIDEの実行設定で指定することもできます:
+
+```txt
+-D test.categories=system
+-D tenant=my_tenant
+-D application=my_app
+-D instance=my_instance
+-D apiKeyFile=/path/to/myname.mytenant.pem
+-D dataPlaneCertificateFile=data-plane-public-cert.pem
+-D dataPlaneKeyFile=data-plane-private-key.pem
+```
+
+## ヒントとトラブルシューティング
+
+- Vespa Cloudは毎日アップグレードされ、`dev` にあるアプリケーションのVespaプラットフォームもアップグレードされます。これは通常、各インスタンスへのデプロイが行われる時間帯とは逆の時間帯に行われ、数分かかります。冗長性のないデプロイは、アップグレード中は利用できなくなります。
+- 認証(HTTPコード401)または認可(HTTPコード403)によるデプロイの失敗は、コマンドライン・ツールを使ってデプロイする際の `tenant` および/または `application` の設定ミスが原因であることがほとんどです。Vespa CLIまたは `pom.xml` で設定した値が、UIで設定されている内容と一致していることを確認してください。
+- データプレーンの障害が発生した場合は、ビルドとデプロイの前に、公開証明書を `src/main/application/security/clients.pem` にコピーすることを忘れないでください。これはVespa CLIの `vespa auth cert` コマンドが処理します。
+- IDEでJavaの[システムテストとステージングテスト](/ja/reference/applications/testing-java)を実行するには、すべてのAPIおよびデータプレーンの鍵と証明書がIDE側でも設定されていることを確認してください。すべてのIDEが `pom.xml` からすべての設定を正しく取り込むとは限りません:
+
+  ```txt
+  -Dtest.categories=system
+  -DapiKeyFile=/path-to/tname.pem
+  -DdataPlaneCertificateFile=/path-to/data-plane-public-cert.pem
+  -DdataPlaneKeyFile=/path-to/data-plane-private-key.pem
+  ```

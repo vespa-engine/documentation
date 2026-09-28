@@ -1,0 +1,114 @@
+---
+title: "検索リクエストのレート制限"
+sidebarTitle: "クエリーのレート制限"
+---
+
+Vespa のコンテント・クラスターの過負荷を避けたり、特定のクライアントなどからのクエリー負荷を制限したりするために、バンドルされている [Vespa Rate Limiting Searcher](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/searchers/RateLimitingSearcher.java) を設定して、1 秒あたりのリクエスト数が一定のクォータを超えた場合に、サーチチェーンへの受信リクエストを [HTTP リターンコード 429](https://en.wikipedia.org/wiki/List_of_HTTP_status_codes#429) で拒否することができます。カウンターは、次の 1 秒でクォータが補充されるとリセットされます。
+
+## はじめに
+
+レート制限のサーチャーは Vespa にバンドルされていますが、ロードされる前に [services.xml](/ja/reference/applications/services/services) で明示的に設定する必要があります。この例では、デフォルトのサーチチェーンに対してサーチャーを設定する方法を示します:
+
+```xml
+<container id="search" version="1.0">
+    <search>
+        <chain id="default" inherits="vespa">
+            <searcher id="com.yahoo.search.searchers.RateLimitingSearcher"/>
+        </chain>
+    </search>
+</container>
+```
+
+この設定が有効になると、レート制限のサーチャーはロードされますが、アクティブにはなりません。HTTP の検索リクエストに直接パラメーターを指定するか、クエリー・プロファイルを設定することで、リクエストごとに有効化されます。以下では両方のアプローチを示します。
+
+## クエリー・パラメーターによる有効化
+
+このサーチャーは、以下のクエリー・パラメーター引数を受け取ります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>引数</th>
+      <th>型</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>rate.id</td>
+      <td>String</td>
+      <td>レート制限の観点から見たクライアントの ID。</td>
+    </tr>
+    <tr>
+      <td>rate.cost</td>
+      <td>Double</td>
+      <td>このクエリーのコスト（Double）。これはクエリーの実行後に読み取られるため、結果を検査する下流のサーチャーが設定でき、さまざまなクエリーのコストを区別できるようになります。デフォルトは 1 です。</td>
+    </tr>
+    <tr>
+      <td>rate.quota</td>
+      <td>Double</td>
+      <td>このシステムにおいて、特定の ID が 1 秒あたりに消費できるコスト。</td>
+    </tr>
+    <tr>
+      <td>rate.idDimension</td>
+      <td>String</td>
+      <td>メトリクスのログ記録時に使用される rate-id ディメンションの名前。指定しない場合、メトリクスはディメンションなしで記録されます。</td>
+    </tr>
+    <tr>
+      <td>rate.dryRun</td>
+      <td>Boolean</td>
+      <td>拒否対象のリクエストについてメトリクスを出力しますが、実際には拒否しません。</td>
+    </tr>
+  </tbody>
+</table>
+
+典型的なシナリオでは、HTTP の検索リクエストを構築するアプリケーションロジックが、トラフィックの発生元に応じてリクエストに `&rate.id` と `&rate.quota` を設定します。例:
+
+```bash
+http://localhost:8080/search?query=foo&rate.id=clientA&rate.quota=300
+```
+
+## クエリー・プロファイルによる有効化
+
+すべてのリクエストにレート制限のパラメーターを追加したくない場合や、検索リクエストを構築するアプリケーションロジックを制御できない場合は、[クエリー・プロファイル](/ja/reference/querying/query-profiles)を使用してレート制限を有効化できます。アプリケーション・パッケージでレート制限を有効化するデフォルトのクエリー・プロファイルの例:
+
+```xml
+<query-profile id="default">
+    <field name="rate.quota">100</field>
+    <field name="rate.id">default</field>
+</query-profile>
+```
+
+### クライアントごとのクォータ
+
+共有サービスのシナリオでは、リクエストと共に渡されるクエリー・パラメーター（例: `&clientId`）に基づいて異なるクォータを割り当てたい場合があります。以下の例では、リクエストと共に渡された clientId パラメーターに基づいて異なるクォータを割り当てます:
+
+```xml
+<query-profile id="default">
+    <!-- the request parameter used to select query profile -->
+    <dimensions>clientId</dimensions>
+
+    <!-- default rate limiting; add specific query profile for clientId with other settings -->
+    <field name="rate.quota">100</field>
+    <field name="rate.id">default</field>
+    <field name="rate.idDimension">clientID</field>
+
+    <!-- rate limiting for requests with &amp;clientId=clientA -->
+    <query-profile for="clientA">
+        <field name="rate.quota">200</field>
+        <field name="rate.id">clientA</field>
+        <field name="rate.idDimension">clientID</field>
+    </query-profile>
+
+    <!-- rate limiting for requests with &amp;clientId=clientB -->
+    <query-profile for="clientB">
+        <field name="rate.quota">400</field>
+        <field name="rate.id">clientB</field>
+        <field name="rate.idDimension">clientID</field>
+    </query-profile>
+</query-profile>
+```
+
+## メトリクス
+
+このサーチャーは、ディメンション `[rate.idDimension=rate.id]` 付きの[カウントメトリクス](/ja/operations/metrics) `requestsOverQuota` を出力します。

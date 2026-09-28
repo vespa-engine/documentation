@@ -1,0 +1,119 @@
+---
+title: アプリケーションをローカルにデプロイする
+---
+
+次の手順に従って、自分のマシン上に Vespa アプリケーションをデプロイします。
+
+このガイドの別バージョン:
+
+- [pyvespa を使用してアプリケーションをデプロイする](https://vespa-engine.github.io/pyvespa/getting-started-pyvespa-cloud.html) - Python 開発者向け
+- [アプリケーションをデプロイする](/ja/basics/deploy-an-application)
+- [Java コンポーネントを含むアプリケーションをデプロイする](/ja/basics/deploy-an-application-java)
+- [Vespa CLI を使わずにアプリケーションをデプロイする](/ja/basics/deploy-an-application-shell)
+- [Java コンポーネントを含むアプリケーションをローカルにデプロイする](/ja/basics/deploy-an-application-local-java)
+
+この手順は _vespaengine/vespa:8.692.16_ コンテナー・イメージでテストされています。
+
+  
+<Warning>
+**前提条件:**
+
+- x86\_64 または arm64 上の Linux、macOS、または Windows 10 Pro で、[Podman Desktop](https://podman.io/) または [Docker Desktop](https://www.docker.com/products/docker-desktop/) がインストールされ、エンジンが起動していること。 
+  - あるいは、Podman デーモンを起動します:
+    ```bash
+    $ podman machine init --memory 6000
+    $ podman machine start
+    ```
+  - システム制限やその他の設定については [Docker コンテナー](/ja/operations/self-managed/docker-containers)を参照してください。
+
+- Haswell(2013 年)より古い CPU については、[CPU サポート](/ja/operations/self-managed/cpu-support)を参照してください。
+- メモリー: Docker/Podman 専用に最低 4 GB の RAM。[メモリーの推奨事項](/ja/operations/self-managed/node-setup#memory-settings)。 
+- ディスク: `NO_SPACE` を回避してください - vespaengine/vespa コンテナー・イメージとデータ用の余裕分にディスク容量が必要です。[詳細はこちら](/ja/writing/feed-block)。 
+- [Vespa CLI](/ja/clients/vespa-cli) をインストールするための [Homebrew](https://brew.sh/)。または [Github releases](https://github.com/vespa-engine/vespa/releases) から Vespa CLI をダウンロードします。 
+
+</Warning>
+
+<Steps>
+<Step>
+**環境を検証します:**
+
+```bash
+$ docker info | grep "Total Memory"
+
+or
+
+$ podman info | grep "memTotal"
+```
+</Step>
+<Step>
+**[Homebrew](https://brew.sh/) を使用して [Vespa CLI](/ja/clients/vespa-cli) をインストールします:**
+
+```bash
+$ brew install vespa-cli
+```
+Windows を使用している、または Homebrew がない場合は、[Vespa CLI のページ](/ja/clients/vespa-cli)から直接ダウンロードしてください。
+</Step>
+<Step>
+**ローカル・ターゲットを設定します:**
+```bash
+$ vespa config set target local
+```
+</Step>
+<Step>
+**Vespa の Docker コンテナーを起動します:**
+```bash
+docker run --detach --name vespa --hostname vespa-container \
+  --publish 8080:8080 --publish 19071:19071 \
+  vespaengine/vespa
+```
+あるいは、上記のコマンドで `podman` を使用します。
+
+ポート `8080` は、検索およびフィードのインターフェースにコンテナーの外部からアクセスできるようにするために公開され、`19071` はデプロイ用のエンドポイントです。`vespa` という名前のコンテナーは一度に 1 つしか実行できないため、必要に応じて名前を変更してください。詳細は [Docker コンテナー](/ja/operations/self-managed/docker-containers)を参照してください。
+</Step>
+
+<Step>
+**サンプル・[アプリケーション](/ja/basics/applications)をクローンします:**
+```bash
+$ vespa clone album-recommendation myapp && cd myapp
+```
+</Step>
+
+<Step>
+**アプリケーションを[デプロイ](/ja/basics/applications#deploying-applications)します:**
+```bash
+$ vespa deploy --wait 300 ./app
+```
+</Step>
+
+<Step>
+**[ドキュメント](/ja/schemas/documents)を[フィード](/ja/writing/reads-and-writes)します:**
+```bash
+$ vespa feed dataset/documents.jsonl
+```
+</Step>
+<Step>
+**[クエリー](/ja/querying/query-api)を実行します:**
+```bash
+vespa query "select * from music where album contains 'head'"
+```
+```bash
+vespa query \
+  "select * from music where true" \
+  "ranking=rank_albums" \
+  "ranking.features.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+```
+</Step>
+<Step>
+**ドキュメントを取得します:**
+```bash
+vespa document get id:mynamespace:music::a-head-full-of-dreams
+```
+```bash
+vespa visit
+```
+
+ID でドキュメントを取得したり、すべてのドキュメントをエクスポートしたりできます - [/document/v1](/ja/writing/document-v1-api-guide) と [vespa visit](/ja/writing/visiting) を参照してください。
+</Step>
+</Steps>
+
+おめでとうございます。最初の Vespa アプリケーションのデプロイが完了しました!

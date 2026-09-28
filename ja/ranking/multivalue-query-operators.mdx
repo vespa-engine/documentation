@@ -1,0 +1,238 @@
+---
+title: "多値クエリー演算子"
+---
+
+この記事は[ランキング入門](/ja/ranking/ranking-intro)の続編です。このガイドのユースケースの一部は、[テンソル](/ja/ranking/tensor-user-guide)を使用した方がうまく解決できます。
+
+## dotProduct と wand
+
+_wand_(別名 Parallel Wand)は、効率的な top-k 検索に使用できる検索演算子です。これは、Broder らが [Efficient query evaluation using a two-level retrieval process](https://dl.acm.org/doi/10.1145/956863.956944) で説明した _Weak AND/Weighted AND_ アルゴリズムを実装しています。詳細は [Vespa での Wand の使用](/ja/ranking/wand)を参照してください。
+
+_dotProduct_ は _wand_ のブルートフォース版に相当します。どちらも、フィールド内の重み付きトークンが、クエリー内の重み付きトークンのサブセットにマッチするドキュメントを検索するために使用されます。_dotProduct_ が生成する [raw スコア](#raw-scores-and-query-item-labeling)は、_wand_ が生成するものと等価です。
+
+違いは、_wand_ が、内部の最大 _dotproduct_ によって返されるであろう top-k targetHits 件の結果を取得するために、ローカルな最適化を行う点です。どちらがよりコスト効率が良いかは複雑で、語彙(フィーチャー)のサイズと以下に依存します:
+
+- クエリー用語の数とそのウェイト分布
+- ドキュメント用語の数とそのウェイト分布
+
+2 つのアプローチを比較するのは簡単です。どちらかを使用してベンチマークを実行し、レイテンシーと総ヒット数を比較します。平均して、総ヒット数がクエリー内の他のフィルターにマッチするドキュメントの総数に近づく場合は、テンソルのドット積を使用した方が低コストです。
+
+## dotProduct の例
+
+[dotProduct](/ja/reference/querying/yql#dotproduct) のリファレンスを参照してください。_dotProduct_ は、クエリー内の weighted set とフィールド内の weighted set のドット積を計算し、結果を [raw スコア](#raw-scores-and-query-item-labeling)に保存します。これはランキング式で使用されます。
+
+トークンを保存するには、ドキュメント内で weighted set フィールドを使用します(より高いパフォーマンスのためには _fast-search_ 付きの[アトリビュート](/ja/content/attributes)を使用してください):
+
+```bash
+field features type weightedset<string> {
+    indexing: summary | attribute
+    attribute: fast-search
+}
+```
+
+クエリーは、カスタムサーチャーで準備するか、[YQL](/ja/reference/querying/yql#dotproduct) を使用して送信する必要があります。以下のコードは関連する部分を示しています。同じクエリーで複数のドット積を使用する場合は、ラベルを付けるのが良い方法です。これにより、後で結果をランキングする際に、個々のドット積のスコアを使用できます。
+
+```java
+Item makeDotProduct(String label, String field, Map<String, Integer> token_map) {
+    DotProductItem item = new DotProductItem(field);
+    item.setLabel(label);
+    for (Map.Entry<String, Integer> entry : token_map.entrySet()) {
+        item.addToken(entry.getKey(), entry.getValue());
+    }
+    return item;
+}
+```
+
+_dotProduct_ は、ランキング式で使用できる [raw スコア](#raw-scores-and-query-item-labeling)を生成します。最もシンプルなアプローチは、トークンを含むフィールドのすべての raw スコアの合計を使用することです:
+
+```bash
+rank-profile default {
+    first-phase {
+        expression: rawScore(features)
+    }
+}
+```
+
+より細かく制御するには、クエリー内の各ドット積にラベルを付け、それらのスコアを個別に使用します:
+
+```bash
+rank-profile default {
+    first-phase {
+        expression: itemRawScore(dp1) + itemRawScore(dp2)
+    }
+}
+```
+
+## IN 演算子の例
+
+[in 演算子](/ja/reference/querying/yql#in)のリファレンスを参照してください。_in_ 演算子のユースケースは、多数の異なる値を取りうる特定のプロパティを持つドキュメントに検索結果を限定することです。たとえば:
+
+- ユーザーが誰かわかっていて、そのユーザーの友人のいずれかが書いたドキュメントに限定したい
+- ユーザーが関心を持つトピック領域がわかっていて、そのトピックの上位ランクの著者に限定したい
+- 過去 10 分間にユーザーによってクリックされたドキュメントを記録しており、それらの中だけを検索したい
+
+_in_ 演算子を使用する方が、大きな OR 式よりも高いパフォーマンスが得られます:
+
+```bash
+select * from data where category in ('cat1', 'cat2', 'cat3')
+select * from data where category = 'cat1' OR category = 'cat2' OR category = 'cat3' ...
+```
+
+詳細は[マルチルックアップ・セットフィルタリング](/ja/performance/feature-tuning#multi-lookup-set-filtering)を参照してください。
+
+実際のユースケースのほとんどでは、検索対象のフィールドはユーザー ID、トピック ID、グループ ID、ドキュメント ID の類であり、多くの場合、数値としてモデル化できます。通常は `long` 型のフィールド(複数の値が必要な場合は `array<long>`)です。文字列フィールドを使用する場合も、通常は何らかの ID になります。_in_ 演算子で検索することを意図したデータが文字列フィールドにある場合は、`match: word`(アトリビュートの文字列フィールドのデフォルト)を使用することを推奨します。
+
+次の例は、[Java サーチャー](/ja/applications/searchers)で _in_ 演算子をプログラムから使用して category フィールドを検索する方法を示しています:
+
+```js
+field category type string {
+    indexing: attribute | summary
+    attribute: fast-search
+    rank: filter
+}
+```
+
+サーチャーは通常、次のことを行います:
+
+- フィルターとして使用したいフィールドに対して、新しい `StringInItem`(または `NumericInIterm`)を作成する。
+- クエリーアイテムに挿入するトークンを見つける。
+- `AndItem` を使用して、新しい `StringInItem` を元のクエリーと組み合わせる。
+
+10 個のトークンを含むハードコードされたフィルターを追加するシンプルなコード例:
+
+```java
+private Result hardCoded(Query query, Execution execution) {
+    var filter = new StringInItem("category");
+    filter.addToken("magazine1");
+    filter.addToken("magazine2");
+    filter.addToken("magazine3");
+    filter.addToken("tv");
+    filter.addToken("tabloid1");
+    filter.addToken("tabloid2");
+    filter.addToken("tabloid3");
+    filter.addToken("tabloid4");
+    filter.addToken("tabloid5");
+    filter.addToken("tabloid6");
+    var tree = query.getModel().getQueryTree();
+    var oldRoot = tree.getRoot();
+    var newRoot = new AndItem();
+    newRoot.addItem(oldRoot);
+    newRoot.addItem(filter);
+    tree.setRoot(newRoot);
+    query.trace("MyCustomFilterSearcher added hardcoded filter: ", true, 2);
+    return execution.search(query);
+}
+```
+
+ここでの最大の課題は、挿入するトークンを見つけることです。通常、受信した検索リクエストの URL には、すべてのトークンが直接含まれているとは限りません。たとえば、検索リクエストにはユーザー ID が含まれていて、(データベースまたは Vespa のインデックスでの)ルックアップによって、そのユーザーに関連するカテゴリーを取得することになるでしょう。
+
+詳細は javadoc を参照してください: [NumericInItem](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/NumericInItem.html) および [StringInItem](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/StringInItem.html)。
+
+## 結果のピン留めの例
+
+結果を固定位置にピン留めするには、段階的なランキング関数を使用します。つまり、ピン留めされたクエリーのランキングスコアの範囲を定義し、オーガニックな結果をその下にランク付けします。(オーガニックとピン留めを混在させることも _可能_ ですが、以下の例をシンプルに保つため、これらは別々の範囲にしています)
+
+まず、クエリーのキーを定義します。キーは結果をピン留めするために使用される ID です。キーの定義方法はユーザー次第ですが、シンプルな方法はクエリー文字列をハッシュ化することです。たとえば:
+
+```bash
+$ md5 -q -s "65 inch tv set"
+```
+
+1 つのドキュメントを複数のクエリーに対してピン留めできるため、複数のキー / 位置エントリを保存するには [weightedset](/ja/reference/schemas/schemas#weightedset) を使用します:
+
+```js
+field pinned_query_position type weightedset<string> {
+    indexing: index | summary
+}
+```
+
+このセットでは、キーから値へのマッピングを行います。値(_elementWeight_)は、位置のためにランキングプロファイルで使用されます。この例では、「オーガニック」なランキングは closeness 関数です:
+
+```js expandable
+rank-profile semantic_pin inherits default {
+    inputs {
+        query(query_embedding) tensor<float>(x[384])
+    }
+
+    function pin_topten(fieldname) {
+        expression {
+            if (elementCompleteness(fieldname).elementWeight > 0,
+                11-elementCompleteness(fieldname).elementWeight, 0)
+        }
+    }
+
+    first-phase {
+        expression {
+            # restrict the "organic" ranking contribution to [0-1>, add top ten contributions
+            min(closeness(field, doc_embedding), 0.99999) +
+            pin_topten(pinned_query_position)
+        }
+    }
+
+    match-features {
+        # Use match-features to easily debug ranking
+        closeness(field, doc_embedding)
+        elementCompleteness(pinned_query_position).elementWeight
+    }
+}
+```
+
+要するに、オーガニックの範囲を 0〜1 に制限し、ピン留めされた位置が高いほど(11-pos)、ランキングにより多く加算します。weighted set `pinned_query_position` でのマッチによるランク寄与を加算する OR 項を追加します:
+
+```bash
+$ vespa query 'select * from items where true
+    or rank (pinned_query_position contains "af6f44472a1d3b00d40d04309067b739")' \
+  ranking=semantic_pin
+```
+
+上記では、簡単のために `true` 文を使用しています。これを実際のクエリーに置き換えてください。
+
+クエリーキーと位置を持つサンプルドキュメント - ここでは、1 つのドキュメントが 2 つのクエリーに対してピン留めされています:
+
+```json
+[
+    {
+        "put": "id:mynamespace:items::1",
+        "fields": {
+            "pinned_query_position": {
+                "af6f44472a1d3b00d40d04309067b739": 1,
+                "fe5e6fc6358aa1c59b8838852040bfb4": 2
+            }
+        }
+    }
+]
+```
+
+サンプルクエリー結果のスニペット:
+
+```json
+{
+    "id": "id:mynamespace:items::1",
+    "relevance": 10.0,
+    "source": "items",
+    "fields": {
+        "matchfeatures": {
+            "closeness(field,doc_embedding)": 0.0,
+            "elementCompleteness(pinned_query_position).elementWeight": 1.0
+        },
+        "sddocname": "items",
+        "documentid": "id:mynamespace:items::1",
+        "pinned_query_position": {
+            "fe5e6fc6358aa1c59b8838852040bfb4": 2,
+            "af6f44472a1d3b00d40d04309067b739": 1
+        }
+    }
+}
+```
+
+位置 1 にピン留めされた結果が 10 の関連性(ランク)スコアを得ていることがわかります。
+
+## raw スコアとクエリーアイテムのラベル付け
+
+Vespa のランキングは柔軟で、ドキュメントのマッチングから比較的分離されています。マッチングパイプラインの出力は、通常、クエリー内のさまざまな単語が特定のドキュメントにどのようにマッチするかを示し、それがどのようにマッチ品質に変換されるかをランキングフレームワークに判断させます。
+
+しかし、より複雑なマッチ演算子の中には、内部のマッチ情報を公開するのではなく、スコアを直接生成するものがあります。良い例が _wand_ 演算子です。ランキングの際、wand は詳細なマッチ情報を持たず、数値スコアが付加された単一の単語のように見えます。これは _raw スコア_ と呼ばれ、`rawScore` フィーチャーを使用してランキング式に含めることができます。
+
+`rawScore` フィーチャーは、フィールド名をパラメーターとして受け取り、そのフィールドに対してクエリーが生成したすべての raw スコアの合計を返します。より細かい制御が必要な場合(クエリーに、同じフィールドに対して raw スコアを生成する複数の演算子が含まれているが、ランキング式でそれらのスコアを個別に扱いたい場合)は、`itemRawScore` フィーチャーを使用できます。このフィーチャーは、クエリーアイテムの _ラベル_ をパラメーターとして受け取り、そのアイテムのみが生成した raw スコアを返します。
+
+クエリーアイテムのラベル付けは、クエリーアイテムにシンボリックな名前を付けるための汎用的なメカニズムです。クエリーアイテムには、サーチコンテナーのクエリー API でクエリーアイテムの `setLabel` メソッドを使用してラベルを付けます。

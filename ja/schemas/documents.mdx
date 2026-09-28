@@ -1,0 +1,258 @@
+---
+title: "ドキュメント"
+---
+
+Vespa はデータを*ドキュメント*としてモデル化します。ドキュメントは、アプリケーションが設定する、全ドキュメントの中で一意な文字列の識別子を持ちます。ドキュメントは[キーと値のペア](/ja/writing/document-api-guide)の集合です。ドキュメントは、[スキーマ](/ja/basics/schemas)で定義されるスキーマ(すなわち型)を持ちます。
+
+クラスターを設定する際、[documents](/ja/reference/applications/services/content#documents) 要素で、そのクラスターが格納するドキュメントタイプを設定します。この設定は、ガベージコレクターが有効な場合にその設定にも使用されます。さらに、アプリケーションに送信されるドキュメントのデフォルトルートの定義にも使用されます。デフォルトでは、ドキュメントは、そのドキュメントタイプが定義されているすべてのクラスターに送信されます。詳細は[ルーティング](/ja/writing/document-routing)を参照してください。
+
+Vespa はドキュメント ID を使用してドキュメントをノードに分散します。ドキュメント識別子から、コンテントレイヤーは数値のロケーションを計算します。バケットには、ロケーションの下位ビットの所定の数がすべて等しいドキュメントがすべて含まれます。この特性は、ドキュメントの同一位置への格納を可能にするために使用されます。詳細は[バケット](/ja/content/buckets)と[コンテント・クラスターの伸縮性](/ja/content/elasticity)を参照してください。
+
+ドキュメントは[グローバル](/ja/reference/applications/services/content#document)にすることができます。[親子関係](/ja/schemas/parent-child)を参照してください。
+
+## ドキュメント ID
+
+ドキュメント識別子は文字列で表される URI であり、ドキュメント識別子用に定義された URI スキームに準拠する必要があります。ドキュメント識別子の文字列には、[com.yahoo.text.Text](https://github.com/vespa-engine/vespa/blob/master/vespajlib/src/main/java/com/yahoo/text/Text.java) の `isTextCharacter` で定義される*テキスト文字*のみを含めることができます。
+
+### id スキーム
+
+Vespa には現在、定義済みのスキームが 1 つだけあります。*id スキーム*です: `id:<namespace>:<document-type>:<key/value-pair>:<user-specified>`
+
+<Note>
+**注:** 
+
+ID から [/document/v1/](/ja/writing/document-v1-api-guide) で使用される URL へのマッピングの一例は、`id:mynamespace:mydoctype::user-defined-id` から `/document/v1/mynamespace/mydoctype/docid/user-defined-id` へのマッピングです。例とツールは[トラブルシューティング](/ja/writing/document-v1-api-guide#document-not-found)にあります。
+</Note>
+
+例は [/document/v1/](/ja/writing/document-v1-api-guide) ガイドを参照してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>部分</th>
+      <th>必須</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>namespace</td>
+      <td>はい</td>
+      <td>Vespa では使用されません。<a href="/ja/schemas/documents#namespace" aria-label="below">下記</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>document-type</td>
+      <td>はい</td>
+      <td><a href="/ja/reference/applications/services/content#document" aria-label="services.xml">services.xml</a> と<a href="/ja/reference/schemas/schemas" aria-label="schema">スキーマ</a>で定義されるドキュメントタイプです。</td>
+    </tr>
+    <tr>
+      <td>key/value-pair</td>
+      <td>省略可能</td>
+      <td>id スキームの修飾子で、<a href="/ja/content/buckets#document-to-bucket-distribution" aria-label="buckets">バケット</a>へのドキュメントの分散を設定するために使用します。修飾子がない場合、id スキームはすべてのドキュメントを均一に分散します。key/value-pair フィールドには、2 つの可能なキーと値のペアのいずれかが入ります。&#42;&#42;n&#42;&#42; と &#42;&#42;g&#42;&#42; は相互に排他的です: <br/> <code>{`n=*<number>*`}</code><br/> <code>{`[0,2^63-1]`}</code> の範囲の数値 - 異常なバケット分散のテスト専用です <br/><br/> <code>{`g=<groupname>`}</code><br/> &#42;groupname&#42; 文字列はハッシュ化され、格納場所の選択に使用されます<br/><br/><Warning> &#42;&#42;重要:&#42;&#42; <br/>これは <a href="/ja/reference/applications/services/content#document" aria-label="mode=streaming or mode=store-only">mode=streaming または mode=store-only</a> のドキュメントタイプにのみ有用です。通常のインデックス付きドキュメントタイプには修飾子を使用しないでください。</Warning><br/><br/>  <a href="/ja/performance/streaming-search" aria-label="streaming search">ストリーミング検索</a>を参照してください。通常のインデックス付きドキュメントに修飾子を使用すると、フィードのパフォーマンスが予測不能になります。加えて、検索ディスパッチには検索を修飾子/バケットに限定する機能はありません。</td>
+    </tr>
+    <tr>
+      <td>user-specified</td>
+      <td>はい</td>
+      <td>一意な ID 文字列です。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+### 検索結果内のドキュメント ID
+
+(文字列としての)完全なドキュメント ID には冗長な情報が含まれることが多く、かなり長くなります。典型的な値は "id:mynamespace:mydoctype::user-specified-identifier" のようになり、Vespa の外部で有用なのは最後の部分だけです。そのため、ドキュメント ID はデフォルトではメモリに格納されず、[検索結果](/ja/reference/querying/default-result-format#id)に**必ずしも存在するとは限りません**。
+
+ドキュメント ID のメモリへの格納を有効にするには、スキーマで [`documentid`](/ja/reference/schemas/schemas#documentid) を `attribute` に設定します。これは Vespa 8.691.19 以降で可能です。検索結果でメモリからドキュメント ID を返すには、次のように[ドキュメントサマリー](/ja/querying/document-summaries)を設定します。
+
+```js
+schema music {
+    documentid: attribute
+    document music {
+        field ...
+    }
+    document-summary empty-summary {
+        summary documentid {
+            source: documentid
+        }
+    }
+    ...
+```
+
+次に、クエリー API で `presentation.summary=empty-summary` を使用します。
+
+スキーマの [`documentid`](/ja/reference/schemas/schemas#documentid) がデフォルトの `from-disk` 設定の場合、ドキュメント ID はディスクにのみ格納されます。それでも検索結果で値を返すには、次のように[ドキュメントサマリー](/ja/querying/document-summaries)を設定します。
+
+```js
+schema music {
+    document music {
+        field ...
+    }
+    document-summary empty-summary {
+        summary documentid {
+            source: documentid
+        }
+        from-disk
+    }
+    ...
+```
+
+`from-disk` 設定は、ドキュメントサマリーのディスクアクセスに関する警告を抑制します。このように多数の ID をリクエストする場合は、より長いクエリータイムアウトを使用してください。
+
+よりメモリ効率が良いものの、より複雑な代替手段は、独自の一意な識別子(通常は上記の "user-specified-identifier")を、一般に "myid" や "shortid" などの名前を付けたドキュメントフィールドに入れることです。
+
+```js
+field shortid type string {
+    indexing: attribute | summary
+}
+```
+
+これにより、メモリ内フィールドのみの[ドキュメントサマリー](/ja/querying/document-summaries)を使用しながら、実際に必要な識別子を取得できます。"user-specified-identifier" が単純な数値であれば、このフィールドに "type int" を使用して、メモリのオーバーヘッドを最小限にすることもできます。
+
+## 名前空間
+
+ドキュメント ID の名前空間は、複数のドキュメントコレクションがあり、それらが同じドキュメント ID になることが決してないようにしたい場合に便利です。Vespa においてこれ以外の機能はなく、たとえば "doc" のような任意の短い定数値を設定して構いません。また、テストに使用する合成ドキュメントには名前空間 "test" を使用させることも検討してください。そうすれば、誤ってテスト外に存在してしまった場合に検出して削除するのが容易になります。
+
+例 - 次のようにフィードした場合
+
+- ドキュメント A を `curl -X POST https:.../document/v1/first_namespace/my_doc_type/docid/shakespeare` で
+- ドキュメント B を `curl -X POST https:.../document/v1/second_namespace/my_doc_type/docid/shakespeare` で
+
+これらは別々のドキュメントとなり、どちらも検索可能で、異なるドキュメント ID を持ちます。ドキュメント ID の違いは、ユーザー指定の部分(どちらのドキュメントも `shakespeare`)ではなく、名前空間の部分(`first_namespace` と `second_namespace`)にあります。ドキュメント A の完全なドキュメント ID は `id:first_namespace:my_doc_type::shakespeare` です。
+
+名前空間は、*services.xml* やスキーマなど、他の場所の設定とは関係がありません。その意味では、各ドキュメント ID のユーザー指定部分と同様のものです。名前空間は、完全なドキュメント ID の一部としてを除き、クエリーでは使用できません。ただし、[ドキュメント選択](/ja/reference/writing/document-selector-language)では使用でき、たとえば `id.namespace` にアクセスして特定の文字列と比較できます。ユースケースの一例は、ドキュメントのサブセットの[ビジット](/ja/writing/visiting)です。
+
+## フィールド
+
+ドキュメントはフィールドを持つことができます。[スキーマリファレンス](/ja/reference/schemas/schemas#field)を参照してください。
+
+フィールドにデフォルト値を定義することはできません。ドキュメントの put/update 操作にデフォルト値を割り当てるには、[choice ('||') インデックスステートメント](/ja/writing/indexing#choice-example)または[ドキュメント・プロセッサー](/ja/applications/document-processors)を使用してください。
+
+## フィールドセット
+
+*get* や *visit* のような読み取り操作から返されるフィールドを制限するには、*fieldset* を使用します。[例](/ja/clients/vespa-cli#documents)を参照してください。パフォーマンスに影響しない場合、Vespa は指定より多くのフィールドを返すことがあります。
+
+<Note>
+**注:** 
+
+ドキュメントのフィールドセットは、[検索可能なフィールドセット](/ja/reference/schemas/schemas#fieldset)とは別のものです。
+</Note>
+
+フィールドセットの指定には 2 つの選択肢があります。
+
+- 組み込みのフィールドセット
+- ドキュメントタイプの名前、続いてコロン ":"、その後にカンマ区切りのフィールドのリスト(たとえば、`music.sd` で宣言された 2 つのフィールドを取得するには `music:artist,song`)
+
+組み込みのフィールドセット:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>フィールドセット</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>[all]</td>
+      <td>スキーマ内のすべてのフィールド(生成されたフィールドを含む)とドキュメント ID を返します。</td>
+    </tr>
+    <tr>
+      <td>[document]</td>
+      <td>ドキュメント ID を含む、ドキュメント内の元のフィールドを返します。</td>
+    </tr>
+    <tr>
+      <td>[none]</td>
+      <td>ドキュメント ID すらも含めて、フィールドをまったく返しません。&#42;内部用のため使用しないでください&#42;</td>
+    </tr>
+    <tr>
+      <td>[id]</td>
+      <td>ドキュメント ID のみを返します</td>
+    </tr>
+    <tr>
+      <td><code>{`<document type>:[document]`}</code></td>
+      <td><Danger>&#42;&#42;非推奨:&#42;&#42;<br/> <code>{`[document]`}</code> を使用してください</Danger><br/>  上記の <code>{`[document]`}</code> フィールドセットと同じです: 元のドキュメントフィールド(生成されたフィールドは含まない)のみをドキュメント ID とともに返します。</td>
+    </tr>
+  </tbody>
+</table>
+
+組み込みのフィールドセットを使用しない場合は、フィールドのリストを指定できます。構文:
+
+```bash
+<document type>:field1,field2,…
+```
+
+例:
+
+```bash
+music:title,artist
+```
+
+## ドキュメントの有効期限
+
+ドキュメントを自動的に失効させるには、[now](ja/reference/writing/indexing-language#now) を使った[セレクション](/ja/reference/applications/services/content#documents.selection)を使用します。例として、*timestamp* というフィールドを使用して、*music* ドキュメントの有効期間(TTL)を 1 日に設定します。
+
+```xml
+<documents garbage-collection="true">
+    <document type="music"
+              mode="index"
+              selection="music.timestamp &gt; now() - 86400" />
+</documents>
+```
+
+<Note>
+**注:**
+
+`selection` 式は、どのドキュメントを削除するかではなく、どのドキュメントを*保持する*かを指定します。*timestamp* フィールドには、EPOCH からの秒数の値が必要です:
+</Note>
+
+```js
+field timestamp type long {
+    indexing: attribute
+    attribute {
+        fast-access
+    }
+}
+```
+
+`garbage-collection="true"` の場合、Vespa はドキュメント空間を走査して期限切れのドキュメントをパージします。Vespa は、[garbage-collection-interval](/ja/reference/applications/services/content#documents.selection) 秒ごとに 1 回、格納されている各ドキュメントに対して、設定された GC セレクションを実行します。設定された間隔の中で、特定のドキュメントがいつ処理されるかは定められていません。
+
+<Warning>
+**重要:** 
+
+これは、CPU とスペースを節約するためのベストエフォートのガベージコレクション機能です。基準に基づいてドキュメントを除外することが重要な場合は、クエリーフィルターを使用してください。
+</Warning>
+
+- *now* を使った*セレクション*は、タイムスタンプが古くなっている可能性があるため、ドキュメントの再フィードや再処理の際に副作用を起こすことがあります。よくある問題は、古すぎるタイムスタンプでフィードしてしまい、結果としてドキュメントがまったくインデックスされないことです。
+- 通常、書き込み時点ですでに期限切れのドキュメントは永続化されません。[create](/ja/writing/document-v1-api-guide#create-if-nonexistent)(Create if nonexistent)を使用すると、期限切れで次のサイクルで削除されるドキュメントを作成できてしまいます。
+- セレクション文字列がどのドキュメントも選択しない設定をデプロイすると、すべてのドキュメントがガベージコレクションされます。セレクション文字列のテストには [visit](/ja/writing/visiting) を使用してください。ガベージコレクションされたドキュメントは復元できないものと考えてください。
+- セレクション式で参照されるフィールドは属性(attribute)であるべきです。また、フィールドに *"fast-access"* を設定するか、コンテント・クラスターの[検索可能コピー数](/ja/reference/applications/services/content#searchable-copies)を [redundancy](/ja/reference/applications/services/content#redundancy) と同じにする必要があります。そうしないと、ドキュメント選択のメンテナンスが遅くなり、システムのパフォーマンスに重大な影響を及ぼします。
+- セレクション文字列で[インポートされたフィールド](/ja/reference/schemas/schemas#import-field)を使用してドキュメントを失効させることができますが、使用する際には特別な注意が必要です。詳細と制限については、[セレクションでのインポートされたフィールドの使用](/ja/reference/writing/document-selector-language#using-imported-fields-in-selections)を参照してください。
+- ドキュメントのガベージコレクションは、優先度の高い操作に先取りされない限り継続的に実行される、低優先度のバックグラウンド操作です。クラスターがクライアントのフィード操作によって過度に負荷を受けている場合、GC の実行が妨げられる(スターベーション)リスクがあります。ガベージコレクションがスターベーションを起こしていないことを確認するには、ディストリビューターのメトリクス [vds.idealstate.max\_observed\_time\_since\_last\_gc\_sec.average](/ja/operations/metrics) を確認してください。これが `garbage-collection-interval` を大幅に超えている場合、GC がスターベーションを起こしている兆候です。
+
+一括削除するには、*"not music"* のように、どのドキュメントにもマッチしないセレクションを設定します
+
+セレクションのテストには [vespa visit](/ja/writing/visiting) を使用してください。*保持される*すべてのドキュメントの ID をダンプします。
+
+```sh
+$ vespa visit --selection 'music.timestamp > now() - 86400' --field-set "music.timestamp"
+```
+
+式を `not` で囲んで否定すると、GC の際に*削除される*すべてのドキュメントの ID をダンプできます。
+
+```sh
+$ vespa visit --selection 'not (music.timestamp > now() - 86400)' --field-set "music.timestamp"
+```
+
+## ドキュメントの処理
+
+ドキュメントを処理するには、[ドキュメント処理](/ja/applications/document-processors)を使用します。例としては、ドキュメントのエンリッチ(他のソースからのデータのルックアップ)、コンテンツの変換(言語的な変換やトークン化など)、データのフィルタリング、入力データに基づく他のイベントのトリガーなどがあります。
+
+次のような Vespa API の使用例については、サンプルアプリ [album-recommendation-docproc](https://github.com/vespa-engine/sample-apps/tree/master/examples/document-processing) を参照してください。
+
+- [Document API](/ja/writing/document-api-guide) - ドキュメントおよびドキュメント内のフィールドを操作し、Application フレームワークを使用したユニットテストを作成する
+- [ドキュメント処理](/ja/applications/document-processors) - 順序制約付きで独立したプロセッサーをチェーンする
+
+サンプルアプリ [vespa-documentation-search](https://github.com/vespa-cloud/vespa-documentation-search) には、[OutLinksDocumentProcessor](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/java/ai/vespa/cloud/docsearch/OutLinksDocumentProcessor.java) におけるドキュメントの PUT や UPDATE([create-if-nonexistent](/ja/writing/document-v1-api-guide#create-if-nonexistent) を使用)の処理例があります。これは、配列、マップ、テンソルのような[多値フィールド](/ja/querying/searching-multivalue-fields)の使用の入門にもなっています。Vespa Developer Cloud やローカルの Docker インスタンスにフィードしてテストするコードをビルドするには、[VespaDocSystemTest](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/test/java/ai/vespa/cloud/docsearch/VespaDocSystemTest.java) を使用してください。
+
+どちらのサンプルアプリも、処理の一環として、非同期の [DocumentAccess](https://github.com/vespa-engine/vespa/blob/master/documentapi/src/main/java/com/yahoo/documentapi/DocumentAccess.java) を使用し、Document API で他のドキュメントの GET/PUT/UPDATE を行っています。書き込み時にデータをエンリッチするアプリケーションの出発点として活用してください。

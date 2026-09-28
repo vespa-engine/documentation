@@ -1,0 +1,134 @@
+---
+title: "ベクトル検索入門"
+---
+
+ベクトル検索は、クエリーとオブジェクトの両方のデジタル表現を使ってオブジェクトを検索する手法です - 例で説明したほうが分かりやすいでしょう:
+
+ユーザーが花の「Dandelion(タンポポ)」を検索しているとします。通常のテキスト検索は、テキスト内に "dandelion" というタームが含まれているため、[このWikipediaの記事](https://en.wikipedia.org/wiki/Taraxacum)にマッチします:
+
+***Taraxacum***
+
+From Wikipedia, the free encyclopedia (Redirected from Dandelion)
+
+> "Dandelion" redirects here. It may refer to any species of the genus Taraxacum or specifically to Taraxacum officinale. For similar plants, see False dandelion. For other uses, see Dandelion (disambiguation)
+
+***Taraxacum*** (/təˈræksəkʊm/) is a large genus of flowering plants in the family Asteraceae, which consists of species commonly known as dandelions.
+
+...
+
+
+このドキュメントは間違いなくタンポポについてのものです。しかし、ユーザーが "blowball"(タンポポの成熟した球状の綿毛)を検索した場合、このドキュメントは "blowball" に対して適切なマッチであるにもかかわらず、上記のテキストはマッチしません。タンポポの画像の例:
+
+<Columns cols={2}>
+<Frame caption="Photos by Greg Hume">
+![](https://upload.wikimedia.org/wikipedia/commons/4/4f/DandelionFlower.jpg)
+</Frame>
+<Frame caption="Photos by Greg Hume">
+![](https://upload.wikimedia.org/wikipedia/commons/5/54/TaraxacumOfficinaleSeed.JPG)
+</Frame>
+</Columns>
+
+
+コンテンツの種類が増えると、これはさらに複雑になります。テキストのない画像に対して、テキスト検索でマッチさせるのは困難です。動画、ポッドキャスト、楽曲、テレビ番組なども同様です - これはしばしばマルチモーダル検索と呼ばれます。回避策は、楽曲のタイトル、ポッドキャスト・エピソードの概要、Webページ上の画像の *alt* テキストといった、オブジェクトのテキスト・メタデータを検索することです。そのようなメタデータは常に利用できるとは限らず、多くの場合、短すぎたり不正確すぎたりします - これでは根本的な問題は解決しません。
+
+クエリー自体が画像や楽曲であることもあります。現在再生中の楽曲や表示中の画像の文脈で、ユーザーが *これに似たもの* を求める場合です。これはレコメンダー・システムで見られる問題です。
+
+## デジタル表現
+
+同義語やマルチモーダルの問題への解決策は、テキスト・ドメインでのマッチングからデジタル・ドメインでのマッチングに切り替えることです。つまり、テキスト、画像、楽曲を、それが *何についてのものか* を示す数値の集合に変換するということです。
+
+さまざまなオブジェクトと、そのベクトル表現の例:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>&lt;Columns cols=&#123;3&#125;&gt;&lt;Frame&gt;!<a href="https://upload.wikimedia.org/wikipedia/commons/4/4f/DandelionFlower.jpg" aria-label="DandelionFlower.jpg">DandelionFlower.jpg</a>&lt;/Frame&gt;&lt;/Columns&gt;</th>
+      <th>[0.560, 0.001, 0.223, ...]</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&lt;Columns cols=&#123;2&#125;&gt;&lt;Frame&gt;!<a href="/assets/img/dandelion-song.png" aria-label="Dandelion bu Anna of the North">Dandelion bu Anna of the North</a>&lt;/Frame&gt;&lt;/Columns&gt;</td>
+      <td>[0.0, 0.011, 0.0, ...]</td>
+    </tr>
+    <tr>
+      <td>"Taraxacum is a large genus of flowering plants in the family Asteraceae, which consists of species commonly known as dandelions."</td>
+      <td>[0.002, 0.001, 0.411, ...]</td>
+    </tr>
+    <tr>
+      <td>dandelions</td>
+      <td>[0.002, 0.021, 0.355, ...]</td>
+    </tr>
+  </tbody>
+</table>
+
+このように、オブジェクトのデジタル表現は数値の並びであり、*ベクトル* と呼ばれます。*エンベディング* とも呼ばれます。
+
+検索対象のすべてのオブジェクト *と* クエリーをベクトル(デジタル表現)に変換することで、検索問題は類似ベクトルを見つける問題に変わります - すなわち *ベクトル検索* です。
+
+## ベクトルの作り方
+
+オブジェクトからベクトルを作成する方法は複数あります。機械学習がよく使われます。すぐに始められる既製のモデルが数多くあります。
+
+ベクトルの品質が検索の品質を決めるため、ここが、組織が検索の改善に力を注ぎたい部分になります。
+
+ベクトルには *次元*(長さ)と型(各セルの型)があります。
+
+コストと品質のトレードオフが重要です - あるベクトルは、より低い精度で表現したり、最も重要な次元だけを残して短縮したりできます。これにより検索精度は下がりますが、コストは数分の一に削減できます。75%のコスト削減で精度が下がっても、そのユースケースには許容範囲かもしれません。Vespaは[4つの型](../reference/ranking/tensor)をサポートしており、メモリー・コストには8倍の差があります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Int8</th>
+      <th>8ビット、次元あたり1バイト</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>bfloat16</td>
+      <td>16ビット、次元あたり2バイト</td>
+    </tr>
+    <tr>
+      <td>float</td>
+      <td>32ビット、次元あたり4バイト</td>
+    </tr>
+    <tr>
+      <td>double</td>
+      <td>64ビット、次元あたり8バイト</td>
+    </tr>
+  </tbody>
+</table>
+
+最適な型の選び方について詳しくはこちら:
+
+-   [billion-scale-knn](https://blog.vespa.ai/billion-scale-knn/)
+
+ベクトルの長さは、768や384のように数百程度であることが多いです。長いベクトルはより多くの情報を保持できますが、次元によって情報量の多寡があります。ある次元のほとんどの値が等しいか非常に近い場合、その次元にはほとんど価値がなく、除去できます:
+
+-   [主成分分析(PCA)による次元削減](https://blog.vespa.ai/building-billion-scale-vector-search-part-two/#dimension-reduction-using-principal-component-analysis-pca)
+
+多くの場合、より良いアプローチは、最適なサイズが分かったら、最初からそのユースケースに最適なサイズのMLモデルを使用することです。
+
+## ベクトル検索の実行
+
+"dandelion" は "dandelion" にマッチしますが、"rose" にはマッチしません。テキスト検索には二値的な性質があります。しかし、どちらも花であり、"airplane" よりは互いに似ていると見なされます。テキスト・マッチングと異なり、ベクトル検索はアイテムに正確にマッチするわけではありません。次の例では、簡単のために非常に短い3次元ベクトルを使い、その次元を3D空間の座標として使用しています:
+
+<Frame>
+![](/assets/img/3Dplot.png)
+</Frame>
+
+[0.000, 0.497, 0.110] は [0.101, 0.560, 0.093] と等しくはありませんが、かなり近いことが分かります - [0.611, 0.000, 0.217] よりも近いです。
+
+言い換えると、各次元の値が近ければベクトルは類似しており、これを検索で使って *最近傍*(nearest neighbor、NN)を見つけられます。*距離メトリック* を使ってベクトルの類似度を計算する方法は複数あります:
+
+-   [distance-metric](../reference/schemas/schemas#distance-metric)
+
+## 速度のための近似
+
+ベクトル類似度の計算は、次元数とベクトル数の掛け算と考えられます。あなたがカナダ人で、768次元のベクトルで表現されているなら、自分に最も似た別のカナダ人を見つけるには 768 x 39,000,000 = 29,952,000,000、つまり290億回の計算が必要です。
+
+より少ない計算でこれを近似しつつ、高い確率で最も近いベクトルを見つける方法があります - これは *近似最近傍探索*(*ANN検索*)と呼ばれます。Vespaは、厳密な最近傍探索とANN検索の両方をサポートしています:
+
+-   [approximate-nn-hnsw](/ja/querying/approximate-nn-hnsw)
+
+ANNは検索を高速化するために何らかのインデキシングを必要とするため、挿入(新しいベクトルの追加)はより高コストになり(より多くのCPUを使用)、より多くの容量(メモリーとディスク)を消費することに注意してください。さまざまな種類のANNインデキシングを評価する際は、ユースケースがベクトルの更新(削除を含む)を必要とするかどうかを考慮してください - Vespaはそのすべてをサポートしています。

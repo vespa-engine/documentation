@@ -1,0 +1,617 @@
+---
+title: "Proton"
+sidebarTitle: "コンテント・クラスター"
+description: "Proton は Vespa の検索コアであり、各コンテントノード上で *vespa-proton-bin* プロセスとして動作します。Proton はドキュメント(ドキュメントタイプごとに整理)のためのディスクおよびメモリ構造を管理し、[読み取りおよび書き込み操作](/ja/writing/reads-and-writes#operations)と[クエリー](#queries)の実行を処理します。ドキュメントデータは動的であるため、ディスクおよびメモリ構造は[メンテナンスジョブ](#proton-maintenance-jobs)によって定期的に最適化されます。"
+---
+
+コンテントノードには *バケット管理システム* があり、これは一連の *ドキュメントデータベース* にリクエストを送信します。各ドキュメントデータベースは `ready`、`not ready`、`removed` という 3 つの *サブデータベース* で構成されています:
+
+<Frame>
+![](/assets/img/proton-feed.svg)
+</Frame>
+
+
+### バケット管理
+
+ノードが起動すると、まずどのドキュメントとバケットを保持しているかの全体像を把握する必要があります。すべてのバケットのメタデータが判明すると、コンテントノードは down 状態から up 状態に遷移します。ディストリビューターはバケットメタデータへの迅速なアクセスを必要とするため、これらのリクエストを効率的に処理できるようにインメモリのバケットデータベースを維持しています。バケットデータベースの状態は、永続化された検索ノードの状態から常に再構築できますが、これはコストが高いため、プロセスの起動時にのみ行われます。
+
+このデータベースは、プロセスの存続期間中、ノードのバケットメタデータの状態に関する信頼できる情報源(source of truth)と見なされます。受信した操作がノード上のドキュメントの状態を変更するため、データベースが常にこれらの変更と同期していることが極めて重要です。
+
+### 永続化スレッドと操作のディスパッチ
+
+コンテントノードには、起動時に作成され、プロセスの存続期間中サイズが固定される *永続化スレッド* のプールがあります。永続化スレッドの責務は、コンテントノードが受信した書き込みおよび読み取り操作をスケジュールし、それらを検索コアにディスパッチし、書き込み操作によって生じた変更とバケットデータベースの同期を維持することです。
+
+明示的に設定されていない限り、スレッドプールのサイズは利用可能な CPU コア数に基づいて自動的に設定されます。
+
+永続化スレッドは *永続化キュー* によって支えられています。RPC サブシステムが受信した読み取り/書き込み操作は、このキューにプッシュされます。このキューは操作のデッドラインを認識しており、キューに入っている間に操作がデッドラインを超過した場合、実行されることなく直ちに送信元に失敗として返されます。これにより、高負荷のノードがキューを十分な速さで消化できないために、すでに失敗が確定している操作の処理にますます多くの時間を費やすという特有の障害シナリオを回避できます。
+
+特定のデータバケット宛てのすべての操作(Put や Get など)は、*バケットロック* のコンテキストで実行されます。ロックは読み取りに対しては *共有*、書き込みに対しては *排他* です。つまり、同じバケットに対して複数の読み取り操作を並列に実行できますが、1 つのバケットに対して同時に実行できる書き込み操作は 1 つだけです(また、あるバケットに対する既存の書き込みと並行して読み取りを開始することはできず、その逆も同様です)。なお、安全な場合にはこれらのロック制約の一部を緩和できます。詳細は[パフォーマンス最適化](#performance-optimizations)を参照してください。
+
+永続化スレッドがキューから操作を取り出そうとしたときに、その操作の対象バケットがすでにロックされていることを検知した場合、その操作はキューに残したまま、次の操作を試みます。つまり、キューは *単一の* バケットに対するクライアント操作については FIFO として機能しますが、*複数の* バケットにまたがる場合はそうではありません。
+
+#### 書き込み操作
+
+書き込み操作は *非同期*(つまりノンブロッキング)タスクとして検索コアにディスパッチされます。これにより、永続化スレッドが解放されて他の操作を処理できるようになるため並列性が向上し、より深いパイプラインによって検索コアはトランザクションログの同期とデータ構造更新のバッチ処理を最適化できます。
+
+より深いパイプラインは、多数の操作が同時に処理中(in flight)である場合にレイテンシーが増加する可能性というコストを伴うため、同時実行可能な非同期操作の最大数は、適応型の永続化スロットリング機構によって制限されます。スロットラーは並行性のウィンドウを動的にスケールし、ウィンドウサイズをさらに増やすと操作レイテンシーも増加する飽和点に達するまで調整します。処理中の操作数が現在の最大値に達すると、永続化スレッドはその数が減るまで新たな書き込みをディスパッチしません。その間も読み取りは処理できます。
+
+非同期の書き込みタスクは、その存続期間中、排他バケットロックを保持し続けます。検索コアが書き込み操作を完了すると、ロックを解放する前に、バケットデータベースがそのバケットの新しいメタデータ状態(書き込みの副作用を反映したもの)で更新されます。その後、操作への応答が生成され、RPC サブシステム経由で送り返されます。
+
+#### 読み取り操作
+
+読み取り操作は常に永続化スレッドによって *同期的*(つまりブロッキング)に評価されます。潜在的にコストの高いメンテナンス読み取り操作([レプリカの整合](/ja/content/consistency#replica-reconciliation)に使用されるものなど)がクライアント操作を長時間ブロックするのを避けるため、永続化スレッドの一部はそのようなメンテナンス操作の処理を許可されて *いません*。
+
+なお、test-and-set 書き込みの条件評価ステップは *読み取り* サブ操作と見なされるため、同期的に実行されます。これは書き込み操作の一部であるため、上位の操作の排他ロックのコンテキスト内でアトミックに行われます。
+
+#### パフォーマンス最適化
+
+スレッドのコンテキストスイッチを減らすため、一部の書き込み操作は永続化スレッドのキューをバイパスし、操作を受信した RPC スレッドから直接、非同期に検索コアへディスパッチされることがあります。そのような操作でも、適切な排他バケットロックの取得に成功する必要があります。ロックを即座に取得できない場合、操作は代わりに永続化キューにプッシュされます。
+
+ロックの競合とスレッドのウェイクアップを減らすため、少数の永続化スレッドが *ストライプ* としてグループ化され、ストライプごとの専用永続化キューを共有します。操作はバケット ID に基づいて特定のストライプに決定論的にルーティングされるため、各ストライプはバケット空間の重複しない部分を処理します。多数のストライプとキューが一体となって、バケット空間全体をカバーする 1 つの上位レベルの *論理的な* キューを形成します。
+
+キューに同じバケットへの *競合しない* 複数の書き込み操作が含まれている場合、これらは *同一の* 書き込みロックのコンテキストで並列にディスパッチされることがあります。これにより、同じバケットへの次の書き込みをディスパッチする前に、ロック取得・実行・ロック解放という一連のラウンドトリップ全体を待つ必要がなくなります。競合する書き込みの例としては、同じドキュメント ID への複数の Put があります。並列にディスパッチされる操作の最大数は実装依存です。
+
+### ドキュメントデータベース
+
+各ドキュメントデータベースは、単一のドキュメントタイプを担当します。ドキュメントデータベースには FeedHandler と呼ばれるコンポーネントがあり、受信したドキュメント、更新、削除リクエストを処理します。すべてのリクエストはまず[トランザクションログ](#transaction-log)に書き込まれ、その後、リクエストタイプに基づいて適切なサブデータベースに渡されます。
+
+### サブデータベース
+
+サブデータベースには 3 つのタイプがあり、それぞれが独自の[ドキュメントメタストア](/ja/content/attributes#document-meta-store)と[ドキュメントストア](#document-store)を持ちます。ドキュメントメタストアは、ドキュメント ID からローカル ID へのマップを保持します。このローカル ID は、ドキュメントストア内のドキュメントをアドレス指定するために使用されます。ドキュメントメタストアはまた、サブデータベースに存在するバケットの状態に関する情報も管理します。
+
+サブデータベースは *Maintenance Controller* によって管理されます。システムのサイズが変更されると、ドキュメントの分散が変化します。システム内のノード数が変わると、Maintenance Controller は新しい分散を反映するために、Ready サブデータベースと Not Ready サブデータベースの間でドキュメントを移動します。Removed サブデータベース内のエントリーが古くなると、パージされます。サブデータベースは以下のとおりです:
+
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Not Ready&#42;&#42;</td>
+      <td>検索可能ではない冗長なドキュメント、つまり not ready のドキュメントを保持します。not ready のドキュメントは格納のみされ、インデックスされません。この状態から ready 状態に移行するには、いくらかの処理が必要です。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Ready&#42;&#42;</td>
+      <td>すべての ready ドキュメントのアトリビュートとインデックスを維持し、検索可能な状態に保ちます。ready のコピーのうち 1 つがアクティブで、残りは非アクティブです:<br/><br/>&#42;&#42;Active&#42;&#42; <br/> システム内には各ドキュメントのアクティブなコピーが常に正確に 1 つ存在するべきですが、一時的にはそれ以上存在することがあります。これらのドキュメントは、クエリーが評価される際に結果を生成します。<br/><br/>&gt;&#42;&#42;Not Active&#42;&#42;<br/> アクティブではない ready のコピーはインデックスされていますが、結果を生成しません。インデックスされていることにより、アクティブなコピーを保持するノードが利用不能になった場合に、即座に引き継ぐ準備ができています。詳細は searchable-copies を参照してください。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Removed&#42;&#42;</td>
+      <td>削除されたドキュメントを追跡します。各ドキュメントの ID とタイムスタンプが保持されます。この情報は、2 つのノードのバケットがマージされる際に使用されます。削除されたドキュメントが別のノードに異なるタイムスタンプで存在する場合、最新のエントリーが優先されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+## トランザクションログ
+
+コンテントノードは、変更を伴う操作を永続化するためのトランザクションログを持っています。トランザクションログはファイルへの追記によって操作を永続化します。トランザクションログがあることで proton のインメモリ・インデックス構造が簡素化され、定常状態での高いパフォーマンスが実現されます。詳細は以下をお読みください。
+
+すべての操作は[トランザクションログ](/ja/content/proton#transaction-log)に書き込まれ、同期されます。これはシーケンシャルな(ランダムではない)IO ですが、sync 操作のコストがローカル接続ストレージ(SSD など)よりもはるかに高い NAS 接続ストレージ上で実行している場合、フィード全体のパフォーマンスに影響を与える可能性があります。[sync-transactionlog](/ja/reference/applications/services/content#sync-transactionlog) を参照してください。
+
+デフォルトでは、proton はシャットダウン時にアトリビュートベクターやメモリインデックスなどの[コンポーネントをフラッシュ](/ja/reference/applications/services/content#flush-on-shutdown)し、計画的な再起動後の起動を高速化します。
+
+## ドキュメントストア
+
+ドキュメントは、圧縮されたシリアライズ済みのブロブとして *ドキュメントストア* に格納されます。Put、update、remove 操作は、ドキュメントストア内のドキュメントを更新する前に[トランザクションログ](#transaction-log)に永続化されます。操作はクライアントに ack され、操作の結果は即座に検索結果に反映されます。
+
+ドキュメントストアのファイルはシーケンシャルに書き込まれ、ペアで存在します。例:
+
+```bash
+-rw-r--r-- 1 owner users 4133380096 Aug 10 13:36 1467957947689211000.dat
+-rw-r--r-- 1 owner users   71192112 Aug 10 13:36 1467957947689211000.idx
+```
+
+ディスク上の .dat ファイルあたりの[最大サイズ](/ja/reference/applications/services/content#summary-store-logstore-maxfilesize)(バイト単位)は、以下のように設定できます:
+
+```xml highlight= {9}
+<content id="mycluster" version="1.0">
+  <engine>
+    <proton>
+      <tuning>
+        <searchnode>
+          <summary>
+            <store>
+              <logstore>
+                <maxfilesize>8000000000</maxfilesize>
+```
+
+注意事項:
+
+- ファイルは順番に書き込まれます。*proton* は 1 つのペアから始めて、*maxfilesize* に達するまでそれを拡大します。満杯になると、新しいペアが開始されます。
+- つまり、書き込み対象である最後のペアを除き、ペアはイミュータブルです。 
+
+- ドキュメントは複数のファイルに複数のバージョンで存在します。あるペアが新しいアクティブペアとしてスケジュールされる際に、古いバージョンはコンパクションによって取り除かれます。廃止されたバージョンが削除され、アクティブなドキュメントバージョンのみが新しいファイルペアに残り、それが新しいアクティブペアになります。 
+- *maxfilesize* を設定することの影響について、詳しくは [proton メンテナンスジョブ](/ja/content/proton#document-store-compaction)を参照してください。 
+- ファイルは圧縮設定を使用して、[チャンク](/ja/reference/applications/services/content#summary-store-logstore-chunk)単位で書き込まれます。
+
+## デフラグメンテーション
+
+[ドキュメントストアのコンパクション](#document-store-compaction)は、ドキュメントストアのファイルをデフラグおよびソートします。これはドキュメントの古いバージョン(つまり更新されたドキュメントの旧バージョン)を削除します。これは、ドキュメントストアのディスクブロートが、ドキュメントストアの総ディスク使用量に [diskbloatfactor](/ja/reference/applications/services/content#flushstrategy-native-total-diskbloatfactor) を掛けた値より大きくなったときにトリガーされます。詳細は[サマリーのチューニング](/ja/reference/applications/services/content#summary)を参照してください。
+
+デフラグメンテーションの状況は、[max_bucket_spread](/ja/reference/operations/metrics/searchnode#content_proton_documentdb_ready_document_store_max_bucket_spread) メトリクスを時系列で追跡することで最もよく観察できます。時間とともに変化するコーパスでは、のこぎり波状のパターンが正常です。[document_store_compact](/ja/reference/operations/metrics/searchnode#content_proton_documentdb_job_document_store_compact) メトリクスは、proton がドキュメントストアのコンパクションジョブを実行しているタイミングを追跡します。コンパクション設定が厳しすぎる場合、このメトリクスは常に(またはほぼ常に)1 になります。
+
+ベンチマークを行う際は、正しいコンパクション設定を行うことが重要であり、また proton がその後ファイルのコンパクションを完了しており(数時間かかることがあります)、アクティブにコンパクションを実行していないこと(*document_store_compact* はほとんどの時間 0 であるべき)を確認することも重要です。
+  
+
+<Note>
+**注:**
+
+ファイル間をまたぐバケットコンパクションはありません。ドキュメントがファイル間で移動することはありません。
+</Note>
+
+チャンクを使用した最適化された読み取り
+
+ドキュメントは .dat ファイル内でクラスター化されているため、proton はドキュメントにアクセスする際により大きなチャンクを読み取ることで読み取りを最適化します。visit の際、ドキュメントは *バケット* 順で読み取られます。これはデフラグメンテーションジョブが使用する順序と同じです。
+
+あるバケットに対する visit 操作で最初に読み取られるドキュメントは、.dat ファイルからチャンクをメモリに読み込みます。それ以降のドキュメントアクセスは、メモリのルックアップのみで処理されます。チャンクサイズは [maxsize](/ja/reference/applications/services/content#summary-store-logstore-chunk-maxsize) で設定します:
+
+```xml highlight= {9}
+<engine>
+  <proton>
+    <tuning>
+      <searchnode>
+        <summary>
+          <store>
+            <logstore>
+              <chunk>
+                <maxsize>16384</maxsize>
+              </chunk>
+            </logstore>
+```
+
+チャンクは 2^22=4M 個まで存在できます。これにより、*maxfilesize* に基づく最小チャンクサイズが定まります。例えば 8G のファイルでは最小チャンクサイズは 2k になります。最後に、バケットサイズは [bucket-splitting](/ja/reference/applications/services/content#bucket-splitting) を設定することで構成します:
+
+```xml highlight= {3}
+<content id="imagepersonal" version="1.0">
+  <tuning>
+    <bucket-splitting max-documents="1024"/>
+```
+
+関連するサイジングの単位は以下のとおりです:
+
+.dat ファイルサイズ - *maxfilesize*。ファイルが大きいほどファイル数が減り、ローカリティが向上しますが、コンパクションにはより多くのメモリと完了までの時間が必要になります。チャンクサイズ - *maxsize*。チャンクが小さいほど無駄な IO バイトは減りますが、IO 操作は増えます。バケットサイズ - *bucket-splitting*。バケットが大きいほどバケット数が減り、ノードおよびファイルへのローカリティが向上しますが、コンテントレイヤーのバケットメンテナンス操作時のオーバーヘッドが増加します。オーバーヘッドは、CPU、メモリ、ネットワーク使用量のいずれについても、バケットサイズに対して線形と見なせます。
+
+### メモリ使用量
+
+ドキュメントストアは、ローカル ID(LID)からドキュメントストアファイル(.dat)内の位置へのマッピングをメモリ内に保持しています。このマッピングの一部は、.dat ファイルとペアになっている .idx ファイルに永続化されます。ドキュメントストアが使用するメモリは、ドキュメント数とそれらへの更新数に対して線形です。
+
+メトリクス [content.proton.documentdb.ready.document_store.memory_usage.allocated_bytes](/ja/reference/operations/metrics/searchnode#content_proton_documentdb_ready_document_store_memory_usage_allocated_bytes) がメモリ上のサイズを示します。[メトリクス API](/ja/reference/api/state-v1#state-v1-metrics) を使用して確認してください。目安はドキュメントあたり 12 バイトです。
+
+## アトリビュート
+
+[アトリビュート](/ja/content/attributes)フィールドは、マッチング、ランキング、ソート、グルーピングに使用されるインメモリのフィールドです。各アトリビュートは独立したコンポーネントであり、サブデータベース内のすべてのドキュメントにわたってそのフィールドの値を格納するための一連の[データ構造](/ja/content/attributes#data-structures)で構成されます。アトリビュートは Ready サブデータベースによって管理されます。一部のアトリビュートは Not Ready サブデータベースでも管理できます。詳細は[高スループット更新](/ja/content/attributes#fast-access)を参照してください。
+
+## インデックス
+
+インデックスフィールドは、テキスト検索に使用される文字列フィールドです。その他のフィールドタイプには[アトリビュート](/ja/content/attributes)と[サマリーフィールド](/ja/querying/document-summaries)があります。
+
+Ready サブデータベース内のインデックスは、メモリインデックスと 1 つ以上のディスクインデックスで構成されます。ドキュメントを変更する操作はメモリインデックスに適用され、メモリインデックスは定期的に[フラッシュ](#memory-index-flush)されます。フラッシュされたメモリインデックスは、プライマリーのディスクインデックスと[マージ](#disk-index-fusion)されます。
+
+Proton は、近接性による関連度評価のために、デフォルトでテキストインデックスに位置情報を格納します - `posocc`(後述)。ある語のすべての出現が、その位置とともにポスティングリストに格納されます。これは優れたランキングフィーチャーを提供しますが、ドキュメントごとに単一の出現のみを格納するよりもややコストが高くなります。ほとんどのアプリケーションにとって、これは正しいトレードオフです。コストの大半は通常他の場所にあり、関連度には価値があるためです。
+
+フィルタリングのための出現情報のみが必要なアプリケーションは、[rank: filter](/ja/reference/schemas/schemas#rank) を使用してクエリーパフォーマンスを最適化し、`boolocc`\-ファイル(後述)のみを使用できます。
+
+メモリインデックスは、インデックスフィールドごとにディクショナリーを持ちます。これにはそのフィールド内のすべてのユニークな単語が含まれ、位置情報付きのポスティングリストへのマッピングを持ちます。位置情報はランキングの際に使用されます。テキストマッチスコアの計算方法の詳細は [nativeRank](/ja/ranking/nativerank) を参照してください。
+
+ディスクインデックスは、各インデックスフィールドの内容を個別のフォルダーに格納します。各フォルダーには以下が含まれます:
+
+- ディクショナリー。ファイル: `dictionary.pdat`、`dictionary.spdat`、`dictionary.ssdat`。
+- 位置情報付きの圧縮されたポスティングリスト。ファイル: `posocc.dat.compressed`。
+- 出現情報のみを持つポスティングリスト(ビットベクター)。これらは一般的な単語に対して生成されます。ファイル: `boolocc.bdat`、`boolocc.idx`。
+
+例:
+
+```bash
+$ pwd
+/opt/vespa/var/db/vespa/search/cluster.mycluster/n1/documents/myschema/0.ready/index/index.flush.1/myfield
+$ ls -la
+total 7632
+drwxr-xr-x  2 org users     145 Oct 29 06:09 .
+drwxr-xr-x 74 org users    4096 Oct 29 06:11 ..
+-rw-r--r--  1 org users    4096 Oct 29 06:11 boolocc.bdat
+-rw-r--r--  1 org users    4096 Oct 29 06:11 boolocc.idx
+-rw-r--r--  1 org users    8192 Oct 29 06:11 dictionary.pdat
+-rw-r--r--  1 org users    8192 Oct 29 06:11 dictionary.spdat
+-rw-r--r--  1 org users    4120 Oct 29 06:11 dictionary.ssdat
+-rw-r--r--  1 org users 7778304 Oct 29 06:11 posocc.dat.compressed
+```
+
+上記の例のように、出現回数が少ない場合、`boolocc`\-ファイルは空になることに注意してください。
+
+## Proton メンテナンスジョブ
+
+Proton で使用されるメモリおよびディスクのデータ構造は、一連のメンテナンスジョブによって定期的に最適化されます。これらのジョブは自動的に実行され、一部は[フラッシュ戦略のチューニング](/ja/reference/applications/services/content#flushstrategy)で調整できます。すべてのジョブは以下の表で説明されています。
+
+各ジョブは同時に 1 つのインスタンスのみ実行されます。例えば、アトリビュートは順番にフラッシュされます。ジョブが実行中のとき、そのメトリクスは 1 に設定され、それ以外は 0 です。これを使用して、観測されたパフォーマンスやリソース使用量とジョブの実行を関連付けることができます。後述の *Run metric* を参照してください。
+
+ジョブ実行時に使用される *一時的な* リソースは、*CPU*、*Memory*、*Disk* で説明されています。ジョブによって最適化されるコンポーネントのメモリおよびディスク使用量メトリクスは、*Metrics*(*Metric prefix* 付き)で説明されています。利用可能なすべての Proton メトリクスの一覧は、[Vespa Metric Set](/ja/reference/operations/metrics/vespa-metric-set#searchnode-metrics) の searchnode メトリクスを参照してください。メトリクスは[メトリクス API](/ja/operations/metrics) で取得できます。
+
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Job</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CPU</td>
+      <td>少ない - 1 スレッドがディスクにフラッシュ</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>少ない - 一時的な使用がいくらかある</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>新しいファイルも書き込まれるため、古いフラッシュファイルが削除されるまで、ディスク上のアトリビュートのサイズの 2 倍になります。</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.attribute_flush</td>
+    </tr>
+    <tr>
+      <td colSpan={2}>content.proton.documentdb.[ready|notready].attribute.memory_usage.</td>
+    </tr>
+    <tr>
+      <td>Metrics</td>
+      <td>allocated_bytes.average <br/> used_bytes.average <br/> dead_bytes.average <br/> onhold_bytes.average</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>少ない - 1 スレッドがディスクにフラッシュ</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>少ない</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>メモリインデックスと同じサイズの新しいディスクインデックスを作成します。</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.memory_index_flush</td>
+    </tr>
+    <tr>
+      <td>Metric prefix</td>
+      <td>content.proton.documentdb.index.memory_usage.</td>
+    </tr>
+    <tr>
+      <td>Metrics</td>
+      <td>allocated_bytes.average <br/> used_bytes.average <br/> dead_bytes.average <br/> onhold_bytes.average</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>複数のスレッドがインデックスをマージします。<br/> フィーディングの並行性の関数として設定されます - <br/> 詳細はこちらを参照してください</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>少ない</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>現在のインデックスから配信しながら新しいインデックスを作成します: 対象インデックスの 2 倍の一時的なディスク使用量。</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.disk_index_fusion</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>少ない</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>少ない</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>少ない</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.document_store_flush</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>少ない - 1 スレッドが 1 つのファイルを読み取り、ソートして新しいファイルを書き込みます</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>ドキュメントストアファイル 1 つ分をメモリに保持し、さらにファイルをソートするためのメモリを使用します。<br/> 注: メモリの少ないホストでは重要です! <br/> maxfilesize を減らすとファイル数が増え、コンパクションに使用する一時メモリが少なくなります。</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>現在のファイルから配信しながら新しいファイルが書き込まれます。一時的な最大使用量は 2 倍です。</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.document_store_compact</td>
+    </tr>
+    <tr>
+      <td>Metric prefix</td>
+      <td>content.proton.documentdb.[ready|notready|removed].document_store.</td>
+    </tr>
+    <tr>
+      <td>Metrics</td>
+      <td>disk_usage.average <br/> disk_bloat.average <br/> max_bucket_spread.average <br/> memory_usage.allocated_bytes.average <br/> memory_usage.used_bytes.average <br/> memory_usage.dead_bytes.average <br/> memory_usage.onhold_bytes.average</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>フィーディングと同程度の CPU。<br/> 書き込みスレッドのキャパシティを消費するため、フィーディングに影響があります</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>フィーディングと同様 - 例えば、ready サブデータベースのアトリビュートのメモリ使用量とメモリインデックスが増加します</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>フィーディングと同様</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.bucket_move</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>フィーディングと同様 - ドキュメントの追加と削除</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>少ない</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.lid_space_compact</td>
+    </tr>
+    <tr>
+      <td>Metric prefix</td>
+      <td>content.proton.documentdb.[ready|notready|removed].lid_space.</td>
+    </tr>
+    <tr>
+      <td>Metrics</td>
+      <td>lid_limit.last <br/> lid_bloat_factor.average <br/> lid_fragmentation_factor.average</td>
+    </tr>
+    <tr>
+      <td>CPU</td>
+      <td>少ない</td>
+    </tr>
+    <tr>
+      <td>Memory</td>
+      <td>少ない</td>
+    </tr>
+    <tr>
+      <td>Disk</td>
+      <td>少ない</td>
+    </tr>
+    <tr>
+      <td>Run metric</td>
+      <td>content.proton.documentdb.job.removed_documents_prune</td>
+    </tr>
+  </tbody>
+</table>
+
+
+## ドキュメントの取得
+
+ドキュメントの取得は、*get* する ID を指定するか、[選択式](/ja/reference/writing/document-selector-language)を使用して一定範囲のドキュメントを *visit* することで行います。詳細は [Document API](/ja/reference/api/api) を参照してください。概要:
+
+<Frame>
+![ドキュメントの取得](/assets/img/elastic-visit-get.svg)
+</Frame>
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Get&#42;&#42;</td>
+      <td>コンテントノードが get リクエストを受信すると、すべてのドキュメントデータベースをスキャンし、それぞれについて 3 つのサブデータベースすべてを確認します。ドキュメントが見つかると、スキャンは停止され、ドキュメントが返されます。ドキュメントが Ready サブデータベースで見つかった場合、ドキュメントリトリーバーは、ドキュメントを返す前に、<a href="/ja/content/attributes" aria-label="attributes">アトリビュート</a>に格納されている変更を適用します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Visit&#42;&#42;</td>
+      <td>visit リクエストは、各候補バケットに対するイテレーターを作成します。このイテレーターは、すべてのドキュメントデータベースのすべてのサブデータベースから、一致するドキュメントを取得します。get と同様に、Ready サブデータベースではアトリビュートの値がドキュメントのフィールドに適用されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+## クエリー
+
+クエリーはシステム内で別の経路をたどります。ディストリビューターを使用せず、コンテントノードの永続化スレッドも経由しません。クエリーは、上述の格納および取得によって構成されるエラスティシティとは直交しています。クエリーがシステム内をどのように流れるか:
+
+<Frame>
+![クエリー](/assets/img/proton-query.svg)
+</Frame>
+
+クエリーは [Vespa Container](/ja/applications/containers) の *QR-server(query rewrite server)* を通じてシステムに入ります。QR-server は、ドキュメントタイプごとに 1 つのクエリーを検索ノードに発行します:
+
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Container&#42;&#42;</td>
+      <td>コンテナーはすべてのドキュメントタイプを把握しており、クエリーをタイプごとに 1 つずつのクエリーの集合として書き換えます。クエリーには <a href="/ja/reference/api/query#model.restrict" aria-label="restrict">restrict</a> パラメーターを指定でき、その場合コンテナーは指定されたドキュメントタイプにのみクエリーを送信します。コンテナーはクエリーをコンテントノードに送信し、部分的な結果を収集します。すべてのコンテントノードに毎秒 ping を送って稼働状態を確認し、各ノードへの TCP 接続を開いたまま維持します。ノードがダウンした場合、エラスティックシステムがそのドキュメントを他のノードで利用可能にします。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Content node matching&#42;&#42;</td>
+      <td>&#42;マッチエンジン&#42; はクエリーを受け取り、ドキュメントタイプに基づいて適切なドキュメントデータベースにルーティングします。クエリーは、検索可能なドキュメントが存在する &#42;Ready&#42; サブデータベースに渡されます。ドキュメントメタストアに格納された情報に基づいて、クエリーには &#42;アクティブ&#42; なドキュメントのみがマッチすることを保証するブロックリストが付加されます。</td>
+    </tr>
+  </tbody>
+</table>
+
+## /state/v1 API
+
+[/state/v1 API リファレンス](/ja/reference/api/state-v1)に記載されている共通エンドポイントに加えて、Proton には /state/v1 API の一部として、検索ノードの内部状態に関する情報を公開する追加のエンドポイントがあります。この API は `http://host:stateport/state/v1/` で利用できます。
+
+JSON HTTP の stateport を見つけるには、[vespa-model-inspect](/ja/reference/operations/self-managed/tools#vespa-model-inspect) を実行します:
+
+```
+vespa-model-inspect service searchnode
+```
+
+### Initialization Progress API
+
+初期化の進捗は、`http://host:stateport/state/v1/initialization` への HTTP GET で確認できます。このエンドポイントは、他のエンドポイントがまだ利用できない Proton の初期化の早い段階から利用可能になります。ロード中のドキュメントデータベースとそのアトリビュートについて、人間が読みやすい形式の概要を提供します。これは安定した API では **なく**、リリース間で拡張・変更されることに注意してください。
+
+`state/v1/initialization` の例:
+
+```json expandable
+{
+  "state": "initializing",
+  "current_time": "1758873251.933488",
+  "start_time": "1758873249.715624",
+  "load": 1,
+  "replay_transaction_log": 0,
+  "online": 0,
+  "dbs": [
+    {
+      "state": "load",
+      "start_time": "1758873249.936939",
+      "name": "dbname",
+      "ready_subdb": {
+        "loaded_attributes": [
+          {
+            "state": "loaded",
+            "start_time": "1758873249.941415",
+            "name": "int_field",
+            "end_time": "1758873249.942051"
+          },
+          {
+            "state": "loaded",
+            "start_time": "1758873249.941498",
+            "name": "string_field",
+            "end_time": "1758873249.944647"
+          }
+        ],
+        "loading_attributes": [
+          {
+            "state": "reprocessing",
+            "start_time": "1758873249.941555",
+            "name": "tensor_field",
+            "reprocess_progress": "6.061879",
+            "reprocess_start_time": "1758873249.993847"
+          }
+        ],
+        "queued_attributes": [
+
+        ]
+      }
+    }
+  ]
+}
+```
+
+### Custom Component State API
+
+カスタムコンポーネントのステータスは、`http://host:stateport/state/v1/custom/component` への HTTP GET で確認できます。関連する検索ノードのコンポーネントとその内部状態の概要を提供します。これは安定した API では **なく**、リリース間で拡張・変更されることに注意してください。
+
+`state/v1/custom/component` の例:
+
+```json expandable
+{
+    "documentdb": {
+        "mydoctype": {
+            "documentType": "mydoctype",
+            "status": {
+                "state": "ONLINE",
+                "configState": "OK"
+            },
+            "documents": {
+                "active": 10,
+                "ready": 10,
+                "total": 10,
+                "removed": 0
+            },
+            "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype"
+        }
+    },
+    "threadpools": {
+        "url": "http://host:stateport/state/v1/custom/component/threadpools"
+    },
+    "matchengine": {
+        "status": {
+            "state": "ONLINE"
+        },
+        "url": "http://host:stateport/state/v1/custom/component/matchengine"
+    },
+    "flushengine": {
+        "url": "http://host:stateport/state/v1/custom/component/flushengine"
+    },
+    "tls": {
+        "url": "http://host:stateport/state/v1/custom/component/tls"
+    },
+    "hwinfo": {
+        "url": "http://host:stateport/state/v1/custom/component/hwinfo"
+    },
+    "resourceusage": {
+        "url": "http://host:stateport/state/v1/custom/component/resourceusage",
+        "disk": 0.25,
+        "memory": 0.35,
+        "attribute_address_space": 0
+    },
+    "session": {
+        "search": {
+            "url": "http://host:stateport/state/v1/custom/component/session/search",
+            "numSessions": 0
+        }
+    }
+}
+```
+
+`state/v1/custom/component/documentdb/mydoctype` の例:
+
+```json expandable
+{
+    "documentType": "mydoctype",
+    "status": {
+        "state": "ONLINE",
+        "configState": "OK"
+    },
+    "documents": {
+        "active": 10,
+        "ready": 10,
+        "total": 10,
+        "removed": 0
+    },
+    "subdb": {
+        "removed": {
+            "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype/subdb/removed"
+        },
+        "ready": {
+            "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype/subdb/ready"
+        },
+        "notready": {
+            "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype/subdb/notready"
+        }
+    },
+    "threadingservice": {
+        "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype/threadingservice"
+    },
+    "bucketdb": {
+        "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype/bucketdb",
+        "numBuckets": 1
+    },
+    "maintenancecontroller": {
+        "url": "http://host:stateport/state/v1/custom/component/documentdb/mydoctype/maintenancecontroller"
+    }
+}
+```

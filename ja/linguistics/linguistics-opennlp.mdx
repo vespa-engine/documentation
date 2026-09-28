@@ -1,0 +1,123 @@
+---
+title: "OpenNLP リンギスティクス"
+sidebarTitle: "デフォルト（OpenNLP）リンギスティクス"
+---
+
+Vespa のデフォルトのリンギスティクス実装は [OpenNLP](https://opennlp.apache.org/) を使用しています。別の実装を使用している場合でも、Apache OpenNLP の言語検出はデフォルトで使用されます。詳細については[言語処理](/ja/linguistics/linguistics#language-handling)を参照してください。OpenNLP は 103 の言語をサポートしています。
+
+## OpenNLP 言語検出
+
+OpenNLP 言語検出器は、信頼度付きの予測を返します。信頼度は通常、入力が多いほど高くなります。予測を採用するしきい値は、通常 1.0（当てずっぽうの推測）から 6.0（確信のある推測）までの数値で設定でき、デフォルトは 2.0 です:
+
+```xml
+<container id="..." version="1.0">
+    ...
+    <config name="ai.vespa.opennlp.open-nlp">
+      <detectConfidenceThreshold>4.2</detectConfidenceThreshold>
+    </config>
+```
+
+## デフォルトの言語
+
+OpenNLP のトークナイズとステミングは、次の言語をサポートしています:
+
+- アラビア語 (ar)
+- カタルーニャ語 (ca)
+- デンマーク語 (da)
+- オランダ語 (nl)
+- 英語 (en)
+- フィンランド語 (fi)
+- フランス語 (fr)
+- ドイツ語 (de)
+- ギリシャ語 (el)
+- ハンガリー語 (hu)
+- インドネシア語 (id)
+- アイルランド語 (ga)
+- イタリア語 (it)
+- ノルウェー語 (no)
+- ポルトガル語 (pt)
+- ルーマニア語 (ro)
+- ロシア語 (ru)
+- スペイン語 (es)
+- スウェーデン語 (sv)
+- トルコ語 (tr)
+
+その他の言語は、英語 _en_ へのフォールバックを使用します。
+
+英語はデフォルトでより単純なステマー（kStem）を使用します。このステマーは生成するステムが少ないため、再現率が低くなります。英語にも OpenNlp のステミング（Snowball）を使用するには、\<container\> 要素に次の設定を追加します:
+
+```xml
+<container id="..." version="1.0">
+    ...
+    <config name="ai.vespa.opennlp.open-nlp">
+      <snowballStemmingForEnglish>true</snowballStemmingForEnglish>
+</config>
+```
+
+例やリンギスティクスの実験方法については、_Tokens_ [OpenNLP モデル](https://opennlp.apache.org/models.html)と[テキストマッチング](/ja/querying/text-matching)を参照してください。
+
+より多くの言語のサポートが必要な場合は、デフォルトの OpenNLP ベースのリンギスティクス統合を、より多くの言語をサポートする [Lucene Linguistics](/ja/linguistics/lucene-linguistics) 実装に置き換えることを検討できます。
+
+### 中国語
+
+デフォルトのリンギスティクス実装は中国語をトークンに分割しませんが、次の設定で有効にできます:
+
+```xml
+<container id="..." version="1.0">
+    ...
+    <config name="ai.vespa.opennlp.open-nlp">
+      <cjk>true</cjk>
+      <createCjkGrams>true</createCjkGrams>
+    </config>
+```
+
+createCjkGrams は、2 文字より長いセグメントの部分文字列を追加します。これにより再現率が向上する場合があります。
+
+## トークナイズ
+
+トークナイズは、単語以外の文字をすべて除去し、各単語境界で文字列を _トークン_ に分割します。さらに、CJK トークンは _セグメンテーション_ アルゴリズムを使用して分割されます。生成されたトークンは、インデックス内で検索可能になります。
+
+[N-gram マッチング](/ja/reference/schemas/schemas#gram)も参照してください。
+
+## 正規化
+
+正規化の例としては Ã  â‡’ a があります。正規化により、しばしば綴りを誤られるアクセント記号や類似の装飾が、ドキュメントとクエリーの両方で同じ方法で正規化されます。
+
+Vespa はテキストの正規化に [java.text.Normalizer](https://docs.oracle.com/javase/7/docs/api/java/text/Normalizer.html) を使用しています。[SimpleTransformer.java](https://github.com/vespa-engine/vespa/blob/master/linguistics/src/main/java/com/yahoo/language/simple/SimpleTransformer.java) を参照してください。正規化では大文字・小文字は保持されます。
+
+[nfkc](/ja/reference/querying/yql#nfkc) クエリー・ターム・アノテーションを参照してください。YQL の [accentDrop](/ja/reference/querying/yql#accentdrop) アノテーションも参照してください。
+
+## ステミング
+
+ステミングとは、[ステマー](https://en.wikipedia.org/wiki/Stemming)を使用して、_単語を基本形に変換する_（名詞は単数形、動詞は不定形に）ことを意味します。検索者は通常、使用されている語形に関係なくクエリーの単語を含むドキュメントに関心があるため、ステミングを使用すると検索の再現率が向上します。Vespa のステミングは対称的です。つまり、インデックス作成時と検索時の両方で単語がステムに変換されます。
+
+例として、テキストがインデックスされる際、ステマーは名詞 _reports_（複数形）を _report_ に変換し、後者がインデックスに保存されます。同様に、検索の前に _reports_ は _report_ にステミングされます。別の例として、_am_、_are_、_was_ は、クエリーとインデックスの両方で _be_ にステミングされます。
+
+[ボールディング（強調表示）](/ja/reference/schemas/schemas#bolding)が有効な場合、クエリー・タームのすべての語形が太字になります。つまり、_reports_ を検索すると、_report_、_reported_、_reports_ のすべてが太字になります。
+
+[stem](/ja/reference/querying/yql#stem) クエリー・ターム・アノテーションを参照してください。
+
+### 理論
+
+マッチングの観点から見ると、ステミングはすべての可能なトークン文字列を取り、それらを同値クラスにマッピングします。上記の例では、トークンの集合 \{ _report_、_reports_、_reported_ } が 1 つの同値クラスに属します。クラスを代表するために、リンギスティクス・ライブラリーはクラス内の最良の要素を選ぶべきです。クエリー時には、ユーザーが入力したテキストがトークナイズされ、各トークンが最も可能性の高い同値クラスにマッピングされます。この同値クラスも、そのクラスに属する最短の要素によって代表されます。
+
+理論はかなり単純に聞こえますが、実際には、あるトークンがどの同値クラスに属すべきかを判断できるとは限りません。典型的な例が文字列 _number_ です。ほとんどの場合、これは何らかの数値的な実体を意味すると推測され、同値クラスは \{ _number_、_numbers_ } となります。しかし、これは動詞である可能性もあり、その場合は別の同値クラス \{ _number_、_numbered_、_numbering_ \} になります。これらはもちろん密接に関連しており、実際にはマージされるため、やや大きな同値クラス \{ _number_、_numbers_、_numbered_、_numbering_ \} となり、それで問題ありません。しかし、_my legs keep getting number every day_ のような文では、_number_ トークンは明らかに数値的な実体の意味を持たず、代わりに同値クラス \{ _numb_、_number_、_numbest_、_numbness_ \} に属すべきです。しかし、_number_ を同値クラス _numb_ に盲目的に割り当てるのは明らかに正しくありません。なぜなら、_より痺れている_ という意味は _数値的な実体_ という意味よりもはるかに可能性が低いからです。
+
+低レベルのリンギスティクス・ライブラリーが現在採用しているアプローチは、上記のような _number_ に類するケースでしばしば問題を引き起こします。より良い再現率を実現するために、Vespa は _multiple_ ステミング・オプションを実装しています。
+
+### 構成
+
+デフォルトでは、すべての単語はその _best_ 形にステミングされます。その他のステミング・タイプについては、[ステミング・リファレンス](/ja/reference/schemas/schemas#stemming)を参照してください。タイプを変更するには、次を追加します:
+
+```yaml
+stemming: [stemming-type]
+```
+
+ステミングは、フィールド単位、フィールドセット単位、またはすべてのフィールドのデフォルトとして設定できます。例: フィールド _title_ のステミングを無効にする:
+
+```yaml
+field title type string {
+    indexing: summary | index
+    stemming: none
+}
+```

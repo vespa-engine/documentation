@@ -1,0 +1,252 @@
+---
+title: "ベンチマーク"
+sidebarTitle: "Vespa Cloud を使用したベンチマーク"
+---
+
+これは、[Vespa ベンチマーク・ガイド](/ja/performance/benchmarking)に基づき、[サンプルアプリ](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation)を使用して、Vespa Cloud でベンチマークを始めるためのステップバイステップのガイドです。概要:
+
+<Frame>![Vespa Cloud ベンチマーク](/assets/img/cloud-benchmarks.svg)</Frame>
+
+## パフォーマンステスト用インスタンスのセットアップ
+
+ベンチマークには [dev ゾーン](/ja/operations/environments#dev)のインスタンスを使用します。そこにインスタンスをデプロイするには、[はじめに](/ja/basics/deploy-an-application)ガイドを使用し、`deploy:environment="dev"` 属性を使用してリソースを指定してください:
+
+```xml
+<nodes deploy:environment="dev" count="1">
+    <resources vcpu="8.0"
+               memory="64Gb"
+               disk="474Gb"
+               architecture="arm64"
+               storage-type="local"/>
+</nodes>
+```
+
+```bash
+$ vespa deploy --wait 600
+```
+
+ドキュメントをフィードします:
+
+```bash
+$ vespa feed ext/documents.jsonl
+```
+
+フィードを検証するためにドキュメントをクエリーします:
+
+```bash
+$ vespa query "select * from music where true"
+```
+
+curl を使用してドキュメントをクエリーします:
+
+```bash
+$ curl \
+  --cert ~/.vespa/mytenant.myapp.default/data-plane-public-cert.pem \
+  --key  ~/.vespa/mytenant.myapp.default/data-plane-private-key.pem \
+  -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from music where true"}' \
+  https://baaae1db.b68ddc0d.z.vespa-app.cloud/search/
+```
+
+この時点で、インスタンスはデータと共に準備が整い、データプレーンの認証情報を使用してクエリーできます。
+
+## トークンエンドポイントでの vespa-fbench を使用したテスト
+
+mTLS の代わりに API トークンのエンドポイントを使用してテストするには、次のオプションを使用します:
+
+```bash
+$ vespa-fbench -q query.txt -s 5 -H "Authorization: Bearer [your token]" -T /etc/ssl/certs/ca-bundle.crt -o out.txt "[token-endpoint]" 443
+```
+
+ca-bundle.crt は単なるルート証明書であり、Vespa 固有のものではありません。
+
+## vespa-fbench を使用したテスト
+
+このガイドの残りの部分では、mTLS のエンドポイントを使用し、データプレーンの認証情報が作業ディレクトリにあることを前提とします:
+
+```bash
+$ ls -1 \*.pem
+  data-plane-private-key.pem
+  data-plane-public-cert.pem
+```
+
+クエリーファイルを準備します:
+
+```bash
+$ echo "/search/?yql=select+*+from+music+where+true" > query001.txt
+```
+
+Docker コンテナー内で実行される [vespa-fbench](/ja/reference/operations/tools#vespa-fbench) を使用してテストします:
+
+```bash
+$ docker run -v $(pwd):/files -w /files \
+    --entrypoint /opt/vespa/bin/vespa-fbench \
+    vespaengine/vespa \
+    -C data-plane-public-cert.pem \
+    -K data-plane-private-key.pem \
+    -T /etc/ssl/certs/ca-bundle.crt \
+    -n 1 -q query001.txt -s 1 -c 0 \
+    -o output.txt \
+    baaae1db.b68ddc0d.z.vespa-app.cloud 443
+```
+
+`-o output.txt` はテストの検証時に便利です - 負荷テストの際にはこのオプションを削除してください。出力に `SSL_do_handshake` エラーがないことを確認してください。HTTP ステータスコード 200 が期待されます:
+
+```bash expandable
+ Starting clients...
+  Stopping clients
+  Clients stopped.
+  .
+  Clients Joined.
+  *** HTTP keep-alive statistics ***
+  connection reuse count -- 4
+  ***************** Benchmark Summary *****************
+  clients:                       1
+  ran for:                       1 seconds
+  cycle time:                    0 ms
+  lower response limit:          0 bytes
+  skipped requests:              0
+  failed requests:               0
+  successful requests:           5
+  cycles not held:               5
+  minimum response time:    128.17 ms
+  maximum response time:    515.35 ms
+  average response time:    206.38 ms
+  25 percentile:            128.70 ms
+  50 percentile:            129.60 ms
+  75 percentile:            130.20 ms
+  90 percentile:            361.32 ms
+  95 percentile:            438.36 ms
+  99 percentile:            499.99 ms
+  actual query rate:          4.80 Q/s
+  utilization:               99.03 %
+  zero hit queries:              5
+  http request status breakdown:
+    200 :        5
+```
+
+この時点で、ローカルのラップトップから *vespa-fbench* を使用したクエリーの実行が問題なく動作します。
+
+## データセンター内でのクエリーの実行
+
+次のステップは、dev ゾーンと同じロケーション(データセンター)からこれを実行することです。この例では AWS の[ゾーン](/ja/operations/zones)です。Vespa Cloud のゾーン名から AWS のゾーンを推定します。以下は Amazon Linux 2023 AMI (HVM) イメージのホストを使用した例です:
+
+<Steps>
+<Step>
+ホストを作成します - ここではキーペアの名前を *key.pem* とします。デフォルト以外の設定は不要です。
+</Step>
+<Step>
+ログインし、更新して、docker をインストールします:
+
+```bash
+$ ssh -i key.pem ec2-user@ec2-xx-xxx-xxx-xxx.compute-1.amazonaws.com
+[ec2-user]$ sudo yum update -y
+[ec2-user]$ sudo yum install -y docker
+[ec2-user]$ sudo service docker start
+[ec2-user]$ sudo usermod -a -G docker ec2-user
+[ec2-user]$ exit
+```
+</Step>
+<Step>
+エンドポイントへのアクセスのための認証情報をコピーし、ログインして docker のセットアップを検証します:
+
+```bash
+$ scp -i key.pem data-plane-private-key.pem ec2-user@ec2-xx-xxx-xxx-xxx.compute-1.amazonaws.com:
+$ scp -i key.pem data-plane-public-cert.pem ec2-user@ec2-xx-xxx-xxx-xxx.compute-1.amazonaws.com:
+
+$ ssh -i key.pem ec2-user@ec2-xx-xxx-xxx-xxx.compute-1.amazonaws.com
+[ec2-user]$ docker info
+```
+</Step>
+<Step>
+ダミーのクエリーを作成します:
+
+```bash
+[ec2-user]$ echo "/search/?yql=select+*+from+music+where+true" > query001.txt
+```
+</Step>
+<Step>
+vespa-fbench を実行し、200 レスポンスを確認します:
+
+```bash
+[ec2-user]$ docker run -v $(pwd):/files -w /files \
+              --entrypoint /opt/vespa/bin/vespa-fbench \
+              vespaengine/vespa \
+              -C data-plane-public-cert.pem \
+              -K data-plane-private-key.pem \
+              -T /etc/ssl/certs/ca-bundle.crt \
+              -n 1 -q query001.txt -s 1 -c 0 \
+              baaae1db.b68ddc0d.z.vespa-app.cloud 443
+```
+</Step>
+</Steps>
+
+この時点で、Vespa Cloud の dev インスタンスと同じゾーンで *vespa-fbench* を使用したベンチマークが可能になります。
+
+## ベンチマークの実行
+
+[Vespa ベンチマーク・ガイド](/ja/performance/benchmarking)を使用してベンチマークを計画し、実行します。下記の[サイジング](#サイジング)も参照してください。ベンチマークツールを実行するクライアントに十分なリソースがあることを確認してください。
+
+[メトリクス](../operations/metrics.html)をエクスポートします:
+
+```bash
+$ curl \
+    --cert data-plane-public-cert.pem \
+    --key data-plane-private-key.pem \
+    https://baaae1db.b68ddc0d.z.vespa-app.cloud/prometheus/v1/values
+```
+
+注記:
+
+- `consumer=Vespa` を使用して、定期的にすべてのメトリクスをダンプします。
+- 本番環境では、コンテナー・ノードのサービングスレッドを使い果たさないようにしてください。これは、予想されるトラフィックに対して、各 `threadpool` の値について次の式が 100% を大きく下回る(通常は 50% 未満)ことを確認することで検証できます: `100 * (jdisc.thread_pool.active_threads.sum / jdisc.thread_pool.active_threads.count) / jdisc.thread_pool.size.max`。プールのスレッド数を増やすには、より大きなコンテナー・ノードを使用するか、コンテナー・ノードを増やすか、[services-search](/ja/reference/applications/services/search#threadpool) に記載されているようにスレッド数をチューニングします。スレッドプールとそのキューを使い果たした場合、コンテナーによって拒否されたリクエストに対して HTTP 503 レスポンスが発生します。
+
+## 変更の実施
+
+設定に変更をデプロイする際は、必ず Deployment ダッシュボードで進捗を追跡してください。[requestthreads](/ja/reference/applications/services/content#requestthreads) の変更など、一部の変更はコンテント・ノードを再起動します。これは順番に行われ、時間がかかります。*Wait for services and endpoints to come online* での正常な完了を待ってください。
+
+ノードのタイプ/数を変更する場合は、`vds.idealstate.merge_bucket.pending.average` メトリクスを監視しながら、自動データ再分散の完了を待ってください:
+
+```bash
+$ while true; do curl -s \
+    --cert data-plane-public-cert.pem \
+    --key data-plane-private-key.pem \
+    https://baaae1db.b68ddc0d.z.vespa-app.cloud/prometheus/v1/values?consumer=Vespa | \
+    grep idealstate.merge_bucket.pending.average; \
+    sleep 10; done
+```
+
+注記:
+
+- `consumer=Vespa` を使用してすべてのメトリクスをダンプします。
+- コンテント・ノードの数を変更すると、このメトリクスは急上昇し、その後(必ずしも線形ではなく)減少します - 速度はデータ量に依存します。
+
+## サイジング
+
+Vespa Cloud を使用すると、Vespa チームがアプリケーションの最適化を支援し、リソース費用を削減できます。現在 Vespa Cloud 上で稼働している 150 のアプリケーションに基づくと、削減額は通常 50% です。コストの最適化はドメイン知識なしには難しいものです - しかし、自分たちのアプリケーションとそのサービング・プラットフォームの両方の専門家であるチームはほとんどありません。サイジングとは、適切なノードサイズと適切なクラスター・トポロジーの両方を見つけることを意味します:
+
+<Frame>![より少なく、より小さなノードへのリサイズ](/assets/img/nodes.svg)</Frame>
+
+アプリケーションは、主要なビジネスのユースケースのために Vespa を使用します。可用性とパフォーマンス対コストはビジネス上の決定です。最適にサイジングされたアプリケーションは、予想されるすべての負荷状況に対応でき、想定外の状況に対しては品質を段階的に低下させるように設定されています。
+
+Vespa は標準でコスト効率が高いものの、Vespa の専門家は通常、CPU、メモリ、ディスク容量/IO の過剰/過少割り当てを見つけ出し、アプリケーションチームとトレードオフについて議論できます。
+
+[自動デプロイ](/ja/operations/automated-deployments)を使用すると、アプリケーションはほとんどリスクなく本番稼働できます。ローンチ後は、自動データ移行を伴う Vespa の弾力性機能を使用して、実際の負荷に基づいてアプリケーションを適切なサイズに調整します。
+
+[Vespa サイジング・ガイド](/ja/performance/sizing-search)を使用してアプリケーションをサイジングし、そこで使用されるメトリクスを確認してください。プロのヒント:
+
+- メモリ割り当ての上限は 60% が適切です
+- CPU 割り当ての上限は 50% が適切ですが、アプリケーションに依存します。
+- ディスク割り当ての上限は 70% が適切です
+
+経験則:
+
+- メモリとディスクは、インデックスされたフィールドのデータに対しておおよそ線形にスケールします - attribute は空のフィールドに対して固定コストがかかります。
+- データのばらつきはメモリ使用量に影響します。
+- サイズ不足のインスタンスは[書き込みをブロック](/ja/writing/feed-block)します。
+- 大きなフィールドの追加(例: embedding の追加)によるメモリへの影響をテストするには、多くの場合 `dev` ゾーンを使用するのが良い方法です。
+
+## 注記
+
+- ベンチマークを実行するユーザーは、エンドポイントへの読み取りアクセス権を持っている必要があります - すでに持っている場合は、このセクションをスキップできます。[Vespa セキュリティ・ガイド](/ja/security/guide)を参照してください。
+- ベンチマーク時のメトリクスの追跡には[モニタリング](/ja/operations/monitoring)が役立ちます。

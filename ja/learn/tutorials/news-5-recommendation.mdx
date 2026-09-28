@@ -1,0 +1,462 @@
+---
+title: "ニュース検索とレコメンデーションのチュートリアル - レコメンデーション"
+---
+
+これは、パーソナライズされたニュースレコメンデーションのための Vespa アプリケーションを構築するチュートリアルシリーズの第 5 部です。シリーズの構成は次のとおりです:
+
+1. [はじめに](/ja/learn/tutorials/news-1-deploy-an-application)
+2. [基本的なニュース検索アプリケーション](/ja/learn/tutorials/news-2-basic-feeding-and-query) - アプリケーション・パッケージ、フィード、クエリー
+3. [ニュース検索](/ja/learn/tutorials/news-3-searching) - ソート、グルーピング、ランキング
+4. [ユーザーとニュース記事の埋め込み生成](/ja/learn/tutorials/news-4-embeddings)
+5. [ニュースレコメンデーション](/ja/learn/tutorials/news-5-recommendation) - 部分更新(ニュース埋め込み)、ANN、フィルタリング
+6. [サーチャーによるニュースレコメンデーション](/ja/learn/tutorials/news-6-recommendation-with-searchers) - カスタムサーチャー、ドキュメントプロセッサー
+7. [親子関係によるニュースレコメンデーション](/ja/learn/tutorials/news-7-recommendation-with-parent-child) - 親子関係、テンソルランキング
+8. 高度なニュースレコメンデーション - 幕間 - ランキングモデルの学習
+9. 高度なニュースレコメンデーション - ML モデル
+
+このパートでは、前のパートで作成した埋め込みを使って、アプリケーションをニュース検索からレコメンデーションへと変換し始めます。まずアプリケーションを修正し、埋め込みをフィードして検索に使えるようにします。
+
+参考として、このチュートリアルの最終状態は `news` サンプルアプリケーションの [app-5-recommendation](https://github.com/vespa-engine/sample-apps/tree/master/news/app-5-recommendation) サブディレクトリにあります。
+
+
+## 埋め込みのインデキシング
+
+まず、`news.sd` の検索定義を修正して、埋め込みを保持するフィールドとレコメンデーション用のランクプロファイルを追加する必要があります:
+
+```sd expandable
+schema news {
+    document news {
+        field news_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field category type string {
+            indexing: summary | attribute
+        }
+        field subcategory type string {
+            indexing: summary | attribute
+        }
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field abstract type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field body type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: index | summary
+        }
+        field date type int {
+            indexing: summary | attribute
+        }
+        field clicks type int {
+            indexing: summary | attribute
+        }
+        field impressions type int {
+            indexing: summary | attribute
+        }
+        field embedding type tensor(d0[50]) {
+            indexing: attribute
+            attribute {
+                distance-metric: dotproduct
+            }
+        }
+    }
+
+    fieldset default {
+        fields: title, abstract, body
+    }
+
+    rank-profile popularity inherits default {
+        function popularity() {
+            expression: if (attribute(impressions) > 0, attribute(clicks) / attribute(impressions), 0)
+        }
+        first-phase {
+            expression: nativeRank(title, abstract) + 10 * popularity
+        }
+    }
+
+    rank-profile recommendation inherits default {
+        first-phase {
+            expression: closeness(field, embedding)
+        }
+    }
+}
+```
+
+`embedding` フィールドはテンソル・フィールドです。Vespa のテンソルは柔軟な多次元データ構造であり、第一級市民として、クエリー、ドキュメントのフィールド、ランキングの定数で使用できます。テンソルは密(dense)でも疎(sparse)でもその両方でもよく、任意の数の次元を持つことができます。詳細は[テンソルユーザーガイド](/ja/ranking/tensor-user-guide)を参照してください。
+
+ここでは、ベクトルを表す単一の次元(`d0` - 次元 0)を持つ密テンソルを定義しました。距離メトリックは "dotproduct" です。これは、このフィールドを最大の内積(dotproduct)を検索する最近傍検索に使用したいためです。
+
+これは `recommendation` ランクプロファイルに現れています。ここでは、[closeness](/ja/reference/ranking/rank-features#closeness(dimension,name)) ランキング特徴量を使ったランキング式を追加しました。これは内積を計算し、それを使ってニュース記事をランキングします。これは `nearestNeighbor` 検索オペレーターの使用を前提としており、検索の際に後述します。現時点では、初期の検索点として使用されるテンソルがクエリーに含まれていることを想定しています。
+
+ニュース埋め込み用に生成されたファイル `mind/vespa_news_embeddings.json` を見ると、次のような行が複数あります:
+
+```json
+{
+    "update": "id:news:news::N13390",
+    "fields": {
+        "embedding": {
+            "assign": {
+                "values": [9.871717,-0.403103,...]
+            }
+        }
+    }
+}
+```
+
+これは[部分更新](/ja/writing/partial-updates)です。したがって、前の検索チュートリアルからシステムがすでに稼働していると仮定すると、コーパス全体をフィードし直す必要はありません。部分更新では、必要なフィールドだけを更新すればよいのです。そのため、別の埋め込みセットを学習した後、それらを再び部分的にフィードできます。フィード形式の詳細については、[Vespa の読み取りと書き込み](/ja/writing/reads-and-writes)を参照してください。
+
+ユーザーを表す別のドキュメントタイプを追加する必要があります。次のスキーマを `schemas/user.sd` に追加します:
+
+```sd
+schema user {
+    document user {
+        field user_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field embedding type tensor(d0[50]) {
+            indexing: summary | attribute
+        }
+    }
+}
+```
+
+このスキーマは、`user_id` を検索してユーザーの埋め込みベクトルを取得できるように構成されています。
+
+また、このドキュメントタイプを使用することを Vespa に知らせる必要があるため、`services.xml` を修正して `content` セクションの `documents` の下に追加します:
+
+```xml
+<documents>
+    <document type="news" mode="index" />
+    <document type="user" mode="index" />
+</documents>
+```
+
+```bash
+$ vespa deploy --wait 600 my-app
+```
+
+```bash
+$ sleep 20
+```
+
+更新したスキーマと `services.xml` で再デプロイした後、`mind/vespa_user_embeddings.json` と `mind/vespa_news_embeddings.json` をフィードします:
+
+```bash
+$ vespa feed mind/vespa_user_embeddings.json
+$ vespa feed mind/vespa_news_embeddings.json
+```
+
+フィードジョブが完了するとインデックスは使用可能になります。65238 件のニュースドキュメントと 94057 件のユーザードキュメントがあることを確認できます:
+
+```bash
+$ sleep 20
+```
+
+```bash
+$ vespa query -v \
+  'yql=select * from news where true' \
+  'hits=0'
+```
+
+```bash
+$ vespa query -v \
+  'yql=select * from user where true' \
+  'hits=0'
+```
+
+
+## クエリープロファイルとクエリープロファイルタイプ
+
+アプリケーションをテストする前に、クエリープロファイルタイプを追加する必要があります。上記の `recommendation` ランクプロファイルは、クエリーとともにテンソルを送信することを必要とします。Vespa が正しい型をバインドするためには、このクエリーパラメーターの期待される型を知る必要があります。それがクエリープロファイルタイプと呼ばれるものです。
+
+[クエリープロファイル](/ja/reference/querying/query-profiles)は、検索リクエストパラメーターの名前付きセットで、デフォルトとして設定できるため、クエリーごとに渡す必要がなくなります。このサンプルアプリケーションではこれを使用しません。それでも、渡すことを想定しているクエリーパラメーターの型を設定するために、デフォルトのクエリープロファイルをセットアップする必要があります。
+
+そこで、次の内容を `news/my-app/search/query-profiles/default.xml` に書き込みます:
+
+```xml
+<query-profile id="default" type="root" />
+```
+
+クエリープロファイルタイプをセットアップするには、ファイル `search/query-profiles/types/root.xml` に書き込みます:
+
+```xml
+<query-profile-type id="root">
+    <field name="ranking.features.query(user_embedding)" type="tensor&lt;float&gt;(d0[50])" />
+</query-profile-type>
+```
+
+これにより、クエリーパラメーター `ranking.features.query(user_embedding)` が渡されたとき、次元 `d0[50]` の float テンソルを期待するように Vespa が設定されます。これが `nearestNeighbor` 検索オペレーターとどのように連携するかは後述します。
+
+<Warning>
+テンソルをクエリーパラメーターとして送信する場合、このクエリープロファイルタイプのセットアップが必要です。よくある落とし穴はデフォルトのクエリープロファイルを忘れることですが、クエリープロファイルタイプを正しくセットアップするにはデフォルトのクエリープロファイルが必要です。
+</Warning>
+
+クエリープロファイルの更新をデプロイします:
+
+```bash
+$ vespa deploy --wait 600 my-app
+```
+
+
+## アプリケーションのテスト
+
+これで、埋め込みを使って Vespa にクエリーできるようになりました。まず、ユーザー `U33527` を見つけましょう:
+
+```bash
+$ vespa query -v \
+  'yql=select user_id, embedding from user where user_id contains "U33527"' \
+  'hits=1'
+```
+
+これはユーザーの埋め込みを含むドキュメントを返します:
+
+```json expandable
+{
+    "root": {
+        ...
+        "children": [
+            {
+                "id": "index:mind/0/ce7cc40b398f32626fcff97a",
+                "relevance": 0.0017429193899782135,
+                "source": "mind",
+                "fields": {
+                    "user_id": "U33527",
+                    "embedding": {
+                        "type": "tensor<float>(d0[50])",
+                        "values": [
+                            0.0,
+                            0.06090399995446205,
+                            0.15839800238609314,
+                            ...
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+}
+```
+
+このベクトルを使ってニュース記事にクエリーできます。このクエリーは手で書くこともできますが、Vespa にクエリーする便利なスクリプト [user_search.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/user_search.py) を用意しています:
+
+```bash
+$ ./src/python/user_search.py U33527 10
+```
+
+このスクリプトはまず、Vespa への HTTP `GET` クエリーでユーザー埋め込みを取得します。次に、埋め込みベクトルを含むテンソルをパースします。最後に、`POST` を使って `nearestNeighbor` 検索を発行します(ただし `GET` でも同様に動作します)。最近傍検索の構文の詳細については、[nearest-neighbor オペレーター](/ja/reference/querying/yql#nearestneighbor)を参照してください。`nearestNeighbor` 検索は次のようになります:
+
+```json
+{
+    "hits": 10,
+    "yql": "select * from sources news where (nearestNeighbor(embedding, user_embedding))",
+    "ranking.features.query(user_embedding)": "{ ... }",
+    "ranking.profile": "recommendation"
+}
+```
+
+ここでは、クエリーパラメーター `user_embedding` がドキュメントの `embedding` フィールドに対して検索されるように、`nearestNeighbor` 検索オペレーターがセットアップされているのがわかります。`user_embedding` のテンソルは `ranking.features.query(user_embedding)` パラメーターにあります。前述のとおり、まさにこのクエリーパラメーターに対してクエリープロファイルタイプを設定したので、Vespa はここで何を期待すべきかを知っています。
+
+Vespa がこのクエリーを受け取ると、すべてのドキュメントを線形にスキャンし、上でセットアップした `recommendation` ランクプロファイルを使ってスコアリングします。`dotproduct` 距離メトリックを使用することで、最大内積問題を最近距離問題に変換するよう Vespa に依頼したことを思い出してください。この場合、`distance` ランキング特徴量は単に負の内積を出力します。
+
+距離検索では、最小の距離を見つけたいのですが、Vespa は最終結果をランクスコアの降順でソートします。期待どおりのランク順を得るために、Vespa は `closeness` 特徴量を提供しており、この場合それは内積そのものです。
+
+これが意図どおりに動作することを、[evaluate.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/evaluate.py) を使ってテストしましょう:
+
+```bash
+$ ./src/python/evaluate.py mind 1000
+```
+
+これは学習セットと検証セットの両方のインプレッションを読み込み、ランダムに抽出した 1000 件のインプレッションについて Vespa にクエリーし、学習時に見たのと同じメトリクスを計算します。結果は次のようになります:
+
+```
+Train: {'auc': 0.8774, 'mrr': 0.5115, 'ndcg@5': 0.5842, 'ndcg@10': 0.6345}
+Valid: {'auc': 0.6308, 'mrr': 0.2935, 'ndcg@5': 0.3203, 'ndcg@10': 0.3789}
+```
+
+これは学習時の結果と一致しています。したがって、内積空間からユークリッド空間への変換は意図どおりに機能しています。結果のランクスコアは異なりますが、この変換が同じ順序を保っていることは明らかです。
+
+
+## 近似最近傍検索
+
+ここまでは、厳密な最近傍検索を使用してきました。これはすべてのドキュメントの線形スキャンです。私たちが使用している MIND デモデータセットでは、約 28000 件のドキュメントしか含まれておらず、Vespa はこれらのスキャンに数ミリ秒しかかからないため、問題にはなりません。しかし、インデックスが大きくなるにつれて、時間(および計算コスト)は無視できなくなります。
+
+最近傍を効率的に見つける厳密な方法は存在しません。そこで、近似最近傍(ANN)と呼ばれる手法で、精度と引き換えに効率を得ます。Vespa は、HNSW(hierarchical navigable small world)アルゴリズムを使用しながらも、フィルタリングなど検索の他の側面との互換性を保つ、独自の ANN 実装を提供します。これについては次のセクションで扱います。
+
+思い出してほしいのですが、上で単一ユーザーを検索したとき(`targetHits` が 10 の場合)、Vespa は次のような結果を返しました:
+
+```json expandable
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 95
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 65238,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        }
+    }
+}
+```
+
+ここで、`coverage` は Vespa が全 65238 件のドキュメントをスキャンしたことを示しています。興味深いのは `totalCount` です。この数値は、この線形スキャンの間にドキュメントが上位 10 件の結果に入った回数です。
+
+`news.sd` の埋め込みフィールドに `index` を追加して、近似最近傍に切り替えましょう:
+
+```sd expandable
+schema news {
+    document news {
+        field news_id type string {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field category type string {
+            indexing: summary | attribute
+        }
+        field subcategory type string {
+            indexing: summary | attribute
+        }
+        field title type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field abstract type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field body type string {
+            indexing: index | summary
+            index: enable-bm25
+        }
+        field url type string {
+            indexing: index | summary
+        }
+        field date type int {
+            indexing: summary | attribute
+            attribute: fast-search
+        }
+        field clicks type int {
+            indexing: summary | attribute
+        }
+        field impressions type int {
+            indexing: summary | attribute
+        }
+        field embedding type tensor(d0[50]) {
+            indexing: attribute | index
+            attribute {
+                distance-metric: dotproduct
+            }
+        }
+    }
+
+    fieldset default {
+        fields: title, abstract, body
+    }
+
+    rank-profile popularity inherits default {
+        function popularity() {
+            expression: if (attribute(impressions) > 0, attribute(clicks) / attribute(impressions), 0)
+        }
+        first-phase {
+            expression: nativeRank(title, abstract) + 10 * popularity
+        }
+    }
+
+    rank-profile recommendation inherits default {
+        first-phase {
+            expression: closeness(field, embedding)
+        }
+    }
+}
+```
+
+この変更を行ってデプロイすると、インデックスを構築するために再起動が必要であることが Vespa から通知されます:
+
+```bash
+$ vespa deploy --wait 600 my-app
+```
+
+HNSW `index` の導入にはコンテントノードの再起動が必要です。Vespa Cloud では、これはデプロイ後に自動的に処理されます。デプロイが完了してアプリケーションが準備完了になるまで待ってください:
+
+```bash
+$ vespa status --wait 300
+```
+
+デプロイが完了したら、再び Vespa にクエリーできます:
+
+```bash
+$ ./src/python/user_search.py U33527 10
+```
+
+```json expandable
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 10
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 65238,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        }
+    }
+}
+```
+
+ここで、`coverage` は依然として 100% ですが、`totalCount` は 10、つまりリクエストしたヒット数と同じに減少しています。このフィールドにインデックスを追加したことで、Vespa はこのフィールドの値に対して HNSW グラフ構造を構築しました。近似最近傍検索で使用すると、このグラフに対してクエリーが行われ、このグラフによって決定された最も近い点だけがリストに追加されます。
+
+特に注意深い人は、結果セットが変わったことに気づいたかもしれません。実際、厳密な最近傍検索を使用したときの 3 番目の結果はニュース記事 `N438` でしたが、これは近似検索では除外されました。前述のとおり、近似最近傍検索では精度と引き換えに効率を得ます。
+
+また、このグラフの探索にはコストがかかることにも触れておくべきでしょう。今回のケースでは、ドキュメント数が比較的少ないため、効率の向上はそれほど大きくありません。しかし、ドキュメント数が増えるにつれて、これは効果を発揮し始めます。この点に関する議論は、[Approximate nearest neighbor search in Vespa](https://blog.vespa.ai/approximate-nearest-neighbor-search-in-vespa-part-1/) を参照してください。近似最近傍検索に関する多くのトレードオフを扱った [Billion-scale vector search with Vespa - part one](https://blog.vespa.ai/billion-scale-knn/) と [Billion-scale vector search with Vespa - part two](https://blog.vespa.ai/billion-scale-knn-part-two/) も参照してください。
+
+Vespa における HNSW を使った ANN の実装には優れた特徴があります。ANN を有効にするためにコーパスを再フィードする必要がなかったことに注目してください。他の多くの ANN のアプローチでは、バッチジョブでオフラインにインデックスを構築する必要があります。HNSW はこのインデックスの増分構築を可能にしており、Vespa はこれを最大限に活用しています。
+
+Vespa のユニークな特徴は、その実装がグラフ探索中のフィルタリングを可能にしていることです。これを次に見ていきます。
+
+
+## フィルタリング
+
+近似最近傍を使用する際の一般的なケースは、追加のクエリーフィルターとの組み合わせです。たとえば、小売の検索では、ユーザーに関連する商品を見つけることを考えられます。この場合、在庫切れの商品を推薦すべきではありません。そのため、追加のクエリーフィルターとして `in_stock` が true であることを保証することになります。
+
+さて、ほとんどの ANN の実装はライブラリの形で提供されるため、検索全体とは統合されていません。自然なアプローチは、まず ANN を実行し、その後に結果を*後段でフィルタリング*(post-filter)することです。残念ながら、関連するドキュメントが検索で回収(リコール)されていない可能性があるため、これはしばしば最適とはいえない結果につながります。この点に関する議論は [Using approximate nearest-neighbor search in real world applications](https://blog.vespa.ai/using-approximate-nearest-neighbor-search-in-real-world-applications/) を、事前フィルタリングと事後フィルタリングのトレードオフの理解には [Query Time Constrained Approximate Nearest Neighbor Search](https://blog.vespa.ai/constrained-approximate-nearest-neighbor-search/) を参照してください。
+
+今回のケースでは、あるユーザーに対して 10 件の `sports` 記事を取得したいとしましょう。このユーザーで 10 件の `sports` 記事に到達するには、検索から少なくとも 278 件のニュース記事を取得する必要があることがわかります:
+
+```bash
+$ ./src/python/user_search.py U63195 10 | grep "category\": \"sports\"" | wc -l
+$ ./src/python/user_search.py U63195 278 | grep "category\": \"sports\"" | wc -l
+```
+
+一方、明示的にフィルターを追加すると:
+
+```bash
+$ ./src/python/user_search.py U63195 10 "AND category contains 'sports'" | \
+  grep "category\": \"sports" | wc -l
+```
+
+ここでは 10 ヒットだけを指定し、`sports` カテゴリのヒットがちょうど 10 件返されます。Vespa は依然としてクエリー点からグラフを探索しますが、10 ヒットに達しても検索は停止しません。実質的に、フィルターを満たす結果が 10 件見つかるまでグラフ検索が広がっていきます。
+
+補足として、コーパスの大部分をフィルターで除外するような厳しいフィルターの場合、フィルターを満たす結果を探す間にグラフ内の多くの候補がスキップされることになります。これには指数関数的な時間がかかる可能性があります。このケースでは、効率のために、Vespa はフィルターにマッチする少数のドキュメントに対する線形の総当たり検索にフォールバックします。
+
+
+## まとめ
+
+これで、基本的なレコメンデーションシステムが稼働しました。ユーザーを検索して埋め込みベクトルを取得し、それを使ってニュース記事にクエリーできます。現時点では、これは Vespa への 2 回の呼び出しを意味します。[チュートリアルの次のパート](/ja/learn/tutorials/news-6-recommendation-with-searchers)では、`searchers`(サーチャー)を紹介します。これにより、Vespa クラスター内のクエリー処理中にカスタムロジックを実行できるようになり、クライアントから Vespa への 1 回のパスだけで済むようになります。

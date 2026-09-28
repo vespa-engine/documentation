@@ -1,0 +1,338 @@
+---
+title: "カスタム Searcher を使用したリランキング"
+sidebarTitle: "Searcher リランキング"
+---
+
+このガイドでは、[段階的ランキング](/ja/ranking/phased-ranking)の最終ステージを実装する[サーチャー](/ja/applications/searchers)をデプロイする方法を示します。このサーチャーは、ドキュメントの[スキーマ](/ja/basics/schemas)にある設定可能な[ランキング](/ja/ranking/ranking-intro)仕様を使用してコンテントノードによってランク付けされた、グローバルの上位 200 件のドキュメントをリランキングします。
+
+リランキング・サーチャーは[マルチフェーズ検索](/ja/applications/searchers#multiphase-searching)を使用します:
+
+**マッチング・クエリープロトコルフェーズ:** マッチングプロトコルフェーズでは、クエリーに関与する各コンテントノードに対して、ローカルで最もランキングの高いヒット(スキーマで定義された設定可能なランキング式によってランク付けされたもの)を返すよう要求します。このマッチング・クエリープロトコルフェーズには、コンテントノードごとに実行される複数のランキングフェーズを含めることができます。クエリープロトコルフェーズでは、コンテントノードは [match-features](/ja/reference/schemas/schemas#match-features) を返すこともでき、リランキング・サーチャーはそれを使用して結果をリランキング(またはフィーチャーのロギング)できます。カスタムサーチャーでは、コンテントノードからのグローバルで最もランキングの高いヒットを対象に処理を行い、上位ランクのドキュメント(グローバルで最良のドキュメント)全体で計算された集約フィーチャーにアクセスできます。
+
+**フィル・クエリープロトコルフェーズ:** すべてのランキングフェーズの後、グローバル上位ランキングのヒットに対してサマリーデータを埋めます。ドキュメントのフィールドにアクセスする必要がある場合、サーチャーはリランキングロジックの前に `execution.fill` を呼び出す必要がありますが、これは最初のプロトコルマッチングフェーズで届けられる `match-features` を使用するだけの場合よりも多くのリソースを消費します。ステートレスなリランキング中にフィールドのサブセットにアクセスする必要がある場合は、専用の[ドキュメント・サマリー](/ja/querying/document-summaries)の設定を検討してください。
+
+[Vespa におけるクエリーのライフサイクル](/ja/performance/sizing-search#life-of-a-query-in-vespa)も参照してください。
+
+<Info>
+**前提条件:**
+
+- x86\_64 または arm64 上の Linux、macOS、または Windows 10 Pro で、[Podman Desktop](https://podman.io/) または [Docker Desktop](https://www.docker.com/products/docker-desktop/) がインストールされ、エンジンが実行中であること。
+	- あるいは、Podman デーモンを起動します:
+        
+        ```bash
+        $ podman machine init --memory 6000
+        $ podman machine start
+        ```
+
+	- システム制限やその他の設定については [Docker コンテナ](/ja/operations/self-managed/docker-containers.html)を参照してください。
+- Haswell(2013 年)より古い CPU については、[CPU サポート](/ja/operations/self-managed/cpu-support)を参照してください。
+- メモリ: Docker/Podman 専用に最低 4 GB の RAM。[メモリの推奨事項](/ja/operations/self-managed/node-setup#memory-settings)。
+- ディスク: `NO_SPACE` を回避してください - vespaengine/vespa コンテナイメージとデータ用の余裕分のためにディスク容量が必要です。[詳細はこちら](/ja/writing/feed-block.html)。
+- [Vespa CLI](/ja/clients/vespa-cli.html) をインストールするための [Homebrew](https://brew.sh/)、または [Github releases](https://github.com/vespa-engine/vespa/releases) から Vespa CLI をダウンロード。
+- [Java 17](https://openjdk.org/projects/jdk/17/)。
+- アプリケーションのビルドには [Apache Maven](https://maven.apache.org/install.html) を使用します。
+</Info>
+
+### 最小限の Vespa アプリケーション
+
+カスタムのリランキング・サーチャーを使用する Vespa アプリケーション・パッケージを定義するには、4 つのファイルが必要です:
+
+- スキーマ
+- デプロイメント仕様 `services.xml`
+- カスタムのリランキング・サーチャー
+- [pom.xml](https://maven.apache.org/guides/introduction/introduction-to-the-pom.html)
+
+まず、2 つのフィールドを持つシンプルなスキーマを定義します。また、リランキングのためにサーチャーで使用する 2 つの[ランクフィーチャー](/ja/reference/ranking/rank-features)を持つランクプロファイルも定義します:
+
+```js
+schema doc {
+
+    document doc {
+        field name type string {
+            indexing: summary | index
+            match: text 
+            index: enable-bm25
+        }
+
+        field downloads type int {
+            indexing: summary | attribute
+        }
+    }
+
+    fieldset default {
+        fields: name 
+    }
+
+    rank-profile rank-profile-with-match {
+        first-phase {
+            expression: bm25(name) 
+        }
+        match-features {
+            bm25(name)
+            attribute(downloads)
+        }
+    }
+}
+```
+
+<Card>
+上記をファイル my-app/src/main/application/schemas/doc.sd に貼り付けてください
+</Card>
+
+リランキングロジックを実装するサーチャー:
+
+```java expandable
+package ai.vespa.example.searcher;
+
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+import com.yahoo.search.Searcher;
+import com.yahoo.search.result.FeatureData;
+import com.yahoo.search.result.Hit;
+import com.yahoo.search.searchchain.Execution;
+
+public class ReRankingSearcher extends Searcher {
+    @Override
+    public Result search(Query query, Execution execution) {
+        int hits = query.getHits();
+        query.setHits(200); //Re-ranking window
+        query.getRanking().setProfile("rank-profile-with-match");
+        Result result = execution.search(query);
+        if(result.getTotalHitCount() == 0
+                || result.hits().getErrorHit() != null)
+            return result;
+        double max = 0;
+        //Find max value of the window
+        for (Hit hit : result.hits()) {
+            FeatureData featureData = (FeatureData) hit.getField("matchfeatures");
+            if(featureData == null)
+                throw new RuntimeException("No 'matchfeatures' found - wrong rank profile used?");
+            double downloads = featureData.getDouble("attribute(downloads)");
+            if (downloads > max)
+                max = downloads;
+        }
+        //re-rank using normalized value
+        for (Hit hit : result.hits()) {
+            FeatureData featureData = (FeatureData) hit.getField("matchfeatures");
+            if(featureData == null)
+                throw new RuntimeException("No 'matchfeatures' found - wrong rank profile used?");
+            double downloads = featureData.getDouble("attribute(downloads)");
+            double normalizedByMax = downloads / max; //Change me
+            double bm25Name = featureData.getDouble("bm25(name)");
+            double newScore = bm25Name + normalizedByMax;
+            hit.setField("rerank-score",newScore);
+            hit.setRelevance(newScore);
+        }
+        result.hits().sort();
+        //trim the result down to the requested number of hits
+        result.hits().trim(0, hits);
+        return result;
+    }
+}
+```
+
+<Card>
+上記をファイル my-app/src/main/java/ai/vespa/example/searcher/ReRankingSearcher.java に貼り付けてください
+</Card>
+
+Vespa の[アプリケーション・パッケージ](/ja/reference/applications/application-packages)を構成するには [services.xml](/ja/reference/applications/services/services) が必要です。ここでは、カスタムサーチャーを `default` [サーチチェーン](/ja/applications/chaining)に含めます:
+
+```xml expandable
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0" xmlns:deploy="vespa" xmlns:preprocess="properties">
+    <container id="default" version="1.0">
+        <document-api/>
+        <search>
+            <chain id="default" inherits="vespa">
+                <searcher id="ai.vespa.example.searcher.ReRankingSearcher" bundle="ranking"/>
+            </chain>
+        </search>
+        <nodes>
+            <node hostalias="node1" />
+        </nodes>
+    </container>
+
+    <content id="docs" version="1.0">
+        <redundancy>2</redundancy>
+        <documents>
+            <document type="doc" mode="index" />
+        </documents>
+        <nodes>
+            <node hostalias="node1" distribution-key="0" />
+        </nodes>
+    </content>
+</services>
+```
+
+<Card>
+上記をファイル my-app/src/main/application/services.xml に貼り付けてください
+</Card>
+
+サーチャーの `bundle` 名に注意してください。これは `pom.xml` で定義されている `artifactId` と同期している必要があります:
+
+```xml expandable
+<?xml version="1.0"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>ai.vespa.example</groupId>
+    <artifactId>ranking</artifactId>  <!-- Note: When changing this, also change bundle names in services.xml -->
+    <version>1.0.0</version>
+    <packaging>container-plugin</packaging>
+    <parent>
+        <groupId>com.yahoo.vespa</groupId>
+        <artifactId>cloud-tenant-base</artifactId>
+        <version>[7,999)</version>  <!-- Use the latest Vespa release on each build -->
+        <relativePath/>
+    </parent>
+    <properties>
+        <bundle-plugin.failOnWarnings>true</bundle-plugin.failOnWarnings>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <test.hide>true</test.hide>
+    </properties>
+</project>
+```
+
+<Card>
+上記をファイル my-app/pom.xml に貼り付けてください
+</Card>
+
+### Vespa の起動
+
+これでファイルが揃ったので、Vespa を起動できます:
+
+```bash
+$ docker pull vespaengine/vespa
+$ docker run --detach --name vespa --hostname vespa-container \
+  --publish 8080:8080 --publish 19071:19071 \
+  vespaengine/vespa
+```
+
+Homebrew を使用して [vespa-cli](/ja/clients/vespa-cli) をインストールします:
+
+```bash
+$ brew install vespa-cli
+```
+
+Maven プロジェクトをビルドします。このステップで、カスタムサーチャーを含むアプリケーション・パッケージが作成されます:
+
+```bash
+$ (cd my-app && mvn package)
+```
+
+vespa-cli を使用してアプリケーションを Vespa にデプロイします:
+
+```bash
+$ vespa deploy --wait 300 my-app
+```
+
+### データのフィード
+
+いくつかのサンプルドキュメントを作成します:
+
+```json
+{
+    "put": "id:docs:doc::0",
+    "fields": {
+        "name": "A sample document",
+        "downloads": 100
+    }
+}
+```
+
+<Card>
+上記をファイル doc-1.json に貼り付けてください
+</Card>
+
+```json
+{
+    "put": "id:docs:doc::1",
+    "fields": {
+        "name": "Another sample document",
+        "downloads": 10
+    }
+}
+```
+
+<Card>
+上記をファイル doc-2.json に貼り付けてください
+</Card>
+
+CLI を使用してフィードします:
+
+```bash
+$ vespa document doc-1.json && vespa document doc-2.json 
+```
+
+### データへのクエリー
+
+クエリーを実行します - リランキング・サーチャーは `default` サーチチェーンに含まれているため、これによって呼び出されます:
+
+```bash
+$ vespa query 'yql=select * from doc where userQuery()' \
+ 'query=sample' 
+```
+
+```json expandable
+{
+    "root": {
+        "id": "toplevel",
+        "relevance": 1.0,
+        "fields": {
+            "totalCount": 2
+        },
+        "coverage": {
+            "coverage": 100,
+            "documents": 2,
+            "full": true,
+            "nodes": 1,
+            "results": 1,
+            "resultsFull": 1
+        },
+        "children": [
+            {
+                "id": "id:docs:doc::0",
+                "relevance": 1.1823215567939547,
+                "source": "docs",
+                "fields": {
+                    "matchfeatures": {
+                        "attribute(downloads)": 100.0,
+                        "bm25(name)": 0.1823215567939546
+                    },
+                    "rerank-score": 1.1823215567939547,
+                    "sddocname": "doc",
+                    "documentid": "id:docs:doc::0",
+                    "name": "A sample document",
+                    "downloads": 100
+                }
+            },
+            {
+                "id": "id:docs:doc::1",
+                "relevance": 0.2823215567939546,
+                "source": "docs",
+                "fields": {
+                    "matchfeatures": {
+                        "attribute(downloads)": 10.0,
+                        "bm25(name)": 0.1823215567939546
+                    },
+                    "rerank-score": 0.2823215567939546,
+                    "sddocname": "doc",
+                    "documentid": "id:docs:doc::1",
+                    "name": "Another sample document",
+                    "downloads": 10
+                }
+            }
+        ]
+    }
+}
+```
+
+### 後片付け
+
+アプリケーションとデータを削除します:
+
+```bash
+$ docker rm -f vespa
+```

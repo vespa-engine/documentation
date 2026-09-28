@@ -1,0 +1,199 @@
+---
+title: "HTTP サーバーとフィルター"
+description: "このドキュメントでは、コンテナーで HTTP サーバーとフィルターをセットアップする方法を説明します。先に進む前に、[開発者ガイド](/ja/applications/developer-guide)に慣れておいてください。"
+---
+
+## HTTP サーバーのセットアップ
+
+例えばポート 8090 で HTTP リクエストを受け付けるには、*services.xml* にサーバーを含む `http` セクションを追加します:
+
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<container version="1.0">
+    <http>
+        <server port="8090" id="main-server" />
+    </http>
+</container>
+```
+
+新しいサーバーが稼働していることを確認するには、ルートパスのデフォルトハンドラーをチェックします。これはすべての HTTP サーバーのリストを返します:
+
+```txt
+$ curl http://localhost:8090/
+```
+
+*services.xml* に `http` セクションを追加すると、ポート 8080 の**デフォルト HTTP サーバーが無効になります**。
+
+特権ポート(< 1024)へのバインドはサポートされています。ただし、これはスタンドアロンのコンテナーとして実行する場合に**のみ**機能し、Vespa クラスターとして実行する場合には機能**しない**ことに注意してください。
+
+### HTTP サーバーの設定
+
+サーバーの設定は、`server` 要素内で `jdisc.http.connector` config の値を設定することで変更できます:
+
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<container version="1.0">
+    <http>
+        <server port="8090" id="main-server" >
+            <config name="jdisc.http.connector">
+                <tcpNoDelay>false</tcpNoDelay>
+            </config>
+        </server>
+    </http>
+</container>
+```
+
+http-server の config で `listenPort` を設定することは、*server* 要素の *port* 属性で設定されるポートと競合するため許可されないことに注意してください。設定可能な設定フィールドの完全なリストについては、[jdisc.http.connector.def](https://github.com/vespa-engine/vespa/blob/master/container-disc/src/main/resources/configdefinitions/jdisc.http.jdisc.http.connector.def) の config 定義スキーマを参照してください。
+
+### TLS
+
+TLS は、[ssl](/ja/reference/applications/services/http#ssl) 要素または [ssl-provider](/ja/reference/applications/services/http#ssl-provider) 要素のいずれかを使って設定できます。
+
+```xml
+<container version="1.0">
+    <http>
+        <server id="server-1" port="5000">
+            <ssl>
+                <private-key-file>/path/to/private-key.pem</private-key-file>
+                <certificate-file>/path/to/certificate.pem</certificate-file>
+                <ca-certificates-file>/path/to/ca-certificates.pem</ca-certificates-file>
+                <client-authentication>want</client-authentication>
+                <cipher-suites>
+                    TLS_AES_128_GCM_SHA256,
+                    TLS_AES_256_GCM_SHA384,
+                    TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                    TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+                </cipher-suites>
+                <protocols>TLSv1.2,TLSv1.3</protocols>
+            </ssl>
+        </server>
+        <server id="server-2" port="5001">
+            <ssl-provider class="MySslProvider" bundle="the name in <artifactId> in pom.xml"/>
+        </server>
+    </http>
+</container>
+```
+
+例については、[multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) サンプルアプリケーションを参照してください。
+
+## フィルターチェーンのセットアップ
+
+フィルターには主に 2 つのタイプがあります:
+
+- リクエストフィルター
+- レスポンスフィルター
+
+リクエストフィルターはリクエストを処理するハンドラーの前に実行され、レスポンスフィルターはその後に実行されます。これらは、認証、エラーチェック、ヘッダーの変更などのタスクに使用されます。
+
+### フィルターチェーンの使用
+
+フィルターチェーンは、[filtering](/ja/reference/applications/services/http#filtering) 要素内の `request-chain` および `response-chain` 要素を使ってセットアップします。2 つのリクエストフィルターチェーンと 1 つのレスポンスフィルターチェーンをセットアップする例:
+
+```xml
+<http>
+    <filtering>
+        <filter id="request-filter1" class="com.yahoo.test.RequestFilter1" bundle="demo-bundle"/>
+
+        <request-chain id="test-request-chain">
+            <filter id="request-filter1" />
+            <filter id="request-filter2" class="com.yahoo.test.RequestFilter2" />
+        </request-chain>
+
+        <request-chain id="other-request-chain">
+            <filter id="request-filter1" />
+        </request-chain>
+
+        <response-chain id="test-response-chain">
+            <filter id="response-filter" class="com.yahoo.test.ResponseFilter" />
+        </response-chain>
+    </filtering>
+    <server port="8080" id="main-server" />
+</http>
+```
+
+複数のチェーンで使用するフィルターは、上記の例の `request-filter1` のように、`filtering` 要素の直下で定義する必要があります。
+
+フィルターチェーンを実際に使用するには、1 つ以上の URI [バインディング](/ja/reference/applications/services/http#binding)を追加します:
+
+```xml
+<http>
+    <filtering>
+        <request-chain id="test-request-chain">
+            <filter id="request-filter" class="com.yahoo.test.RequestFilter" />
+            <binding>http://*/*</binding>
+        </request-chain>
+
+        <response-chain id="test-response-chain">
+            <filter id="response-filter" class="com.yahoo.test.ResponseFilter" />
+            <binding>http://*/*</binding>
+        </response-chain>
+    </filtering>
+    <server port="8080" id="main-server" />
+</http>
+```
+
+これらのバインディングは、リクエスト URI が `http://*/*` にマッチする場合に、リクエストチェーンとレスポンスチェーンの両方を使用することを表します。つまり、1 つのリクエストに対してリクエストフィルターチェーンとレスポンスフィルターチェーンの両方を使用できます。ただし、リクエストにマッチするバインディングを持つリクエストチェーンが複数ある場合でも、使用されるリクエストチェーンは 1 つだけです。レスポンスチェーンについても同様です。そのような場合にどのチェーンが使用されるかについては、[javadoc](https://javadoc.io/doc/com.yahoo.vespa/jdisc_core/latest/com/yahoo/jdisc/application/UriPattern.html) を参照してください。
+
+フィルターチェーンを特定の *server* にバインドするには、バインディングにサーバーポートを追加します:
+
+```xml
+<request-chain id="test-request-chain">
+    <filter id="request-filter" class="com.yahoo.test.RequestFilter" />
+    <binding>http://*:8080/*</binding>
+    <binding>http://*:9000/*</binding>
+</request-chain>
+```
+
+いずれかのフィルターが設定されている場合、リクエストはフィルターチェーンにマッチしなければなりません。マッチしないリクエストには 403 レスポンスが返されます。このセマンティクスは無効化できます - [strict-mode](/ja/reference/applications/services/http#filtering) を参照してください。
+
+#### 継承したチェーンからのフィルターの除外
+
+ほとんどの URI にバインドしているリクエストフィルターチェーンがあるとします。別の URI でほぼ同じチェーンを実行したいけれども、フィルターの 1 つを除外する必要があるとします。これは、[チェーン要素](/ja/reference/applications/services/http#chain)に、スペース区切りのフィルター id のリストを取る `excludes` を追加することで行います。*status.html* に対して、継承したチェーンからセキュリティフィルターを除外する例:
+
+```xml
+<request-chain id="request-chain-with-excludes"
+    inherits="request-chain-with-security"
+    excludes="com.yahoo.jdisc.http.filter.security.MyFilter">
+    <binding>http://*/status.html</binding>
+</request-chain>
+```
+
+### カスタムフィルターの作成
+
+artifactId が `filter-bundle` の[アプリケーション・パッケージ](/ja/applications/developer-guide)を作成します。新しいファイル `filter-bundle/components/src/main/java/com/yahoo/demo/TestRequestFilter.java` を作成します:
+
+```java expandable
+package com.yahoo.demo;
+import com.yahoo.jdisc.*;
+import com.yahoo.jdisc.handler.*;
+import com.yahoo.jdisc.http.*;
+import com.yahoo.jdisc.http.filter.RequestFilter;
+import java.net.*;
+import java.nio.ByteBuffer;
+public class TestRequestFilter extends AbstractResource implements RequestFilter  {
+    @Override
+    public void filter(HttpRequest httpRequest, ResponseHandler responseHandler) {
+        if (isLocalAddress(httpRequest.getRemoteAddress())) {
+            rejectRequest(httpRequest, responseHandler);
+        } else {
+        httpRequest.context().put("X-NOT-LOCALHOST", "true");
+    }
+}
+private boolean isLocalAddress(SocketAddress socketAddress) {
+    if (socketAddress instanceof InetSocketAddress) {
+        InetAddress address = ((InetSocketAddress)socketAddress).getAddress();
+        return address.isAnyLocalAddress() || address.isLoopbackAddress();
+    } else {
+    return false;
+}
+}
+private void rejectRequest(HttpRequest request, ResponseHandler responseHandler) {
+    HttpResponse response = HttpResponse.newInstance(request, Response.Status.FORBIDDEN);
+    ContentChannel channel = responseHandler.handleResponse(response);
+    channel.write(ByteBuffer.wrap("Not accessible by localhost.".getBytes()), null);
+    channel.close(null);
+}
+}
+```
+
+バンドルをビルドし、[アプリケーション・パッケージ](/ja/basics/applications)の *components* ディレクトリに配置します。

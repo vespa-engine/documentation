@@ -330,6 +330,8 @@ Note the [document-api](/en/reference/applications/services/container#document-a
 
 Contained in [content](#content). The minimum total data copies the cluster will maintain. This can be set instead of (or in addition to) redundancy to ensure that a minimum number of copies are always maintained regardless of other configuration.
 
+On Vespa Cloud, this results in a [redundancy](#redundancy) of at least ceil(min-redundancy / groups) per group; self-managed, a total redundancy of at least min-redundancy. Settings that refer to redundancy, such as [searchable-copies](#searchable-copies), use this derived value. As each group holds at least one full copy, the actual copy count can exceed min-redundancy: on Vespa Cloud, min-redundancy 2 with 3 groups gives 3 copies.
+
 `min-redundancy` can be changed without node restart - replicas will be added or removed automatically.
 
 ### min-redundancy and groups
@@ -489,7 +491,15 @@ Contained in [engine](#engine). If specified, the content cluster will use the P
 
 ## searchable-copies
 
-Contained in [proton](#proton). Default value is 2, or [redundancy](#redundancy), if lower. If set to less than redundancy, only some of the stored copies are ready for searching at any time. This means that node failures causes temporary data unavailability while the alternate copies are being indexed for search. The benefit is using less memory, trading off availability during transitions. Refer to [bucket move](/en/content/proton#bucket-move).
+Contained in [proton](#proton). The number of data copies that are indexed (*ready*) and hence searchable.
+
+Vespa Cloud: Searchable copies *per group*, capped at [redundancy](#redundancy). Default 1 with multiple groups, otherwise 2 (or redundancy, if lower).
+
+Self-managed: The total searchable copies, divided evenly across groups - must be divisible by the number of groups. Default 2 or the number of groups if higher, or 1 if redundancy is 1.
+
+In clusters using only [streaming search](/en/performance/streaming-search) there is no index, so a searchable copy costs no extra resources - the default is redundancy, making failover instant.
+
+If set to less than redundancy, only some of the stored copies are ready for searching at any time. This means that node failures causes temporary data unavailability while the alternate copies are being indexed for search. The benefit is using less memory, trading off availability during transitions. Refer to [bucket move](/en/content/proton#bucket-move).
 
 If updating documents or using [document selection](#documents) for garbage collection, consider setting [fast-access](/en/reference/schemas/schemas#attribute) on the subset of attribute fields used for this to make sure that these attributes are always kept in memory for fast access. Note that this is only useful if `searchable-copies` is less than `redundancy`. Read more in [proton](/en/content/proton).
 

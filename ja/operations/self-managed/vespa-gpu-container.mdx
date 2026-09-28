@@ -1,0 +1,122 @@
+---
+title: "コンテナー GPU セットアップ"
+sidebarTitle: "Docker コンテナーの GPU セットアップ"
+---
+
+Vespa は、[ステートレス・モデル評価機能](/ja/ranking/stateless-model-evaluation)の一部として、ONNX モデルの評価に GPU を使用することをサポートしています。Docker や Podman などのコンテナーエンジン内で Vespa を実行する場合、コンテナー内で GPU を利用可能にするには特別な設定が必要です。
+
+以下のガイドでは、RHEL8 上の Podman を使用して、Nvidia GPU 向けにこれを行う方法を説明します。これは、x86\_64 上の素の Rocky Linux 8.8 および AlmaLinux 8.8 でも動作するはずです。その他のプラットフォームやコンテナーエンジンについては、[Nvidia container toolkit installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) を参照してください。以下のコマンドは root として実行する必要があります（最初に `sudo bash` を実行してください）。
+
+## スクリプトの実行
+
+RHEL8 / x86\_64 向けのスクリプトを取得し、次のように実行します:
+
+```bash
+sudo dnf -y install wget
+wget https://raw.githubusercontent.com/vespa-engine/docker-image/master/experimental/gpu-setup-rhel8-x86.sh
+sh gpu-setup-rhel8-x86.sh
+```
+
+これは以下の手順に従い、サンプルアプリケーションが GPU を利用できるかどうかを確認します。詳細については、以下の手順を参照してください。
+
+## 設定手順
+
+<Steps>
+<Step>
+`getenforce` で SELinux が無効になっていることを確認します。必要に応じて `/etc/selinux/config` を編集して再起動してください。SELinux の干渉を一時的に回避するには、代わりに `setenforce Permissive` を実行することも可能です。
+</Step>
+<Step>
+`vespaengine/vespa` コンテナーイメージを実行する**ホスト**に Nvidia ドライバーがインストールされていることを確認します。RHEL 8 では次のように行えます:
+
+```bash
+dnf config-manager \
+  --add-repo=https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
+dnf module install -y --enablerepo cuda-rhel8-x86_64 nvidia-driver:530
+nvidia-modprobe
+ls -ld /dev/nvidia*
+```
+
+上記のコマンドを実行した後、（少なくとも）これらのデバイスが表示されているはずです:
+
+```bash
+crw-rw-rw-. 1 root root 195,   0 Aug 16 11:24 /dev/nvidia0
+crw-rw-rw-. 1 root root 195, 255 Aug 16 11:24 /dev/nvidiactl
+crw-rw-rw-. 1 root root 238,   0 Aug 16 11:24 /dev/nvidia-uvm
+crw-rw-rw-. 1 root root 238,   1 Aug 16 11:24 /dev/nvidia-uvm-tools
+```
+
+詳細については、CUDA インストールガイドの [Device Node Verification](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#device-node-verification) を参照してください。
+</Step>
+<Step>
+`nvidia-container-toolkit` をインストールします。これにより、コンテナーエンジンが GPU デバイスにアクセスできるようになります。RHEL 8 では次のように行えます:
+
+```bash
+dnf config-manager \
+  --add-repo=https://nvidia.github.io/libnvidia-container/rhel8.6/libnvidia-container.repo
+dnf install -y --enablerepo libnvidia-container nvidia-container-toolkit
+```
+</Step>
+<Step>
+「Container Device Interface」の設定を生成します:
+
+```bash
+nvidia-ctk cdi generate --device-name-strategy=type-index --format=json --output /etc/cdi/nvidia.json
+```
+</Step>
+<Step>
+GPU デバイスがコンテナーに公開されていることを確認します:
+
+```bash
+podman run --rm -it --device nvidia.com/gpu=all docker.io/nvidia/cuda:11.6.2-base-ubuntu20.04 nvidia-smi
+```
+
+すべてが正しく設定されていれば、GPU の詳細が表示されるはずです。
+</Step>
+<Step>
+`--device` オプションを付けて Vespa コンテナーを起動します:
+
+```bash
+podman run --detach --name vespa --hostname vespa-container \
+  --publish 8080:8080 --publish 19071:19071 \
+  --device nvidia.com/gpu=all \
+  vespaengine/vespa
+```
+</Step>
+<Step>
+`vespaengine/vespa` イメージには、サイズが大きいため、現在のところ必要な CUDA ライブラリがデフォルトでは含まれていません。これらのライブラリは、コンテナー内に手動でインストールする必要があります:podman exec -u 0 -it vespa /bin/bash
+
+```bash
+podman exec -u 0 -it vespa /bin/bash
+dnf -y install dnf-plugins-core
+dnf config-manager \
+  --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
+dnf -y install vespa-onnxruntime-cuda
+```
+
+実行中のコンテナー内に `vespa-onnxruntime-cuda` を上記の方法でインストールする代わりに、以下の `Dockerfile` を使用して独自のコンテナーイメージをビルドすることもできます。この方法であれば、インストール権限付きでコンテナーイメージを実行する必要がなくなります。
+
+```bash
+FROM vespaengine/vespa
+
+USER root
+
+RUN dnf -y install 'dnf-command(config-manager)'
+RUN dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
+RUN dnf -y install $(rpm -q --queryformat '%{NAME}-cuda-%{VERSION}' vespa-onnxruntime)
+
+USER vespa
+```
+
+その場合は、代わりに自分のコンテナーイメージ名を指定して実行します:
+
+```bash
+podman run --detach --name vespa --hostname vespa-container \
+  --publish 8080:8080 --publish 19071:19071 \
+  --device nvidia.com/gpu=all \
+  your-container-image-name
+```
+</Step>
+<Step>
+これで、ホスト上のすべての Nvidia GPU がコンテナー内で利用可能になり、デバイスは `/dev/nvidiaN` として公開されます。ONNX ランタイムが計算に GPU を使用するように設定する方法については、[ステートレス・モデル評価](/ja/ranking/stateless-model-evaluation#onnx-inference-options)を参照してください。GPU を使用する埋め込みモデルについても同様に、[embedder onnx リファレンス](/ja/reference/rag/embedding#embedder-onnx-reference-config)を参照してください。
+</Step>
+</Steps>

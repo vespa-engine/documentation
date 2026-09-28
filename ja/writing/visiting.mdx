@@ -1,0 +1,312 @@
+---
+title: "ビジット(Visiting)"
+---
+
+ビジット(visiting)は、[ドキュメント・セレクション式](/ja/reference/writing/document-selector-language)で指定したドキュメントの集合を効率的に取得または処理するための機能です。
+
+ビジットは、アプリケーションのバックアップやマイグレーションによく使われます。この用途には、[アプリケーションとデータのクローン](/ja/operations/cloning)が良いガイドです。
+
+visit を実行するには [Vespa CLI](/ja/clients/vespa-cli) を使用します。以下は、[クイックスタート](/ja/basics/deploy-an-application-local)を使った例です:
+
+```sh
+$ vespa visit
+```
+
+```json
+{
+    "id": "id:mynamespace:music::love-is-here-to-stay",
+    "fields": {
+        "artist":"Diana Krall",
+        "year":2018,
+        "category_scores": {
+            "type": "tensor<float>(cat{})",
+            "cells": {
+                "pop": 0.4000000059604645,
+                "rock": 0.0,
+                "jazz": 0.800000011920929
+            }
+        },
+        "album": "Love Is Here To Stay"
+    }
+}
+```
+
+一般的に、ビジットのユースケースは、データの再処理や、バックアップおよびクラスターのクローンのためのドキュメントのダンプなど、時間に敏感でないものです。詳細は[アプリケーションとデータのクローン](/ja/operations/cloning)が参考になります。
+
+ビジットにはスナップショット分離がありません。反復処理された時点でのドキュメントの状態を返します。反復の順序は実装依存です。詳細は[整合性のドキュメント](/ja/content/consistency#read-consistency)を参照してください。
+
+<Note>
+**注:**
+
+バケットの反復処理を行うため、ビジットは通常、レイテンシーの高い処理です。空のコンテント・クラスターであっても、スケーリングを可能にするために多数のデータバケットに事前分割されています。ドキュメントを 1 件だけダンプする場合でも、*location* 指定のセレクションを使用しない限り、すべてのデータバケットの反復処理が必要です。ビジットの性能をテストする際は、より大きなデータセットを使用してください。小さなデータセットからの外挿はしないでください。小さな結果セットに対する低レイテンシーの操作には、[クエリー API](/ja/querying/query-api) または [`vespa document get`](/ja/clients/vespa-cli#documents) を使用してください。
+</Note>
+
+ビジットの動作の詳細については、[リクエスト処理](#request-handling)を参照してください。内部ツールの [vespa-visit](/ja/reference/operations/self-managed/tools#vespa-visit) も参照してください。プログラムからのアクセスについては、[visitor session API](/ja/writing/document-api-guide#visitorsession) を参照してください。
+
+## pyvespa からのビジット
+
+[pyvespa ライブラリー](https://vespa-engine.github.io/pyvespa/reads-writes#visiting)は、ドキュメントをビジットするための便利な Python インターフェースを提供します。
+
+## データのエクスポート
+
+データを stdout にエクスポートします:
+
+```sh
+$ vespa visit
+```
+
+サブセットをエクスポートするには、`--slices 100 --slice-id 0` を使用すると、データ空間の 1/100 のみを効率的に反復処理することで、コーパスの 1% をエクスポートします。指定した `--slices` の数に対して、0 以上 `--slices` 未満のすべての `--slice-id` 値でビジットすることで、出力を重複させることなく(場合によっては並列で)コーパス全体をビジットできます:
+
+```sh
+$ vespa visit --slices 100 --slice-id 0
+```
+
+<Note>
+**注:**
+
+アプリケーションに[グローバル・ドキュメント型](/ja/reference/applications/services/content#document)がある場合、これらのドキュメントをビジットするには `--bucket-space global` を使用してください。デフォルトでは、ビジットは非グローバルなドキュメントのみを反復処理します。
+</Note>
+
+### 性能に関する注意: ビジットでエクスポートしたデータのフィード
+
+Vespa はハッシュを使用して、ドキュメントを多数の[バケット](/ja/content/buckets)に擬似ランダムに分散させます。受信するドキュメントストリーム内の操作は、すべてのバケットの集合と、それらを保存するコンテント・ノードの両方に対して均等に分散されることが想定されています。これにより負荷が並列化され、クラスター内のハードウェアリソースが効率的に活用されます。
+
+ビジットはクラスター内のバケットを反復処理し、1 つのバケットに保存されているすべてのドキュメントを返してから次のバケットに移ります(多くの場合、多数のバケットを並列に処理します)。その結果、内部のドキュメントからバケットへの分散と、ビジット処理のドキュメント出力順序の間には直接的な相関があります。
+
+ビジットの出力を直接コンテント・クラスターにフィードし直すと、この相関により、ドキュメントのストリームはバケットやコンテント・ノードに対して均一に分散されなくなります。Vespa 8.349 より前では、バックエンドのバケットレベルの書き込みロックとインデックス作成スレッドをめぐる競合が増加するため、フィード性能が大幅に低下する可能性があります。Vespa 8.349 以降には、再フィードの性能を初回フィードの性能に大きく近づける最適化が含まれています。
+
+この問題を回避する簡単な戦略は、再フィードの前にビジットの出力を*シャッフル*することです。これにより、フィード操作と基盤となるデータ分散の間の相関が取り除かれます。
+
+## セレクション
+
+ビジットするドキュメントを選択(すなわちフィルタリング)するには、[ドキュメント・セレクション式](/ja/reference/writing/document-selector-language)を使用します。その他の例は [Vespa CLI チートシート](/ja/clients/vespa-cli#cheat-sheet)を参照してください。
+
+
+```sh
+$ vespa visit --selection "id = 'id:mynamespace:music::love-is-here-to-stay'"
+$ vespa visit --selection "year = 2018"
+```
+
+## フィールド
+
+出力するフィールドを選択するには、[フィールドセット](/ja/schemas/documents#fieldsets)を使用します。[例](/ja/clients/vespa-cli#documents)を参照してください。よくある使い方は、フィールドのカンマ区切りリスト、または *[document]* / *[all]* という省略記法を使用することです。
+
+```sh
+$ vespa visit --field-set=[all]
+$ vespa visit --field-set=music:id,year
+```
+
+
+## タイムスタンプ範囲
+
+[Document V1 API](/ja/reference/api/document-v1) と [Vespa CLI](/ja/clients/vespa-cli) のどちらにも、特定のタイムスタンプ範囲内に最終更新されたドキュメントを返すオプションがあります。要求するタイムスタンプ範囲の *from* と *to* は、どちらか一方または両方を指定できます:
+
+- Document V1 では、HTTP リクエストパラメーター `fromTimestamp` と `toTimestamp` を使用して範囲を指定します(マイクロ秒単位)。
+- `vespa visit` では、`--from` と `--to` を使用して範囲を指定します(秒単位)。
+
+タイムスタンプ範囲の設定は、タイムスタンプ範囲なしのビジターが返すはずのドキュメント集合に対する*フィルター*にすぎません。スナップショット分離を意味するものでは*ありません*。あらゆる変更はドキュメントのタイムスタンプを更新するため、返されるドキュメントの集合は、ドキュメントへの並行した変更の影響を受ける可能性があります。
+
+## 再処理
+
+再処理は、次のようなユースケースを解決するために使用します:
+
+- 後方互換性のない方法で使用中のドキュメント型を変更するには、新しい型を定義し、再処理して既存のすべてのドキュメントを変更します。
+- ドキュメント識別子を新しいスキームに変更できます。
+- インデックス作成手順を変更した後に、検索ドキュメントを再インデックスできます。
+
+この例では、コンテント・クラスター内のドキュメントのサブセットを特定し、それらを再処理して書き戻す方法を示します。データの入った Vespa クラスターがセットアップ済みであることを前提とします。
+
+### 1. ドキュメント再処理クラスターをセットアップする
+
+この例のドキュメント・プロセッサーは:
+
+- *artist* フィールドの値に *Metallica* を含むドキュメントを削除します
+- それ以外のすべてのドキュメントの *title* フィールドの値を大文字にします
+
+```js expandable
+import com.yahoo.docproc.Arguments;
+import com.yahoo.docproc.DocumentProcessor;
+import com.yahoo.docproc.Processing;
+import com.yahoo.docproc.documentstatus.DocumentStatus;
+import com.yahoo.document.DocumentOperation;
+import com.yahoo.document.DocumentPut;
+import com.yahoo.document.Document;
+
+/**
+ * Example of using a document processor will modify and/or delete
+ * documents in the context of a reprocessing use case.
+ */
+public class ReProcessor extends DocumentProcessor {
+    private String deleteFieldName;
+    private String deleteRegex;
+    private String uppercaseFieldName;
+
+    public ReProcessor() {
+        deleteFieldName = "artist";
+        deleteRegex = ".*Metallica.*";
+        uppercaseFieldName = "title";
+    }
+
+    public Progress process(Processing processing) {
+        Iterator<DocumentOperation> it = processing.getDocumentOperations().iterator();
+        while (it.hasNext()) {
+            DocumentOperation op = it.next();
+            if (op instanceof DocumentPut) {
+                Document doc = ((DocumentPut) op).getDocument();
+
+                // Delete the current document if it matches:
+                String deleteValue = (String) doc.getValue(deleteFieldName);
+                if (deleteValue != null) {
+                    if (deleteValue.matches(deleteRegex)) {
+                        it.remove();
+                        continue;
+                    }
+                }
+
+                // Uppercase the other field:
+                String uppercaseValue = doc.getValue(uppercaseFieldName).toString();
+                if (uppercaseValue != null) {
+                    doc.setValue(uppercaseFieldName, uppercaseValue.toUpperCase());
+                }
+            }
+        }
+        return Progress.DONE;
+    }
+}
+```
+
+このプロセッサーをコンパイルするには、[開発者ガイド](/ja/applications/developer-guide)を参照してください。ドキュメント処理の詳細については、[ドキュメント・プロセッサーの開発](/ja/applications/document-processors)を参照してください。Vespa のセットアップを変更した後、設定をリロードします:
+
+```bash
+$ vespa deploy music
+```
+
+有効化するにはノードの再起動も行ってください。
+
+### 2. ドキュメントを選択する
+
+再処理するドキュメントのセレクション条件を定義します。(*すべての*ドキュメントを再処理する場合は、これをスキップします。)この例では、フィールド *year* が 1995 より大きいすべてのドキュメントを対象とします。セレクション文字列 *music.year > 1995* がこれを行います。
+
+### 3. ルートを設定する
+
+ビジターはドキュメントを [Messagebus ルート](/ja/writing/document-routing)に送信します。例:
+
+- **default** - ドキュメントは *default* ルートに送信されます。
+- **indexing** - ドキュメントは *indexing* に送信されます。
+- **`<clustername>/chain.<chainname>`**: ドキュメントは、クラスター *clustername* で実行されているドキュメント処理チェーン *chainname* に送信されます。
+
+id が *reprocessing* のコンテナー・クラスターがあり、その中に id が *reprocessing-chain* の docproc チェーンがあるとします。この例のルートは、ドキュメントをコンテント・ノードからドキュメント再処理チェーンへ、そして最終的にインデックス作成へと送信します:
+
+```bash
+reprocessing/chain.reprocessing-chain indexing
+```
+
+詳細: [Message Bus ルーティングガイド](/ja/writing/document-routing)。
+
+### 4. 再処理する
+
+再処理を開始します:
+
+```bash
+$ [vespa-visit](/en/reference/operations/self-managed/tools.html#vespa-visit) -v --selection "music AND music.year > 1995" \
+  --datahandler "reprocessing/chain.reprocessing-chain indexing"
+```
+
+'-v' オプションは、進捗情報を標準エラー出力に出力します。
+
+## フィールド値の分析
+
+*visit* を使用すると、空のフィールドなどの条件を満たすドキュメントの id を一覧表示できます。以下は、未設定または空の「name」フィールドを見つける例です:
+
+```bash
+$ vespa visit \
+    --pretty-json \
+    --cluster default \
+    --selection 'restaurant AND (restaurant.name == "" OR restaurant.name == null)' \
+    --field-set "[id]"
+```
+
+セレクション文字列の最初の部分「restaurant AND ...」に注目してください。これは、セレクションが *restaurant* ドキュメント型(すなわちスキーマ)に限定されることを保証するためです。
+
+[NaN を含むフィールド](/ja/querying/grouping#count-fields-with-nan)のカウントと一覧表示も参照してください。
+
+## リクエスト処理
+
+簡単に言うと、*visit* はすべての、または一部の[バケット](/ja/content/buckets)を反復処理し、ドキュメントを(複数の)ターゲットに送信します。ターゲットは通常、ビジットのクライアント([vespa-visit](/ja/reference/operations/self-managed/tools#vespa-visit) など)ですが、ドキュメントのシンクとして機能するターゲットの集合を設定することもできます。[vespa-visit-target](/ja/reference/operations/self-managed/tools#vespa-visit-target) を参照してください。
+
+### クライアント
+
+セレクション条件によってビジターを特定のバケット集合にマッピングできた場合、ディストリビューターへのビジットリクエストの送信にはそれらが使用されます。そうでない場合、ビジットのクライアントはバケット空間全体を、通常は正しいディストリビューターを決定するために必要な最小の分割レベルで反復処理します。
+
+ディストリビューターはリクエストを受け取り、要求されたバケットに含まれる、自身が持つバケットを確認します。複数ある場合、ディストリビューターは同時に開始するバケットビジターの数を制限します。最初の分の処理が終わると、最後に処理したバケットをビジターのクライアントに応答します。
+
+すべてのバケットには自然な順序があるため、クライアントは返されたバケットを進捗カウンターとして使用できます。したがって、ディストリビューターのリクエストが返った後、クライアントは次のいずれかを知ることができます:
+
+- 送信したバケットに含まれるすべてのバケットがビジット済みである
+- 送信したバケットに含まれるバケットのうち、順序上この特定のバケットまでがビジット済みである
+- 要求したバケットに含まれるバケットは存在しなかった
+
+クライアントは、一度に 1 つのバケットのみを処理中とする厳密な順序でビジットするか、一度に多数のバケットのビジットを開始して高いスループットを得るかを選択できます。
+
+### ディストリビューター
+
+ディストリビューターは、クライアントから特定のバケットに対するビジットリクエストを受け取ります。これはディストリビューター内の 0 個、1 個、または多数のバケットに対応する可能性があります。ディストリビューターは順序の先頭にある 1 つ以上のバケットを選び、それぞれについて 1 つのコンテント・ノードのコピーを選択し、リクエストをコンテント・ノードに渡します。
+
+すべてのコンテント・ノードのリクエストへの応答が揃うと、ディストリビューターは、進捗カウンターとして使用するために、最後にビジットしたバケットをクライアントに応答します。
+
+その後のクライアントからディストリビューターへのリクエストには進捗カウンターが設定され、ディストリビューターは順序上その地点より前のすべてのバケットを無視できます。
+
+バケットの分割と結合は順序を変えないため、バケットが一貫して分割されている限り、ビジットに大きな影響はありません。2 つのバケットが結合され、最初のバケットが既にビジット済みの場合、結合されたバケットにビジットリクエストを送信する必要があります。コンテント層は進捗カウンターを使用して、そのバケット内で既に処理済みのドキュメントを再ビジットしないようにします。
+
+ディストリビューターが一度に 1 つのバケットビジターのみを開始する場合、ビジターの順序が保たれることを保証できます。一度に複数のバケットを開始すると、スループットが向上しレイテンシーが低下する可能性がありますが、進捗の追跡は粗くなるため、障害後に再開する際に、もう少し多くのドキュメントを再ビジットする必要が生じる可能性があります。
+
+### コンテント・ノード
+
+コンテント・ノードは、自身がドキュメントを保存している単一のバケットに対するビジットリクエストを受け取ります。多数のリクエストを並列に受け取ることがありますが、それらの実行は互いに独立しています。
+
+コンテント・ノード内のビジター層がビジットリクエストを取り上げます。そこでビジタースレッドが割り当てられ、そのビジター用にプロセッサー型のインスタンスが作成されます。プロセッサーはバックエンドにイテレーターをセットアップし、ドキュメントに対する 1 つ以上のリクエストをバックエンドに送信します。
+
+ビジターのクライアントで指定されたドキュメント・セレクションはバックエンドまで渡されるため、可能な限り低いレベルで不要なデータをフィルタリングできます。
+
+ドキュメントがバックエンドから取得され、ビジター層まで戻ってくると、ビジットのプロセッサーがデータを処理します。
+
+デフォルトでは、バックエンドに対して常に 1 つのイテレーターリクエストが処理中です。多数の小さなイテレーターリクエストを送信し、複数を同時に処理中にすることで、ドキュメントの取得と並行して処理を行うことができます。
+
+## トラブルシューティング
+
+### すべてのドキュメントがエクスポートされない
+
+通常、すべてのドキュメントは同じ[バケット空間](/ja/content/buckets#bucket-space)を共有し、複数のスキーマのドキュメントが同じ場所に配置されます。[親子関係](/ja/schemas/parent-child)を使用する場合、グローバル・ドキュメントは別のバケット空間に保存されます。`default` または `global` の空間をビジットするには、[bucket-space](/ja/reference/api/document-v1#bucketspace) パラメーターを使用してください。これは、すべてのドキュメントをダンプした際に、ダンプされた件数が期待した件数と一致しない場合のよくある原因です。
+
+### ビジットの性能が悪い
+
+ビジット時には、すべてのコンテント・ノードがビジターの*クライアント*に並列にデータをプッシュする可能性があります。そのため、クライアントがボトルネックになることがよくあります。データ処理が遅いと、暗黙的にビジット処理全体が遅くなります。特に、大きな浮動小数点テンソル・フィールドを JSON としてレンダリングするのは非常にコストが高くなります。
+
+クライアント側のレンダリングがボトルネックかどうかを確認するには、通常のセレクション条件とフィールドセットで [vespa-visit](/ja/reference/operations/self-managed/tools#vespa-visit) を実行し、`--nullrender` 引数(Vespa 8.134 から利用可能)を追加します。これは通常どおりドキュメントを受信して処理しますが、レンダリングを完全にスキップします。
+
+ビジットの出力を独自のビジネスロジック(ドキュメントのストリームに対して `jq` を実行するなど)にリダイレクトしている場合は、内部で誤ってデータをバッファリングしていないことを確認してください。これは入力と出力の両方に当てはまります。ビジターの出力の処理がボトルネックかどうかを確認するには、`stdout` を `/dev/null` にリダイレクトしてビジットを実行し、所要時間を比較します。
+
+クライアントがボトルネックでない場合、ビジットの性能はディスク性能によって制限されている可能性があります。アトリビュートでないフィールドはメモリに保持されず、セレクションの評価時にディスクから取得する必要があります。これには、マッチしたドキュメントに対して常に返す必要があるドキュメント ID も含まれます。特定のフィールドの取得や返却が特にコスト高になっていないかを確認するには、コストが高くなりそうなフィールドを*含まない*セレクションやフィールドセットでビジットを実行してみてください。
+
+### ビジター操作がハングする
+
+コンテント・クラスターが不整合な状態にある(レプリカがノード間でまだマージ中である)場合、ビジット操作は停止/ハングすることがあります。
+
+### Handshake failed
+
+[/document/v1](/ja/reference/api/document-v1) API 経由で vespa visit を実行した場合:
+
+```bash
+[HANDSHAKE_FAILED @ localhost]: An error occurred while resolving version of recipient(s)
+[tcp/container0:37227/visitor-1-1682523227698 at tcp/container0:37227] from host 'content0'
+```
+
+この場合のビジットのクライアントは、/document/v1 インターフェースを持つ Vespa Container ノードです。ビジットは比較的長時間続く操作です。クライアントは各コンテント・ノード上でビジター操作を開始し、コンテント・ノードはデータを送信するためにクライアント(ここでは `tcp/container0:37227`)に接続し返します。なぜ接続し返すのか、少し奇妙に思えるかもしれません。
+
+これは、スループットを高めるために、ビジター操作の結果を複数の宛先にプッシュできるようにするという考えに基づいています。[リクエスト処理](#request-handling)を参照してください。これが、ランダムなポートで接続し返す理由であり、[vespa-model-inspect](/ja/reference/operations/self-managed/tools#vespa-model-inspect) でそのポートが見えない理由(一時的なポートである)です。
+
+これはまた、Vespa ノードがすべてのポートで相互に通信できなければならないことも意味します。[Docker コンテナー](/ja/operations/self-managed/docker-containers)を参照してください。
+
+例として [multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) を確認してください。すべてのコンテナーに Docker ネットワークが使用されています。[docker-compose.yaml](https://github.com/vespa-engine/sample-apps/blob/master/examples/operations/multinode-HA/docker-compose.yaml) の「network」も参照してください。
+
+このエラーのもう 1 つの原因として、過負荷時などにコンテナーインスタンスが応答しなくなっていることが考えられます。

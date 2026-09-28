@@ -1,0 +1,358 @@
+---
+title: "クエリープロファイル"
+---
+
+クエリープロファイルとは、設定として与えられる、名前付きの検索リクエストパラメーターのコレクションです。検索リクエストでクエリープロファイルを指定すると、そのパラメーターがリクエストのパラメーターとして使用されます。これにより、クライアントは大量のパラメーターを管理して送信する必要がなくなり、あるユースケースで使用するリクエストパラメーターを、クライアントを変更することなく変更できるようになります。クエリープロファイルは、クエリーストリームの一部に実験的な処理を適用する[バケットテスト](../applications/testing#feature-switches-and-bucket-tests)や、(OEM)顧客、ユーザータイプ、地域、フロントエンドタイプなどに基づいて動作を差別化することを可能にします。このドキュメントでは、クエリープロファイルの作成方法と使用方法を説明します。完全な構文については[クエリープロファイルリファレンス](../reference/querying/query-profiles)も参照してください。
+
+## クエリープロファイルの使用
+
+クエリープロファイルは、リクエストパラメーター名とその値を含む XML ファイルです。例:
+
+```xml
+<query-profile id="MyProfile">
+    <field name="hits">20</field>
+    <field name="maxHits">2000</field>
+    <field name="unique">merchantid</field>
+</query-profile>
+```
+
+完全な構文については[クエリープロファイルリファレンス](../reference/querying/query-profiles)を参照してください。 
+
+<Warning>
+**重要:**
+
+完全なプロパティ名を使用する必要があることに注意してください。`input.query(...)` のようなエイリアスは、リクエストとプログラムによるルックアップでのみサポートされています。
+</Warning> 
+
+組み込みのクエリープロパティの一覧については、[クエリー API リファレンス](../reference/api/query)を参照してください。
+
+クエリープロファイルをデプロイするには:
+
+<Steps>
+<Step>
+上記の形式を使用して、*[my-profile-name].xml* という名前のプロファイル用ファイルを作成します。例: *MyProfile.xml*(名前に含まれる `/` は `_` に置き換えます)
+</Step>
+<Step>
+これを[アプリケーション・パッケージ](../basics/applications)のルートにあるディレクトリ *search/query-profiles* に配置します
+</Step>
+<Step>
+アプリケーション・パッケージを[再デプロイ](../basics/applications#deploying-applications)します
+</Step>
+</Steps>
+
+このディレクトリには、任意の数のクエリープロファイルファイルを追加できます。クエリープロファイルに、不正な構文や無限の参照ループなどのエラーが含まれている場合、デプロイは失敗します。
+
+クエリーリクエストでクエリープロファイルを使用するには、プロファイルの名前をパラメーター `queryProfile` として送信します。
+
+```js
+queryProfile=MyProfile
+```
+
+リクエストでクエリープロファイルが指定されていない場合、`default` という名前のプロファイルが使用されます。`default` プロファイルが設定されていない場合、プロファイルは使用されません。queryProfile パラメーターが設定されているものの、既存のプロファイルに解決されない場合は、エラーメッセージが返されます。例として、クエリープロファイルを使用しないすべてのクエリーに対して、デフォルトのクエリータイムアウトを 200ms に設定します。
+
+```bash
+$ cat search/query-profiles/default.xml
+
+<query-profile id="default">
+    <field name="timeout">0.2</field>
+</query-profile>
+```
+
+クエリープロファイルの値(設定されたクエリープロファイルによるものでも、リクエストで設定されたものでも)は、*クエリープロパティ*として利用できます。[Searcher コンポーネント](../applications/searchers)から値をルックアップするには、次を使用します。
+
+```js
+query.properties().get("myVariable")
+```
+
+プロパティ名は大文字と小文字が区別されることに注意してください。
+
+### 例
+
+[IN](../reference/querying/yql#in) 演算子と *cities* の[ローカル置換](#local-substitution)を使用して、YQL クエリー文字列を変更するクエリープロファイルを使用します。
+
+```js
+<query-profile id="city-filter">
+    <field name="yql">select * from restaurant where userQuery() and city in (%{cities})</field>
+    <field name="cities">""</field>
+</query-profile>
+```
+
+IN 演算子には [match: word](../reference/schemas/schemas#match) を使用します。
+
+```js
+field city type string {
+    indexing: summary | index
+    match:    word
+}
+```
+
+YQL 文字列に置換される IN 演算子の値を渡すクエリーの例:
+
+```bash
+$ vespa query \
+  queryProfile=city-filter \
+  cities='"berlin","paris"' \
+  query='what the user typed'
+```
+
+これにより、アプリケーションは、フィルターに都市がある場合は *city-filter* クエリープロファイルを使用し、空の場合は *no-filter* クエリープロファイルを使用できます。
+
+```js
+<query-profile id="no-filter">
+    <field name="yql">select * from restaurant where userQuery()</field>
+</query-profile>
+
+```
+
+```js
+$ vespa query \
+  queryProfile=no-filter \
+  query='what the user typed'
+```
+
+### オーバーライド
+
+*MyProfile.xml* で設定されたパラメーター値は、リクエストに直接存在するかのように使用されます。パラメーターがリクエストとプロファイルの両方に存在する場合、デフォルトではリクエストの値が優先されます。[overridable](../reference/querying/query-profiles#overridable) 属性を `false` に設定することで、個々のクエリープロファイルのフィールドを優先させることができます。例:
+
+```xml
+<query-profile id="default">
+    <field name="timeout" overridable="false">0.2</field>
+</query-profile>
+```
+
+## ネスト構造
+
+リクエスト変数のセットに構造を持たせるために、クエリープロファイルの値を文字列ではなく別のクエリープロファイルへの参照にすることができます。この場合、参照されるクエリープロファイルは、参照元のクエリープロファイルの中でマップ(型を使用する場合は struct。下記参照)として機能します。ネストされたプロファイルのパラメーター名の前には、参照変数の名前とドットが付きます。例:
+
+```xml
+<query-profile id="MyProfile">
+    <field name="hits">10</field>
+    <field name="unique">merchantid</field>
+    MyUserProfile
+</query-profile>
+```
+
+参照されるプロファイルは次のようになります。
+
+```xml
+<query-profile id="MyUserProfile">
+    <field name="age">20</field>
+    <field name="profession">student</field>
+</query-profile>
+```
+
+ここでクエリーの中で `MyProfile` が参照されると、次の変数が含まれることになります。
+
+```js
+hits=10
+unique=merchantid
+user.age=20
+user.profession=student
+```
+
+参照はネストしてより深い構造を作ることができ、複数のドットを持つ変数が生成されます。ドット付きの変数は、他のパラメーターと同様に、(ドット付きの名前を使用して)検索リクエストで直接オーバーライドできます。
+
+プロファイル参照の id 値もリクエストで設定できるため、トップレベルのプロファイルだけでなく、任意の数の特定のサブプロファイルもリクエストで選択できます。たとえば、リクエストに次を含めることができます。
+
+```text
+queryProfile=MyUserProfile&user=ref:MyOtherUserprofile
+```
+
+これにより、上記の例の参照を別のサブプロファイルに変更できます。`ref:` プレフィックスに注意してください。これは、user を文字列に設定するのではなく、id で参照されるクエリープロファイルに設定していることを識別するために必要です。
+
+## 継承
+
+クエリープロファイルは、1 つ以上の他のクエリープロファイルを継承できます。これは、複数のユースケースに適用できる共通のパラメーターセットがあり、それらの間で異なる小さなパラメーターセットがある場合に便利です。別のクエリープロファイルを継承するには、次のように参照します。
+
+```xml
+<query-profile id="MyProfile" inherits="MyBaseProfile">
+    …
+</query-profile>
+```
+
+このプロファイルを使用すると、`MyBaseProfile` のパラメーターは、このプロファイルに明示的に書かれているのとまったく同じように存在します。
+
+継承属性にスペースで区切られた複数のプロファイル id を指定することで、多重継承がサポートされます。このリストでは順序が重要です。パラメーターが継承された複数のプロファイルで設定されている場合、深さ優先・左から右の検索順序で最初に見つかったものが使用されます。
+
+子のクエリープロファイルで指定されたパラメーターは、継承されたプロファイルの同じパラメーターを常にオーバーライドします。
+
+## 値の置換
+
+クエリープロファイルの値には、`%{property-name}` という形式の置換文字列を含めることができます。例:
+
+```xml
+<query-profile id="MyProfile">
+    <field name="message">Hello %{world}!</field>
+    <field name="world">Earth</field>
+</query-profile>
+```
+
+`message` をルックアップして返される値は *Hello Earth!* になります。
+
+### グローバル解決
+
+値は通常、*ルックアップ時点で* `query.properties().get("property-name")` から返される値によって置き換えられます。したがって、置換される値は、バリアント、継承されたプロファイル、実行時に設定された値、およびクエリープロファイル参照をたどった先でルックアップされる可能性があります。詳細:
+
+-   実行時に設定された値の*中で*は置換は行われません
+-   置換で参照される値が null を返す場合、参照は空文字列に置換されます
+-   閉じられていない置換はデプロイ時にエラーになりますが、未知の値はエラーになりません(実行時に存在する可能性があり、存在しない場合は空文字列に置き換えられます)
+-   再帰的な置換は期待どおりに動作します。ただし、ループ検出はありません
+
+### ローカル置換
+
+同じクエリープロファイル(またはバリアント)内の値で置換するには、次のようにプロパティの前にドットを付けます。
+
+```xml
+<query-profile id="MyProfile">
+    <field name="message">Hello %{.world}!</field>
+    <field name="world">Earth</field>
+</query-profile>
+```
+
+ローカル置換はデプロイ時に検証でき、見つからない場合はエラーになります。
+
+## クエリープロファイルのバリアント
+
+クエリープロファイルから返される値を、リクエストで入力されたいくつかのプロパティの値に応じて変化させられると便利な場合があります。たとえば、クエリープロファイルには、リクエストの発生元の市場(`market`)、デバイスの種類(`model`)、*そして*対象のバケット(`bucket`)の両方に依存する値が含まれる場合があります。
+
+このようなリクエストパラメーターのセットに対するバリアントは、リクエスト値の関連する組み合わせに対してクエリープロファイルのネストされたバリアントを定義することで、単一のクエリープロファイルで表現できます。完全な例:
+
+```xml expandable
+<query-profile id="multiprofile1"> <!-- A regular profile may define "virtual" children within itself -->
+
+    {/* Names of the request parameters defining the variant profiles of this. Order matters as described below.
+         Each individual value looked up in this profile is resolved from the most specific matching virtual
+         variant profile */}
+    <dimensions>region,model,bucket</dimensions>
+
+    {/* Values may be set in the profile itself as usual, this becomes the default values given no matching
+         virtual variant provides a value for the property */}
+    <field name="a">My general a value</field>
+
+    {/* The "for" attribute in a child profile supplies values in order for each of the dimensions */}
+    <query-profile for="us,nokia,test1">
+        <field name="a">My value of the combination us-nokia-test1-a</field>
+    </query-profile>
+
+    {/* Same as [us,*,*]  - trailing "*"'s may be omitted */}
+    <query-profile for="us">
+        <field name="a">My value of the combination us-a</field>
+        <field name="b">My value of the combination us-b</field>
+    </query-profile>
+
+    {/* Given a request which matches both the below, the one which specifies concrete values to the left
+         gets precedence over those specifying concrete values to the right
+         (i.e the first one gets precedence here) */}
+    <query-profile for="us,nokia,*">
+        <field name="a">My value of the combination us-nokia-a</field>
+        <field name="b">My value of the combination us-nokia-b</field>
+    </query-profile>
+    <query-profile for="us,*,test1">
+        <field name="a">My value of the combination us-test1-a</field>
+        <field name="b">My value of the combination us-test1-b</field>
+    </query-profile>
+
+</query-profile>
+```
+
+### バリアントと継承
+
+継承階層の複数のレベルにわたってバリアントを定義することが可能です。バリアントの次元は、通常の優先順位ルール(深さ優先・左から右)に従って親から子へ継承されるため、親プロファイルで次元を定義し、子でその変化の対象となる値を定義することができます。
+
+プロファイル内でのバリアント解決は、親での解決よりも優先されます。これはたとえば、サブプロファイル内の特定のプロパティのデフォルト値が、継承されたプロファイル内の完全なバリアント一致よりも優先して選ばれることを意味します。
+
+バリアントは次のように、独自の継承プロファイルを指定できます。
+
+```xml
+<query-profile id="multiprofile1">
+    …
+    <query-profile for="us,nokia,test1" inherits="parent1 parent2">
+        …
+    </query-profile>
+</query-profile>
+```
+
+値は、このプロファイルと継承されたプロファイルの中で、バリアント解決順序(デフォルトでは具体性)によって「インターリーブ」されて解決されます。優先度の高い順に例を示します。
+
+```text
+1.   Highest prioritized variant value
+2.   Value in inherited from highest prioritized variant
+3.   Next highest prioritized variant value
+4.   Value in inherited from next highest prioritized variant
+…
+n.   Value defined at top level in profile
+n+1. Value in inherited from query profile
+```
+
+## クエリープロファイルの型
+
+クエリープロファイルは、オプションで*型チェック*を行うことができます。型チェックは、クエリープロファイルから*クエリープロファイル型*を参照することで有効になります。型は、そのクエリープロファイルで有効なパラメーターのセットや、追加のパラメーターが許可されるかどうかなどを列挙します。
+
+クエリープロファイル型は次のように参照します。
+
+```xml
+<query-profile id="MyProfile" type="MyProfileType">
+    …
+</query-profile>
+```
+
+そして、型は次のように定義します。
+
+```xml
+<query-profile-type id="MyProfileType">
+    <field name="age" type="integer"/>
+    <field name="profession" type="string"/>
+    <field name="user" type="query-profile:MyUserProfile">
+</query-profile-type>
+```
+
+これは、この型を使用するプロファイルにこれら 3 つのパラメーターが存在してよいこと、および `user` パラメーターのクエリープロファイル型を指定しています。
+
+パラメーターを必須にすること、追加のパラメーターを許可しないこと(strict)、他の型を継承することなども指定できます。完全な構文については[クエリープロファイルリファレンス](../reference/querying/query-profiles#query-profile-types)を参照してください。ベースのプロファイル型が strict の場合、組み込みのクエリープロファイル型を*必ず*継承する必要があります。[strict のリファレンスドキュメント](../reference/querying/query-profiles#strict)を参照してください。
+
+クエリープロファイル型は、アプリケーション・パッケージの *search/query-profiles/types* ディレクトリに *[query-profile-type-name].xml* という名前のファイルを追加することでデプロイされます。
+
+クエリープロファイル型は、クエリープロファイルを値の設定に使用しない場合でも有用です。検索リクエストで受け付けられるパラメーターの名前、型、構造を定義するため、検索リクエストの内容を定義、制限、チェックするためにも使用できます。たとえば、型付きのクエリープロファイルが使用されている場合、組み込みの検索 API パラメーターも型チェックされるため、リクエストで設定できるパラメーターを制限したり、一部のパラメーターが常に設定されることを必須にしたりするために型を使用できます。組み込みパラメーターは、常に存在し、アプリケーション定義の型で継承および参照できるクエリープロファイル型のセットで定義されています。これらの組み込み型は[クエリー API](../reference/api/query) で定義されています。
+
+## パスマッチング
+
+プロファイル型に `<match path="true">` を追加すると、プロファイルを名前からルックアップする際に、デフォルトの完全一致ではなく*パス*名マッチングが使用されます。パスマッチングは、プロファイル名をスラッシュで区切られたパスとして解釈し、サブパス(より具体的なパス)である参照をスーパーパスにマッチさせます。最も具体的なマッチが参照のターゲットになります。例:
+
+```text
+Given the query profile names:
+  a1
+  a1/b1
+
+Then:
+  a1/b1/c1/d1  resolves to a1/b1
+  a1/b         resolves to a1
+  a            does not resolve
+```
+
+これは、これらのケースごとに異なる設定項目を作成することなく、すべてのクライアントやバケットに固有のクエリープロファイル id を割り当てるのに便利です。将来、そうしたクライアントやバケットに差別化された設定を提供する必要が生じた場合でも、すでに固有の id が使用されているため、クライアントにリクエストパラメーターを変更させることなく対応できます。
+
+## バージョニング
+
+クエリープロファイル(および型)は、複数のバージョンが同時に存在できます。クエリープロファイル(または型)の名前を参照する場所ではどこでも、名前にコロンで区切ったバージョン文字列を追加できます。例: `MyProfile:1.2.3`。バージョン番号は*解決*されます。バージョンが指定されていない場合は、既知の最も高いバージョンが使用されます。`my-version:1` のようにバージョン番号が部分的にのみ指定されている場合は、1 で始まる最も高いバージョンが使用されます。
+
+クエリープロファイル(または型)を定義する場所では、id にコロンに続けてバージョンを指定できます。
+
+```xml
+<query-profile id="MyProfile:1.2.3">
+  …
+</query-profile>
+```
+
+バージョンが定義されている場合、省略されたサブ番号は 0 を意味するとみなされます。したがって、`id="MyProfile:1"` は `"id=MyProfile:1.0.0"` と同じです。
+
+id にバージョンを指定するクエリープロファイル(および型)は、名前の後にダッシュで区切って同じバージョン文字列を含むファイル名を使用する必要があります。例: *MyProfile-1.2.3.xml*。
+
+バージョンの詳細については、[コンポーネントのバージョニング](../reference/applications/components#component-versioning)を参照してください。
+
+## ダンプツール
+
+解決済みのクエリープロファイルをオフラインでダンプできると便利な場合があります。引数なしで実行すると使用方法が表示されます。
+
+```bash
+$ vespa-query-profile-dump-tool
+```

@@ -1,0 +1,60 @@
+---
+title: "Struct"
+description: "このドキュメントでは、Vespa のドキュメントで struct を使用する方法を説明します。"
+---
+
+## Struct
+
+[struct](/ja/reference/schemas/schemas#struct) はドキュメントに含まれ、1 つ以上のフィールドをグループ化して、単一のフィールドのようにアクセスできる複合型にします。
+
+例:
+
+```js
+struct email {
+    field sender type string {}
+    field recipient type string {}
+    field subject type string {}
+    field content type string {}
+}
+
+field emails type array<email> {}
+```
+
+この例では、struct は[配列 (array)](/ja/reference/schemas/schemas#array) の一部です。struct は[マップ (map)](/ja/reference/schemas/schemas#map) でも使用できます。
+
+## struct フィールド
+
+[struct-field](/ja/reference/schemas/schemas#struct-field) は、struct 内の特定のフィールドをどのようにインデックス化して検索するかを定義します。
+
+struct-field は struct 内のフィールドを参照しますが、struct-field 自体はフィールドの内部に定義される点に注意してください。
+
+先に定義した *email* struct ([struct](/ja/reference/schemas/schemas#struct) を参照) を使用して、*content* のような特定のフィールドのインデックス化を定義できます:
+
+```js
+field emails type array<email> {
+    indexing: summary
+    struct-field content {
+        indexing: attribute
+        attribute: fast-search
+    }
+}
+```
+
+Pyvespa での同等のコード (struct の定義を含む) は次のとおりです:
+
+```python
+email_struct = Struct(name="email", fields=[
+  Field(name="sender", type="string"),
+  Field(name="recipient", type="string"),
+  Field(name="subject", type="string"),
+  Field(name="content", type="string"),
+])
+emails_field = Field(name="emails",
+                type="array<email>",
+                indexing=["summary"],
+                struct_fields=[StructField(name="content", indexing=["attribute"], attribute=["fast-search"])]
+)
+schema = Schema(name="schema", document=Document())
+schema.add_fields(emails_field)
+schema.document.add_structs(email_struct)
+```

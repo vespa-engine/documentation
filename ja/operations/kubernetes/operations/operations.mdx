@@ -1,0 +1,79 @@
+---
+title: "Kubernetes 上の Vespa のライフサイクル運用"
+sidebarTitle: "運用"
+---
+ConfigServer と Vespa Application の Pod には、組み込みのレジリエンスと復旧機能があります。障害発生時には自動的に復旧され、メンテナンスやスケーリング操作の際にはデータの整合性を保つためにグレースフルにシャットダウンされます。
+
+### 自動復旧
+
+Vespa は、クラッシュした Pod の検出と再起動を標準の Kubernetes コントローラーに依存しています。コンテナーが予期せず終了した場合(例: OOMKilled やアプリケーションのクラッシュ)、kubelet が自動的に再起動します。
+
+ただし、ConfigServer はすべての Pod のヘルス履歴を追跡しています。「クラッシュ・ループ」が連鎖的な障害やリソースの絶え間ない浪費を引き起こすのを防ぐため、システムは厳格なスロットリング機構を実装しています。ConfigServer は、特定の Vespa Application について、24 時間あたり最大 2 回までの非自発的な Pod の中断(involuntary disruption)を許可します。この上限を超えた場合、ConfigServer はこれらの Pod の自動フェイル処理を停止し、根本原因を調査するための人間の介入が必要になります。
+
+### グレースフル・シャットダウン
+
+終了時のクエリー失敗やデータ損失を防ぐため、すべての ConfigServer および Vespa Application の Pod には [PreStop Hook](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/) が設定されています。自発的な中断(voluntary disruption)の際、このフックは、Pod を強制終了する前に既存のトラフィックがドレインされ、データがフラッシュされることを保証します。
+
+Kubernetes には 2 種類の中断(disruption)が存在します:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>種類</th>
+      <th>シナリオ</th>
+      <th>動作</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;自発的な中断(Voluntary Disruption)&#42;&#42;</td>
+      <td>スケールダウン、ローリング・アップグレード、またはノードのメンテナンス。</td>
+      <td>preStop フックが自発的な中断を検出し、Vespa コンテナー・クラスターによる新規トラフィックの受け付けを停止し、コンテント・クラスターについてはメモリー内のデータをディスクにフラッシュし、Pod が削除される前のクリーンな終了を保証します。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;非自発的な中断(Involuntary Disruption)&#42;&#42;</td>
+      <td>ノードのハードウェア障害、カーネル・パニック、またはエビクション。</td>
+      <td>Kubernetes が終了処理を開始します。preStop フックはデータのフラッシュと接続のクローズを試みます。ただし、Pod が突然失われた場合、フックは実行できず、復旧は Vespa のデータ・レプリケーションに依存します。</td>
+    </tr>
+  </tbody>
+</table>
+
+### Pod Disruption Budget
+
+Kubernetes 上の Vespa では、`PodDisruptionBudget`(PBD)の定義はサポートされていません。ConfigServer は、あらゆる PBD を独自のオーケストレーション・ポリシーで上書きします。
+
+### Application Pod のリソース
+
+Vespa Application の Pod については、各 Pod のリソース、Vespa クラスター内の Pod 数、およびグループ構成を、アプリケーション・パッケージの `<services>` 要素を通じて更新できます。詳細は[仕様](/ja/reference/applications/services/services)を参照してください。
+
+### ConfigServer Pod のリソース
+
+ConfigServer Pod のリソースは、`VespaSet` の PodTemplate を介して `vespa` コンテナーのリソース仕様をオーバーライドすることで設定できます。Config Server は、Pod の cgroup 制限からヒープ・サイズを推定します。この制限は、Pod に設定された `requests` と `limits` から導出されます。ヒープ・サイズが正しく推定されるよう、requests と limits に同じ値を設定することを推奨します。
+
+ConfigServer Pod のレプリカ数の水平スケーリングはサポートされていません。
+
+```bash
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: sample-vespaset
+spec:
+  configServer:
+    image: "$VESPA_IMAGE"
+    storageClass: "gp3"
+    podTemplate:
+      spec:
+        containers:
+          - name: vespa
+            resources:
+              requests:
+                cpu: "4"
+                memory: "8Gi"
+              limits:
+                cpu: "4"
+                memory: "8Gi"
+```
+
+### オートスケーリング
+
+Kubernetes 上の Vespa は、アプリケーション・パッケージの `resource` 要素で指定された範囲によるオートスケーリングを提供します。詳細は[オートスケーリング](/ja/operations/autoscaling)ガイドを参照してください。

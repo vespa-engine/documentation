@@ -1,0 +1,116 @@
+---
+title: "デプロイ"
+description: "このドキュメントでは、アプリケーションのデプロイのさまざまな側面を詳しく説明します。入門としては[アプリケーションのデプロイ](/ja/basics/applications#deploying-applications)を参照してください。"
+---
+
+## コンバージェンス(収束)
+
+デプロイ・コマンドが成功した後、アプリケーション・パッケージは有効になりますが、稼働中のアプリケーションという分散システムでは、これは即座には完了しません。コマンドラインまたはコンソールから追跡できる、分散した *コンバージェンス(収束)* プロセスを通じて行われます。アプリケーションのデプロイ時に実行される詳細な手順については、[デプロイ・リファレンス](/ja/reference/applications/application-packages#deploy)を参照してください。
+
+statusコマンドを使うと、最後のデプロイのステータスを取得できます:
+
+```shell
+$ vespa status deployment
+```
+
+## ロールバック
+
+左側のインスタンスの四角にカーソルを合わせ、pinをクリックして理由を入力します - これによりダウングレード・プロセスが開始されます:
+
+<Frame>
+![](/assets/img/pin-version.png)
+</Frame>
+
+新しいバージョンへのピン留めは新しいデプロイを開始し、通常のロールアウトとして展開できます。高速化するには、abortをクリックしてシステムテストとステージングテストのジョブをキャンセルします。
+
+<Frame>
+![](/assets/img/skip-tests.png)
+</Frame>
+
+テストのスキップは、アプリケーション所有者自身の判断とリスクで行います:
+
+- このバージョンのシステムテストは、以前のデプロイですでに実行されています。そのため、これをスキップすることは安全と考えられます。
+- ロールバック時のステージングテストはこれまで実行されたことがなく、この経路は未テストです。
+
+この2つのうち、ステージングテストの方が実行に時間がかかります。テスト・フェーズをスキップするかどうかはユーザーが決定します。これにより、ユーザーは、テスト・フェーズを含めてバージョンを即座にロールバックするかどうか、また本番ゾーンへ並行してロールアウトするかどうかを制御できます。
+
+ロールバックのためのピン留めの後は、次のデプロイが同期するようにコード・リポジトリを必ず更新し、以降のデプロイのためにピンを解除してください。
+
+### フォローアップの手順
+
+一般に、アプリケーション・パッケージの変更をロールバックするには、ロールバック先の以前のバージョンで再度デプロイします。上のセクションでは最速のロールバック方法を説明しました。その他の方法は次のとおりです:
+
+1. 自動化を使う場合: ソースコード・リポジトリでコードをリバートし、自動化に新しいバージョンをロールアウトさせます。テストをスキップし、コンソールのデプロイメント・グラフで "deploy now" をクリックすることで、デプロイを高速化できます。
+2. 正常なパッケージの再ビルドに問題がある場合は、Vespa Cloudから以前のパッケージをダウンロードできます: [コンソール](/ja/operations/automated-deployments#source-code-repository-integration)を使って正常なバージョンを選択し、ダウンロードして再度デプロイします。必要であれば、[インスタンス](/ja/operations/automated-deployments#block-windows)(通常は "default" という名前)にカーソルを合わせてシステムテストとステージングテストをスキップし、デプロイを高速化します。
+3. セルフマネージドのインスタンスでは、新しいデプロイのためにソースから正常なバージョンを再生成します。[デプロイAPI](/ja/reference/api/deploy-v2#rollback) も参照してください
+
+## ファイル配布
+
+アプリケーション・パッケージには、コンポーネントやその他の大きなファイルを含めることができます。アプリがデプロイされると、これらのファイルはノードに配布されます:
+
+- コンポーネント(すなわちバンドル)
+- config内の *path* および *url* 型のファイル。[コンポーネント設定へのファイルの追加](/ja/applications/configuring-components#adding-files-to-the-component-configuration)を参照
+- 機械学習モデル
+- [定数テンソル](/ja/reference/schemas/schemas#constant)
+
+configに指定された新しいコンポーネントやファイルが配布されると、コンテナーは新しいファイル参照を取得し、それが利用可能になるのを待ち、すべてのファイルが利用可能になった時点で新しいconfigに切り替えます。
+
+<Frame>
+![](/assets/img/config-delivery.svg)
+</Frame>
+
+## リモート・モデルのデプロイ
+
+ほとんどのアプリケーション・パッケージは、ソースコードとしてコード・リポジトリに保存されます。しかし、モデルや [FSA](/ja/reference/operations/tools#vespa-makefsa) のように、生成されるリソースや、コード・リポジトリに保存するには大きすぎるリソースもあります。
+
+Vespaの機械学習モデルは、アプリケーション・パッケージ内の *models* ディレクトリに保存されます。これは、たとえばリモート・システム上で頻繁に再学習されるモデルなど、一部のアプリケーションでは不便な場合があります。また、モデルがバージョン管理システムの制約に収まらないほど大きいこともあります。
+
+その解決策は、アプリケーション・パッケージのビルド中にリモートの場所からモデルをダウンロードすることです。これは、*pom.xml* にステップを追加するだけで実装できます([例](https://github.com/vespa-cloud/cord-19-search/blob/main/pom.xml)を参照):
+
+```xml expandable
+<build>
+    <plugins>
+        <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>1.4.0</version>
+        <executions>
+            <execution>
+            <id>download-model</id>
+            <phase>generate-resources</phase>
+            <goals>
+            <goal>exec</goal>
+            </goals>
+            <configuration>
+                <executable>bin/download_models.sh</executable>
+                    <arguments>
+                        <argument>target/application/models</argument>
+                        <argument>MODEL-URL</argument>
+                    </arguments>
+                </configuration>
+            </execution>
+        </executions>
+        </plugin>
+    </plugins>
+</build>
+```
+
+*bin/download_model.sh* の例:
+
+```txt
+#!/bin/bash
+
+DIR="$1"
+URL="$2"
+
+echo "[INFO] Downloading $URL into $DIR"
+
+mkdir -p $DIR
+pushd $DIR
+curl -O $URL
+popd
+```
+
+認証・認可に必要な認証情報や、(たとえばTensorFlowモデルの)アーカイブの展開処理は、このスクリプトに追加してください。
+
+コンバージェンス中にコンテナー・ノードがダウンロードすべきリソースを指定するには、[model](/ja/reference/applications/config-files#model) config型も参照してください。

@@ -1,0 +1,134 @@
+---
+title: "Vespa クエリー言語 - YQL"
+sidebarTitle: "YQL クエリー言語"
+---
+
+Vespa は、非構造化の人間による入力と、アプリケーション・ロジックのための構造化クエリーを別々に受け取り、それらを実行用の単一のデータ構造に結合します。人間による入力はヒューリスティックに解析されます。[Query API の入力](/ja/querying/query-api#input)を参照してください。アプリケーション・ロジックは YQL で表現します。このガイドを例として利用してください - [YQL リファレンス](../reference/querying/yql)も参照してください。
+
+## ライブ・クエリーの例
+
+以下はライブの YQL の例です:
+
+
+選択: `doc` ソースからすべてのドキュメントを選択します。これはソース内のすべてのドキュメントを数える最も簡単な方法です:
+
+`select * from doc where true`
+
+
+フィルタリング: `title` フィールドに `ranking` を含むすべてのドキュメントを検索します:
+
+`select * from doc where title contains "ranking"`
+
+
+フィルタリング: `default` [フィールドセット](../reference/schemas/schemas#fieldset)に `ranking` を含むすべてのドキュメントを検索します。
+
+`select * from doc where default contains "ranking"`
+
+
+並べ替え: ドキュメント内のターム数で降順に並べ替えます。
+
+`select * from doc where true order by term_count desc`
+
+
+ページネーション: すべてのドキュメントを選択し、6~15 件目のヒットを返します。
+
+`select * from doc where true limit 15 offset 5`
+
+
+グルーピング:
+
+-   `doc` ソースからすべてのドキュメントを選択します。
+-   ターム数を 100 単位のバケットでグルーピングし、バケットごとの平均ターム数を表示します。
+-   `limit 0` に関する注意: これは通常のヒットを 0 件返し、グルーピングの結果のみを返します。
+
+`select * from doc where true limit 0 | all( group( fixedwidth(term_count,100) ) each( output( avg(term_count) ) ) )`
+
+その他の[グルーピングの例](/ja/querying/grouping)を参照してください。
+
+
+数値: 属性 "last_updated" > 1646167144 のドキュメントを選択します:
+
+`select * from doc where last_updated > 1646167144`
+
+数値: フィールドに整数を持つドキュメントを選択します - 単一値フィールドと、array`<int>` のような複数値フィールドの両方で機能します:
+
+`select * from doc where term_count = 258`
+
+
+フレーズ: フレーズ "question answering" を含むドキュメントを選択します:
+
+`select * from doc where default contains phrase("question","answering")`
+
+
+タイムアウト: 100 ms 後にクエリー実行をタイムアウトし、タイムアウト前に見つかったヒットを返します - [ranking.softtimeout.enable](../reference/api/query#ranking.softtimeout.enable) を参照してください:
+
+`select * from doc where true timeout 100`
+
+
+正規表現: `namespace` [属性](../content/attributes)フィールドが正規表現にマッチするドキュメントを選択します:
+
+`select * from doc where namespace matches "op.*"`
+
+
+### コマンドラインでのクエリー
+
+[Vespa CLI](../clients/vespa-cli) を使用して、コマンドラインからクエリーを実行します:
+
+```bash
+$ vespa query 'select * from doc where true'
+```
+
+任意の HTTP クライアントを使用するには、`-v` を使用してエンコードされた YQL 文字列を生成します:
+
+```bash
+$ vespa query -v 'select * from doc where true'
+
+curl http://127.0.0.1:8080/search/?timeout=10s&yql=select+%2A+from+doc+where+true
+```
+
+クエリーを実行します:
+
+```bash
+$ curl http://127.0.0.1:8080/search/?timeout=10s&yql=select+%2A+from+doc+where+true
+```
+
+あるいは、POST の `yql` パラメーターとしてクエリーを設定します:
+
+```bash
+$ curl --data-urlencode 'yql=select * from doc where true' \
+  http://127.0.0.1:8080/search/
+```
+
+## クエリーの例
+
+ブール値:
+
+```bash
+$ vespa query 'select * from doc where is_public = true'
+```
+
+マップ:
+
+```bash
+$ vespa query 'select * from doc where my_map contains sameElement(key contains "Coldplay", value > 10)'
+
+#
+# Schema definition for my_map:
+#
+field my_map type map<string, int> {
+    indexing: summary
+    struct-field key   { indexing: attribute }
+    struct-field value { indexing: attribute }
+}
+```
+
+エスケープ - [FAQ](../learn/faq#how-does-backslash-escapes-work) を参照してください:
+
+```bash
+#
+# The artist field is:
+#   "artist": "Meta..ica"
+#
+
+$ vespa query -v 'select * from music where artist matches "M.ta\\.\\.ica"'
+```

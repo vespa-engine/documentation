@@ -1,0 +1,291 @@
+---
+title: "ニュース検索とレコメンデーションのチュートリアル - エンベディング"
+---
+
+これは、パーソナライズされたニュースレコメンデーションのための Vespa アプリケーションをセットアップするチュートリアルシリーズの第 4 部です。各部の構成は次のとおりです:
+
+1. [はじめに](/ja/learn/tutorials/news-1-deploy-an-application)
+2. [基本的なニュース検索アプリケーション](/ja/learn/tutorials/news-2-basic-feeding-and-query) - アプリケーション・パッケージ、フィーディング、クエリー
+3. [ニュース検索](/ja/learn/tutorials/news-3-searching) - ソート、グルーピング、ランキング
+4. [ユーザーとニュース記事のエンベディングの生成](/ja/learn/tutorials/news-4-embeddings)
+5. [ニュースレコメンデーション](/ja/learn/tutorials/news-5-recommendation) - 部分更新(ニュースのエンベディング)、ANN、フィルタリング
+6. [サーチャーを使ったニュースレコメンデーション](/ja/learn/tutorials/news-6-recommendation-with-searchers) - カスタムサーチャー、ドキュメントプロセッサー
+7. [親子関係を使ったニュースレコメンデーション](/ja/learn/tutorials/news-7-recommendation-with-parent-child) - 親子関係、テンソルランキング
+8. 高度なニュースレコメンデーション - 幕間 - ランキングモデルのトレーニング
+9. 高度なニュースレコメンデーション - ML モデル
+
+この部では、アプリケーションをニュース検索からレコメンデーションへと変換し始めます。この部では Vespa をまったく使用しません。ここでの焦点は、ニュースとユーザーのエンベディングを生成することです。これらのエンベディングは次の部から使い始めます - 希望すればこの部はスキップしても構いません。
+
+レコメンデーションシステムの主な機能は、任意のユーザーに対して興味のあるアイテムを提供することです。ユーザーについて多くを知っているほど、より良いレコメンデーションを提供できます。レコメンデーションは、クエリーがユーザープロファイルであるような検索と見なすことができます。そこでこのチュートリアルでは、前回のニュース検索チュートリアルを土台に、ユーザープロファイルを作成し、それを使用して関連するニュース記事を検索します。
+
+まず、協調フィルタリングの手法を使用してエンベディングを生成することから始めます。次に、BERT モデルに基づいてエンベディングを生成するコンテンツベースのアプローチを使用して、それを改善します。これを最近傍アルゴリズムで使用するため、最大内積検索がどのように距離検索の形式に変換されるかにも触れます。
+
+まずは、MIND データセットがどのようなデータを提供してくれるのかをもう一度見てみましょう。
+
+
+### 必要要件
+
+このチュートリアルでは、いくつかの機械学習ツールを使い始めます。具体的には、Numpy、Scikit-learn、PyTorch、および HuggingFace Transformers ライブラリーが必要です。サンプルアプリケーションのディレクトリーで以下を実行して、必要な依存関係がすべて揃っていることを確認してください:
+
+```bash
+$ python3 -m pip install --ignore-installed -r requirements.txt
+```
+
+
+## MIND データセット
+
+このチュートリアルシリーズにおける私たちの目的では、MIND データセットは主に 2 つのファイルで構成されます: `news.tsv` と `behaviors.tsv` です。前者はすべてのニュース記事のコンテンツを含んでおり、前のチュートリアルで使用しました。
+
+`behaviors.tsv` ファイルにはインプレッションのセットが含まれます。インプレッションとは、あるユーザーに対して生成されたニュース記事の順序付きリストです。そこには、ユーザーがそれらの記事のうちどれをクリックしたか、逆にどれをクリックしなかったかが含まれます。クリックされなかった記事を「スキップ」と呼ぶことにします。インプレッションには、ユーザーが過去にクリックした記事のリストも含まれます。例を示します:
+
+```
+3       U11552  11/11/2019 1:03:52 PM   N2139   N18390-0 N10537-0 N23967-1
+```
+
+ここでは、ユーザー `U11552` に 3 つの記事 `N18390`、`N10537`、`N23967` が表示され、ユーザーはそのうち 2 つをスキップし、最後の 1 つをクリックしました。その時点で、ユーザーは過去に記事 `N2139` をクリックしていました。`news.tsv` と突き合わせて、これらの記事のコンテンツを抽出できます。
+
+クリックは興味を示すポジティブなシグナル、スキップは興味に対するネガティブなシグナルの可能性があると解釈します。ユーザーが明示的に興味を表明したわけではないため、これは暗黙的フィードバックと呼ばれます。しかし、クリックとスキップを使うことで、それでもユーザーの興味を推測し始めることができます。
+
+
+## レコメンデーションシステムにおける協調フィルタリング
+
+上記に対してレコメンデーションを提供するシンプルなアプローチは、ユーザーが暗黙的にインタラクションしたカテゴリー、サブカテゴリー、エンティティなどを抽出し、それらをユーザーごとに保存することです。エンティティやカテゴリーの正確な用語を保存するため、これはスパースなユーザープロファイルと呼べます。その後、従来の情報検索技術を使用して、類似のコンテンツを持つ記事をさらに検索できます。
+
+しかし、これでは多くの情報を見逃してしまいます。たとえば、カテゴリーやエンティティの中には互いに類似しているものがあり、それらもユーザーの興味の対象になり得ます。また、似た興味を持つユーザーは、似た記事をクリックする傾向があります。あるタイプのコンテンツがあるユーザーにとって興味深いものであれば、それは類似のユーザーにとっても興味深い可能性が高いのです。
+
+この情報を活用することを協調フィルタリングと呼び、その古典的なアプローチが行列分解です。このアプローチでは、一方の軸にユーザー、もう一方の軸にニュース記事を並べた大きな行列を作成します。これをインタラクション行列と呼びます。次に、この行列を 2 つの小さな行列に分解します。この 2 つの小さな行列の積が元の行列を近似します。
+
+<Frame>
+![行列分解](/assets/img/tutorials/mf.png)
+</Frame>
+
+上の画像では、ユーザー数と同じ行数を持つユーザー行列と、ニュース記事数と同じ列数を持つニュース行列が見えます。各ユーザー行(またはニュース列)は同じ長さを持ち、それが `k` 次元で表されています。直感的には、ユーザーとニュースのペアの `k` 長ベクトルのドット積が、そのニュース記事に対するユーザーの興味を近似します。情報が `k` 長のベクトルに圧縮されるため、これはユーザーをまたいでも機能します。これが「協調」フィルタリングと呼ばれるゆえんです。
+
+これらの `k` 長のベクトルは行列から抽出し、ユーザーまたはニュース記事に関連付けることができます。そのため、あるユーザーにニュース記事をレコメンドしたいときは、単にそのユーザーのベクトルを見つけ、最も高いドット積を持つ記事を見つければよいのです。以下では、このアプローチを使用して、ユーザーとニュース記事のそのようなエンベディングを生成します。
+
+ただし、このアプローチは実際のニュースレコメンデーションではうまく機能しないことに注意してください。その理由は、ニュースレコメンデーションの大部分は、まだ暗黙的フィードバックを受け取っていない可能性のある**新しい**ニュース記事をレコメンドすることだからです。これは「コールドスタート」問題と呼ばれます。このような問題に対しては、レコメンデーションを提供するために、ニュース記事の追加のコンテンツ(しばしば「サイド情報」と呼ばれる)を使用する必要があります。この「コールドスタート」には、もう少し後で取り組みます。
+
+
+## エンベディングの生成
+
+インタラクション行列を分解する標準的な方法は、交互最小二乗法 (Alternating Least Squares) を使用することです。この考え方は、ユーザー行列とニュース行列をランダムに初期化し、一方の行列のパラメーターを固定してもう一方を解く、というものです。どちらの行列を固定するかを交互に切り替えることで、従来の最小二乗問題として解くことができます。このプロセスを収束するまで反復できます。
+
+このチュートリアルの目的は、ユーザーとニュースのベクトルのドット積がクリックの確率を表すようにエンベディングを生成することです。このシグナルを使えば、クリック確率でニュース記事をランキングできます。エンベディングベクトルをトレーニングするために、確率的勾配降下法を使用してエンベディングを修正し、ドット積にロジスティック関数を適用したものがユーザーのクリックを予測するようにします。損失関数にはバイナリー交差エントロピーを使用します。
+
+これには PyTorch を使用します。メインとなる PyTorch のモデルクラスは次のとおりです:
+
+```python
+class MF(torch.nn.Module):
+    def __init__(self, num_users, num_items, embedding_size):
+        super(MF, self).__init__()
+        self.user_embeddings = torch.nn.Embedding(num_embeddings=num_users,
+                                                  embedding_dim=embedding_size)
+        self.news_embeddings = torch.nn.Embedding(num_embeddings=num_items,
+                                                  embedding_dim=embedding_size)
+
+    def forward(self, users, items):
+        user_embeddings = self.user_embeddings(users)
+        news_embeddings = self.news_embeddings(items)
+        dot_prod = torch.sum(torch.mul(user_embeddings, news_embeddings), 1)
+        return torch.sigmoid(dot_prod)
+```
+
+PyTorch の `Embedding` クラスを使用して、ユーザーとニュースのエンベディングを保持します。forward 関数は勾配降下法のフォワードパスです。まず、ミニバッチ更新のために選択されたユーザーとアイテムが、それぞれのエンベディングテーブルから抽出されます。次に、ドット積を取ってロジスティック関数を適用し、その値を返します。このユーザーとニュースのペアに対する予測は、クリックまたはスキップのラベルと照らして評価されます:
+
+```python
+# forward + backward + optimize
+    user_ids, news_ids, labels = batch
+    prediction = model(user_ids, news_ids)
+    loss = loss_function(prediction.view(-1), labels)
+    loss.backward()
+    optimizer.step()
+```
+
+これを複数のエポックにわたって行います。ここでの `batch` には、ミニバッチのトレーニングに使用される `user_id`、`news_id`、`label` のバッチが含まれます。たとえば、上のインプレッションの例からは、`U11552, N23967, 1` というトレーニング例が得られます。トレーニングデータを生成するコードは、ポジティブな例(クリック)1 件につき 4 件のネガティブな例(スキップ)をサンプリングします。
+
+完全なコードは、サンプルアプリケーションの [train_mf.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/train_mf.py) にあります。それでは、エンベディングを生成してみましょう:
+
+```bash
+$ ./src/python/train_mf.py mind 10
+```
+
+これはトレーニングコードを 10 エポック実行し、結果として得られるユーザーとニュースのベクトルを、他のデータがある `mind` ディレクトリーに出力します:
+
+```
+Total loss after epoch 1: 573.5299682617188 (3.49713397026062 avg)
+Total loss after epoch 2: 551.6585083007812 (3.363771438598633 avg)
+...
+{'auc': 0.5776, 'mrr': 0.248, 'ndcg@5': 0.2573, 'ndcg@10': 0.317}
+{'auc': 0.4988, 'mrr': 0.2154, 'ndcg@5': 0.2182, 'ndcg@10': 0.2824}
+```
+
+エポック数を重ねるごとに損失が減少していくのが分かります。最後の 2 行は、トレーニングセットと検証セットに対して実行されたランキングメトリクスです。ここで、`AUC` メトリクス - ROC 曲線下面積 (Area Under the (ROC) Curve) - は、トレーニングセットで `0.5776`、検証セットで `0.4988` です。より多くのエポック数で実行すると、トレーニングセットの `AUC` が検証セットよりもはるかに大きくなるのが分かります。100 エポック実行した場合、それぞれおよそ `0.974` と `0.51` になります。
+
+この場合、`AUC` メトリクスは、関連性のあるニュースを関連性のないニュースより上位にランキングする確率を測ります。`0.5` 前後のスコアは、完全にランダムであることを意味します。つまり、検証セットに関しては、有用なことを何も学習できていないということです。
+
+これは過学習ではなく、むしろ先に述べた問題の一例です。検証セットには、トレーニングセットのデータより後の期間にユーザーに表示されたニュース記事が含まれています。そのため、ほとんどのニュース記事は新規であり、それらのエンベディングベクトルは事実上ランダムです。
+
+これには次のセクションで対処します。
+
+
+## コールドスタート問題への対処
+
+上記のアプローチは、トレーニングセットの期間にユーザーがインタラクションしたニュース記事に基づいていました。使用されたのはユーザー id とニュース記事 id だけです。新しい記事がトレーニングセットに現れていないという問題を克服するには、記事のコンテンツ特徴を使用する必要があります。つまり、予測は、実際のニュース記事 id ではなく、ユーザーが過去にインタラクションしたコンテンツとの類似性に基づくことになります。
+
+これは、当然のことながら、コンテンツベースのレコメンデーションと呼ばれます。
+
+ここで採用する一般的なアプローチでも、ユーザーエンベディングとニュースエンベディングのドット積に依拠しますが、ニュースエンベディングはさまざまなコンテンツ特徴から構築されます。
+
+MIND データセットには、利用できるそのような特徴がいくつかあります。各ニュース記事には `category`、`subcategory`、およびテキストから抽出された 0 個以上の `entities` があります。これらの特徴はカテゴリカルであり、取りうる値の集合が有限であることを意味します。これらを扱うために、上でユーザー id とニュース id のエンベディングを生成したのと同様に、取りうる値ごとにエンベディングを生成します。これらの id も結局のところカテゴリカルです。
+
+
+### BERT エンベディングの作成
+
+しかし、`title` や `abstract` などの他のコンテンツ特徴もあります。これらからエンベディングを作成するために、[HuggingFace transformers](https://huggingface.co/docs/transformers/index) ライブラリーの [BERT ベースの文分類器](https://huggingface.co/docs/transformers/model_doc/bert#transformers.BertForSequenceClassification)を利用します:
+
+```python
+from transformers import BertTokenizer, BertModel
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+model = BertModel.from_pretrained('google/bert_uncased_L-8_H-512_A-8')
+tokens = tokenizer(title, abstract, return_tensors="pt")
+outputs = model(**tokens)
+embedding = outputs[0][0][0]
+```
+
+ここでは、8 層で隠れ次元サイズが 512 の中規模の BERT モデルを使用します。これは、エンベディングがサイズ 512 のベクトルになることを意味します。タイトルとアブストラクトを組み合わせたものを表すために、最初の `CLS` トークンのベクトルを使用します。
+
+すべてのニュースコンテンツに対してこれらのエンベディングを生成するには、次のいずれかを実行します:
+
+1. エンベディングを生成する。これにはしばらく時間がかかることがあり、`train` および `dev` デモデータセットのすべてのニュース記事でおよそ 1 時間ほどかかります。
+
+```bash
+$ python3 src/python/create_bert_embeddings.py mind
+```
+
+2. 前処理済みのエンベディングをダウンロードする:
+
+```bash
+$ curl -L -o mind/train/news_embeddings.tsv \
+  https://data.vespa-cloud.com/sample-apps-data/mind_news_embedding.tsv
+$ curl -L -o mind/dev/news_embeddings.tsv \
+  https://data.vespa-cloud.com/sample-apps-data/mind_news_embedding_dev.tsv
+```
+
+これにより、`mind/train` および `mind/dev` サブディレクトリーの下に `news_embeddings.tsv` ファイルが作成されます。
+
+
+## モデルのトレーニング
+
+各ニュース記事に対するコンテンツベースのエンベディングが用意できたので、それらを使用するモデルをトレーニングできます。次の図は、トレーニングするモデルを示しています:
+
+<Frame>
+![モデルトレーニングの例](/assets/img/tutorials/embeddings.png)
+</Frame>
+
+つまり、BERT モデルからの 512 次元のエンベディングを典型的なニューラルネットワーク層に通して、次元を 50 に削減します。次に、この表現を `category`、`subcategory`、`entity` の 50 次元エンベディングと連結します。今のところ、エンティティは 1 つだけ使用します。この表現をさらに別のニューラルネットワーク層に通して、ニュース記事の最終的な表現を形成します。最後に、ユーザーエンベディングとのドット積を取ります。
+
+PyTorch のコードでは、次のようになります:
+
+```python expandable
+class ContentBasedModel(torch.nn.Module):
+    def __init__(self,
+                 num_users,
+                 num_news,
+                 num_categories,
+                 num_subcategories,
+                 num_entities,
+                 embedding_size,
+                 bert_embeddings):
+        super(ContentBasedModel, self).__init__()
+
+        self.user_embeddings = torch.nn.Embedding(num_embeddings=num_users, embedding_dim=embedding_size)
+        self.news_embeddings = torch.nn.Embedding(num_embeddings=num_news, embedding_dim=embedding_size)
+        self.cat_embeddings = torch.nn.Embedding(num_embeddings=num_categories, embedding_dim=embedding_size)
+        self.sub_cat_embeddings = torch.nn.Embedding(num_embeddings=num_subcategories, embedding_dim=embedding_size)
+        self.entity_embeddings = torch.nn.Embedding(num_embeddings=num_entities, embedding_dim=embedding_size)
+
+        self.news_bert_embeddings = torch.nn.Embedding.from_pretrained(bert_embeddings, freeze=True)
+        self.news_bert_transform = torch.nn.Linear(bert_embeddings.shape[1], embedding_size)
+        self.news_content_transform = torch.nn.Linear(in_features=embedding_size*5, out_features=embedding_size)
+
+    def get_user_embeddings(self, users):
+        return self.user_embeddings(users)
+
+    def get_news_embeddings(self, items, categories, subcategories, entities):
+        bert_embeddings = self.news_bert_embeddings(items)
+        bert_embeddings = self.news_bert_transform(bert_embeddings)
+        bert_embeddings = torch.sigmoid(bert_embeddings)
+
+        cat_embeddings = self.cat_embeddings(categories)
+        news_embeddings = self.news_embeddings(items)
+        sub_cat_embeddings = self.sub_cat_embeddings(subcategories)
+        entity_embeddings_1 = self.entity_embeddings(entities[:,0])
+        news_embedding = torch.cat((news_embeddings, bert_embeddings, cat_embeddings,
+                                    sub_cat_embeddings, entity_embeddings_1), 1)
+        news_embedding = self.news_content_transform(news_embedding)
+        news_embedding = torch.sigmoid(news_embedding)
+
+        return news_embedding
+
+    def forward(self, users, items, categories, subcategories, entities):
+        user_embeddings = self.get_user_embeddings(users)
+        news_embeddings = self.get_news_embeddings(items, categories, subcategories, entities)
+        dot_prod = torch.sum(torch.mul(user_embeddings, news_embeddings), 1)
+        return torch.sigmoid(dot_prod)
+```
+
+フォワードパスの関数は前のものとほぼ同じです。トレーニングスクリプト全体は [train_cold_start.py](https://github.com/vespa-engine/sample-apps/blob/master/news/src/python/train_cold_start.py) にあります。これを実行すると、次のようになります:
+
+```bash
+$ python3 src/python/train_cold_start.py mind 5
+```
+
+```
+Total loss after epoch 1: 920.5855102539062 (0.703811526298523 avg)
+{'auc': 0.5391, 'mrr': 0.2367, 'ndcg@5': 0.2464, 'ndcg@10': 0.3059}
+...
+Total loss after epoch 10: 517.16748046875 (0.3953879773616791 avg)
+{'auc': 0.8758, 'mrr': 0.5074, 'ndcg@5': 0.5818, 'ndcg@10': 0.6316}
+{'auc': 0.6249, 'mrr': 0.2842, 'ndcg@5': 0.3114, 'ndcg@10': 0.3733}
+```
+
+これは大幅に良くなっています。エポック 9 での `AUC` スコアは、まずまずの `0.6266` です。さらにトレーニングを続けると、dev セットの `AUC` が下がり始めることに注意してください。これは過学習の兆候なので、トレーニングを停止すべきです。
+
+参考までに、MIND コンペティションのベースラインモデルである [Neural News Recommendation with Multi-Head Self-Attention](https://aclanthology.org/D19-1671/) は `0.6362` という結果を出しています。このモデルはさらに、各インプレッションにおけるユーザー履歴を使用して、ユーザーエンベディングのより良いモデルを作成します。しかし、当面はこの結果で満足することにし、今後もこれらを使用していきます。ぜひ自由に実験して、より良い結果を達成できるか試してみてください!
+
+<Note>
+これらの数値はデモデータセットに対するもので、フルデータセットよりはるかに小さいものです。参考までに、[MIND の論文](https://msnews.github.io/assets/doc/ACL2020_MIND.pdf)では、このベースラインはフルデータセットで `0.6776` を達成しています。
+</Note>
+
+トレーニングスクリプトは、これらのエンベディングをファイル `mind/user_embeddings.tsv` と `mind/news_embeddings.tsv` に書き込みます。
+
+
+## 内積検索からユークリッド検索へのマッピング
+
+これらのベクトルは、内積を最大化するようにトレーニングされています。ユーザーベクトルが与えられたときに最適なニュース記事を見つけることは、最大内積検索 (Maximum Inner Product Search) - すなわち MIPS と呼ばれます。この形式はそのままでは効率的な検索にはあまり適していませんが、最近傍検索の問題にマッピングできるため、効率的な近似最近傍インデックスを使用できます。
+
+`distance-metric: dotproduct` を指定すると、Vespa は [Speeding Up the Xbox Recommender System Using a Euclidean Transformation for Inner-Product Spaces](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf) で論じられている手法を使用して MIPS のケースを解決します。[Vespa での MIPS サポートを発表するブログ記事](https://blog.vespa.ai/announcing-maximum-inner-product-search/)を参照してください。
+
+```sd
+field embedding type tensor<float>(d0[50]) {
+    indexing: attribute | index
+    attribute {
+        distance-metric: dotproduct
+    }
+}
+```
+
+Vespa における最近傍検索とサポートされている距離メトリクスの詳細については、[最近傍検索](/ja/querying/nearest-neighbor-search)を参照してください。
+
+Vespa に適したフィードを作成するスクリプトを用意しています:
+
+```bash
+$ python3 src/python/convert_embeddings_to_vespa_format.py mind
+```
+
+これで、これらのエンベディングベクトルを Vespa にフィードする準備ができました。
+
+
+## まとめ
+
+ユーザーとドキュメントのエンベディングを生成できたので、これらを使用してユーザーにニュースアイテムをレコメンドし始めることができます。[チュートリアルの次の部](/ja/learn/tutorials/news-5-recommendation)では、これらのフィードを開始します。

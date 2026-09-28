@@ -1,0 +1,232 @@
+---
+title: "メトリクス"
+---
+
+すべてのノードのメトリクスは、*[/metrics/v2/values](/ja/reference/api/metrics-v2#metrics-v2-values)* または *[/prometheus/v1/values](/ja/reference/api/prometheus-v1#prometheus-v1-values)* を使用して集約されます。これらのエンドポイントから得られる値は、リクエスト直前の 1 分間のアクティビティを反映します。
+
+prometheus エンドポイントを使用してメトリック値を取得する例:
+
+```bash
+$ curl -s http://ENDPOINT/prometheus/v1/values/?consumer=vespa | \
+  grep "vds.idealstate.merge_bucket.pending.average" | egrep -v 'HELP|TYPE'
+```
+
+<Warning>
+**重要:** 
+
+すべてのメトリクスをリストするには、必ず [consumer=vespa](/ja/reference/api/metrics-v1#consumer) を使用してください。
+</Warning>
+
+*/metrics/v2/values* を使用してメトリック値を取得する例:
+
+```bash
+$ curl ENDPOINT/metrics/v2/values | \
+  jq -r -c '
+    .nodes[] |
+    .hostname as $h |
+    .services[].metrics[] |
+    select(.values."content.proton.documentdb.documents.total.last") |
+    [$h, .dimensions.documenttype, .values."content.proton.documentdb.documents.total.last"] |
+    @tsv'
+
+node9.vespanet	music	0
+node8.vespanet	music	0
+```
+
+## メトリクスの集約
+
+Vespa のメトリクスは、個々のノード上で動作するサービスから生成され、多くの場合、各ノード内で一意のタグ/ディメンションの組み合わせごとに、1 つのメトリックに対して多数の記録値が存在します。システム全体の挙動を把握するには、これらの記録値を組み合わせる必要があります。これを正しい方法で行えば、「ズームアウト」して全体像をつかむことも、「ズームイン」して詳細な挙動を見ることもできます。これは、本番環境の問題を調査する際に非常に役立ちます。残念ながら、メトリクスを誤った方法で組み合わせてしまうのは簡単で、その結果、グラフが大きく歪む可能性があります。
+
+さまざまなメトリクスで利用できる各値(サフィックス)について、最大限に活用するために推奨する集約方法を以下に示します。このガイドラインは、時間方向の集約(複数のスナップショット間隔)とタグの組み合わせに対する集約の両方で使用してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>サフィックス名</th>
+      <th>集約方法</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>{`max`}</code></td>
+      <td>利用可能な最大値 <code>{`MAX(max)`}</code> を使用します。</td>
+    </tr>
+    <tr>
+      <td><code>{`min`}</code></td>
+      <td>利用可能な最小値 <code>{`MIN(min)`}</code> を使用します。</td>
+    </tr>
+    <tr>
+      <td><code>{`sum`}</code></td>
+      <td>すべての値の合計 <code>{`SUM(sum)`}</code> を使用します。</td>
+    </tr>
+    <tr>
+      <td><code>{`count`}</code></td>
+      <td>すべての値の合計 <code>{`SUM(count)`}</code> を使用します。</td>
+    </tr>
+    <tr>
+      <td><code>{`average`}</code></td>
+      <td>平均値を生成するには、グラフを生成する場所で <code>{`SUM(sum) / SUM(count)`}</code> を計算します。<code>{`sum`}</code> と <code>{`count`}</code> のサフィックスが利用できる場合は、<code>{`average`}</code> サフィックス自体を使用しないでください。これを使用すると、平均の平均を計算することになりやすく、非常に歪んでノイズの多い結果になりがちです。</td>
+    </tr>
+    <tr>
+      <td><code>{`last`}</code></td>
+      <td>ノード上の利用可能なメモリ量など、安定していると予想されるメトリクス以外では避けてください。この値はメトリクスのスナップショット期間の最後の値であり、実質的にはスナップショット期間中のすべての値から選ばれた 1 つの値です。変動の激しいメトリクスでは、通常、非常にノイズが多くなります。この値を集約すること自体に意味はありませんが、どうしても必要な場合は、時間を通じて同じタグの組み合わせを持つ値を選んでください。</td>
+    </tr>
+    <tr>
+      <td><code>{`95percentile`}</code></td>
+      <td>この値は、数学的に正しい値が得られる方法で集約することはできません。それでも集約が必要な場合は、最も現実的な値を得るには平均値 <code>{`AVERAGE(95percentile)`}</code> を、外れ値をより適切に特定することが目的なら最大値 <code>{`MAX(95percentile)`}</code> を計算します。いずれにしても、この値は、すべてのタグ値を指定した最も細かい粒度で見るのが最適です。</td>
+    </tr>
+    <tr>
+      <td><code>{`99percentile`}</code></td>
+      <td><code>{`95percentile`}</code> サフィックスと同様です。</td>
+    </tr>
+  </tbody>
+</table>
+
+## メトリック・セット
+
+*/metrics/v1/values* のノード・メトリクスは、サービスごとに、一連のシステム・メトリクスとともにリストされます。例:
+
+```json expandable
+{
+    "services": [
+        {
+            "name": "vespa.container",
+            "timestamp": 1662120754,
+            "status": {
+                "code": "up",
+                "description": "Data collected successfully"
+            },
+            "metrics": [
+                {
+                    "values": {
+                        "memory_virt": 3683172352,
+                        "memory_rss": 1425416192,
+                        "cpu": 2.0234722784298,
+                        "cpu_util": 0.202347227843
+                    },
+                    "dimensions": {
+                        "metrictype": "system",
+                        "instance": "container",
+                        "clustername": "default",
+                        "vespaVersion": "8.46.19"
+                    }
+                },
+                {
+                    "values": {},
+                    "dimensions": {
+                        "clustername": "default",
+                        "instance": "container",
+                        "vespaVersion": "8.46.19"
+                    }
+                }
+            ]
+        },
+```
+
+[consumer](/ja/reference/api/metrics-v1#consumer) リクエスト・パラメーターで別の組み込みまたはカスタムのメトリック・セットを指定しない限り、`default` メトリック・セットがシステム・メトリック・セットに追加されます。[メトリック・リスト](/ja/reference/operations/metrics/default-metric-set#metric-sets)を参照してください。
+
+`Vespa` メトリック・セットにはより豊富なメトリクスが含まれます。[メトリック・リスト](/ja/reference/operations/metrics/vespa-metric-set#metric-sets)を参照してください。
+
+*consumer* リクエスト・パラメーターは、[/metrics/v2/values](/ja/reference/api/metrics-v2#metrics-v2-values) と [/prometheus/v1/values](/ja/reference/api/prometheus-v1#prometheus-v1-values) でも使用できます。
+
+最小限のメトリック・セットの例。システム・メトリック・セット + 特定のメトリック:
+
+```xml
+<admin version="2.0">
+    <adminserver hostalias="node1" />
+    <metrics>
+        <consumer id="my-metric-set">
+            <metric id="vds.idealstate.garbage_collection.documents_removed.count" />
+        </consumer>
+    </metrics>
+</admin>
+```
+
+デフォルトのメトリック・セットとその他の例。システム・メトリック・セット + デフォルトのメトリック・セット + 組み込みメトリック:
+
+```xml
+<admin version="2.0">
+    <adminserver hostalias="node1" />
+    <metrics>
+        <consumer id="my-metric-set">
+            <metric-set id="default" />
+            <metric id="vds.idealstate.garbage_collection.documents_removed.count" />
+        </consumer>
+    </metrics>
+</admin>
+```
+
+## メトリクス名
+
+Vespa が出力するメトリクスの名前は、通常、次の命名スキームに従います: `<prefix>.<service>.<component>.<suffix>`。区切り文字(ここでは `.`)は、メトリクス・インテグレーションによって異なる場合があります。同様に、`<prefix>` 文字列も設定によって異なる場合があります。さらに、一部のメトリクスは複数レベルの `component` 名を持ちます。各メトリックには複数の値が関連付けられており、メトリックが提供する `suffix` ごとに 1 つの値があります。典型的なサフィックスには `sum`、`count`、`max` があります。
+
+## コンテナー・メトリクス
+
+説明と単位付きのコンテナーのメトリクスは、[コンテナー・メトリクス・リファレンス](/ja/reference/operations/metrics/container#container-metrics)にあります。最もよく使われるメトリクスを以下に挙げます。
+
+### 汎用コンテナー・メトリクス
+
+これらのメトリクスは、サーバー全体について出力されるもので、たとえばリソースに関連します。`mem.heap.*`、`mem.native.*`、`mem.direct.*` のようにメモリ使用量を示すメトリクスがあります。その他、JVM のガベージ・コレクションに関連するメトリクスとして、`jdisc.gc.count` と `jdisc.gc.ms` があります。
+
+### スレッドプール・メトリクス
+
+コンテナーのスレッドプールのメトリクスです。`jdisc.thread_pool.*` メトリクスには、スレッドプール名を持つ `threadpool` ディメンションがあります。たとえば、コンテナーのデフォルト・スレッドプールでは *default-pool* です。詳細は[コンテナーのチューニング](/ja/performance/container-tuning#container-tuning)を参照してください。
+
+### HTTP 固有のメトリクス
+
+これらは HTTP に固有のメトリクスです。コネクターに固有のメトリクスには、TCP リッスンポートを含むディメンションがあります。
+
+HTTP ステータス・レスポンスコードのメトリクス `http.status.*`、またはリクエスト処理に関するより詳細なメトリクス `jdisc.http.*` については、[コンテナー・メトリクス](/ja/reference/operations/metrics/container)を参照してください。その他の関連メトリクスには、`serverNumConnections`、`serverNumOpenConnections`、`serverBytesReceived`、`serverBytesSent` があります。
+
+### クエリー固有のメトリクス
+
+クエリーに関連するメトリクスについては、まず `queries` と `query_latency`、`handled.requests` と `handled.latency`、またはより深い洞察のために `httpapi_*` メトリクスから始めてください。
+
+### フィード固有のメトリクス
+
+Vespa へのフィードに関連するメトリクスについては、`feed.operations` と `feed.latency` メトリクスの使用を推奨します。
+
+## 利用可能なメトリクス
+
+Vespa インストレーションで実行される各サービスは、多数のメトリクスを保持・報告します。
+
+コンテナー・サービスのメトリクスが最もよく使われており、[コンテナー・メトリクス](/ja/reference/operations/metrics/container)にリストされています。そこで、説明と単位付きの利用可能なメトリクスを確認できます。
+
+## カスタム・コンポーネントからのメトリクス
+
+[サーチャー](/ja/applications/searchers)や[ドキュメント・プロセッサー](/ja/applications/document-processors)のようなコンポーネントからカスタム・メトリクスを追加するには:
+
+<Steps>
+<Step>
+コンポーネントのコンストラクターに [MetricReceiver](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/metrics/simple/MetricReceiver.html) インスタンスを追加します。これはコンテナーによって[注入](/ja/applications/dependency-injection)されます。
+</Step>
+<Step>
+*MetricReceiver* の *declare* メソッドを使用して、[Gauge](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/metrics/simple/Gauge.html) および [Counter](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/metrics/simple/Counter.html) メトリクスを宣言します。オプションで、宣言時に任意のメトリック・ディメンションをデフォルト値に設定できます。詳細は javadoc を参照してください。
+</Step>
+<Step>
+計測すべきデータがあるたびに、ゲージでは [sample](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/metrics/simple/Gauge.html#sample\(double\)) メソッドを、カウンターでは [add](https://javadoc.io/doc/com.yahoo.vespa/container-disc/latest/com/yahoo/metrics/simple/Counter.html#add\(\)) メソッドを呼び出します。宣言されたゲージとカウンターは本質的にスレッドセーフです。データをサンプリングする際に、オプションで任意のディメンションを設定できます。
+</Step>
+<Step>
+前のセクションのように、メトリクスがメトリック API で出力されるように、*services.xml* に [consumer](/ja/reference/applications/services/admin#consumer) を追加します。
+</Step>
+</Steps>
+完全な例は、[album-recommendation-java](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation-java) サンプル・アプリケーションにあります。
+
+<Note>
+**注:** 
+
+値のないメトリクスはメトリック API に表示されません。上記の例では、メトリック値を設定するために少なくとも 1 回はクエリーを実行してください。
+</Note>
+
+### 例 / QA
+
+Vespa コンテナー内で、それぞれ独自のスレッドを持つコンポーネントとして動作する 2 つの異なるライブラリがあります。各ライブラリに MetricReceiver を注入しています。レシーバーを注入した後、これらのライブラリ内で使用できるように、このレシーバーへの参照をコンテナー全体で共有するオブジェクトに保存しています(各ライブラリには複数のクラスなどがあるため、毎回レシーバーを注入することはできず、保存した参照を使う必要があります)。質問:
+
+<AccordionGroup>
+<Accordion title="MetricReceiver オブジェクトはコンテナー内で一意ですか? つまり、2 つの異なるコンポーネントにレシーバーを注入する場合、常に同じオブジェクトが注入されるのですか?">
+はい、同じオブジェクトが得られます。
+</Accordion>
+<Accordion title="オブジェクトはどのくらいの期間有効ですか? 同じオブジェクトがコンテナーのライフタイム(コンテナー起動から再起動/シャットダウンまで)にわたって有効なままですか、それともオブジェクトが変わることがありますか? レシーバーへの参照を共通の場所に保存して、注入できないライブラリ内の他の場所でメトリクスを出力するために使用しているので、この参照をどのくらいの頻度で更新する必要があるのか知りたいのです。">
+それが注入されたコンポーネントのライフタイムの間、有効なままです。したがって、直接または間接の注入以外の手段でコンポーネント参照を共有すると、無効な参照を持つことになる可能性があります。「コンテナー全体で共有するオブジェクト」は問題の元です。代わりに、それを必要とするすべてのコンポーネントに注入すべきです。あるいは、それでは粒度が細かすぎると感じる場合は、これらのものが注入される 1 つの大きなオブジェクトを作成し、それを共通のものを必要とするすべてのコンポーネントに注入してください。
+</Accordion>
+</AccordionGroup>

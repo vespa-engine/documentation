@@ -1,0 +1,466 @@
+---
+title: "ドキュメント・アトリビュート"
+description: "*アトリビュート*は、フィールドのインデキシングを指定する[スキーマ](/ja/reference/schemas/schemas#attribute)のキーワードです:"
+---
+
+```txt
+field price type int {
+indexing: attribute
+}
+```
+
+アトリビュートの特性とユースケース:
+
+- 完全一致、前方一致、大文字小文字を区別するマッチングを含む柔軟な[マッチ・モード](/ja/reference/schemas/schemas#match)。ただしテキスト・マッチング(トークン化と言語処理)は含まれません。
+- 高い持続的な更新レート(read-apply-writeパターンの回避)。アトリビュート・フィールドに対するすべての変更操作はVespaの[トランザクション・ログ](/ja/content/proton#transaction-log)に書き込まれて永続化されますが、ログへの追記はランダム・アクセスではなくシーケンシャル・アクセスです。詳細は[部分更新](/ja/writing/partial-updates)を参照してください。
+- 即時のクエリー更新 - 値は即座に検索可能になります。
+- すべてのフィールドがアトリビュートであれば、[ドキュメント・サマリー](/ja/querying/document-summaries)はメモリのみの操作になります。
+- [数値の範囲クエリー](/ja/reference/querying/yql#numeric)。
+
+  ```txt
+  where price > 100
+  ```
+
+- [グルーピング](/ja/querying/grouping) - 結果をグループに集約します - 結果に多様性を持たせるのにも最適です。
+
+  ```txt
+  all(group(customer) each(max(3) each(output(summary()))))
+  ```
+
+- [ランキング](/ja/basics/ranking) - アトリビュート値をランク関数で直接使用します。
+
+  ```txt
+  rank-profile rank_fresh {
+    first-phase {
+      expression { freshness(timestamp) }
+    }
+  }
+  ```
+
+- [ソート](/ja/reference/querying/sorting-language) - アトリビュート値で結果を並べ替えます。
+
+  ```txt
+  order by price asc, release_date desc
+  ```
+
+- [親子関係](/ja/schemas/parent-child) - グローバルな親ドキュメントからアトリビュート値をインポートします。
+
+  ```txt
+  import field advertiser_ref.name as advertiser_name {}
+  ```
+
+もう1つのフィールド・オプションは*index*です - [ステミング](/ja/linguistics/linguistics-opennlp#stemming)や[正規化](/ja/linguistics/linguistics-opennlp#normalization)を伴う[テキスト検索](/ja/querying/text-matching)に使用するフィールドには[index](/ja/content/proton#index)を使用してください。
+
+アトリビュートはインメモリのデータ構造です。アトリビュートは、メモリと引き換えに、クエリー実行と[ドキュメント更新](/ja/writing/partial-updates)を高速化します。データ構造は定期的に最適化されるため、静的なリソース使用量と一時的なリソース使用量の両方を考慮してください - 後述の[アトリビュートのメモリ使用量](#attribute-memory-usage)を参照してください。結果セットの生成でストレージへのアクセスを抑えるには、ドキュメント・サマリーでアトリビュートを使用します。
+
+<Frame>
+![](/assets/img/attributes-update.svg)
+</Frame>
+
+設定の概要:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;fast-search&#42;&#42;</td>
+      <td><a href="/ja/reference/schemas/schemas#attribute" aria-label="reference">リファレンス</a>も参照してください。<a href="#index-structures" aria-label="index structure">インデックス構造</a>を追加してクエリー・パフォーマンスを向上させます: <pre><code>{`field titles type array<string> {     indexing : summary | attribute     attribute: fast-search }`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;fast-access&#42;&#42;</td>
+      <td>高スループットの更新では、レプリカを持つすべてのノードでアトリビュートがメモリにロードされているべきです。レプリケーション・ファクターやその他の設定によっては、常にそうなるとは限りません。<a href="/ja/reference/schemas/schemas#attribute" aria-label="fast-access">fast-access</a>を使用して、すべてのノード上のレプリカをメモリに置くことでフィード・レートを向上させます - <a href="/ja/reference/schemas/schemas#attribute" aria-label="reference">リファレンス</a>と<a href="/ja/performance/sizing-feeding" aria-label="sizing feeding">フィードのサイジング</a>を参照してください。 <pre><code>{`field titles type array<string> {     indexing : summary | attribute     attribute: fast-access }`}</code></pre></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;distance-metric&#42;&#42;</td>
+      <td><a href="/ja/querying/nearest-neighbor-search" aria-label="nearest neighbor search">最近傍検索</a>のような機能には<a href="/ja/reference/schemas/schemas#distance-metric" aria-label="distance-metric">distance-metric</a>が必要であり、クエリーを高速化するために<code>{`hsnw index`}</code>を持つこともできます。詳細は<a href="/ja/querying/approximate-nn-hnsw" aria-label="approximate nearest neighbor">近似最近傍</a>を参照してください。インデックスを有効にするには、フィールドの<code>{`index`}</code>設定に注意してください: <pre><code>{`field image_sift_encoding type tensor<float>(x[128]) {     indexing: summary | attribute | index     attribute {         distance-metric: euclidean     }     index {         hnsw {             max-links-per-node: 16             neighbors-to-explore-at-insert: 500         }     } }`}</code></pre></td>
+    </tr>
+  </tbody>
+</table>
+
+アトリビュート・フィールドのデータ型によって、コンテント・ノード上の全ドキュメントにわたってそのフィールドの値を格納するためにアトリビュートが使用するデータ構造が決まります。一部のデータ型では、複数のデータ構造の組み合わせが使用されます:
+
+- *Attribute Multivalue Mapping*は、arrayおよびweighted set型の値の配列を格納します。
+- *Attribute Enum Store*は、すべての文字列アトリビュートの一意な文字列と、[fast-search](/ja/content/attributes#fast-search)が設定されたアトリビュートの一意な値を格納します。
+- *Attribute Tensor Store*は、すべてのテンソル・アトリビュートのテンソル値を格納します。
+
+以下の図では、行はドキュメントを表し、名前付きの列はアトリビュートを表しています。
+
+<Frame>
+![](/assets/img/attributes.svg)
+</Frame>
+
+アトリビュートには以下の種類があります:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>型</th>
+      <th>サイズ</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>単一値</td>
+      <td>固定</td>
+      <td>"A"アトリビュートのようなもので、例は<code>{`int`}</code>です。要素サイズは型のサイズで、整数なら4バイトです。(ローカルIDでインデックスされる)メモリ・バッファーがすべての値を直接保持します。</td>
+    </tr>
+    <tr>
+      <td>複数値</td>
+      <td>固定</td>
+      <td>"B"アトリビュートのようなもので、例は<code>{`array<int>`}</code>です。(ローカルIDでインデックスされる)メモリ・バッファーが、&#42;Multivalue Mapping&#42;内で配列が格納されている位置への参照(32ビット)を保持します。&#42;Multivalue Mapping&#42;は複数のメモリ・バッファーで構成され、同じサイズの配列は同じバッファーに一緒に配置されます。</td>
+    </tr>
+    <tr>
+      <td>複数値</td>
+      <td>可変</td>
+      <td>"B"アトリビュートのようなもので、例は<code>{`array<string>`}</code>です。(ローカルIDでインデックスされる)メモリ・バッファーが、&#42;Multivalue Mapping&#42;内で配列が格納されている位置への参照(32ビット)を保持します。一意な文字列は&#42;Enum Store&#42;に格納され、&#42;Multivalue Mapping&#42;内の配列は&#42;Enum Store&#42;内の文字列への参照(32ビット)を格納します。&#42;Enum Store&#42;は複数のメモリ・バッファーで構成されます。</td>
+    </tr>
+    <tr>
+      <td>単一値</td>
+      <td>可変</td>
+      <td>"C"アトリビュートのようなもので、例は<code>{`string`}</code>です。(ローカルIDでインデックスされる)メモリ・バッファーが、&#42;Enum Store&#42;内で文字列が格納されている位置への参照(32ビット)を保持します。</td>
+    </tr>
+    <tr>
+      <td>テンソル</td>
+      <td>固定 / 可変</td>
+      <td>"D"アトリビュートのようなもので、例は<code>{`tensor<float>(x{},y[64])`}</code>です。(ローカルIDでインデックスされる)メモリ・バッファーが、&#42;Tensor Store&#42;内でテンソル値が格納されている位置への参照(32ビット)を保持します。&#42;Tensor Store&#42;内のメモリ・レイアウトはテンソル型によって異なります。</td>
+    </tr>
+  </tbody>
+</table>
+
+"A"、"B"、"C"、"D"アトリビュートのメモリ・バッファーは、ローカルID(LID)順にアトリビュート値または参照を保持します - [ドキュメント・メタ・ストア](#document-meta-store)を参照してください。
+
+アトリビュートを更新すると、値全体が書き込まれます。これは[複数値](/ja/basics/schemas#document-fields)フィールドにも当てはまります - 配列に要素を追加する例:
+
+1. メモリ・バッファーに新しい配列用のスペースが確保される
+2. 現在の値がコピーされる
+3. 新しい要素が書き込まれる
+
+つまり、大きなフィールドほど更新時にコピーされるデータ量が多くなります。また、[weighted set](/ja/reference/schemas/schemas#weightedset)の更新は、数値キーを使用したほうが高速になります(メモリが少なく、比較が容易なため)。
+
+*Multivalue Mapping*、*Enum Store*、*Tensor Store*に格納されたデータは、32ビットの参照を使って参照されます。このアドレス空間はいっぱいになる可能性があり、その場合フィードがブロックされます - [詳細はこちら](/ja/writing/feed-block)。arrayまたはweighted setアトリビュートでは、同じ数の値を持てるドキュメント数の上限はノードあたり約20億です。文字列アトリビュートまたは[fast-search](/ja/content/attributes#fast-search)が設定されたアトリビュートでは、一意な値の数の上限はノードあたり約20億です。
+
+## インデックス構造
+
+`fast-search`がない場合、アトリビュートへのアクセスはメモリ・ルックアップであり、クエリー実行に応じて1つの値またはすべての値を参照します。アトリビュートは線形の配列に似たデータ構造です - ドキュメントのマッチングは、場合によっては*すべての*アトリビュート値のスキャンを意味します。
+
+[fast-search](/ja/reference/schemas/schemas#attribute)を設定すると、より高速なルックアップと検索のためのインデックス構造が作成されます。これは、ポスティング・リストを指す[辞書](/ja/reference/schemas/schemas#dictionary)で構成されます。これはより多くのメモリを使用し、ドキュメント更新時のCPU使用量も増加します。すべてのアトリビュート型で定常状態のメモリ使用量が増加し、数値型では初期化のオーバーヘッドも追加されます。
+
+デフォルトの辞書はアトリビュート*値*のb-treeで、値ごとにローカル・ドキュメントIDの*出現*b-tree(ポスティング・リスト)を指します。以下のA-attributeがその例です。アトリビュートに`dictionary: hash`を使用すると、C-attributeのように、ポスティング・リストを指すアトリビュート値のハッシュ・テーブルが生成されます(短いポスティング・リストはb-treeではなく配列として表現されます):
+
+<Frame>
+![](/assets/img/attributes-indexes.svg)
+</Frame>
+
+注記:
+
+- ある値が多くのドキュメントに出現する場合、*出現*b-treeは大きくなります。そのような値に対しては、b-treeに加えてブーリアン出現リスト(すなわちビットベクター)が生成されます。
+- `fast-search`の設定は、サイズを除けば、ディスク上のファイルからは観測できません。
+- `fast-search`は、追加のインデックス構造が作成されるため、空のフィールドであってもメモリを増加させます。たとえば、単一値フィールドは空の場合に「未定義値」を持ち、この値に対するポスティング・リストが存在します。
+- *値*のb-treeは、数値アトリビュートでの高速な範囲検索を可能にします。これは`hash`ベースの辞書でも利用できますが、フル・スキャンが必要になるため低速です。
+
+`fast-search`の使用には多くの影響があります。詳細は[fast-searchを使用すべきとき](/ja/performance/feature-tuning#when-to-use-fast-search-for-attribute-fields)を参照してください。
+
+## アトリビュートのメモリ使用量
+
+アトリビュート構造は定期的に最適化され、これにより一時的なリソース使用が発生します - 詳細は[メンテナンス・ジョブ](/ja/content/proton#proton-maintenance-jobs)を参照してください。アトリビュートのメモリ・フットプリントはいくつかの要因に依存し、データ型が最も重要です:
+
+- 数値型(int、long、byte、double)およびブーリアン型(bit) - 固定長で、ドキュメントあたりのコストは固定
+- 文字列型 - フットプリントは文字列の長さと、格納が必要な一意な文字列の数に依存します。
+
+arrayやweighted setのようなコレクション型はメモリ使用量を多少増加させますが、主な要因はドキュメントあたりの平均値数です。文字列アトリビュートは通常最も大きなアトリビュートであり、初期化時に最も多くのメモリを必要とします - 可能な場合はブーリアン/数値型を使用してください。例として、以下の式を参照してください:
+
+```js
+schema foo {
+document bar {
+    field titles type array<string> {
+    indexing: summary | attribute
+    }
+  }
+}
+```
+
+- ドキュメントあたり平均10個の値、平均文字列長15、10万個の一意な文字列、2000万ドキュメントと仮定します。
+- 定常状態のメモリ使用量は約1 GBです \(20M\*4\*(6/5) + 20M\*10\*4\*(6/5) + 100k\*(15+1+4+4)\*(6/5)\)。
+- 初期化中(ディスクからのアトリビュートのロード)には、値ごとに以下の分として、さらに2.4 GBが割り当てられます \(20M\*10\*(4+4+4)\):
+      
+- ローカル・ドキュメントID
+- enum値
+- ウェイト
+- ドキュメントあたりの平均値数を20(2倍)に増やすと、初期化中のメモリ・フットプリントも2倍(4.8 GB)になります。
+
+キャパシティ・プランニングを行う際は、初期化中に発生する最大フットプリントを念頭に置いてください。定常状態のフットプリントでは、文字列アトリビュートの場合、一意な値の数が重要です。
+
+さまざまなデータ型とコレクション型を扱っている[アトリビュート・サイジングのサンプル・スプレッドシート](/assets/attribute-memory-Vespa.xls)を確認してください。初期化を考慮に入れたうえで、48 GB RAMのノードが保持できるドキュメント数の見積もりも含まれています。
+
+[複数値](/ja/basics/schemas#document-fields)アトリビュートは、データをメモリに格納する方法に適応的なアプローチを採用しており、ノードあたり最大20億ドキュメントまでサポートされます。
+
+<Tip>
+**プロのヒント:** 
+
+protonの*/state/v1/*インターフェースで、アトリビュートのメモリ使用量を調べることができます。これはドキュメント化されていないデバッグ用インターフェースで、いつでも変更される可能性があります - 例: *http://localhost:19110/state/v1/custom/component/documentdb/music/subdb/ready/attribute/artist*
+</Tip>
+
+## アトリビュートのファイル使用量
+
+アトリビュート・データは、ディスク上の2つの場所に格納されます:
+
+- メモリ内のアトリビュート・ストア。これは定期的にディスクへフラッシュされます。起動時にはフラッシュされたファイルを使ってメモリ構造を素早く再構築するため、ドキュメント・ストア内のソースからアトリビュート・ストアを生成するのに比べてはるかに速く起動できます。アトリビュート・ストアは、新しいフラッシュ・ファイルを生成する際に一時的にディスク使用量が2倍になります。[アトリビュート・フラッシュ](/ja/content/proton#attribute-flush)を参照してください。
+- ディスク上のドキュメント・ストア。ここにあるドキュメントは、インデックス構造の(再)生成に使用されるほか、ノード間のレプリカ生成のソースにもなります。なお、アトリビュート・データは[サマリー](/ja/querying/document-summaries)の設定に関係なくドキュメント・ストアに格納されます。
+
+フィールド型ごとに格納に使用されるデータ型はさまざまです(以下を参照)。したがって、定常状態のディスク使用量の控えめな経験則は、データ・サイズの2倍です。
+
+## サイジング
+
+アトリビュートのサイジングは厳密な科学ではなく、近似です。その理由は、サイズが変動するためです。ドキュメント数、値の数、値の一意性のいずれも可変です。メモリを占有するアトリビュートの構成要素は以下のとおりです:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>略語</th>
+      <th>概念</th>
+      <th>コメント</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>D</td>
+      <td>ドキュメント数</td>
+      <td>ノード上のドキュメント数、より正確には割り当てられたローカル・ドキュメントIDの最大数</td>
+    </tr>
+    <tr>
+      <td>V</td>
+      <td>ドキュメントあたりの平均値数</td>
+      <td>arrayとweighted setにのみ適用</td>
+    </tr>
+    <tr>
+      <td>U</td>
+      <td>一意な値の数</td>
+      <td>文字列の場合、または<a href="/ja/reference/schemas/schemas#attribute" aria-label="fast-search">fast-search</a>が設定されている場合にのみ適用</td>
+    </tr>
+    <tr>
+      <td>FW</td>
+      <td>固定データ幅</td>
+      <td>数値はsizeof(T)、文字列は1バイト、ブーリアンは1ビット</td>
+    </tr>
+    <tr>
+      <td>WW</td>
+      <td>ウェイト幅</td>
+      <td>weighted setにおけるウェイトの幅で4バイト。arrayは0バイト。</td>
+    </tr>
+    <tr>
+      <td>EIW</td>
+      <td>enumインデックス幅</td>
+      <td>enumストアへのインデックスの幅で4バイト。すべての文字列と、<a href="/ja/reference/schemas/schemas#attribute" aria-label="fast-search">fast-search</a>が設定されたその他のアトリビュートで使用</td>
+    </tr>
+    <tr>
+      <td>VW</td>
+      <td>可変データ幅</td>
+      <td>文字列はstrlen(s)、それ以外は0バイト</td>
+    </tr>
+    <tr>
+      <td>PW</td>
+      <td>ポスティング・エントリー幅</td>
+      <td>ポスティング・リストのエントリーの幅。単一値は4バイト、arrayとweighted setは8バイト。<a href="/ja/reference/schemas/schemas#attribute" aria-label="fast-search">fast-search</a>が設定されている場合にのみ適用。</td>
+    </tr>
+    <tr>
+      <td>PIW</td>
+      <td>ポスティング・インデックス幅</td>
+      <td>ポスティング・リストのストアへのインデックスの幅。4バイト</td>
+    </tr>
+    <tr>
+      <td>MIW</td>
+      <td>複数値インデックス幅</td>
+      <td>複数値マッピングへのインデックスの幅。4バイト</td>
+    </tr>
+    <tr>
+      <td>ROF</td>
+      <td>リサイズ・オーバーヘッド係数</td>
+      <td>デフォルトは6/5。これは、リサイズ戦略に起因する動的ベクターの平均オーバーヘッドです。リサイズ戦略は50%で、構造体が平均して5/6埋まっていることを示します。</td>
+    </tr>
+  </tbody>
+</table>
+
+### 構成要素
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>構成要素</th>
+      <th>式</th>
+      <th>近似係数</th>
+      <th>適用対象</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ドキュメント・ベクター</td>
+      <td>D &#42; ((FW or EIW) or MIW)</td>
+      <td>ROF</td>
+      <td>単一値の数値アトリビュートはFW、複数値アトリビュートはMIW。単一値の文字列、または単一値でfast-searchのアトリビュートはEIW</td>
+    </tr>
+    <tr>
+      <td>複数値マッピング</td>
+      <td>D &#42; V &#42; ((FW or EIW) + WW)</td>
+      <td>ROF</td>
+      <td>arrayまたはweighted setにのみ適用。文字列またはfast-searchの場合はEIW</td>
+    </tr>
+    <tr>
+      <td>Enumストア</td>
+      <td>U &#42; ((FW + VW) + 4 + ((EIW + PIW) or EIW))</td>
+      <td>ROF</td>
+      <td>文字列またはfast-searchが設定されている場合に適用。fast-searchが設定されている場合は(EIW + PIW)、そうでない場合はEIW。</td>
+    </tr>
+    <tr>
+      <td>ポスティング・リスト</td>
+      <td>D &#42; V &#42; PW</td>
+      <td>ROF</td>
+      <td>fast-searchが設定されている場合に適用</td>
+    </tr>
+  </tbody>
+</table>
+
+### バリエーション
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>型</th>
+      <th>構成要素</th>
+      <th>式</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>数値・単一値・プレーン</td>
+      <td>ドキュメント・ベクター</td>
+      <td>D &#42; FW &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>数値・複数値・プレーン</td>
+      <td>ドキュメント・ベクター、複数値マッピング</td>
+      <td>D &#42; MIW &#42; ROF + D &#42; V &#42; (FW+WW) &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>数値・単一値・fast-search</td>
+      <td>ドキュメント・ベクター、Enumストア、ポスティング・リスト</td>
+      <td>D &#42; EIW &#42; ROF + U &#42; (FW+4+EIW+PIW) &#42; ROF + D &#42; PW &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>数値・複数値・fast-search</td>
+      <td>ドキュメント・ベクター、複数値マッピング、Enumストア、ポスティング・リスト</td>
+      <td>D &#42; MIW &#42; ROF + D &#42; V &#42; (EIW+WW) &#42; ROF + U &#42; (FW+4+EIW+PIW) &#42; ROF + D &#42; V &#42; PW &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>単一値・文字列・プレーン</td>
+      <td>ドキュメント・ベクター、Enumストア</td>
+      <td>D &#42; EIW &#42; ROF + U &#42; (FW+VW+4+EIW) &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>単一値・文字列・fast-search</td>
+      <td>ドキュメント・ベクター、Enumストア、ポスティング・リスト</td>
+      <td>D &#42; EIW &#42; ROF + U &#42; (FW+VW+4+EIW+PIW) &#42; ROF + D &#42; PW &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>複数値・文字列・プレーン</td>
+      <td>ドキュメント・ベクター、複数値マッピング、Enumストア</td>
+      <td>D &#42; MIW &#42; ROF + D &#42; V &#42; (EIW+WW) &#42; ROF + U &#42; (FW+VW+4+EIW) &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>複数値・文字列・fast-search</td>
+      <td>ドキュメント・ベクター、複数値マッピング、Enumストア、ポスティング・リスト</td>
+      <td>D &#42; MIW &#42; ROF + D &#42; V &#42; (EIW+WW) &#42; ROF + U &#42; (FW+VW+4+EIW+PIW) &#42; ROF + D &#42; V &#42; PW &#42; ROF</td>
+    </tr>
+    <tr>
+      <td>ブーリアン・単一値</td>
+      <td>ドキュメント・ベクター</td>
+      <td>D &#42; FW &#42; ROF</td>
+    </tr>
+  </tbody>
+</table>
+
+## ページド・アトリビュート
+
+通常のアトリビュート・フィールドはメモリ内にあることが保証されますが、[paged](/ja/reference/schemas/schemas#attribute)アトリビュート設定を使用すると、アトリビュート・データをメモリからディスクへページアウトできます。`paged`設定は、以下の型では*サポートされていません*:
+
+- [fast-rank](/ja/reference/schemas/schemas#attribute)を伴う[tensor](/ja/reference/schemas/schemas#tensor)。
+- [predicate](/ja/reference/schemas/schemas#predicate)。
+
+[fast-search](/ja/reference/schemas/schemas#attribute)を使用するアトリビュート・フィールドでは、辞書とインデックス構造に必要なメモリは決してディスクへページアウトされません。
+
+アトリビュートの`paged`設定は、メモリ・リソースに制約があり、かつアトリビュート・データがランキング中にクエリーあたり限られた数のヒットからのみアクセスされる場合の代替手段です。たとえば、[再ランキング・フェーズ](/ja/ranking/phased-ranking)でのみ使用される密なテンソル・アトリビュートで、アトリビュートへのアクセス回数が再ランキング・フェーズの件数によって制限される場合です。
+
+たとえば、second phaseの[total-rerank-count](/ja/reference/schemas/schemas#secondphase-total-rerank-count)を100にすると、クエリーあたりのページイン/ディスク・アクセスの最大回数は100に制限されます。100 QPSで稼働する場合、1秒あたり最大1万回のディスク・アクセスが必要になります。これは、アクセスされたアトリビュート・データがまだ一切メモリにページインされていない場合の最悪ケースです。これはアクセスの局所性とメモリ圧迫の度合い(アトリビュート・データのサイズと利用可能なメモリの比較)に依存します。
+
+この例では、1024個の[int8](/ja/reference/ranking/tensor#tensor-type-spec)値を持つ密なテンソルを使用します。このテンソル・アトリビュートは再ランキング(second-phaseランキング式)中にのみアクセスされます:
+
+```txt
+schema foo {
+    document foo {
+        field tensordata type tensor<int8>(x[1024]) {
+            indexing: attribute
+            attribute: paged
+        }
+    }
+    rank-profile foo {
+        first-phase {}
+        second-phase {
+            total-rerank-count: 100
+            expression: sum(attribute(tensordata))
+        }
+    }
+}
+```
+
+サービング・レイテンシーのSLAが厳しくなく、クエリー・スループットが低いユースケースでは、`paged`アトリビュート設定はノードあたりより多くのデータを格納できるため、チューニングの選択肢になり得ます。
+
+### ページド・アトリビュートのデメリット
+
+*paged*アトリビュートの使用には多くのデメリットがあります:
+
+- アトリビュートへのアクセスがディスクに触れる可能性があるため、クエリー・レイテンシーが予測不能になります。ノードあたりの1秒あたりクエリー・スループットが制限されます(ドキュメント再ランキング要求の局所性に依存)。
+- ページド・アトリビュートは、ファイルバックのメモリ・マッピングによって実装されています。パフォーマンスは、[Linuxの仮想メモリ管理](https://tldp.org/LDP/tlk/mm/memory.html)によるデータのページイン/ページアウトの能力に依存します。検索あたり多数のスレッドを使用する場合や、高いクエリー・スループットでは、システム(カーネル)のCPU使用率が高くなり、システムが応答しなくなる可能性があります。
+- ページド・アトリビュートを使用すると、コンテント・ノードの合計メモリ使用率は100%近くになります。アトリビュート・データのどの部分をメモリにページインするかは、アクセス・パターンに基づいてLinuxカーネルが決定します。ページド・アトリビュートを有効にする前に、Linuxの仮想メモリ管理システムの動作を十分に理解しておくことを推奨します。
+- ページド・アトリビュートを使用している場合、コンテント・ノードの[メモリ使用量メトリクス](/ja/performance/sizing-search#metrics-for-vespa-sizing)は実態を反映しません。ノードで利用可能なメモリよりはるかに多い使用量を示すことがあります。これは、アトリビュートのメモリ使用量がアトリビュートに含まれるデータ量として報告される一方で、そのデータがディスクへページアウトされているかどうかはLinuxカーネルが制御しているためです。
+- ページド・アトリビュートを使用すると、アトリビュート・データのディスク使用量が2倍になります。たとえば、元のアトリビュート・サイズが92 GB(上記のドキュメントあたり1024個のint8のスキーマで1億ドキュメント)の場合、`paged`設定を使用するとアトリビュートのディスク使用量は200 GB近くまで倍増します。
+- 稼働中のシステムで`paged`設定を変更する(たとえばオプションを削除する)と、深刻なメモリ不足(out-of-memory)状態を引き起こす可能性があります。`paged`がない場合、コンテント・ノードはページアウトの選択肢なしにアトリビュートをメモリにロードしようとするためです。
+- [first-phase](/ja/ranking/phased-ranking)ランキングでページド・アトリビュートを使用すると、クエリーがコーパスの大部分を取得する場合、極端に高いクエリー・レイテンシーが発生する可能性があります。ディスク・アクセスの回数は、最悪の場合、クエリーが生成するヒット数と等しくなります。ページド・アトリビュートを検索するクエリーを実行する場合も、同様の問題が発生する可能性があります。
+- `paged`を[HNSWインデキシング](/ja/querying/approximate-nn-hnsw)と組み合わせて使用することは、*強く*非推奨です。*HNSW*インデキシングは、インデキシング中にもテンソルの検索と読み取りを行うため、フィード中にランダム・アクセスが発生します。システムのメモリ使用率が100%に達すると、Linuxカーネルはページのメモリへのページイン/ページアウトを開始します。これによりシステム(カーネル)のCPU使用率が高くなり、HNSWインデキシングのスループットが著しく低下する可能性があります。
+
+## ミュータブル・アトリビュート
+
+[ミュータブル・アトリビュート](/ja/reference/schemas/schemas#mutate)は、ドキュメントごとのマッチングおよびランキングのパフォーマンスに関するドキュメント・メタデータです。
+
+アトリビュート値は、ランク・プロファイルで定義されたとおり、クエリー実行の一部として変更されます - 詳細は[ランク・フェーズ統計](/ja/ranking/phased-ranking#rank-phase-statistics)を参照してください。
+
+## ドキュメント・メタ・ストア
+
+ドキュメント・メタ・ストアは、ノード上のすべてのドキュメントに関するインメモリのデータ構造です。これは*暗黙的なアトリビュート*であり、[コンパクション](/ja/content/proton#lid-space-compaction)と[フラッシュ](/ja/content/proton#attribute-flush)の対象になります。小さなドキュメントを扱う/他のアトリビュートを持たないアプリケーションでは、このアトリビュートがメモリ使用量の大半を占めることがあります。
+
+ドキュメント・メタ・ストアはドキュメント数に対して線形にスケールし、ドキュメントあたり約30バイトを使用します。`"field": "[documentmetastore]"`に対するメトリック*content.proton.documentdb.ready.attribute.memory_usage.allocated_bytes*が、メモリ内のドキュメント・メタ・ストアのサイズです - サイズを調べるには[メトリックAPI](/ja/reference/api/state-v1#state-v1-metrics)を使用してください - この例では、ノードには900万件のreadyドキュメントがあり、ドキュメントあたり52バイトをメモリで使用しています:
+
+```json highlight= {10,14}
+{
+    "name": "content.proton.documentdb.ready.attribute.memory_usage.allocated_bytes",
+    "description": "The number of allocated bytes",
+    "values": {
+        "average": 4.69736008E8,
+        "count": 12,
+        "rate": 0.2,
+        "min": 469736008,
+        "max": 469736008,
+        "last": 469736008
+    },
+    "dimensions": {
+        "documenttype": "doctype",
+        "field": "[documentmetastore]"
+    }
+},
+```
+
+上記は*ready*ドキュメントに関するものです。*removed*と*notready*も確認してください - [サブデータベース](/ja/content/proton#sub-databases)を参照してください。

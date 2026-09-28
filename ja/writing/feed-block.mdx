@@ -1,0 +1,87 @@
+---
+title: "フィードブロック"
+---
+
+コンテント・クラスターは、少なくとも 1 つのコンテントノードがディスクまたはメモリの[リソース制限](/ja/reference/applications/services/content#resource-limits)に達すると、外部からの書き込み操作をブロックします。これは、コンテントノードのリソース使用量が飽和するのを避けるために行われます。*Cluster controller* はコンテントノードのリソース使用量を監視し、フィードをブロックするかどうかを判断します。一時的なリソース使用量（詳細は以下のメトリクスを参照）は監視対象の使用量に含まれません。これにより、一時的なリソース使用量は、自然な変動によるフィードブロックにつながるのではなく、コンテントノードのリソースの余裕分で吸収されるようになります。
+
+<Note>
+**Note:** 
+
+ラップトップ上で Docker イメージとして Vespa を実行している場合、`[UNKNOWN(251009) @ tcp/vespa-host:19112/default]: ReturnCode(NO_SPACE, External feed is blocked due to resource exhaustion: in content cluster 'example': disk on node 0 [vespa-host] is 81.7% full (the configured limit is 80.0%, effective limit lowered to 79.0% until feed unblocked)` が容易に発生し得ます。これを解決するには、Docker デーモンに割り当てるストレージを増やすか、未使用のボリュームをクリーンアップするか、未使用の Docker イメージを削除してください。
+</Note>
+
+これが発生すると、HTTP クライアントには *507 Server Error: Insufficient Storage* が表示されます。
+
+フィードがブロックされている間、書き込み操作は *Distributors* によって拒否されます。すべての Put 操作とほとんどの Update 操作が拒否されます。以下の操作は引き続き許可されます:
+
+- Remove 操作
+- 数値の単一値フィールドに対する Update の [assign](/ja/reference/schemas/document-json-format#assign) 操作
+
+解決するには、コンテント・クラスターにノードを追加します。データは[自動的に再分散](/ja/content/elasticity)され、すべてのコンテントノードが制限を下回るとフィードのブロックが解除されます。セルフマネージドの Vespa では [resource-limits](/ja/reference/applications/services/content#resource-limits) を設定することもできますが、これは推奨されません。制限を上げすぎると OOM が発生し、コンテントノードが起動できなくなる可能性があります。
+
+<Warning>
+**Important:** 
+
+常にノードを**追加**してください。ノードの容量を変更しないでください。実際には、そのほうが安全で迅速です。ほとんどの Vespa アプリケーションは同種のノードで構成されているため、ノードの容量を変更すると、ノードセット全体の入れ替えが発生し、同種のノードを追加するよりも多くのデータコピーが発生する可能性があります。データのコピー自体がノードに負荷をかけるため、通常はノードを 1 台追加するのが最小かつ最も安全な変更です。
+</Warning>
+
+リソース使用量とフィードがブロックされているかどうかの監視には、以下の[メトリクス](/ja/operations/metrics)が使用されます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;cluster-controller.resource_usage.nodes_above_limit&#42;&#42;</td>
+      <td>1 つ以上のリソース制限を超えているコンテントノードの数。0 を超えている場合、フィードはブロックされます。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;content.proton.resource_usage.disk&#42;&#42;</td>
+      <td>0 から 1 の間の数値で、コンテントノード上で（利用可能な総量のうち）どれだけのディスクが使用されているかを示します。<a href="/ja/content/proton#disk-index-fusion" aria-label="disk index fusion">disk index fusion</a> 中に一時的に使用されるディスクは含まれません。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;content.proton.resource_usage.memory&#42;&#42;</td>
+      <td>0 から 1 の間の数値で、コンテントノード上で（利用可能な総量のうち）どれだけのメモリが使用されているかを示します。<a href="/ja/content/proton#memory-index-flush" aria-label="メモリインデックス">メモリインデックス</a>によって一時的に使用されるメモリは含まれません。</td>
+    </tr>
+  </tbody>
+</table>
+
+フィードがブロックされている場合、書き込み操作の応答にエラーメッセージが返されます。例:
+
+```text
+ReturnCode(NO_SPACE, External feed is blocked due to resource exhaustion:
+                     in content cluster 'example': memory on node 0 [my-vespa-node-0.example.com] is 82.0% full (the configured limit is 80.0%, effective limit lowered to 79.0% until feed unblocked))
+```
+
+フィードがブロックされると、ブロックが解除されるためには、リソース使用量が別のより低い制限を下回る必要があることに注意してください。これは、制限値の近辺にいるときに、フィードのブロックと解除が頻繁に切り替わるのを避けるためです。この低い方の制限は、設定された制限よりも 1% 低い値です。
+
+アトリビュートのデータ構造（*Multivalue Mapping*、*Enum Store*、*Tensor Store*）が使用するアドレス空間も満杯になり、フィードをブロックすることがあります。詳細は[アトリビュートのデータ構造](/ja/content/attributes/#data-structures)を参照してください。これはめったに発生しません。アドレス空間の使用量の監視には、以下のメトリクスが使用されます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;content.proton.documentdb.attribute.resource_usage.address_space.max&#42;&#42;</td>
+      <td>0 から 1 の間の数値で、コンテントノード上で最も使用量の多いアトリビュートのデータ構造がどれだけのアドレス空間を使用しているかを示します。</td>
+    </tr>
+  </tbody>
+</table>
+
+
+アドレス空間の制限（デフォルト値は 0.90）を超えると、エラーが返されます:
+
+```text
+ReturnCode(NO_SPACE, External feed is blocked due to resource exhaustion:
+                     in content cluster 'example': attribute-address-space:example.ready.a1.enum-store on node 0 [my-vespa-node-0.example.com] is 91.0% full (the configured limit is 90.0%))
+```
+
+解決するには、コンテント・クラスターにノードを追加し、アトリビュートを持つドキュメントをより多くのノードに分散させます。

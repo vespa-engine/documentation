@@ -1,0 +1,396 @@
+---
+title: "テキスト・マッチング"
+---
+
+このガイドでは、Vespaにおける[string](../reference/schemas/schemas#string)フィールドに対するトークナイゼーション、言語処理、マッチングを実演します。このガイドの例は、[クイックスタート](../basics/deploy-an-application-local)に基づいています。
+
+ランキングについては[ランキング](../basics/ranking)の入門を参照し、Vespaがフィールドごとにサポートするさまざまな[マッチ・モード](../reference/schemas/schemas#match)を確認してください。[テキスト検索](../learn/tutorials/text-search)および[MLによるテキスト検索](../learn/tutorials/text-search-ml)のチュートリアルも参照してください。最後に、Vespaにおける言語処理については[linguistics](../linguistics/linguistics)を参照してください。
+
+テキスト・マッチングのデバッグには、[クエリー・トレーシング](#query-trace)の使用が役立ちます。
+
+## インデックスとアトリビュート
+
+Vespaのstringフィールドには、[indexing](../reference/schemas/schemas#indexing)や[マッチ・モード](../reference/schemas/schemas#match)など、フィールドごとに指定できる設定を組み合わせて指定できます。
+
+-   *index*は、デフォルトのマッチ・モード*text*でのフリーテキスト検索用で、[トークナイゼーションとステミング](../linguistics/linguistics)などの言語処理と統合されています。
+-   *attribute*インデキシングは、言語処理を行わない、正確な文字列内容をマッチさせるデータベース型の文字列マッチングに使用されます。
+
+フリーテキスト検索は通常、*index*モードのstringフィールドを使用して実現します:
+
+```js
+field album type string {
+    indexing: summary | index
+}
+```
+
+string型のフィールドにindexとattributeの両方が構成されている場合、Vespaはデフォルトのマッチ`text`でインデックスに対して検索・マッチングを行います。フィールドがindexとattributeの両方である場合、マッチングにはindexの側面が使用されます。(attributeは、グルーピングやソートなど、一般的な用途では引き続き有用です。)1つのソース・フィールドに複数のマッチ・モードを持たせるには、documentブロックの外側に合成フィールドを定義します:
+
+```js
+schema music {
+
+  document music {
+
+    field album type string {
+      indexing: summary | index
+    }
+
+  }
+
+  field album_as_attribute type string {
+    indexing: input album | attribute
+  }
+
+}
+```
+
+インデックス検索で部分文字列マッチングを行いたい場合は、[n-gramマッチング](#n-gram-match)の使用を検討してください。
+
+以下では、クイックスタートのサンプル・アプリケーションを例として、テキストのインデキシングと検索におけるテキストへの変換の詳細を説明します。
+
+*album*フィールドは[index](../reference/schemas/schemas#indexing)モードです。テキスト・フィールドの場合、これによりクエリーの再現率を高めるためのstringフィールドの変換が有効になります。
+
+以下は、変換を理解するために、インデキシング後の結果のテキスト・トークンをダンプするのに役立ちます。これを[クエリー・トレーシング](#query-trace)と組み合わせることで、ドキュメントのフィールドがクエリーにマッチしない、あるいはマッチする理由を理解するのに役立ちます。
+
+[schemas/music.sd](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/app/schemas/music.sd)に、[source](../reference/schemas/schemas#source)を適切なindexフィールドに設定した[tokens](../reference/schemas/schemas#tokens)を使用する追加のサマリー・フィールドを含む、別の[ドキュメント・サマリー](/ja/querying/document-summaries)を追加します:
+
+```js
+document-summary my-debug-summary {
+    summary album { }
+    summary album_tokens {
+        source: album
+        tokens
+    }
+    from-disk
+}
+
+fieldset default {
+    fields: artist, album
+}
+```
+
+新しいドキュメント・サマリーを有効にするために、アプリケーションを再デプロイします:
+
+```bash
+$ vespa deploy --wait 300
+```
+
+albumフィールドの元の内容を表示します:
+
+```bash
+$ vespa query "select * from music where true" summary=my-debug-summary | \
+  jq -c '.root.children[].fields.album'
+"Liebe ist für alle da"
+"A Head Full of Dreams"
+"Hardwired...To Self-Destruct"
+"When We All Fall Asleep, Where Do We Go?"
+"Love Is Here To Stay"
+```
+
+albumフィールドのインデキシングに使用されるトークンを表示します:
+
+```bash
+$ vespa query "select * from music where true" summary=my-debug-summary | \
+  jq -c '.root.children[].fields.album_tokens'
+["lieb","ist","fur","all","da"]
+["a","head","full","of","dream"]
+["hardwire","to","self","destruct"]
+["when","we","all","fall","asleep","where","do","we","go"]
+["love","is","here","to","stay"]
+```
+
+インデキシング前のデータに対する[言語的変換](../linguistics/linguistics)を観察してください:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>変換</th>
+      <th>種類</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Hardwired...To → hardwire to</td>
+      <td>トークナイゼーション - 非文字(ここでは「...」)で単語を分割</td>
+    </tr>
+    <tr>
+      <td>Head → head</td>
+      <td>小文字化</td>
+    </tr>
+    <tr>
+      <td>für → fur</td>
+      <td>正規化</td>
+    </tr>
+    <tr>
+      <td>dreams → dream</td>
+      <td>ステミング</td>
+    </tr>
+  </tbody>
+</table>
+
+次に、[schemas/music.sd](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/app/schemas/music.sd)で*index*から[attribute](../reference/schemas/schemas#indexing)に変更します(そして、すべてのbm25設定を削除します):
+
+```js
+@@ -13,8 +13,7 @@
+         }
+ 
+         field album type string {
+-            indexing: summary | index
+-            index: enable-bm25
++            indexing: summary | attribute
+         }
+ 
+         field year type int {
+@@ -51,7 +50,7 @@
+             query(user_profile) tensor<float>(cat{})
+         }
+         first-phase {
+-            expression: bm25(album) + 0.25 * sum(query(user_profile) * attribute(category_scores))
++            expression: 0.25 * sum(query(user_profile) * attribute(category_scores))
+         }
+     }
+```
+
+新しいスキーマを使用してチュートリアルを再度実行し、フィードの後で停止します。albumフィールドのインデキシングに使用されるトークンを表示します:
+
+```bash
+$ vespa query "select * from music where true" summary=my-debug-summary | \
+  jq -c '.root.children[].fields.album_tokens'
+["a head full of dreams"]
+["love is here to stay"]
+["when we all fall asleep, where do we go?"]
+["liebe ist für alle da"]
+["hardwired...to self-destruct"]
+```
+
+最も重要な観察点は、attributeでは文字列が*そのまま*追加され、マッチングは空白を含む完全な値を対象とすることです(トークナイゼーションなし)。
+
+唯一の変換は小文字化です。フィールドの`match`設定が`cased`に設定されていない限り、クエリーの単語とattributeのデータの両方が、マッチング前に小文字化されます。attributeの[wordマッチ・モード](../reference/schemas/schemas#match)について詳しくはこちらをお読みください。
+
+## プレフィックス・マッチ
+
+string型のattributeで文字列のプレフィックスをマッチさせるには、[prefix](../reference/querying/yql#prefix)アノテーションを使用します:
+
+```js
+field album type string {
+    indexing: summary | attribute
+}
+```
+
+通常の*index*フィールドはプレフィックス・マッチングをサポートしていないことに注意してください。
+
+```bash
+$ vespa query 'select * from music where album contains ({prefix: true}"a hea")'
+```
+
+[search-suggestions](https://github.com/vespa-engine/sample-apps/tree/master/incremental-search/search-suggestions)サンプル・アプリケーションはプレフィックス検索を使用しています。設計に関する議論はREADMEを参照してください。
+
+文字列内の個々の単語をプレフィックス・マッチさせるには、index stringフィールドに加えて、文字列の配列のattributeを使用します。例:
+
+```js
+schema company {
+    document company {
+        field company_name_string type string {
+            indexing: index | summary
+        }
+    }
+    field company_name_array type array<string> {
+        indexing: input company_name_string | trim | split " +" | attribute | summary
+    }
+}
+```
+
+上記のように、[indexing-language](../reference/writing/indexing-language)を使用して文字列を分割します。「Goldman」と「Sachs」を追加すると、「Gold」や「Sach」のようなクエリー単語にマッチするようになります。
+
+## ファジー・マッチ
+
+編集距離を設定可能なstring attributeでのマッチングには、[fuzzy](../reference/querying/yql#fuzzy)マッチングを使用します。フィールドの構成:
+
+```js
+field album type string {
+    indexing:  summary | attribute
+    attribute: fast-search
+}
+```
+
+```bash
+$ vespa query 'select * from music where album contains ({maxEditDistance: 1}fuzzy("A Head Full of Dreems"))'
+```
+
+ファジー・マッチングはスペルミスに最適です。*prefixLength*と*fast-search*の使用については[リファレンス](../reference/querying/yql#fuzzy)を参照してください。
+
+ファジー・マッチでは文字の[正規化](../linguistics/linguistics-opennlp#normalization)は行われません。
+
+### ファジー・プレフィックス・マッチ
+
+デフォルトでは、`fuzzy`はクエリーに対して*完全な*文字列をマッチさせます。先行入力(type-ahead)検索のようなユースケースでは、これは「Ahead Full」のようなユーザーのクエリーが、ドキュメントの文字列「A Head Full of Dreams」に、ファジー・マッチング(欠けている文字が多すぎる)でも、通常の*非ファジー*のプレフィックス・マッチング(プレフィックスが正確に一致しない)でも、マッチしないことを意味します。
+
+`prefix:true`を追加すると、*ファジー・プレフィックス*のセマンティクスが有効になります。文字列に、指定された最大編集回数以内でクエリー文字列にマッチできる*プレフィックス*があれば、マッチと見なされます。
+
+```bash
+$ vespa query 'select * from music where album contains ({maxEditDistance: 1, prefix: true}fuzzy("Ahead Full"))'
+```
+
+このクエリーは、「A Head Full of Dreams」、「A Head Full of Clouds」、「Ahead Full Steam」などの文字列にマッチします。
+
+正確なプレフィックス固定(`prefixLength:n`)は、ファジー・プレフィックス・マッチングと併用して、候補集合を、クエリーの*n*文字と*正確に*一致するプレフィックスを持つ文字列に限定できます。ファジー・プレフィックス・マッチングは、候補文字列の残り(サフィックス)に対して適用されます。辞書の一部のみを考慮すればよくなるため、これにより辞書スキャンが大幅に高速化されます。
+
+<Warning>
+**重要:**
+
+ファジー・プレフィックス・マッチングは、非プレフィックスのファジー・マッチングよりもはるかに多くのドキュメントにマッチすることがよくあります。たとえば、`{maxEditDistance:2,prefix:true}fuzzy("XY")`のようなクエリーは、*あらゆる文字列*が最大2回の編集でそのプレフィックスを「XY」に変換できるため、結果的に*すべての*ドキュメントにマッチします。これは、クエリー文字列の長さが`maxEditDistance`以下であるすべてのファジー・プレフィックス・クエリーに当てはまります。ユーザー入力に基づいてクエリーを構築する際は、この点を考慮すべきです。
+</Warning>
+
+### ファジー・マッチングのテスト
+
+合成(派生)フィールドを使用すると、ファジー・マッチングを簡単にテストできます:
+
+```js expandable
+schema music {
+
+    document music {
+        field songs type array<string> {
+            indexing: summary | index
+            index: enable-bm25
+        }
+    }
+
+    field songs_attr type array<string> {
+        indexing: input songs | attribute | summary
+        attribute: fast-search
+    }
+}
+```
+
+上記の例では、スキーマの`document`セクション内に曲名の配列を持つフィールドがあります。そのフィールドの値を取り、ファジー・マッチングをサポートするフィールド型である[アトリビュート](../content/attributes)に入力します。
+
+このフィールドを追加してVespaにデプロイします。Vespa Cloudではデータは自動的に再インデックスされるため、`songs_attr`フィールドにデータが投入されます。大きなコーパスでは少し時間がかかる場合があります。その後、クエリーでテストします:
+
+```bash
+$ vespa query 'select * from music where songs_attr contains ({maxEditDistance: 1}fuzzy("enter zandman"))'
+```
+
+## 正規表現マッチ
+
+attributeでは[正規表現](../reference/querying/yql#matches)の使用がサポートされています。ただし一般的なケースでは、クエリー速度を最適化するデータ構造はなく、すべてのattribute値に対して式が実行されます。attributeに*fast-search*が設定されている場合、明示的にプレフィックスをアンカーした正規表現クエリー(例:`^abc.*`)はより効率的に実行されます。つまり、マッチする可能性のあるattribute値の範囲(「abc」で始まる必要があるもの)のみを対象に実行されます。
+
+```js
+field album type string {
+    indexing:  summary | attribute
+}
+```
+
+文字列の先頭からマッチさせる例:
+
+```bash
+$ vespa query 'select * from music where album matches "^a head fu[l]+ of dreams"'
+```
+
+部分文字列の検索:
+
+```bash
+$ vespa query 'select * from music where album matches "head"'
+```
+
+正規表現は、string attributeが*空でない*値を持つドキュメントを選択するためにも使用できます。`^.`は、少なくとも1文字を持つ任意の値にマッチします:
+
+```bash
+$ vespa query 'select * from music where album matches "^."'
+```
+
+これは任意のstring attributeフィールドで機能します。*fast-search*がない場合、式はすべてのドキュメントの値に対して評価されるため、大きなコーパスでは低速です。より効率的にするには、attributeに[fast-search](../reference/schemas/schemas#attribute)を追加してください。逆のクエリー(値が*欠落している*ドキュメントの一覧)については、[NaNを持つフィールドのカウントと一覧](/ja/querying/grouping#count-fields-with-nan)を参照してください。
+
+正規表現マッチでは文字の[正規化](../linguistics/linguistics-opennlp#normalization)は行われません。
+
+## N-Gramマッチ
+
+N-gramマッチングは、テキストを指定されたNサイズのサブワード・トークン(「グラム」)に分割します。これは、スペースを使用しないCJK言語や、テキスト・インデックスでの部分文字列マッチングに役立ちます。
+
+Vespaはデフォルトで、クエリーにおいてテキストから作成したグラムをANDアイテムに結合し、そのすべてがマッチすることを要求します。これは、クエリー・パラメーター`gram.match`を送信することで上書きできます。このパラメーターには、任意の複合クエリー・アイテムの名前を設定できます:`all`(デフォルト)、`any`、`weakAnd`、`phrase`、`near`、`onear`。
+
+```js
+Example: Input text "滿腦子的夢想" with these settings
+
+    field album type string {
+        indexing: {
+            "zh-hant" | set_language;
+            summary | index
+        }
+        match {
+            gram
+            gram-size: 2
+        }
+    }
+
+Produces the tokens 子的 夢想 滿腦 的夢 腦子
+
+Any query which contains at least two tokens frmo this text will therefore be matched.
+```
+
+## ユースケースの例
+
+*世界中のすべての場所/町の名前のような、短い単語長のドキュメントをインデックスする最良の方法は何でしょうか。条件は次のとおりです:*
+
+-   *ユーザーのクエリーのスペルミスに強いこと。例:「Amsterdam」→「amstredam」*
+-   *言語をまたいで検索できること。例:「America」→「美國」*
+
+これを多言語対応にするには、[array`<string>`](../reference/schemas/schemas#array)フィールドを使用してすべての代替表記を保存します。クエリー時にインデキシングで使用する正規の単一言語に翻訳することもできますが、非常に短いドキュメントの場合は、インデキシング時に行うことを選択してください。
+
+スペルチェック付きマッチングの選択肢:
+    1. フィールドをattributeにして、[ファジー・マッチング](#fuzzy-match)を使用する。
+    2. フィールドをindexにして、[グラム・マッチング](#n-gram-match)を使用する。
+    3. いずれにせよ代替表記の配列を持っているので、マッチさせたいスペルミスをすべてそこに詰め込む。元の表記への近さで重み付けするために、代わりに[weighted set](../reference/schemas/schemas#weightedset)の使用を検討してください。
+
+3\. はクエリーのコストが最も低く、スペルミスのマッチングを正確に制御できますが、インデックスが大きくなり、開発者の作業が増え、スペル訂正の調整が複雑になります。1. は最もコストが高くなりますが、おそらく最も手軽でもあります。現在のところ、マッチ品質を示すランク・シグナルはありません。2. はその中間で、近接性を使用するランキング・シグナル(たとえば[nativeRank](../ranking/nativerank)。ただし[bm25](../ranking/bm25)は除く)を組み込む場合に最もうまく機能するでしょう。
+
+セマンティックなマッチングとランキングについては、[Simplify Search with Multilingual Embedding Models](https://blog.vespa.ai/simplify-search-with-multilingual-embeddings/)をお読みください。
+
+## クエリー・トレース
+
+[trace.level=2](../reference/api/query#trace.level)を追加すると、クエリーのテスト時に有益な情報が得られます。attributeの小文字化の例(「Liebe」と「liebe」のクエリーが同じ結果になることを確認してください):
+
+```bash
+$ vespa config set target local
+$ vespa query 'select * from music where album contains "Liebe ist für alle da"' \
+  ranking=rank_albums \
+  trace.level=2
+```
+
+また、*index*と*attribute*のインデキシング・モードでクエリーのパースがどう変わるかを見るために、クエリー・トレーシングも試してください。
+
+## 付録: マッチ構成のデバッグ
+
+マッチ構成を理解または検証するには、生成された構成を調べます。以下で使用する-i引数の値を見つけるために、これを実行します:
+
+```bash
+$ docker exec vespa sh -c vespa-configproxy-cmd | grep IndexingProcessor
+
+  vespa.configdefinition.ilscripts,default/docprocchains/chain/indexing/component/com.yahoo.docprocs.indexing.IndexingProcessor, ...
+```
+
+最初からやり直し、以下のインデキシング設定でデプロイしてデータをフィードします。(exactマッチングを使用する)*artist*フィールドと*album*フィールドの違いに注目してください:
+
+```js
+field artist type string {
+    indexing: summary | index
+    match   : exact
+}
+field album type string {
+    indexing: summary | index
+}
+
+$ docker exec vespa sh -c 'vespa-get-config \
+  -n vespa.configdefinition.ilscripts \
+  -i default/docprocchains/chain/indexing/component/com.yahoo.docprocs.indexing.IndexingProcessor'
+
+maxtermoccurrences 100
+fieldmatchmaxlength 1000000
+ilscript[0].doctype "music"
+ilscript[0].docfield[0] "artist"
+ilscript[0].docfield[1] "album"
+ilscript[0].docfield[2] "year"
+ilscript[0].docfield[3] "category_scores"
+ilscript[0].content[0] "clear_state | guard { input artist | exact | summary artist | index artist; }"
+ilscript[0].content[1] "clear_state | guard { input album | tokenize normalize stem:"BEST" | summary album | index album; }"
+ilscript[0].content[2] "clear_state | guard { input year | summary year | attribute year; }"
+ilscript[0].content[3] "clear_state | guard { input category_scores | summary category_scores | attribute category_scores; }"
+```

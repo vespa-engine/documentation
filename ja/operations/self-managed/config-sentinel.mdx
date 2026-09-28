@@ -1,0 +1,165 @@
+---
+title: "Config sentinel"
+---
+
+Config sentinelはサービスの起動と停止を行い、手動で停止されていない限り、障害が発生したサービスを再起動します。Vespaシステム内のすべてのノードでは、少なくとも次のプロセスが実行されています:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>プロセス</th>
+      <th>説明</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><a href="/ja/operations/self-managed/config-proxy" aria-label="config-proxy">config-proxy</a></td>
+      <td>VespaアプリケーションとConfigサーバー・ノードの間でconfigリクエストをプロキシします。すべての設定はローカルにキャッシュされるため、Configサーバーが停止しても、このノードは現在の設定を維持できます。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;config-sentinel&#42;&#42;</td>
+      <td>&#42;config-proxy&#42; に自身を登録し、ノード設定を購読して適用します。すなわち、どのサービスをどのパラメーターでローカルに実行すべきかという設定です。</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/reference/operations/log-files#logd" aria-label="vespa-logd">vespa-logd</a></td>
+      <td>他のすべてのサービスが使用する &#42;$VESPA_HOME/logs/vespa/vespa.log&#42; を監視し、すべてを <a href="/ja/reference/operations/log-files#log-server" aria-label="log-server">log-server</a> に中継します。</td>
+    </tr>
+    <tr>
+      <td><a href="/ja/operations/self-managed/monitoring#metrics-proxy" aria-label="metrics-proxy">metrics-proxy</a></td>
+      <td>すべてのノードとサービスに対するメトリクス・アクセス用のAPIを提供します。</td>
+    </tr>
+  </tbody>
+</table>
+
+<Frame>
+![Vespaノードの設定、起動、ログ](/assets/img/config-sentinel.svg)
+</Frame>
+
+起動シーケンス:
+
+<Steps>
+<Step>
+*config server(s)* が起動され、アプリケーションのconfigがそこにデプロイされます - [Configサーバーの運用](/ja/operations/self-managed/configuration-server)を参照してください。
+</Step>
+<Step>
+*config-proxy* が起動されます。環境変数 [VESPA\_CONFIGSERVERS](/ja/operations/self-managed/files-processes-and-ports#environment-variables) と [VESPA\_CONFIGSERVER\_RPC\_PORT](/ja/operations/self-managed/files-processes-and-ports#environment-variables) を使用して [config-server(s)](/ja/operations/self-managed/configuration-server) に接続します。一部のConfigサーバーがダウンしている場合は、すべてのConfigサーバーに対してリトライします。
+</Step>
+<Step>
+*config-sentinel* が起動され、自身のホスト名を [config id](/ja/applications/configapi-dev#config-id) として使用して、*config-proxy* からノード設定(すなわちサービス・リスト)を購読します。ホスト名がどのように検出されるか、およびそのオーバーライド方法の詳細については、[Node and network setup](/ja/operations/self-managed/node-setup) を参照してください。config-sentinelのconfig(サービス・リスト)には、起動すべきプロセスと、それぞれに割り当てる *config id*(通常はそのサービス・インスタンスの論理名)が列挙されています。
+</Step>
+<Step>
+*config-proxy* が *config-server* からノード設定を購読してキャッシュし、その結果を *config-sentinel* に返します
+</Step>
+<Step>
+*config-sentinel* が、config idを引数として、ノード設定に指定されたサービスを起動します。以下の出力例の *id="search/qrservers/qrserver.0"* のような形です。*logd* と *metrics-proxy* は設定に関わらず常に起動されます。各サービスは:
+	
+    a. *config-proxy* から設定を購読します。
+	
+    b. *config-proxy* は *config-server* から設定を購読してキャッシュし、その結果をサービスに返します。
+	
+    c. サービスは自身の設定に従って実行され、ログを *`$VESPA_HOME/logs/vespa/vespa.log`* に書き込みます。プロセスは内部コンポーネントをインスタンス化し、それぞれに同じまたは別のconfig idが割り当てられ、さらにコンポーネントがインスタンス化されていきます。
+
+ノードの最小起動数の設定については、[クラスターの起動](#cluster-startup)も参照してください。
+</Step>
+</Steps>
+
+新しいconfigが *config-servers* にデプロイされると、変更された設定がそれを購読しているノードへ伝播されます。それを受けて、これらのノードは自身を再設定します。
+
+## ユーザー・インターフェース
+
+Config sentinelはRPCサービスを実行しており、これを使ってそのノード上で実行されるべきサービスの一覧表示、起動、停止を行えます。これはテストやデバッグに役立ちます。これらのアクションを実行するには [vespa-sentinel-cmd](/ja/reference/operations/self-managed/tools#vespa-sentinel-cmd) を使用します。`vespa-sentinel-cmd list` の出力例:
+
+```bash
+vespa-sentinel-cmd 'sentinel.ls' OK.
+container state=RUNNING mode=AUTO pid=27993 exitstatus=0 id="default/container.0"
+container-clustercontroller state=RUNNING mode=AUTO pid=27997 exitstatus=0 id="admin/cluster-controllers/0"
+distributor state=RUNNING mode=AUTO pid=27996 exitstatus=0 id="search/distributor/0"
+logd state=RUNNING mode=AUTO pid=5751 exitstatus=0 id="hosts/r6-3/logd"
+logserver state=RUNNING mode=AUTO pid=27994 exitstatus=0 id="admin/logserver"
+searchnode state=RUNNING mode=AUTO pid=27995 exitstatus=0 id="search/search/cluster.search/0"
+slobrok state=RUNNING mode=AUTO pid=28000 exitstatus=0 id="admin/slobrok.0"
+```
+
+プロセスとサービスの詳細については、[ファイルとプロセス](/ja/operations/self-managed/files-processes-and-ports)を参照してください。ノード上で実行されているサービスを一覧表示するには [vespa-model-inspect host *hostname*](/ja/reference/operations/self-managed/tools#vespa-model-inspect) を使用します。
+
+## クラスターの起動
+
+Config sentinelは、他のノードのうち最小限の数(デフォルトは50%)への接続性がない限り、ノード上のサービスを起動しません。この機能の例は、[multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA#start-the-admin-server) サンプル・アプリケーションにあります。設定例:
+
+```xml
+<services>
+    <config name="cloud.config.sentinel">
+        <connectivity>
+            <minOkPercent>20</minOkPercent>
+            <maxBadCount>1</maxBadCount>
+        </connectivity>
+    </config>
+```
+
+例: `minOkPercent 10` は、10%以上のノードが稼働している場合にのみサービスを起動することを意味します。アプリケーションに11ノードある場合、最初に起動されたノードはそのサービスを起動しません - 2番目のノードが起動されると、両方のノードでサービスが起動されます。
+
+`maxBadCount` は、相手ノードは稼働しているものの、適切な双方向の接続性がまだ確立できていない場合の接続性チェックのためのものです。通常、一方向のみの接続性はネットワーク設定が壊れていて調査が必要なことを意味するため、この値は低く設定してかまいません(1、あるいは0が推奨値です)。一時的な問題がある場合(以下の例では、起動時にさまざまな問題を引き起こすDNSの無応答)、config sentinelはループしてリトライするため、サービスの起動がわずかに遅れるだけで済みます。
+
+ログの例:
+
+```bash
+[2021-06-15 14:33:25] EVENT   : starting/1 name="sbin/vespa-config-sentinel -c hosts/le40808.ostk (pid 867)"
+[2021-06-15 14:33:25] EVENT   : started/1 name="config-sentinel"
+[2021-06-15 14:33:25] CONFIG  : Sentinel got 4 service elements [tenant(footest), application(bartest), instance(default)] for config generation 1001
+[2021-06-15 14:33:25] CONFIG  : Booting sentinel 'hosts/le40808.ostk' with [stateserver port 19098] and [rpc port 19097]
+[2021-06-15 14:33:25] CONFIG  : listening on port 19097
+[2021-06-15 14:33:25] CONFIG  : Sentinel got model info [version 7.420.21] for 35 hosts [config generation 1001]
+[2021-06-15 14:33:25] CONFIG  : connectivity.maxBadCount = 3
+[2021-06-15 14:33:25] CONFIG  : connectivity.minOkPercent = 40
+[2021-06-15 14:33:28] INFO    : Connectivity check details: 2086533.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le01287.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23256.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23267.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23297.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23312.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23317.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le23319.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le30550.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le30553.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le30556.ostk -> unreachable from me, but up
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le30560.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le30567.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40387.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40389.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40808.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40817.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40833.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40834.ostk -> unreachable from me, but up
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40841.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40858.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40860.ostk -> unreachable from me, but up
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40863.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40873.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40892.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40900.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40905.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: le40914.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: sm02318.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: sm02324.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: sm02340.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: zt40672.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: zt40712.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: zt40728.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] INFO    : Connectivity check details: zt41329.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:28] WARNING : 8 of 35 nodes up but with network connectivity problems (max is 3)
+[2021-06-15 14:33:28] WARNING : Bad network connectivity (try 1)
+[2021-06-15 14:33:30] WARNING : slow resolve time: 'le30556.ostk' -> '1234:5678:90:123::abcd' (5.00528 s)
+[2021-06-15 14:33:30] WARNING : slow resolve time: 'le40834.ostk' -> '1234:5678:90:456::efab' (5.00527 s)
+[2021-06-15 14:33:30] WARNING : slow resolve time: 'le40860.ostk' -> '1234:5678:90:789::cdef' (5.00459 s)
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le23312.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le23319.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le30553.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le30556.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le40834.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le40841.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le40860.ostk -> connect OK, but reverse check FAILED
+[2021-06-15 14:33:31] INFO    : Connectivity check details: le40863.ostk -> OK: both ways connectivity verified
+[2021-06-15 14:33:31] INFO    : Enough connectivity checks OK, proceeding with service startup
+[2021-06-15 14:33:31] EVENT   : starting/1 name="searchnode"
+...
+```

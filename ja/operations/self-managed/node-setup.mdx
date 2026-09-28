@@ -1,0 +1,58 @@
+---
+title: "ノードとネットワークのセットアップ"
+sidebarTitle: "ノードのセットアップ"
+---
+
+Vespa は、相互に通信し連携する複数のサービスで構成されています。これらのサービスは、スケーリングのために任意の数の実際のハードウェアに分割することも、開発のためにすべてを単一の環境に共存させることもできます。この柔軟性を実現するために、サービスが稼働する環境にはいくつかの要件があります。
+
+## ノード
+
+この文脈における*ノード*とは、いくつかの Vespa サービスが稼働している環境のことです。これは、データセンター内のサーバーのような実際のマシンの場合もあれば、Vespa の構成を開発・テストするためのラップトップの場合もあります。また、仮想マシンや Docker コンテナーであってもよいため、1 台のハードウェア上で複数のノードを実行できます。
+
+ノード上で稼働するさまざまな Vespa サービスは、主にネットワークを介して相互に通信します。つまり、すべてのノードは IP アドレスを持ち、他のすべてのノードへのネットワーク接続性を持つ必要があります。IPv4 と IPv6 の両方のプロトコルがサポートされています。Vespa スタック全体を単一ノードで実行する場合でも、同じフレームワークが使用されることに注意してください。
+
+## メモリ設定
+
+[入門ガイド](/ja/basics/deploy-an-application-local)と[サンプル・アプリケーション](https://github.com/vespa-engine/sample-apps)では、メモリ設定は常にガイドを実行するための最小限になっています。これは、Vespa の機能のセットアップと探索を容易にするためです。[multinode-HA](https://github.com/vespa-engine/sample-apps/tree/master/examples/operations/multinode-HA) アプリケーションには、小さなホスト上でより大きなアプリケーションをテストできるように、さらに切り詰めた設定の例があります。
+
+これらは推奨される Vespa のメモリ設定ではないことに注意することが重要です。最適なノード構成の見つけ方は、[パフォーマンス・ガイド](/ja/performance/index)で扱っています。Vespa の構成、フィード、使用にはさまざまな方法があるため、一般的な推奨設定を用意することはできません。
+
+<Warning>
+**重要:** 
+
+Vespa はマルチプロセスのアプリケーションであり、ノードごとに複数のサービスを実行するように構成できます。[config sentinel](/ja/operations/self-managed/config-sentinel) を参照してください。メモリ不足は、診断が困難なさまざまな問題を引き起こす可能性があります。このような場合、Vespa チームはより大きなノードでテストすることを推奨します。
+</Warning>
+
+経験則としては、まずアプリケーションが機能的に正しいことを確認するために 8 GB のノードから始め、最適化は後で行ってください。
+
+システムのデフォルト値を確認してください。よくある問題は、`vm.max_map_count` のデフォルト値が低すぎることです。これにより、特に多くの attribute フィールドで [paged](/ja/content/attributes#paged-attributes) オプションが有効になっている場合、アプリがメモリマッピングのアサーションに遭遇します。この症状は次のようなものです:
+
+```bash
+vespalib::alloc::MemoryAllocator::PtrAndSize vespalib::alloc::MmapFileAllocator::alloc(size_t) const: Assertion buf!=MAP_FAILED
+```
+
+```bash
+'terminate called after throwing an instance of 'std::runtime_error' 'what(): mmap of file '/opt/vespa/var/db/vespa/search/cluster.abc/n12/documents/xyz/0.ready/index/index.fusion.43/field123/boolocc.bdat' with flags '1' failed with error: 'Cannot allocate memory'
+```
+
+## ホスト名
+
+ノード上で Vespa サービスが起動されるとき、ノードは構成（実行すべきサービスを含む）を取得するために、構成システムに対して自分自身を識別させる必要があります。これには、コンフィグサーバーにおけるノードの一意の識別子が必要です。ノードがコンフィグサーバーの知る*ホスト名*を持つことはすでに要件となっているため、Vespa は、ノードが構成を取得するために自分自身を識別する際にも同じ*ホスト名*を使用します。詳細は [config sentinel](/ja/operations/self-managed/config-sentinel) を参照してください。
+
+ノードの IP アドレスを見つけて接続するには、ノードは、自身を識別し、その IP アドレスにマッピングされる*ホスト名*を持つ必要があります。ネットワーク上の実際のマシンは通常、DNS に *Fully Qualified Domain Name*（FQDN）を持っており、この目的のためのホスト名として FQDN を使用すべきです。
+
+[hosts.xml](/ja/reference/applications/hosts) で構成されたホスト名が、ノードの IP アドレスの検索に使用できることが*要件*であることに注意してください（後述の `VESPA_HOSTNAME` を使用した回避策を参照）。コンフィグサーバーは、そのノードで稼働している Vespa サービスへのネットワーク接続を開くために使用する URL を、このホスト名を使って作成します。ノードが DNS 名を持たない IP アドレスを使用する場合は、Vespa 環境の*すべての*ノードの `/etc/hosts` に、対応するホスト名を持つ*すべての* IP アドレスを記載しなければ*なりません*。この場合でも、`/etc/hosts` の配布から DNS サーバーの使用に移行する場合に備えて、FQDN としても使用できる名前を使用することを推奨します。
+
+これは、ノードが自身のホスト名（FQDN）を*知っていなければならず*、それが正確に何であるかについてコンフィグサーバーと一致していなければならないことを意味します。通常、これは単に `hostname` コマンドを実行することで達成されます。`hostname` がノードの FQDN に設定されていれば、すべてが問題なく動作するはずです。
+
+`/etc/hosts` を変更する代わりに、ホストで [VESPA\_HOSTNAME](/ja/operations/self-managed/files-processes-and-ports#environment-variables) を設定する方法もあります。[vespa-ip-vs-hostname](https://www.jocas.lt/journal/articles/vespa-ip-vs-hostname/) は、その方法についての優れた記事です。
+
+## シンプルな単一ノード開発環境
+
+単一ノード構成で Vespa の構成をテストする場合、通常はホスト名を「localhost」という値でオーバーライドすることで、セットアップの手間を回避できます。そのためには次のコマンドを試してください:
+
+```bash
+$ echo "override VESPA_HOSTNAME localhost" >> $VESPA_HOME/conf/vespa/default-env.txt
+```
+
+Java のユニットテストの実行では `default-env.txt` の設定は読み込まれず、環境に `VESPA_HOSTNAME` が設定されていない場合はデフォルトで「localhost」になります。

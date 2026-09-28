@@ -1,0 +1,91 @@
+---
+title: "リクエストハンドラーなどを使用した HTTP API の構築" 
+---
+
+このチュートリアルでは、次の要素で構成されるシンプルなアプリケーションを構築します:
+
+- カスタム REST API - _リクエストハンドラー_ として実装。 
+- 2 つのリクエスト/レスポンス処理ロジック - チェーン化された 2 つの _プロセッサー_ として実装。 
+- 上記のプロセッサーで共有される _コンポーネント_。 
+- カスタム出力フォーマット - _レンダラー_。
+
+最終的な成果は、次の形式の受信リクエストを処理することです:
+
+```bash
+http://hostname:port/demo?terms=something%20completely%20different
+```
+
+これを、プロセッサーによって生成され、レンダラーによってシリアライズされたネスト構造のレスポンスに変換します。[http-api-using-request-handlers-and-processors](https://github.com/vespa-engine/sample-apps/tree/master/examples/http-api-using-request-handlers-and-processors) にあるサンプル・アプリケーションを使用してください。
+
+## リクエストハンドラー
+
+カスタム API を実装するには、カスタム・リクエストハンドラーが必要です。プロセッサーはリクエストデータに直接アクセスできるため、多くの場合、カスタムハンドラーを追加する必要はありません。しかし、例えば特定の処理チェーンへのルーティングにどのパラメーターを使用するかをアプリケーションでより細かく制御したい場合には必要になります。
+
+この例では、リクエストハンドラーは単にリクエスト URI をプロパティとして追加し、処理のために組み込みの processing ハンドラーに転送します。
+
+[DemoHandler.java](https://github.com/vespa-engine/sample-apps/blob/master/examples/http-api-using-request-handlers-and-processors/src/main/java/ai/vespa/examples/DemoHandler.java) のコードを確認してください
+
+## プロセッサー
+
+このアプリケーションには 2 つのプロセッサーが含まれます。1 つは受信リクエストにアノテーションを付け（config のデフォルト値を使用）、結果をチェックするもので、もう 1 つは共有コンポーネントを使用して結果を作成するものです。
+
+### AnnotatingProcessor
+
+[AnnotatingProcessor.java](https://github.com/vespa-engine/sample-apps/blob/master/examples/http-api-using-request-handlers-and-processors/src/main/java/ai/vespa/examples/AnnotatingProcessor.java) のコードを確認してください
+
+### DataProcessor
+
+もう 1 つのプロセッサーは、リクエストで渡されたデータから構造化された Response Data を作成します。これは、Web サービスが処理サービスである場合に行われます。サービスが他のサービスの上にミドルウェアを実装している場合には、同様のプロセッサーは代わりに下流の Web サービスへの送信リクエストを行って Response Data を生成します。
+
+[DataProcessor.java](https://github.com/vespa-engine/sample-apps/blob/master/examples/http-api-using-request-handlers-and-processors/src/main/java/ai/vespa/examples/DataProcessor.java) のコードを確認してください
+
+サーバーのタスクが、構成時にチェーン化によって組み合わせられ、Request と Response のみを通じて通信する、独立した Processing ステップに分解されていることに注目してください。この構造は共有、再利用、モジュール性を高め、Processor にカプセル化されたロジックを追加、削除、変更するバリエーションを簡単に作成できるようにします。
+
+プロセッサーの順序は @Before と @After アノテーションによって決定されます。[チェーン化されたコンポーネント](../../applications/chaining.html)を参照してください。
+
+### カスタム構成
+
+AnnotatingProcessor が使用するデフォルトのタームはユーザー構成に配置されており、その定義は [demo.def](https://github.com/vespa-engine/sample-apps/blob/master/examples/http-api-using-request-handlers-and-processors/src/main/resources/configdefinitions/demo.def) にあります:
+
+```bash
+package=com.mydomain.demo
+
+demo[].term string
+```
+
+言い換えると、_demo_ という名前の単一の配列を含む構成クラスであり、その配列は、_term_ という名前の単一の文字列のみを含むクラス Demo を含みます。
+
+## レンダラー
+
+レンダラーの責務は、構造化された結果をクライアントに送り返すためにバイト列にシリアライズすることです。
+
+レンダリングは、まずコンストラクターを呼び出してレンダラーの単一インスタンスを作成し、その後、レンダリングする結果セットごとに新しいレンダラーをクローンすることで動作します。`render()` が呼び出される前に、新しいクローンごとに `init()` が一度呼び出されます。
+
+[DemoRenderer.java](https://github.com/vespa-engine/sample-apps/blob/master/examples/http-api-using-request-handlers-and-processors/src/main/java/ai/vespa/examples/DemoRenderer.java) のコードを確認してください
+
+## 共有コンポーネント
+
+このカスタム・コンポーネントの責務は、アプリケーションの一部を Searcher から切り離すことです。これにより、潜在的にコストの高いカスタム・コンポーネントを再ビルドすることなく、Searcher を再構成できます。
+
+この例では、コンポーネントが行うことはかなりお遊び的なものです。より典型的な用途は、[FSA](/ja/reference/operations/tools#vespa-makefsa) や複雑な共有ヘルパー機能です。
+
+[DemoComponent.java](https://github.com/vespa-engine/sample-apps/blob/master/examples/http-api-using-request-handlers-and-processors/src/main/java/ai/vespa/examples/DemoComponent.java) のコードを確認してください
+
+## アプリケーション
+
+[services.xml](https://github.com/vespa-engine/sample-apps/blob/master/examples/http-api-using-request-handlers-and-processors/src/main/application/services.xml) でアプリケーションの構成を確認してください
+
+## 試してみましょう！
+
+プロジェクトをビルドし、[テストを実行](../../applications/developer-guide.html)して、[http://localhost:8080/demo?terms=1%202%203%204](http://localhost:8080/demo?terms=1%202%203%204) にクエリーすると、次の結果が得られます:
+
+```bash
+OK
+Renderer initialized: 1369733374898
+http://localhost:8080/demo?terms=1%202%203%204
+1
+    2
+        3
+            4
+Rendering finished work: 1369733374902
+```

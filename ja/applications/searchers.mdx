@@ -1,0 +1,427 @@
+---
+title: "Searcher"
+description: "*コンテナー*は、(クエリーとして表現される)ユーザーアクションとその結果のすべてのグローバル処理の中心です。処理[コンポーネント](/ja/applications/components)の開発・ホスティング環境と、複数の開発チームによって開発されたそれらのコンポーネントを1つの機能する全体へ合成するモデルを提供します。"
+---
+
+このドキュメントでは、Searcherコンポーネントの開発とデプロイの方法について説明します。開発を始めるには、[開発者ガイド](/ja/applications/developer-guide)を参照してください。リファレンスとしては、[Container javadoc](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/package-summary)と[services.xmlリファレンス](/ja/reference/applications/services/processing#chain)を参照してください。
+
+クエリーのベストプラクティスは、ユーザーが生成したクエリーをそのままVespaに送信し、追加のロジックはSearcherコンポーネントで実装することです。[クエリーHTTP API](/ja/querying/query-api#http)を参照してください。
+
+<Frame>
+![](/assets/img/vespa-overview-searcher.svg)
+</Frame>
+
+## Searcher
+
+サーチ・コンテナーのコンポーネントは *Searcher* と呼ばれます。Searcherは、通常OSGiバンドルの一部としてデプロイされるコンポーネントで、クラス `com.yahoo.search.Searcher` を継承します。すべてのSearcherは、次の単一のメソッドを実装する必要があります:
+
+```java
+public Result search(Query query, Execution execution);
+```
+
+コンテナーはリクエストを受け取ると、それを表すQueryを作成し、設定されたSearcherコンポーネントのリストを実行します。これは、リストの最初のSearcherの `search()` メソッドを呼び出すことで行われます。そのSearcherは、リスト内の次のSearcherへ呼び出しを渡す(または、必要に応じて渡さない)責任を負います。これは、与えられたExecutorの `search()` を呼び出すことで行われ、ExecutorはSearcherのリストのどこにいるかを追跡します。したがって、以下は何もしない(noop)Searcherの実装です:
+
+```java
+public Result search(Query query, Execution execution) {
+    return execution.search(query);
+}
+```
+
+最終的に、search呼び出しはSearcherリストの末尾に到達します。リストの最後のSearcherは(何らかの方法で)Resultを作成でき、それが呼び出しチェーンを遡って先頭に到達するまで渡されます。コンテナーは次に、そのResultを受信リクエストへのレスポンスに変換します。
+
+この説明から明らかなように、これは同期モデルであり、各リクエストは結果が返されるまで専用のワーカースレッドで処理されます。この同期モデルは、[個々のSearcherのマルチスレッド化](#keeping-state-in-searchers)によって実装されています。
+
+この単一のsearcherメソッドで、あらゆる種類の機能を表現できます。例えば:
+
+- *クエリー・プロセッサー*は、クエリーを変更してから次のSearcherへ渡します。
+- *リザルト・プロセッサー*は、クエリーを渡して結果を取得し、結果を変更してから返します。
+- *リザルト・プロデューサー*は、内部ルックアップ、または(より一般的には)バックエンドへのネットワーク・リクエストの送信によって結果を生成するもので、クエリーを目的の実行形式に変換し、結果を保持するResultをインスタンス化して返します。
+- *ワークフロー*は、ループ内でクエリーを複数回渡し、各Query実行から受け取ったResultから返却用のResultを段階的に構築したり、if-elseループで特定のQueryを渡すことを選択したりできます。
+
+## QueryとResult
+
+サーチ・コンテナーにおける **Query** は、リクエストに対する結果を作成するために必要なすべての情報のコンテナーであり、以下を含みます:
+
+- リクエストで受け取ったパラメーター(ユーザーのクエリー文字列や選択されたアクションを含む)。
+- 選択された[クエリー・プロファイル](/ja/querying/query-profiles)のパラメーター(存在する場合)。
+- ブーリアン・クエリーツリーを含む、目的の実行形式。この情報は、Searcherコンポーネントによってリクエストとクエリー・プロファイルから段階的に作成されます。
+- 途中でSearcherが作成した情報を含む、任意の型の任意のオブジェクト。
+
+**Result** は、Queryから生成されたすべてのデータをカプセル化します。Resultは、HitGroupと呼ばれるリストに編成されたHitオブジェクトの複合ツリーを含みます(Resultは最上位のグループを指します)。各Hitは、Queryに関連すると判断された特定のデータ項目を含みます。Hitオブジェクトは汎用的なキー/値ストレージを持ちますが、より構造化された情報を表現できるようポリモーフィックでもあります。Searcherでの構造化情報の扱いの詳細については、[構造化データの検査](/ja/applications/inspecting-structured-data)のドキュメントを参照してください。
+
+Hitはヒットリストに階層的に編成できるため、Resultオブジェクトは結果のあらゆる編成を表現できます。例えば、フェデレーション・システムでは、ヒットは最初、ソースごとに1つのヒットグループに編成されます。上流のSearcherは、これをユーザーのニーズにより適した形、例えば単一のブレンドされたグループや、クエリーの解釈候補ごとに1つのグループなどに再編成できます。
+
+## サーチチェーン
+
+前述のSearcherのリストは、*サーチチェーン*と呼ばれます。サーチチェーンは、[汎用コンポーネント・チェーン](/ja/applications/chaining)の特殊なケースです。サーチチェーンは、idを持つSearcherインスタンスのリストにすぎません。サーチチェーンは通常、クエリーごとに作成されるのではなく、設定の一部です。複数のサーチチェーンが同時に存在でき、実行するチェーンはリクエストで指定できます。何も指定されていない場合は、デフォルトのものが使用されます。同じSearcherインスタンスが複数のサーチチェーンに存在できるため、特定のリクエストで次に呼び出すSearcherを把握する責任はExecutionオブジェクトが負っています。
+
+サーチチェーンは、(通常はSearcherから)プログラムで同期的または非同期的に実行することもできます:
+
+```java
+// Get a chain by id
+SearchChain myChain = execution.searchChainRegistry().getComponent("myChain");
+// Execute it in the same thread
+Result result = new Execution(myChain, execution.context()).search(query);
+// ... or in another thread
+Execution settings = new Execution(myChain, execution.context());
+FutureResult futureResult = new AsyncExecution(settings).search(query);
+FutureResult otherFutureResult = new AsyncExecution(settings).search(otherQuery);
+```
+
+非同期実行は、[フェデレーション](/ja/querying/federation)のように、Searcherが1つのQueryを複数のサーチチェーンに並列にフォークし、それぞれが特定のソースから結果を取得するようなケースで便利です。また、例に示すように、同じExecutionインスタンスを使用して複数のAsyncExecutionインスタンスを構築することが許可されています。状態はコンストラクター引数からコピーされるだけだからです。
+
+チェーン内のSearcherの実行順序は明示的に順序付けされるのではなく、Searcherまたはその設定で宣言された[順序制約](/ja/applications/chaining)によって決まります。[サーチ・リファレンス](/ja/reference/applications/services/search)も参照してください。
+
+### Searcherを書く
+
+完全なSearcherの例:
+
+```java
+package com.yahoo.search.example;
+import com.yahoo.search.*;
+import com.yahoo.search.result.Hit;
+import com.yahoo.search.searchchain.Execution;
+/**
+* A searcher adding a new hit.
+*/
+public class SimpleSearcher extends Searcher {
+    public Result search(Query query, Execution execution) {
+        Result result = execution.search(query); // Pass on to the next searcher to get results
+        Hit hit = new Hit("test");
+        hit.setField("message", "Hello world");
+        result.hits().add(hit);
+        return result;
+    }
+}
+```
+
+コンテナーは、[設定](/ja/applications/components#adding-component-to-application-package)で指定されたとおり、このクラスのインスタンスを1つ以上作成し、クエリーを処理するために目的のサーチチェーンに配置します。このSearcherの最初の行は、これが属するチェーンの次のSearcherへクエリーを転送します。これにより最終的にResultが生成され、それが変更された後、このチェーンの前のSearcherへ戻されます。コンテナーは、再設定されたときにのみこのSearcherの新しいインスタンスを作成するため、Searcherが必要とするデータはSearcherのコンストラクターで読み込み、準備できます。コンストラクターは、他のプラガブル・コンポーネントと同様に、[設定](/ja/applications/components#dependency-injection)を受け取ることもできます。
+
+Searcherで利用可能な完全なAPIは、[Search Container Javadoc](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/search/package-summary)を参照してください。
+
+### Searcherをテストする
+
+実際のシステムでSearcherをテストする意味を持たせる前に、Searcherを単体で、またはやり取りする少数のSearcherとともにテストする一連のユニットテストに合格させるべきです。そのために、テスト対象のSearcher、やり取りするSearcher(存在する場合)、およびテストに適したモック結果を生成するSearcherを含むサーチチェーンをプログラムで構築するユニットテストを書くことができます。上記のSearcherをテストする簡単な例を示します:
+
+```java expandable
+package com.yahoo.search.example.test;
+
+import com.yahoo.search.*;
+import com.yahoo.search.searchchain.*;
+import com.yahoo.search.example.SimpleSearcher;
+
+public class SimpleSearcherTestCase extends junit.framework.TestCase {
+
+public void testBasics() {
+  // Create chain
+  Chain<Searcher> searchChain = new Chain<Searcher>(new SimpleSearcher());
+
+  // Create an empty context, in a running container this would be
+  // populated with settings used by different searcher. Tests must
+  // set this according to their own requirements.
+  Execution.Context context = Execution.Context.createContextStub(null);
+  Execution execution = new Execution(searchChain, context);
+
+  // Execute it
+  Result result = execution.search(new Query("search/?query=some test query"));
+
+  // Assert the result has the expected hit by scanning for the ID
+  assertNotNull(result.hits().get("test"));
+  }
+}
+```
+
+この場合、テスト対象のSearcherはResultの内容を気にしないため、モック結果を生成するSearcherは不要です。サーチチェーンが結果を生成しないSearcherで終わる場合、フレームワークは単に空の結果を返します。このケースではそうなります。結果を生成するモックSearcherを追加するテストは、[フェデレーション](/ja/querying/federation#unit-testing-the-result-processor)に示されています。
+
+アプリケーション・パッケージ全体のユニットテストを書く方法は、[開発者ガイド](/ja/applications/developer-guide)を参照してください。
+
+### Searcherをデプロイする
+
+Searcherがユニットテストに合格したら、それをホストするVespaシステムにデプロイできます。手順は[コンポーネントのデプロイ](/ja/applications/components#deploying-a-component)で説明されているものと同じです。まず[コンポーネントjarをビルド](/ja/applications/components#building-the-plugin-jar)します。Searcherを *services.xml* に含めるには、サーチチェーンを定義し、そこにSearcherを追加します - 例:
+
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0">
+    <admin version="2.0">
+        <adminserver hostalias="node1" />
+    </admin>
+
+    <container version="1.0">
+        <search>
+            <chain id="default" inherits="vespa">
+                <searcher id="com.yahoo.search.example.SimpleSearcher"
+                    bundle="the name in artifactId in pom.xml" />
+                </chain>
+            </search>
+            <nodes>
+                <node hostalias="node1" />
+            </nodes>
+        </container>
+    </services>
+```
+
+これはサーチチェーン `default` を定義しており、他のチェーンが明示的に指定されていない場合のクエリーで使用されます。上記のSearcher idは、マニフェストのシンボリック名によって追加したコンポーネント・バンドルjarへ解決され、クラス名によってバンドル内の適切なクラスへ解決されます。この3つを同じに保つことで物事をシンプルに保てますが、これが可能な場合には、より高度な使い方もサポートされています。後のセクションを参照してください。
+
+[サーチチェーン・リファレンス](/ja/reference/applications/services/search#chain)を参照してください。
+
+*hosts.xml* の例:
+
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<hosts>
+    <host name="localhost">
+        <alias>node1</alias>
+    </host>
+</hosts>
+```
+
+*services.xml*、*hosts.xml*、*components/Simplesearcher.jar* を含むディレクトリーを作成すると、そのディレクトリーはバンドルを含む完全なアプリケーション・パッケージとなり、Vespaインスタンスにデプロイできるようになります。
+
+デプロイ後、アプリケーションにクエリーを実行します: [http://localhost:8080/search?query=best](http://localhost:8080/search/?query=best)。
+
+### アプリケーションでSearcherをテストする
+
+Searcherは、コンテナー内で実行してテストすることもできます。上記の *services.xml* ファイルの *container* 部分からインスタンスを作成します:
+
+```java expandable
+import com.yahoo.component.ComponentSpecification;
+import com.yahoo.application.container.JDisc;
+import com.yahoo.application.Networking;
+
+import com.yahoo.search.Query;
+import com.yahoo.search.Result;
+
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+public class ContainerTest {
+    @Test
+    public void testSearch() {
+    String servicesXml =
+    "<container version=\"1.0\">" +
+    "  <search>" +
+    "    <chain id=\"default\" inherits=\"vespa\">" +
+    "      <searcher id=\"ai.vespa.examples.SimpleSearcher\" />" +
+    "    </chain>" +
+    "  </search>" +
+    "</container>";
+    try (JDisc container = JDisc.fromServicesXml(servicesXml, Networking.disabled)) {
+    Result result = container.search().process(ComponentSpecification.fromString("default"),
+    new Query("search/?query=test+query"));
+    assertNotNull(result.hits().get("test"));
+    }
+  }
+}
+```
+
+チェーン内にどのSearcherがあり、どのような順序かを調べます:
+
+```java
+ChainRegistry<Searcher> chains = container.searching().getChains();
+Chain<Searcher> defaultChain = chains.getComponent("default");
+
+boolean foundSimpleSearcher = false;
+for (Searcher searcher: defaultChain.components()) {
+  if ("com.yahoo.search.example.SimpleSearcher".equals(searcher.getClassName()))
+  foundSimpleSearcher = true;
+}
+
+assertTrue("No instance of SimpleSearcher found in the default chain", foundSimpleSearcher);
+```
+
+## Searcher間での情報の受け渡し
+
+Queryオブジェクトは、Searcher間で情報を受け渡すために使用されます。Queryの一部は、任意のオブジェクトを保持できる汎用的なプロパティストアです。リクエストやクエリー・プロファイルで設定された値はすべてこれらのプロパティを通じて利用できますが、それに加えて、Searcherは自分が作成した任意のオブジェクトを追加できます。これは、あるSearcherコンポーネントが生成した情報を、後で別のコンポーネントが消費する場合に便利です。例:
+
+```java
+import com.yahoo.search.*;
+import com.yahoo.search.searchchain.*;
+@Provides(SomeObject.NAME)
+public class ProducerSearcher extends Searcher {
+    public Result search(Query query, Execution execution) {
+        SomeObject.setTo(query.properties(), new SomeObject(query));
+        return execution.search(query); // Pass to next in chain
+    }
+}
+```
+
+```java
+import com.yahoo.search.*;
+import com.yahoo.search.searchchain.*;
+@After(SomeObject.NAME)
+public class ConsumerSearcher extends Searcher {
+    public Result search(Query query, Execution execution) {
+        SomeObject someObject = SomeObject.getFrom(query.properties());
+        ...
+        return execution.search(query); // Pass to next in chain
+    }
+}
+```
+
+```java
+import com.yahoo.search.query.Properties;
+public final class SomeObject {
+    public static final String NAME = "SomeObject";
+    public static void setTo(Properties properties, SomeObject value) {
+        properties.set(NAME, value);
+    }
+    @SuppressWarnings("unchecked")
+    public static SomeObject getFrom(Properties properties) {
+        return (SomeObject) properties.get(NAME);
+    }
+}
+```
+
+このコードは、データを交換するSearcherが従うべき2つのイディオムを示しています:
+
+- オブジェクトのキーは、格納されるオブジェクトの短縮名と完全に一致させるべきです。
+- Searcherは、まったく同じ名前を *provides* すると宣言すべきです(そしてもちろん、消費側は、そのオブジェクトが提供された *after* に実行される必要があると宣言しなければなりません)。
+
+不要な依存関係を引き起こさない場合は、プロパティのgetとputを、格納されるオブジェクト内の(静的な)`getFrom` および `setTo` メソッドでラップすることを推奨します。これにより、オブジェクトの外部でキーを不必要に記述することなく、格納と参照が可能になります。
+
+オブジェクトは通常のインメモリ参照として渡されるため、これによる目立ったオーバーヘッドはありません。ただし、状況によっては(複数のソースへフェデレーションする場合など)、Queryをクローンする必要があります。その場合、Queryは追加されたプロパティのクローンを試みます。Cloneableを実装しているものはcloneが呼ばれ、それ以外は参照によってコピーされます。
+
+<Warning>
+**重要:**
+
+バグを避けるため、ミュータブルな状態を含むオブジェクトをQueryに追加する場合は、**ディープクローン**することが重要です。
+</Warning>
+
+一方で、変更されるべきでないオブジェクトをクローンするのは無駄であり、それらは参照によってコピーされるべきです。したがって、ガイドラインは次のとおりです:
+
+- 下流で変更されるべきでないオブジェクトは、Queryに追加される際にイミュータビリティを強制すべきです。ミューテーター・メソッドを一切提供しないか、*frozen*(あらゆるミューテーター呼び出しが例外を引き起こす状態)にすることで実現します。ミュータビリティを *強制する* オブジェクトは、Cloneableを実装しないか、シャロークローンを実装すべきです。
+- 下流での変更をサポートすべきオブジェクトは、**必ず** Cloneableを実装し、ディープコピーを行うcloneメソッドを提供しなければなりません。
+
+### クエリー・コンテキスト
+
+場合によっては、同じQueryオブジェクトを参照するSearcherの範囲を超えて、Searcher間で情報を受け渡す必要があります。この目的のために、QueryはQueryContextオブジェクトを提供します。これは、同じリクエストを処理するすべてのSearcherに共有データビューを提供します。このコンテキストは、(特に)プロパティ(名前付きオブジェクト)を設定する機能を提供します。コンテキストは、リクエストを処理するすべてのスレッドから、同期のオーバーヘッドなしに安全にアクセスできます(いくつかの注意点はあります)が、参照時間は定数時間ではなく線形時間です。このようなプロパティの設定と取得には、次を使用します:
+
+```java
+{query|result}.getContext(true).setProperty(name, value)
+{query|result}.getContext(true).getProperty(name)
+```
+
+## Searcherのパラメーター化
+
+Searcherに引数を渡すのは簡単です。Searcher内でクエリー・プロパティから参照されるあらゆるキー/値は、リクエストでそのまま渡すことも、クエリー・プロファイルで渡すこともできます。例:
+
+```java
+String myParameter = query.properties().getString("my.parameter", "defaultValue");
+```
+
+この値は、リクエストに `&my.parameter=myValue` を追加することで設定できます。ガイドライン:
+
+- 名前は、先頭を小文字にしたcamelCaseを使用すべきです
+- ドットはネストに使用され、[クエリー・プロファイル](/ja/querying/query-profiles)では特別な意味を持ちます。ドットは、容易にかなり大きくなるパラメーター空間の整理を助けるために存在します。通常、正しいのはSearcherごとに個別の名前空間を作成すること、つまり `myfeature.a`、`myfeature.b` のように、すべてのパラメーターに同じドット付きプレフィックスを使用することです。これはサーチAPIをクリーンに保つのに役立つだけでなく、`myfeature` 内のすべての値の設定を含むさまざまなクエリー・プロファイルを定義して実行時に選択できるようにし、これはしばしば有用です。
+- このようなパラメーターAPIをより使いやすくするために、有効なパラメーターを定義する[クエリー・プロファイル・タイプ](/ja/querying/query-profiles#query-profile-types)の作成も検討すべきです。これは、バンドルに付随するXMLファイルの形になります。これにより、リクエスト・パラメーターとクエリー・プロファイルにおけるパラメーター設定の妥当性のチェック、および任意で強制が可能になります。
+
+パラメーターは、クエリーごとに変わりうると想定するのが合理的で、かつ同程度に低コストであるすべてのクエリー状態に使用すべきです。良い候補は、例えばアルゴリズムへの数値やビジネスロジックのスイッチなどです。
+
+## 実行モデル
+
+大まかに言うと、コンテナーは次のように動作します:
+
+<Steps>
+  <Step>
+  メインスレッドが、入力ソケットのキューで待機しているリクエストの1つを取り出します
+  </Step>
+
+  <Step>
+  このスレッドは、このリクエストに応答するために使用するサーチチェーンを選択し、チェーンの実際の実行をワーカースレッドに引き渡します(そのようなワーカースレッドは多数あります)
+  </Step>
+
+  <Step>
+  ワーカースレッドは、サーチチェーン内のすべてのSearcherを、最初のものから順に呼び出します
+  </Step>
+
+  <Step>
+  各Searcherが結果を返します
+  </Step>
+
+  <Step>
+  結果は最終的に(場合によってはテンプレートを使用して)出力ソケットのバッファへレンダリングされます
+  </Step>
+</Steps>
+
+各サーチチェーンのインスタンスは1つです。すべてのチェーンにおいて、各Searcherのインスタンスは1つです。(チェーンに同一のSearcherが複数設定されている場合を除きます - これはまれなケースです。)
+
+同じサーチチェーンに対するリクエストが同時に到着すると、複数のワーカースレッドがそのチェーン内のSearcherを実行します。したがって、1つのSearcherは複数のスレッドによって同時に実行される可能性があります。多数の実行スレッドが `search()` メソッドを同時に通過している可能性があるのです。
+
+このモデルは、Searcherクラスに重要な制約を課します: *インスタンス変数は安全ではありません。* インスタンス変数は排除するか、何らかの方法でスレッドセーフにする必要があります。
+
+## Searcherで状態を保持する
+
+クエリーと結果の受け渡しはコールスタック上で行われるため、コンテナーはクエリーを実行するために多数のワーカースレッドを割り当て、結果が返されるまでクエリーごとに1つのスレッドを使用します。
+
+つまり、結果が返されるまでこの特定のクエリーのためにSearcher内で保持したい状態は、searchメソッドのローカル変数として保持すべきであり、すべてのクエリーで共有すべき状態はメンバー変数として保持すべきです。後者は常に複数のスレッドからアクセスされるため、そのようなメンバー変数の状態は *マルチスレッドセーフ* でなければなりません。
+
+この重要な制約は、Servlet APIなどの制約に似ています。簡単な例で要点を押さえましょう:
+
+```java
+public class SafeSearcher extends Searcher {
+    public Result search(Query query, Execution execution) {
+        long count = (Long) query.properties().get("Count");
+        count++;
+        return execution.search(query);
+    }
+}
+public class UnsafeSearcher extends Searcher {
+    private long count;
+    public Result search(Query query, Execution execution) {
+        count = (Long) query.properties().get("Count");
+        count++; // unsafe
+        return execution.search(query);
+    }
+}
+```
+
+2つ目の例はインスタンス変数を使用しており、これは複数のスレッドから同時にアクセスされます。適切な並行性制御(同期化など)がなければ、そのようなアクセスは本質的に安全ではなく、一貫性のない結果やデータ破損を引き起こす可能性があります。
+
+インスタンス変数を持つマルチスレッドセーフなSearcherを実装するための選択肢:
+
+1. イミュータブルなオブジェクトを使用する: 構築後は決して変更されず、Searcherのコンストラクターが返った後は状態への変更が発生しません。
+2. スレッドセーフなクラスの単一インスタンスを使用する。
+3. 単一インスタンスを作成し、すべてのスレッド間でアクセスを同期化する(ただし、これはスケーラビリティを大きく制限します)。
+4. 例えば `ThreadLocal` を使用して、各スレッドが独自のインスタンスを持つようにする。
+
+## マルチフェーズ・サーチ
+
+このドキュメントで説明した、Queryから結果を1回のパスで取得するモデルは、良好なパフォーマンスを得るには単純すぎる場合があります。サーチ・コンテナーは、そのようなケースに対処するために *マルチフェーズ・サーチ* をサポートしています。マルチフェーズ・サーチでは、まず結果のヒットが最小限の情報で埋められます。この最小限に埋められた結果はサーチチェーンを上っていき、その過程でヒットの一部が(うまくいけば)削除されます。より多くの情報が必要になると、結果に残っているヒットだけについて追加データを取得するために、2回目のfillリクエストがサーチチェーンを下って送られます。これは段階的に繰り返すことができ、次第に小さくなるヒットの集合に対して、次第にコストの高い情報を扱っていきます。
+
+コンテナーは、Executionの `fill` メソッドを提供することでこれをサポートしています。このメソッドは、Searcherから結果のヒットへ情報を追加するようリクエストするために呼び出せます。加えて、バックエンドとバックエンド・プロバイダーがマルチフェーズ・サーチをサポートしている必要があります(現在、これは内部のVespaクラスターのみが該当します)。
+
+すべてのSearcherは、自分がマルチフェーズ構成で動作していると想定すべきです。つまり:
+
+- クエリーを変更するSearcherや、ワークフローを含むSearcherは何もする必要はありません
+- ヒットから(idとrelevanceだけでなく)フィールド情報にアクセスするSearcherは、**必ず** `fill()` を呼び出して各ヒットタイプのデフォルトのフィールドセットを取得するか、`fill(summaryClassName)` を呼び出して対象のバックエンドに存在することが分かっている特定のフィールドのコレクションを取得すべきです。既に埋められたヒットを含む結果に対してfillを呼び出すコストは低いです。
+- フェデレーションを行うSearcherは、通常の `search` メソッドと `fill` メソッドの両方を実装すべきです。fillメソッドは、結果にヒットが残っているソース・ブランチに対して、下方向へのfillをリクエストしなければなりません。
+- マルチフェーズ・サーチをサポートしたいバックエンドSearcherは、最初は未fillのヒットを返し、与えられた結果のうちそのバックエンドに属するヒットをバックエンドからの情報で埋める `fill` メソッドを実装すべきです。
+
+<Note>
+**注:**
+
+[vespa-match-features](https://vinted.engineering/2025/11/06/vespa-match-features/)は、マルチフェーズ・サーチ、結果のfill、match-featuresに関する優れた記事です。
+</Note>
+
+## エラー処理
+
+Searcherが問題に遭遇してエラーを通知したい場合は、`result.hits().addError(errorMsg)` を呼び出して、結果オブジェクトにエラーヒットを設定します。
+
+[タイムアウト](/ja/learn/faq#how-is-the-query-timeout-computed)についてはFAQを参照してください。
+
+## タイムアウト
+
+Searcher内でタイムアウトを適切に処理するには?`Result result = execution.search(query)` はタイムアウトになる可能性があります - 出力すると:
+
+```txt
+Container.com...vespa.Searcher result: Result: Source 'top-chain': 12: Timed out: Error in execution of chain 'top-chain': Chain timed out.
+```
+
+チェーンのツリーがあり([フェデレーション](/ja/querying/federation#timeout-behavior)を参照)、メインチェーンがソースごとに1つのチェーンを呼び出す場合、いずれかのソースチェーンがタイムアウトする(例えば期限内にResultを返さない)と、これが発生することがあります。
+
+これが決して発生しないようにすることは一般的には不可能ですが、Searcherは時間のかかる処理を行う前に `query.getTimeLeft` をチェックし、自分が開始する処理(ネットワーク呼び出しなど)のうち期限を受け取れるものには、タイムアウトとして `query.getTimeLeft() - a_little` を渡すことができます。
+
+## WordItem
+
+Searcher内では、[WordItem](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/WordItem)を使用して、現在のクエリーを変更したり、入力クエリー・タームや現在のクエリーの結果に基づいて新しいクエリーを作成したりすることがよくあります。親クエリーの言語処理設定(ステミングなど)を維持するには、`isFromQuery` をtrueに設定します - [例](https://github.com/vespa-cloud/vespa-documentation-search/blob/main/src/main/java/ai/vespa/cloud/docsearch/DocumentationSearcher.java)。

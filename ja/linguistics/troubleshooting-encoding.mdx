@@ -1,0 +1,89 @@
+---
+title: "文字エンコーディングのトラブルシューティング"
+---
+
+このドキュメントは、Unicode と I18N に関連する最も一般的な問題を見分けるのに役立ちます。
+
+UTF-8 は Unicode 固有のエンコーディングで、各文字（コードポイント）は 1〜4 個の 8 ビットバイトとしてエンコードされます。UTF-8 のスキーム自体は技術的にはより多くのバイトを使用できますが、Unicode は（一部は UTF-16 の制限のため）約 100 万のコードポイントを持つと定義されており、その場合 4 バイトを超えることは決してありません。
+
+Java の文字列は UTF-16、すなわち 16 ビットの char（文字）の並びとして格納されます。Unicode の基本多言語面のすべてのコードポイント、つまり最初の 64k のコードポイントは単一の char として表現され、それより上位のコードポイントはサロゲートペアを使用して表現されます。サロゲートペアは、予約された範囲の char のペアです。
+
+Java の文字列でコードポイントにアクセスするには、例えば String.codePointAt() を使用します。これはコードポイントを表す 32 ビット整数（基本的に UCS-4）を返します。Java で文字列を走査する際は、codePointAt + offsetByCodePoints、String.codePoints()、または類似のメソッドを使用してください。アプリケーションが概念的に「文字」を扱うのであれば、String.charAt() の使用はほとんどの場合誤りです。投機的なエンコードを行わずに UTF-16 の入力から UTF-8 バッファーのバッファーサイズを計算するために、Vespa には静的ヘルパーメソッドを備えたツールボックス [com.yahoo.text.Utf8](https://github.com/vespa-engine/vespa/blob/master/vespajlib/src/main/java/com/yahoo/text/Utf8.java) があります。
+
+Python を使用している場合は、次のコードで制御文字を除去してください:
+
+```python
+def remove_control_characters(s):
+    return "".join(ch for ch in s if unicodedata.category(ch)[0]!="C")
+```
+
+## エンコーディング・バグの視覚的なパターンマッチング
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>変換</th>
+      <th>結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>入力</td>
+      <td>hôtel</td>
+    </tr>
+    <tr>
+      <td>正しく URL クオートされたもの（Vespa はここでは常に UTF-8 を使用）</td>
+      <td>h%C3%B4tel</td>
+    </tr>
+    <tr>
+      <td>ISO-8859-1（ISO Latin-1）としてエンコードし、その後 URL クオートしたもの</td>
+      <td>h%F4tel</td>
+    </tr>
+    <tr>
+      <td>UTF-16（Java の文字列と同様）としてエンコードし、その後 URL クオートしたもの</td>
+      <td>%00h%00%F4%00t%00e%00l</td>
+    </tr>
+    <tr>
+      <td>参考までに、バイトオーダーマーカーを含むリトルエンディアンの UTF-16</td>
+      <td>%FF%FEh%00%F4%00t%00e%00l%00</td>
+    </tr>
+  </tbody>
+</table>
+
+探すべきものは、ASCII の範囲外、つまり序数が 127 を超える単独のバイトです。UTF-8 であれば、コードポイントが ASCII の範囲外にある場合、こうしたバイトは常に 2 つ以上の連続として現れるはずです。各コードポイントの最初のバイトは、上位 2 ビットが立っています。つまり 16 進数で C から F です。そのコードポイントの残りのバイトは、最上位ビットが立ち、その次のビットは立っていません。つまり 16 進数で 8 から B です。
+
+ここから、最も一般的な 2 つのデコード／エンコードのエラーに進みます:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>エラー</th>
+      <th>コードポイントの 16 進ダンプ</th>
+      <th>表示結果</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>UTF-8 の入力を ISO-8859-1 であるかのようにデコードした場合</td>
+      <td>h&#92;xc3&#92;xb4tel</td>
+      <td>hÃ´tel</td>
+    </tr>
+    <tr>
+      <td>UTF-8 の入力を UTF-8 として再エンコードし、再び UTF-8 としてデコードした場合</td>
+      <td>h&#92;xc3&#92;xb4tel</td>
+      <td>hÃ´tel</td>
+    </tr>
+  </tbody>
+</table>
+
+これら 2 つのバグがまったく同じバイト列を生成することに注目してください。これは、Unicode の最初の 256 のコードポイントが ISO-8859-1 と同一であるためです。ISO-8859-1 も Unicode も ASCII 互換であるため、探すべきものは通常の ASCII の合間にある「ノイズ」です。
+
+有効な ISO-8859-1 の入力を UTF-8 デコーダーでデコードしようとすると、ASCII の範囲外のコードポイントが含まれている場合、通常はデコーダーが入力を不正として報告します。有効な ISO-8859-1 が、有効な UTF-8 に要求されるビットパターンに適合することはめったにありませんが、時折起こることもあります。
+
+エンコーディングの問題を Web ブラウザーでデバッグしようとは*決して*しないでください。常に 16 進ダンプツールを使用してください。`xxd` は vim に同梱されている便利なユーティリティで、一部の UNIX の代替ツールに伴うエンディアンの悩みのいくつかを避けられます。
+
+また、Windows 1252 は ISO-8859-1 と同じでは*ない*ことを覚えておいてください。
+
+## JSON
+
+正しい JSON を使用してください。よくある誤りは、フィードデータから ASCII の制御文字を除去しないことです。ユーティリティ関数については [stripInvalidCharacters](https://github.com/vespa-engine/vespa/blob/master/vespajlib/src/main/java/com/yahoo/text/Text.java) を参照してください。

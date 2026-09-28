@@ -1,0 +1,521 @@
+---
+title: "/document/v1 API ガイド"
+sidebarTitle: "/document/v1"
+---
+
+*/document/v1/* API を使用して、ドキュメントの読み取り、書き込み、更新、削除を行います。
+
+API の詳細については、[document/v1 API リファレンス](/ja/reference/api/document-v1)を参照してください。[読み取りと書き込み](/ja/writing/reads-and-writes)には、代替となるツールや API の概要、およびドキュメントへアクセスする際の Vespa コンポーネント間のフローが記載されています。*/document/v1/ API* の使い方については、[はじめに](#getting-started)を参照してください。
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>GET</td>
+      <td>&#42;&#42;Get&#42;&#42;<br/><br/><code>{`$ curl http://localhost:8080/document/v1/my_namespace/music/docid/love-id-here-to-stay`}</code><br/><br/>&#42;&#42;Visit&#42;&#42; <br/><br/>指定した namespace とドキュメントタイプのすべてのドキュメントを<a href="/ja/writing/visiting" aria-label="Visit">Visit</a> する:<br/><br/><code>{`$ curl http://localhost:8080/document/v1/namespace/music/docid`}</code><br/><br/>continuation を使用してすべてのドキュメントを Visit する:<br/><br/><code>{`$ curl http://localhost:8080/document/v1/namespace/music/docid?continuation=AAAAEAAAAAAAAAM3AAAAAAAAAzYAAAAAAAEAAAAAAAFAAAAAAABswAAAAAAAAAAA`}</code><br/><br/>&#42;セレクション&#42;を使用して Visit する:<br/><br/><code>{`$ curl http://localhost:8080/document/v1/namespace/music/docid?selection=music.genre=='blues'`}</code><br/><br/>コンテント・クラスター <code>{`mycluster`}</code> 内のすべての&#42;非グローバル&#42;なドキュメントタイプと namespace にわたってドキュメントを Visit する:<br/><br/><code>{`$ curl http://localhost:8080/document/v1/?cluster=mycluster`}</code><br/><br/>コンテント・クラスター <code>{`mycluster`}</code> に保存されているすべての&#42;<a href="/ja/reference/applications/services/content#document" aria-label="global">グローバル</a>&#42;なドキュメントタイプと namespace にわたってドキュメントを Visit する:<br/><br/><code>{`$ curl http://localhost:8080/document/v1/?cluster=mycluster&bucketSpace=global`}</code><br/><br/>下記の <a href="#visiting-throughput" aria-label="visiting throughput">Visit のスループット</a>を参照してください。</td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;POST&#42;&#42;</td>
+      <td><a href="/ja/reference/schemas/document-json-format" aria-label="document JSON format">ドキュメント JSON フォーマット</a>でデータを POST する:<br/><br/><code>{`$ curl -X POST -H "Content-Type:application/json" --data '`}</code><br/><code>{`{`}</code><br/><code>{`"fields": {`}</code><br/><code>{`"artist": "Coldplay",`}</code><br/><code>{`"album": "A Head Full of Dreams",`}</code><br/><code>{`"year": 2015`}</code><br/><code>{`}`}</code><br/><code>{`}' \\`}</code><br/><code>{`http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams`}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;PUT&#42;&#42;</td>
+      <td>ドキュメントに対して<a href="/ja/writing/partial-updates" aria-label="partial update">部分更新</a>を行う:<br/><br/><code>{`$ curl -X PUT -H "Content-Type:application/json" --data '`}</code><br/><code>{`{`}</code><br/><code>{`"fields":`}</code> <br/><code>{`{`}</code><br/><code>{`"artist":`}</code> <br/><code>{`{`}</code><br/><code>{`"assign": "Warmplay"`}</code><br/><code>{`}`}</code><br/><code>{`}`}</code><br/><code>{`}' \\`}</code><br/><code>{`http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams`}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;DELETE&#42;&#42;</td>
+      <td>ID を指定してドキュメントを削除する:<br/><br/><code>{`$ curl -X DELETE http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams`}</code><br/><br/><code>{`music`}</code> スキーマ内のすべてのドキュメントを削除する:<br/><br/><code>{`$ curl -X DELETE \\`}</code><br/><code>{`"http://localhost:8080/document/v1/mynamespace/music/docid?selection=true&cluster=my_cluster"`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+## 条件付き書き込み
+
+Put、Remove、Update の各操作には、*test-and-set* [条件](/ja/reference/writing/document-selector-language)を追加できます:
+
+例:
+
+```sh
+$ curl -X PUT -H "Content-Type:application/json" --data '
+  {
+      "condition": "music.artist==\"Warmplay\"",
+      "fields": {
+          "artist": {
+              "assign": "Coldplay"
+          }
+      }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+```
+
+<Warning>
+**重要:** 
+
+*条件には、フィールド名のみではなく documenttype.fieldname(例: music.artist)を使用してください。*
+</Warning>
+
+条件が満たされない場合は、412 Precondition Failed が返されます:
+
+```json
+{
+    "pathId": "/document/v1/mynamespace/music/docid/a-head-full-of-dreams",
+    "id": "id:mynamespace:music::a-head-full-of-dreams",
+    "message": "[UNKNOWN(251013) @ tcp/vespa-container:19112/default]: ReturnCode(TEST_AND_SET_CONDITION_FAILED, Condition did not match document nodeIndex=0 bucket=20000000000000c4 ) "
+}
+```
+
+[条件のリファレンス](/ja/reference/schemas/document-json-format#test-and-set)も参照してください。
+
+## 存在しない場合の作成
+
+### アップサート
+
+存在しないドキュメントへの更新は、[create](/ja/reference/schemas/document-json-format#create) を使用してサポートされています。これはしばしば *アップサート* と呼ばれます。ドキュメントがまだ存在しない場合は挿入し、存在する場合は更新します。更新が適用される前に、コンテントノード上に空のドキュメントが作成されます。これにより、複数の書き込み元がある場合のクライアントコードが簡素化されます。例:
+
+```sh
+$ curl -X PUT -H "Content-Type:application/json" --data '
+  {
+      "fields": {
+          "artist": {
+              "assign": "Coldplay"
+          }
+      }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-thoughts?create=true
+```
+
+### create を使用した条件付きの更新と Put
+
+条件付きの更新および Put は、[create](/ja/reference/schemas/document-json-format#create) と組み合わせることができます。この場合のセマンティクスは次のとおりです:
+
+- ドキュメントがすでに存在する場合、条件は利用可能な最新のドキュメントバージョンに対して評価されます。条件が一致する場合(かつその場合に限り)、操作が適用されます。
+- それ以外の場合(すなわち、ドキュメントが存在しないか、最新のドキュメントバージョンが tombstone の場合)、条件は *無視* され、条件が指定されていないかのように操作が適用されます。
+
+条件付き Put を使用して、順序どおりでない書き込みを処理できます。例えば、信頼できる情報源となるシステムに `version` フィールドがあるとします。これを使用して、ドキュメントが存在しない場合、またはバージョンが書き込もうとしているものより古い場合にのみ、ドキュメントを書き込むことができます:
+
+
+```sh
+$ curl -X POST -H "Content-Type:application/json" --data '
+  {
+    "condition": "music.version < 42",
+    "create": true,
+    "fields": {
+      "version": 42,
+      "artist": "Coldplay"
+    }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-thoughts
+```
+
+同様に、更新もバージョンが古いことを条件にできます。`create=true` を追加するとアップサートになります。
+
+```sh
+  $ curl -X PUT -H "Content-Type:application/json" --data '
+  {
+    "condition": "music.version < 43",
+    "create": true,
+    "fields": {
+      "version": {
+        "assign": 43
+      },
+      "artist": {
+        "assign": "Warmplay"
+      }
+    }
+  }' \
+  http://localhost:8080/document/v1/mynamespace/music/docid/a-head-full-of-thoughts
+```
+
+<Danger>
+**警告:**
+
+`"create": true` を指定した操作が実行される時点でドキュメントの既存のレプリカがすべて欠落している場合、条件が指定されていても、常に新しいドキュメントが作成されます。既存のレプリカが後で利用可能になった場合、そのバージョンのドキュメントは、より新しいタイムスタンプを持つ最新の更新によって上書きされます。
+</Danger>
+
+<Note>
+**注:**
+
+自動作成されるドキュメントについては、[ドキュメントの有効期限](/ja/schemas/documents#document-expiry)を参照してください。選択基準に一致しないドキュメントが作成される可能性があります。
+</Note>
+
+<Note>
+**注:**
+
+条件 *なし* の Put 操作に *create* を指定しても、観察可能な影響はありません。無条件の Put 操作は、ドキュメントがすでに存在していたかどうかにかかわらず、常に新しいバージョンのドキュメントを書き込むためです。
+</Note>
+
+## データダンプ
+
+ドキュメントを反復処理するには、[Visit](/ja/writing/visiting) を使用します。出力例:
+
+```json
+{
+    "pathId": "/document/v1/namespace/doc/docid",
+    "documents": [
+        {
+            "id": "id:namespace:doc::id-1",
+            "fields": {
+                "title": "Document title 1"
+            }
+        }
+    ],
+    "continuation": "AAAAEAAAAAAAAAM3AAAAAAAAAzYAAAAAAAEAAAAAAAFAAAAAAABswAAAAAAAAAAA"
+}
+```
+
+*continuation* トークンに注目してください。さらにデータを取得するには、次のリクエストでこれを使用します。以下は、JSON の解析に [jq](https://stedolan.github.io/jq/) を使用してすべてのデータをダンプするサンプルスクリプトです。デフォルトではコーパスを 8 個のスライスに分割します。高いスループットを得るには、コンテナーノード数の少なくとも 4 倍のスライス数を使用することを推奨します。ベンチマークの際にはタイムアウトを短く設定できます。(進行状況が定期的に保存されるよう、各リクエストの最大タイムアウトは 60 秒です)
+
+```sh expandable
+#!/bin bash
+set -eo pipefail
+
+if [ $# -gt 2 ]
+then
+  echo "Usage: $0 [number of slices, default 8] [timeout in seconds, default 31536000 (1 year)]"
+  exit 1
+fi
+
+endpoint="https://my.vespa.endpoint"
+cluster="db"
+selection="true"
+slices="${1:-8}"
+timeout="${2:-31516000}"
+curlTimeout="$((timeout > 60 ? 60 : timeout))"
+url="$endpoint/document/v1/?cluster=$cluster&selection=$selection&stream=true&timeout=$curlTimeout&concurrency=8&slices=$slices"
+auth="--key my-key --cert my-cert -H 'Authorization: my-auth'"
+curl="curl -sS $auth"
+start=$(date '+%s')
+doom=$((start + timeout))
+
+## auth can be something like auth='--key data-plane-private-key.pem --cert data-plane-public-cert.pem'
+curl="curl -sS $auth"
+
+function visit {
+  sliceId="$1"
+  documents=0
+  continuation=""
+  while
+    printf -v filename "data-%03g-%012g.json.gz" $sliceId $documents
+    json="$(eval "$curl '$url&sliceId=$sliceId$continuation'" | tee >( gzip > $filename ) | jq '{ documentCount, continuation, message }')"
+    message="$(jq -re .message <<< $json)" && echo "Failed visit for sliceId $sliceId: $message" >&2 && exit 1
+    documentCount="$(jq -re .documentCount <<< $json)" && ((documents += $documentCount))
+    [ "$(date '+%s')" -lt "$doom" ] && token="$(jq -re .continuation <<< $json)"
+  do
+    echo "$documentCount documents retrieved from slice $sliceId; continuing at $token"
+    continuation="&continuation=$token"
+  done
+  time=$(($(date '+%s') - start))
+  echo "$documents documents total retrieved in $time seconds ($((documents / time)) docs/s) from slice $sliceId" >&2
+}
+
+for ((sliceId = 0; sliceId < slices; sliceId++))
+do
+  visit $sliceId &
+done
+wait
+```
+
+
+### Visit のスループット
+
+このガイドの冒頭にあるリクエスト例では、セレクションを使用した Visit は、すべての music ドキュメントに対する線形スキャンであることに注意してください。したがって、Visit を 1 回完了するたびに、すべてのドキュメントに対してセレクション式を評価する必要があります。そのため、ドキュメントコーパスの互いに素なサブセットに一致するセレクションを使用して複数の Visit を並行実行することは、各 Visit で作業が重複するため、スループットを向上させる方法としては不適切です。幸い、この API はスループットを向上させるための他のオプションを提供しています:
+
+- コーパスを任意の数のより小さな[スライス](/ja/reference/api/document-v1#slices)に分割し、それぞれを独立した一連の HTTP リクエストで Visit します。これは、変更する設定として圧倒的に最も効果的です。すべての HTTP コンテナーを同時に経由して、また任意の数のクライアントから Visit できるためです。*/document/v1* を経由する Visit では、通常このいずれかがボトルネックになります。この設定の適切な値は、コンテナーあたり少なくとも数個です。
+- バックエンドの[並行度](/ja/reference/api/document-v1#concurrency)を上げて、各 Visit の HTTP レスポンスが速やかにドキュメントで満たされるようにします。これを上記のスライスと併用する場合は、コンテナーレイヤーで過大なデータをバッファリングしないよう、HTTP レスポンスのストリーミング(下記)も必ず使用してください。多数のスライスが指定されている場合、この設定は効果がないことがあります。
+- HTTP レスポンスを[ストリーミング](/ja/reference/api/document-v1#stream)します。これにより、データをより早く受信でき、リクエストあたりの受信量も増え、HTTP のオーバーヘッドが削減されます。また、コンテナーでのバッファリングによるメモリ使用量が最小限に抑えられ、コンテナーあたりの並行度を高められます。常に使用することを推奨しますが、後方互換性のため、デフォルトでは使用されません。
+
+## はじめに
+
+<Tip>
+**プロのヒント:**
+
+[Vespa CLI](/ja/clients/vespa-cli) を使用すると、`/document/v1` リクエストを簡単に生成できます。`-v` オプションを付けると、生成された `/document/v1` リクエストが出力されます。例:
+</Tip>
+
+```sh
+$ vespa document -v ext/A-Head-Full-of-Dreams.json
+
+  curl -X POST -H 'Content-Type: application/json'
+  --data-binary @ext/A-Head-Full-of-Dreams.json
+  http://127.0.0.1:8080/document/v1/mynamespace/music/docid/a-head-full-of-dreams
+
+  Success: put id:mynamespace:music::a-head-full-of-dreams
+```
+
+JSON ペイロードの作成については、[ドキュメント JSON フォーマット](/ja/reference/schemas/document-json-format)を参照してください。
+
+以下は、手始めにクラスターからランダムなドキュメントをダンプするためのクイックガイドです:
+
+<Steps>
+<Step>
+クラスターからドキュメントを取得するには、[album-recommendation](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/app/services.xml) の例のように、構成からコンテント・クラスター名を調べます: `<content id="music" version="1.0">`。
+</Step>
+<Step>
+クラスター名を使用して、ドキュメント ID のダンプを開始します(完全な JSON を取得するには `jq` を省略します):
+
+```bash
+$ curl -s 'http://localhost:8080/document/v1/?cluster=music&wantedDocumentCount=10&timeout=60s' | \
+  jq -r .documents[].id
+```
+
+```bash
+id:mynamespace:music::love-is-here-to-stay
+id:mynamespace:music::a-head-full-of-dreams
+id:mynamespace:music::hardwired-to-self-destruct
+```
+
+`wantedDocumentCount` は、空の結果を避けるために、操作をより長く実行してドキュメントを見つけるのに便利です。この操作はコーパス全体のスキャンであり、空の結果と [continuation トークン](#data-dump)が返されるのは正常です。
+</Step>
+<Step>
+
+ID `id:mynamespace:music::love-is-here-to-stay` のドキュメントを検索します:
+
+```bash
+$ curl -s 'http://localhost:8080/document/v1/mynamespace/music/docid/love-is-here-to-stay' | jq .
+```
+
+```json
+{
+    "pathId": "/document/v1/mynamespace/music/docid/love-is-here-to-stay",
+    "id": "id:mynamespace:music::love-is-here-to-stay",
+    "fields": {
+        "artist": "Diana Krall",
+        "year": 2018,
+        "category_scores": {
+            "type": "tensor<float>(cat{})",
+            "cells": {
+                "pop": 0.4000000059604645,
+                "rock": 0,
+                "jazz": 0.800000011920929
+            }
+        },
+        "album": "Love Is Here To Stay"
+    }
+}
+```
+
+</Step>
+<Step>
+
+[ドキュメント ID](/ja/schemas/documents) について詳しく読む。
+
+</Step>
+</Steps>
+
+## トラブルシューティング
+
+- クエリー API でドキュメントが見つからない問題をトラブルシューティングする場合は、[vespa visit](/ja/clients/vespa-cli#documents) を使用してドキュメントをエクスポートします。その後、`id` フィールドをクエリー内の他のユーザー定義の `id` フィールドと比較します。
+    ```bash
+    $ vespa visit
+    ```
+
+    ```json
+    {
+        "id": "id:mynamespace:music::when-we-all-fall-asleep-where-do-we-go",
+        "fields": {
+            "artist": "Billie Eilish",
+            "doc_id": 12345
+        }
+    }
+    ```
+    [ドキュメント ID](/ja/schemas/documents#id-scheme) の構成要素の詳細を参照してください。
+- ドキュメントが見つからない場合のレスポンスは次のようになります:
+    ```bash
+    $ curl http://127.0.0.1:8080/document/v1/mynamespace/music/docid/non-existing-doc
+    ```
+
+    ```json
+    {
+        "pathId": "/document/v1/mynamespace/music/docid/non-existing-doc",
+        "id": "id:mynamespace:music::non-existing-doc"
+    }
+    ```
+
+    これは空のドキュメントのように見えるかもしれません。より多くの出力を得るには `-v` を使用します:
+    
+    ```bash
+	$ curl -v http://127.0.0.1:8080/document/v1/mynamespace/music/docid/non-existing-doc
+	> GET /document/v1/mynamespace/music/docid/non-existing-doc HTTP/1.1
+	> Host: 127.0.0.1:8080
+	> User-Agent: curl/7.88.1
+	> Accept: */*
+	>
+	< HTTP/1.1 404 Not Found
+	< Date: Fri, 26 May 2023 08:53:20 GMT
+	< Content-Type: application/json;charset=utf-8
+	< Content-Length: 108
+    ```
+
+	```json
+	{
+	  "pathId": "/document/v1/mynamespace/music/docid/non-existing-doc",
+	  "id": "id:mynamespace:music::non-existing-doc"
+	}
+	```
+
+	*404 Not Found* に注目してください。トラブルシューティングには [Vespa CLI](/ja/clients/vespa-cli#documents) が非常に便利です。詳細な出力を得るには `-v` を使用します。これは同等の `curl` コマンドを出力します:
+
+    ```bash
+	$ vespa document get -v id:mynamespace:music::non-existing-doc
+	curl -X GET http://127.0.0.1:8080/document/v1/mynamespace/music/docid/non-existing-doc
+    ```
+
+	Error: Invalid document operation: 404 Not Found
+
+	```json
+	{
+	    "pathId": "/document/v1/mynamespace/music/docid/non-existing-doc",
+	    "id": "id:mynamespace:music::non-existing-doc"
+	}
+	```
+- クエリー結果には、次のような結果が含まれることがあります:
+
+	```json
+	{
+	    "id": "index:mydoctype/3/399f8030300282ca93929939",
+	    "relevance": 0,
+	    "source": "test",
+	    "fields": {
+	        "sddocname": "testdoc",
+	        "myfield": 12
+	    }
+	}
+	```
+
+	[クエリー結果の ID](/ja/reference/querying/default-result-format#id) はドキュメント ID と同じではありません。必要な場合は、ドキュメント ID 用に別のフィールドを使用してください。
+
+- セキュリティ認証情報を使用して、*music* スキーマ内の *すべての* ドキュメントを削除する:
+
+    ```bash
+	$ curl -X DELETE \\
+	  --cert data-plane-public-cert.pem --key data-plane-private-key.pem \\
+	  "http://localhost:8080/document/v1/mynamespace/music/docid?selection=true&cluster=my_cluster"
+    ```
+
+
+## リクエストサイズの制限
+
+Vespa 8.577 以降、Vespa はリクエストサイズの制限を超える POST および PUT リクエストへのレスポンスとして 413(Content too large)を返します。これを避けるには、フィードの前にドキュメントサイズを自動的にチェックし、大きなドキュメントを切り詰めるか分割してください。最適なパフォーマンスのためには、ドキュメントサイズを 10 MB 未満に保つことを推奨します。
+
+## バックプレッシャー
+
+クライアントのフィードスループットがシステムの容量を超えると、Vespa はバックプレッシャーのシグナルとしてレスポンスコード 429(Too Many Requests)を返します。クライアントは、[HTTP ベストプラクティス](/ja/clients/http-best-practices)ドキュメントに記載されているリトライ戦略を実装する必要があります。
+
+独自のリトライロジックを実装する代わりに、リトライとバックプレッシャーを自動的に処理する Vespa のフィードクライアントの使用を検討してください。Vespa CLI の [feed コマンド](/ja/clients/vespa-cli#documents)と [vespa-feed-client](/ja/clients/vespa-feed-client) を参照してください。
+
+`/document/v1` API には設定可能な操作キューが含まれており、デフォルトではレイテンシ、スループット、メモリのバランスが取れるように調整されています。アプリケーションは、[document-operation-executor](https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/document-operation-executor.def) 設定定義で定義されているパラメーターをオーバーライドすることで、このバランスを調整できます。
+
+コンテナーでのレイテンシの増加とメモリ使用量の増大を代償に、より高いスループットへ最適化するには、`maxThrottled`(操作数によるキューの最大容量)、`maxThrottledAge`(キュー内の最大滞留時間(秒単位))、`maxThrottledBytes`(最大メモリ使用量(バイト単位))のいずれかのパラメーターを増やします。これにより、コンテナーは一時的な負荷スパイクの間により多くの操作をバッファリングできるようになり、リクエストのレイテンシは増加するものの、429 レスポンスの数が減少します。増加したレイテンシに対応するため、操作とクライアントのタイムアウトを必ず引き上げてください。
+
+各パラメーターの詳細な説明については、[設定定義](https://github.com/vespa-engine/vespa/blob/master/configdefinitions/src/vespa/document-operation-executor.def)を参照してください。
+
+逆の効果、すなわちレイテンシへ最適化するには、値を `0` に設定します。操作は直接ディスパッチされ、保留中の操作数がドキュメント処理パイプラインの動的ウィンドウサイズを超えると、直ちに失敗として処理されます。
+
+*例: 3 つのパラメーターすべてのデフォルト値を `0` にオーバーライドする。*
+
+```js
+<container id="feed" version="1.0">
+    <document-api/>
+
+    <config name="com.yahoo.document.restapi.document-operation-executor">
+        <maxThrottled>0</maxThrottled>
+        <maxThrottledAge>0</maxThrottledAge>
+        <maxThrottledBytes>0</maxThrottledBytes>
+    </config>
+
+</container>
+```
+
+有効な操作キューの構成は、コンテナーの起動時にログへ記録されます。以下の例を参照してください。
+
+```text
+INFO    container        Container.com.yahoo.document.restapi.resource.DocumentV1ApiHandler   Operation queue: max-items=256, max-age=3000 ms, max-bytes=100 MB
+```
+
+操作キューの状態は、メトリクス [`httpapi_queued_operations`](/ja/reference/operations/metrics/container#httpapi_queued_operations)、[`httpapi_queued_bytes`](/ja/reference/operations/metrics/container#httpapi_queued_bytes)、[`httpapi_queued_age`](/ja/reference/operations/metrics/container#httpapi_queued_age) を通じて観察できます。
+
+## number および group id 修飾子の使用
+
+通常のインデックスモードのドキュメントタイプでは、group または number 修飾子を使用しないでください。これらは特殊なケースであり、[mode=streaming または mode=store-only](/ja/reference/applications/services/content#document) のドキュメントタイプでのみ期待どおりに動作します。例:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>&#42;&#42;Get&#42;&#42;</td>
+      <td>グループ内のドキュメントを取得する:<br/><br/><code>{`$ curl http://localhost:8080/document/v1/mynamespace/music/number/23/some_key`}</code><br/><br/><code>{`$ curl http://localhost:8080/document/v1/mynamespace/music/group/mygroupname/some_key`}</code></td>
+    </tr>
+    <tr>
+      <td>&#42;&#42;Visit&#42;&#42;</td>
+      <td>グループのすべてのドキュメントを Visit する:<br/><br/><code>{`$ curl http://localhost:8080/document/v1/namespace/music/number/23/`}</code><br/><br/><code>{`$ curl http://localhost:8080/document/v1/namespace/music/group/mygroupname`}</code></td>
+    </tr>
+  </tbody>
+</table>
+
+## バッチ更新の例
+
+[update where](/ja/reference/api/document-v1#update-where) を使用して、一連のドキュメント(またはすべてのドキュメント)を更新します。これは更新対象のドキュメントを求めてコーパスを走査するため、*visit* に似ています。上記を参照してください。
+
+マップされた次元の値を削除して混合テンソルをスリム化する簡単な例:
+
+```bash expandable
+#!/bin bash
+set -eo pipefail
+
+endpoint="https://a8701234.bd2c5678.z.vespa-app.cloud"
+cluster="music"
+timeout="31516000"
+selection="true"
+namespace="mynamespace"
+documenttype="music"
+curlTimeout="$((timeout > 60 ? 60 : timeout))"
+url="$endpoint/document/v1/$namespace/$documenttype/docid/?cluster=$cluster&selection=$selection&timeout=$curlTimeout"
+
+auth=" -H 'Authorization: Bearer vespa_cloud_Ddph12348g7iPHvaG1OltkggABCDAoehAZ576PwB3xU'"
+# alternative auth using MTLS:
+# auth=" --key my-key --cert my-cert"
+
+method=" -X PUT"
+data=" --data '{ \"fields\": {
+        \"embeddings\": {
+            \"remove\": {
+                \"addresses\": [
+                    {\"chunk\": \"1\"},
+                    {\"chunk\": \"2\"}
+                ]
+            }
+        }
+    }
+} '"
+curl="curl $method -sS $auth $data"
+
+function update {
+  documents=0
+  continuation=""
+  json=""
+  while
+    # inspect these files for exact counts:
+    printf -v filename "output-%012g.json" $documents
+    json="$(eval "$curl '$url$continuation'" | tee $filename | jq '{ documentCount, continuation, message }')"
+    message="$(jq -re .message <<< $json)" && echo "Failed update: $message" >&2 && exit 1
+    documentCount="$(jq -re .documentCount <<< $json)" && ((documents += $documentCount))
+    token="$(jq -re .continuation <<< $json)"
+  do
+    echo "$documentCount documents updated; continuing at $token"
+    continuation="&continuation=$token"
+  done
+  echo "$documents documents total updated" >&2
+}
+
+update
+```
