@@ -425,7 +425,8 @@ def guess_lang(code: str) -> str:
 VOID = frozenset("area base br col embed hr img input link meta source track wbr".split())
 BLOCK = frozenset(
     "address article aside blockquote details dialog dd div dl dt fieldset figcaption figure footer form "
-    "h1 h2 h3 h4 h5 h6 header hr li main nav ol p section table ul x-callout x-pre x-mathblock iframe summary".split()
+    "h1 h2 h3 h4 h5 h6 header hr li main nav ol p section table ul x-callout x-pre x-mathblock iframe object "
+    "video summary".split()
 )
 DROP = frozenset("script style button noscript input select textarea".split())
 
@@ -867,12 +868,12 @@ class Renderer:
             rest = [c for c in n.children if c is not summary]
             inner = "\n\n".join(self.blocks(rest))
             return [f'<Accordion title="{html.escape(title, quote=True)}">\n\n{inner}\n\n</Accordion>']
-        if tag == "iframe":
-            attrs = " ".join(
-                f'{jsx_attr(k)}="{html.escape(v, quote=True)}"' for k, v in n.attrs.items()
-                if k in ("src", "width", "height", "title", "allow", "allowfullscreen", "frameborder")
-            )
-            return [f"<iframe {attrs}></iframe>"]
+        if tag in ("iframe", "object", "video"):
+            # Embedded content stays HTML; an SVG in <object> keeps its links clickable, unlike <img>
+            attrs = jsx_attrs(n.attrs, ("src", "data", "type", "width", "height", "title", "allow",
+                                        "allowfullscreen", "frameborder", "controls", "poster", "style"))
+            fallback = self.inline(n.children)
+            return [f"<{tag}{attrs}>" + (f"\n  {finish_emphasis(fallback)}\n" if fallback else "") + f"</{tag}>"]
         return self.blocks(n.children)
 
     def list_block(self, n: Node) -> str:
@@ -1002,6 +1003,36 @@ def jsx_attr(name: str) -> str:
             "frameborder": "frameBorder"}.get(name, name)
 
 
+def jsx_style(css: str) -> str:
+    """CSS declarations -> a JSX style object, e.g. max-width:600px -> {{maxWidth: "600px"}}"""
+    props = []
+    for decl in css.split(";"):
+        name, sep, value = decl.partition(":")
+        if sep and name.strip() and value.strip():
+            key = re.sub(r"-(\w)", lambda m: m.group(1).upper(), name.strip().lower())
+            props.append(f"{key}: {json_str(value.strip())}")
+    return "{{" + ", ".join(props) + "}}"
+
+
+def json_str(s: str) -> str:
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def jsx_attrs(attrs: dict[str, str], allowed: tuple[str, ...]) -> str:
+    out = []
+    for k, v in attrs.items():
+        if k not in allowed:
+            continue
+        if k == "style":
+            if jsx_style(v) != "{{}}":
+                out.append(f"style={jsx_style(v)}")
+        elif k in ("allowfullscreen", "controls") and not v:
+            out.append(jsx_attr(k))
+        else:
+            out.append(f'{jsx_attr(k)}="{html.escape(v, quote=True)}"')
+    return (" " + " ".join(out)) if out else ""
+
+
 def cell_attrs(n: Node) -> str:
     out = []
     for k, v in n.attrs.items():
@@ -1061,7 +1092,7 @@ def html_to_mdx(body: str, page: Page) -> str:
 # Markdown (kramdown) -> MDX
 
 HTML_BLOCK_START = re.compile(
-    r"^(\s*)<(div|pre|table|p|ul|ol|dl|h[1-6]|figure|blockquote|details|iframe|img|section|script|style|button|math|hr|br|x-callout|x-chip)\b",
+    r"^(\s*)<(div|pre|table|p|ul|ol|dl|h[1-6]|figure|blockquote|details|iframe|object|video|img|section|script|style|button|math|hr|br|x-callout|x-chip)\b",
     re.IGNORECASE,
 )
 FENCE_RE = re.compile(r"^(\s*)(`{3,}|~{3,})(.*)$")
@@ -1246,19 +1277,16 @@ def indent_block(text: str, indent: str) -> str:
 
 
 def html_block_end(lines: list[str], start: int, tag: str) -> int:
-    if tag in ("img", "br", "hr"):
-        return start
+    """Index of the line that closes the HTML element opened on lines[start]; tags may span lines."""
+    text = "\n".join(lines[start:])
     depth = 0
-    open_re = re.compile(rf"<{tag}\b[^>]*?(/?)>", re.IGNORECASE)
-    close_re = re.compile(rf"</{tag}\s*>", re.IGNORECASE)
-    for j in range(start, len(lines)):
-        for m in re.finditer(rf"<{tag}\b[^>]*?(/?)>|</{tag}\s*>", lines[j], re.IGNORECASE):
-            if m.group(0).startswith("</"):
-                depth -= 1
-            elif not m.group(1):
-                depth += 1
+    for m in re.finditer(rf"<{tag}\b[^>]*?(/?)>|</{tag}\s*>", text, re.IGNORECASE):
+        if m.group(0).startswith("</"):
+            depth -= 1
+        elif not m.group(1) and tag not in VOID:
+            depth += 1
         if depth <= 0:
-            return j
+            return start + text.count("\n", 0, m.end())
     return len(lines) - 1
 
 

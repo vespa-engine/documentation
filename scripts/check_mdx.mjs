@@ -52,8 +52,10 @@ const MINTLIFY_COMPONENTS = new Set(
     "Warning Badge Tile Tree Panel Color View").split(" "),
 );
 // Literals are safe: a template string without ${...}, a quoted string, a number or boolean.
-const isLiteral = (v) =>
-  /^\s*(`(?:[^`\\$]|\\.|\$(?!\{))*`|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|-?\d+(\.\d+)?|true|false)\s*$/.test(v);
+const LITERAL = String.raw`(?:\x60(?:[^\x60\\$]|\\.|\$(?!\{))*\x60|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|-?\d+(?:\.\d+)?|true|false)`;
+// ...or an object of literals, as in style={{maxWidth: "600px"}}
+const OBJECT = String.raw`\{\s*(?:[A-Za-z_$][\w$]*\s*:\s*${LITERAL}\s*(?:,\s*)?)*\}`;
+const isLiteral = (v) => new RegExp(String.raw`^\s*(?:${LITERAL}|${OBJECT})\s*$`).test(v);
 let problems = [];
 const collect = () => (tree) => {
   const walk = (node) => {
