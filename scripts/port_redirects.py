@@ -2,7 +2,11 @@
 """Add the Jekyll redirects from master to the redirects in docs.json.
 
 Sources are redirects.yml and the redirect_from lists in the page frontmatter on the
-git ref (redirects.yml is generated from the latter, but can be out of date). Paths are
+git ref (redirects.yml is generated from the latter, but can be out of date).
+
+Jekyll served every page as /path.html (and /dir/index.html), and Mintlify serves it as
+/path without redirecting, so each URL the Jekyll site had also gets a .html redirect:
+every page on the ref, and every old path of a redirect. Paths are
 converted to Mintlify form (/en/foo.html -> /en/foo), chains are resolved, including
 through the redirects already in docs.json, and destinations must be pages on this
 branch. A redirect is not added when its source is an existing page, which it would
@@ -65,6 +69,20 @@ def resolve(path: str, *maps: dict[str, str]) -> str:
         path = nxt
 
 
+def jekyll_page_urls() -> dict[str, str]:
+    """URL the Jekyll site served (/en/foo.html, /en/dir/index.html) -> page path (/en/foo, /en/dir)."""
+    out = subprocess.run(["git", "ls-tree", "-r", "--name-only", J.REF], cwd=ROOT, capture_output=True, text=True).stdout
+    urls = {"/index.html": "/"}
+    for f in out.split():
+        if re.match(r"(en|ja)/.*\.(html|md)$", f):
+            urls["/" + re.sub(r"\.md$", ".html", f)] = J.page_path("/" + f)
+    return urls
+
+
+def html_url(path: str) -> str:
+    return path.rstrip("/") + ".html"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--ref", default=J.REF, help=f"git ref holding the Jekyll sources (default: {J.REF})")
@@ -92,11 +110,27 @@ def main() -> int:
         else:
             added.append({"source": src, "destination": dst})
 
-    print(f"{len(pairs)} Jekyll redirects: {len(added)} added")
+    # .html URLs: the pages themselves, and the old paths of redirects (including those already in docs.json)
+    new_sources = {r["source"] for r in added}
+    html_sources = dict(jekyll_page_urls())
+    for src in sorted(set(pairs) | set(existing) | new_sources):
+        if src != "/" and not src.endswith(".html"):
+            html_sources.setdefault(html_url(src), src)
+    html_added = []
+    for src, path in sorted(html_sources.items()):
+        dst = resolve(path, existing, pairs)
+        if src in existing or src in new_sources:
+            skipped["already in docs.json"].append(src)
+        elif dst != "/" and not is_page(dst):
+            skipped["destination is not a page"].append(f"{src} -> {dst}")
+        else:
+            html_added.append({"source": src, "destination": dst})
+    print(f"{len(pairs)} Jekyll redirects: {len(added)} added; {len(html_sources)} .html URLs: {len(html_added)} added")
+    added += html_added
     for reason, items in skipped.items():
         if items:
             print(f"  skipped, {reason}: {len(items)}")
-            for item in items:
+            for item in items if reason != "already in docs.json" else []:
                 print(f"    {item}")
     if not args.dry_run and added:
         docs["redirects"] = docs.get("redirects", []) + added
