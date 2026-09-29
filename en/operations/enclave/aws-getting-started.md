@@ -33,9 +33,24 @@ The AWS account you intend to use for Vespa Cloud Enclave must be prepared for d
 Use [Terraform](https://www.terraform.io/) to set up the necessary resources using the
 [modules](https://registry.terraform.io/modules/vespa-cloud/enclave/aws/latest) published by the Vespa team.
 
-Modify the
-[multi-region Terraform files](https://github.com/vespa-cloud/terraform-aws-enclave/blob/main/examples/multi-region/main.tf)
-for your deployment.
+Start with the Terraform examples that match your deployment:
+
+- [Basic](https://github.com/vespa-cloud/terraform-aws-enclave/blob/main/examples/basic/main.tf): a single `dev` zone.
+- [Multi-region](https://github.com/vespa-cloud/terraform-aws-enclave/blob/main/examples/multi-region/main.tf):
+  `test` and `staging` zones, and several production zones.
+- [Multi-AZ](https://github.com/vespa-cloud/terraform-aws-enclave/blob/main/examples/multi-az/main.tf):
+  a multi-AZ production zone spanning multiple availability zones in one AWS region.
+
+Set `tenant_name` to your Vespa Cloud tenant and configure the AWS providers for the regions you will use.
+Include a zone module for each Vespa Cloud zone you will deploy to, including `test` and `staging` for the deployment pipeline.
+For a multi-AZ production zone such as `prod.aws-us-east-1`, use
+[`modules/zone_multi_az`](https://github.com/vespa-cloud/terraform-aws-enclave/tree/main/modules/zone_multi_az).
+Use `modules/zone` for single-AZ zones.
+
+The multi-AZ module always provisions networking in the AZs used by Vespa Cloud's configuration servers.
+Set `azs` to any additional AWS AZ IDs your applications need, such as `use1-az1`.
+Set `primary_zone_az` to one of the provisioned AZ IDs and keep it unchanged after applying Terraform;
+changing it forces VPC replacement.
 
 If you are unfamiliar with Terraform: It is a tool to manage resources and their
 configuration in various cloud providers, like AWS and GCP.
@@ -84,6 +99,10 @@ The _dev_ environment is ideal for this, with rapid deployment cycles.
 
 For production serving, deploy to the [prod](../environments.html#prod) environment -
 follow the steps in [production deployment](../production-deployment.html).
+
+For a [multi-AZ deployment](../az.html), select the production region and its
+[`availability-zone`](../../reference/applications/deployment.html#availability-zone) elements in `deployment.xml`.
+Each selected AZ must have networking provisioned by the Terraform zone module.
 
 ## Enclave teardown
 
