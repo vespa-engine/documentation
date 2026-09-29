@@ -13,12 +13,12 @@ contained within one single
 
 ![Enclave architecture](/assets/img/vespa-cloud-enclave-aws.png)
 
-#### EC2 Instances, Load Balancers, and S3 buckets
+#### EC2 instances, load balancers, and S3 buckets
 
 Configuration Servers inside the Vespa Cloud zone makes the decision to create
 or destroy EC2 instances ("Vespa Hosts" in diagram) based on the Vespa
 applications that are deployed. The Configuration Servers also set up the
-Network Load Balancers needed to communicate with the deployed Vespa
+Network Load Balancers (NLB) needed to communicate with the deployed Vespa
 application.
 
 Each Vespa Host will periodically sync its logs to a S3 bucket ("Log Archive").
@@ -28,16 +28,26 @@ inside the tenant's AWS account.
 #### Networking
 
 The enclave VPC is very network restricted. Vespa Hosts do not have public IPv4
-addresses and there is no
-[NAT gateway](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html)
-available in the VPC. Vespa Hosts have public IPv6 addresses and are able to
-make outbound connections. Inbound connections are not allowed. Outbound IPv6
-connections are used to bootstrap communication with the Configuration Servers,
-and to report operational metrics back to Vespa Cloud.
+addresses, but may make outbound connections via a
+[NAT gateway](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html).
+Vespa Hosts have public IPv6 addresses, and are able to
+make outbound connections. This is used to bootstrap communication with the Configuration Servers,
+and to report operational metrics back to Vespa Cloud.  Inbound connections are not allowed.
 
 When a Vespa Host is booted it will set up an encrypted tunnel back to the
 Configuration Servers. All communication between Configuration Servers and the
 Vespa Hosts will be run over this tunnel after it is set up.
+
+#### Multi-AZ Vespa Cloud zones
+
+In a multi-AZ zone, the VPC spans the region, while subnets are scoped to
+Availability Zones (AZs).  Subnets for the hosts and the load balancers
+are set up via Terraform in the Vespa Cloud control plane AZs, and
+in the zones your application wants to be present in.
+
+The NLB in front of each container cluster has cross-zone load balancing enabled,
+allowing each load balancer node to route connections to healthy containers across the
+application's AZs.
 
 ### Security
 
