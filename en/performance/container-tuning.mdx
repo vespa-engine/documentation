@@ -1,5 +1,6 @@
 ---
 title: "Container Tuning"
+sidebarTitle: "Container tuning"
 ---
 
 A collection of configuration parameters to tune the Container as used in Vespa. Some configuration parameters have native [services.xml](/en/basics/applications) support while others are configured through [generic config overrides](/en/reference/applications/config-files#generic-configuration-in-services-xml).
@@ -15,7 +16,7 @@ The container will pre-start the minimum number of worker threads, so even an id
 The effective thread pool configuration and utilization statistics can be observed through the [Container Metrics](/en/operations/metrics#container-metrics). See [Thread Pool Metrics](/en/operations/metrics#thread-pool-metrics) for a list of metrics exported.
 
 <Note>
-**Note:** 
+**Note:**
 
 If the queue size is set to 0 the metric measuring the queue size - `jdisc.thread_pool.work_queue.size` - will instead switch to measure how many threads are active.
 </Note>
@@ -24,11 +25,12 @@ If the queue size is set to 0 the metric measuring the queue size - `jdisc.threa
 
 A fixed size pool is preferable for stable latency during peak load, at a cost of a higher static memory load and increased context-switching overhead if excessive number of threads are configured. Variable size pool is mostly beneficial to minimize memory consumption during low-traffic periods, and in general if the size of peak load is somewhat unknown. The downside is that once all core threads are active, latency will increase as additional tasks are queued and launching extra threads is relatively expensive as it involves system calls to the OS.
 
+<a id="container-worker-threads-example" />
 ### Example
 
 Consider a container host with 8 vCPU. Setting `<threads>4</threads>` on the [search handler threadpool](/en/reference/applications/services/search#threadpool) yields `4 * 8 = 32` worker threads, and adding `<queue>25</queue>` gives the pool a total queue capacity of `32 * 25 = 800` requests. The same thread calculation applies to the [document processing handler threadpool](/en/reference/applications/services/docproc#threadpool), which does not support queue configuration. The example below shows a consistent configuration where the default thread pool, the search handler threadpool, and the document processing handler threadpool are all kept fixed.
 
-```xml expandable
+```xml
 <container id="container" version="1.0">
 
     <!-- The containers default thread pool -->
@@ -68,7 +70,7 @@ Consider a container host with 8 vCPU. Setting `<threads>4</threads>` on the [se
 
 ## Container memory usage
 
-> *Help, my container nodes are using more than 70% memory!*
+> Help, my container nodes are using more than 70% memory!
 
 It's common to observe the container process utilizing its maximum configured heap size. This, by itself, is not necessarily an indication of a problem. The Java Virtual Machine (JVM) manages memory within the allocated heap, and it's designed to use as much of it as possible to reduce the frequency of garbage collection.
 
@@ -80,7 +82,7 @@ Vespa exports several metrics to allow you to monitor JVM GC performance, such a
 
 Change the default JVM heap size settings used by Vespa to better suit the specific hardware settings or application requirements.
 
-By setting the relative size of the total JVM heap in [percentage of available memory](/en/reference/applications/services/container#nodes), one does not know exactly what the heap size will be, but the configuration will be adaptable and ensure that the container can start even in environments with less available memory. The example below allocates 50% of available memory on the machine to the JVM heap:
+By setting the relative size of the total JVM heap in [percentage of available memory](/en/reference/applications/services/container#jvm), one does not know exactly what the heap size will be, but the configuration will be adaptable and ensure that the container can start even in environments with less available memory. The example below allocates 50% of available memory on the machine to the JVM heap:
 
 ```xml
 <container id="container" version="1.0">
@@ -93,7 +95,7 @@ By setting the relative size of the total JVM heap in [percentage of available m
 
 ## JVM Tuning
 
-Use *gc-options* for controlling GC related parameters and *options* for tuning other parameters. See [reference documentation](/en/reference/applications/services/container#nodes). Example: Running with 4 GB heap using G1 garbage collector and using NewRatio = 1 (equal size of old and new generation) and enabling verbose GC logging (logged to stdout to vespa.log file).
+Use _gc-options_ for controlling GC related parameters and _options_ for tuning other parameters. See [reference documentation](/en/reference/applications/services/container#jvm). Example: Running with 4 GB heap using G1 garbage collector and using NewRatio = 1 (equal size of old and new generation) and enabling verbose GC logging (logged to stdout to vespa.log file).
 
 ```xml
 <container id="default" version="1.0">
@@ -109,9 +111,9 @@ The default heap size with docker image is 1.5g which can for high throughput ap
 
 ### Config Server and Config Proxy
 
-The config server and proxy are not executed based on the model in *services.xml*. On the contrary, they are used to bootstrap the services in that model. Consequently, one must use configuration variables to set the JVM parameters for the config server and config proxy. They also need to be restarted (*services* in the config proxy's case) after a change, but one does *not* need to *vespa prepare* or *vespa activate* first. Example:
+The config server and proxy are not executed based on the model in _services.xml_. On the contrary, they are used to bootstrap the services in that model. Consequently, one must use configuration variables to set the JVM parameters for the config server and config proxy. They also need to be restarted (_services_ in the config proxy's case) after a change, but one does _not_ need to _vespa prepare_ or _vespa activate_ first. Example:
 
-```bash
+```txt
 VESPA_CONFIGSERVER_JVMARGS      -Xlog:gc
 VESPA_CONFIGPROXY_JVMARGS       -Xlog:gc -Xmx256m
 ```
@@ -122,7 +124,7 @@ Refer to [Setting Vespa variables](/en/operations/self-managed/files-processes-a
 
 Some applications observe that the first queries made to a freshly started container take a long time to complete. This is typically due to some components performing lazy setup of data structures or connections. Lazy initialization should be avoided in favor of eager initialization in component constructor, but this is not always possible.
 
-A way to avoid problems with the first queries in such cases is to perform warmup queries at startup. This is done by issuing queries from the constructor of the Handler of regular queries. If using the default handler, [com.yahoo.search.handler.SearchHandler](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/handler/SearchHandler.java), subclass this and configure your subclass as the handler of query requests in *services.xml*.
+A way to avoid problems with the first queries in such cases is to perform warmup queries at startup. This is done by issuing queries from the constructor of the Handler of regular queries. If using the default handler, [com.yahoo.search.handler.SearchHandler](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/handler/SearchHandler.java), subclass this and configure your subclass as the handler of query requests in _services.xml_.
 
 Add a call to a warmupQueries() method as the last line of your handler constructor. The method can look something like this:
 

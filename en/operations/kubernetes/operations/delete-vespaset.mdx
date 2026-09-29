@@ -1,0 +1,49 @@
+---
+title: "Delete a VespaSet"
+---
+
+This page describes how to tear down a Vespa on Kubernetes deployment: first deleting a Vespa application, and then deleting the `VespaSet` itself.
+
+<Warning>
+**Important:**
+
+These operations are destructive: the Pods and their Persistent Volumes are deleted, and the data they hold is permanently removed.
+</Warning>
+
+<a id="delete-application" />
+## Delete an Application
+
+An application is deleted through the ConfigServers' [Deploy API](https://docs.vespa.ai/en/reference/api/deploy-v2.html), the same API used to deploy it. Issue a `DELETE` request to the following endpoint on the ConfigServer HTTP port (19071), reachable within the cluster through the `cfg-internal` Service — see [Configure External Access Layer](/en/operations/kubernetes/configuration/ingress#configserver):
+
+```txt
+DELETE /application/v2/tenant/default/application/default
+```
+
+The ConfigServers will remove all Pods belonging to the application — Container, Content, and Cluster-Controller Pods — along with their PersistentVolumeClaims. The ConfigServer Pods and the `VespaSet` remain, so a new application can be deployed onto the same infrastructure afterwards.
+
+The deletion is complete once the application's Pods and PersistentVolumeClaims are gone:
+
+```bash
+$ kubectl get pods,pvc -n $NAMESPACE
+```
+
+<a id="delete-vespaset" />
+## Delete the VespaSet
+
+Deleting the `VespaSet` removes the entire deployment, including the ConfigServers and any remaining application Pods:
+
+```bash
+$ kubectl delete vespaset vespaset-sample -n $NAMESPACE
+```
+
+The `VespaSet` carries a finalizer, so the deletion is performed as an orchestrated cleanup by the Operator rather than an immediate removal:
+
+1. The ConfigServer Pods are deleted first. This stops the automatic reconciliation that would otherwise recreate application Pods during the teardown.
+2. Any remaining Application Pods are then deleted immediately, without the graceful drain-and-flush shutdown — the deployment is going away, so there is no state to preserve.
+3. Once all Pods are gone, the finalizer is removed and the `VespaSet` is deleted. The dependent resources owned by it — Services, PersistentVolumeClaims, and any operator-generated RBAC resources — are then garbage-collected by Kubernetes.
+
+The deletion is complete when the `VespaSet` resource and its Pods no longer exist:
+
+```bash
+$ kubectl get vespaset,pods -n $NAMESPACE
+```

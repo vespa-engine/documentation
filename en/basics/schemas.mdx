@@ -1,11 +1,13 @@
 ---
-title: Schemas
+title: "Schemas"
 description: "This is an introduction to schemas in Vespa. You can find all the details in the [schema reference](/en/reference/schemas/schemas)."
 ---
 
-A schema defines a type of data and what we want to compute over it. An application package can contain multiple schemas for different kinds of data. Each content cluster specified in `services.xml` refers to the schemas that should be stored and indexed in that cluster. Schemas can inherit other schemas to avoid repeating common content.
+This is an introduction to schemas in Vespa. You can find all the details in the [schema reference](/en/reference/schemas/schemas).
 
-Schemas are placed in files named the same as the schema, with the ending `.sd` (for schema definition), in the `schemas/` directory of the application package.
+A schema defines a [type of data](/en/schemas/documents) and what we want to compute over it. An application package can contain many schemas for different kinds of data. Each [content cluster](/en/learn/overview#content-clusters) specified in services.xml refers to the schemas that should be stored an indexed in that cluster. Schemas can inherit other schemas to avoid repeating common content.
+
+Schemas are placed in files named the same as the schema, with the ending ".sd" (for schema definition), in the `schemas/` directory of the application package.
 
 ## Document fields
 
@@ -30,8 +32,8 @@ schema mySchema {
 Each field has a type, a way it should be processed and indexed, and optionally other settings. The main decision you make is how the field should be used in queries, determined by the `indexing` statement:
 
 - `indexing: summary`: The field should be available in query responses ([document summaries](/en/querying/document-summaries)).
-- `indexing: index`: If a string: create a full-text on-disk index. If a tensor: create an HNSW vector index (requires `attribute` in addition).
-- `indexing: attribute`: For any field type: make the field value available for structured search (exact, range, regexp etc.), ranking, sorting, grouping, and aggregation in the [in-memory column store](/en/content/attributes). Suitable for structured data.
+- `indexing: index`: If a string: Create a full-text on-disk index. If a tensor: Create an HNSW vector index (requires `attribute` in addition).
+- `indexing: attribute`: For any field type: Make the field value available for structured search (exact, range, regexp etc.), ranking, sorting, grouping, and aggregation in the [in-memory column store](/en/content/attributes). Suitable for structured data.
 - `indexing: attribute` and `attribute: fast-search`: As above, but in addition, create an index over this data to make it an efficient filter. Suitable for structured fields that are used as strong filters in queries.
 
 The indexing statement can contain multiple expressions separated by a pipe character, and these can also preprocess the value, so the pipe should be read as passing to the next expression, as on Unix. See the [reference](/en/reference/schemas/schemas#field) for all the types and content of fields.
@@ -40,7 +42,7 @@ When a schema is defined and added to a content cluster, you can [write data](/e
 
 ## Synthetic fields
 
-The document type in the schema defines the fields that you can put and get (read and write) for that document type. However, sometimes you want to take an input field and process it in some way before it is stored/indexed. To do that, you can create additional synthetic fields outside the document in the schema (for example using the [embed](/en/rag/embedding) function):
+The document type in the schema defines the fields that you can put and get (read and write) for that document type. However, sometimes you want to take an input field and process it in some way before it is stored/indexed. To do that, you can create additional synthetic fields outside the document in the schema:
 
 ```js
 schema mySchema {
@@ -62,9 +64,11 @@ schema mySchema {
 }
 ```
 
+Synthetic fields are often used to create embeddings, or combine/transform input values from one or more fields. See the [choice](/en/writing/indexing#choice-example) expression for how to use multiple inputs and set defaults to unset fields. See the [reference](/en/reference/writing/indexing-language#input) for details, including how to set defaults to fields with NULL values.
+
 ## Rank profiles
 
-A *rank profile* specifies what should be computed over the data described by the schema, and how the documents of it should be ranked to select the ones to return in a query response:
+A _rank profile_ specifies what should be computed over the data described by the schema, and how the documents of it should be ranked to select the ones to return in a query response:
 
 ```js
 schema mySchema {
@@ -90,22 +94,15 @@ A schema can have any number of rank profiles for different use cases, experimen
 
 ## Working with schemas
 
-Schemas may become thousands of lines, with inheritance, multiple rank functions calling each other and so on. The most efficient way of working with them is to use an IDE and install the Vespa plugin to get syntax highlighting, completions and navigation — see [IDE support](/en/applications/ide-support).
+Schemas may become thousands of lines, with inheritance, multiple rank functions calling each other and so on. The most efficient way of working with them is to use an IDE and install the Vespa plugin to get syntax highlighting, completions and navigation - see [IDE support](/en/applications/ide-support).
 
 What happens if you change the schema of a running application?
 
-- **Adding new fields**: No problem; the new field will be added and have no value until data is written to it.
+- **Adding new fields**: No problem, the new field will be added and have no value until data is written to it.
 - **Changing how a field is indexed**: This will automatically cause a background reindexing on Vespa Cloud, but in the meantime there may be inconsistency in how the field is used in queries and writes, so in production it is sometimes preferable to create a new field instead.
-- **Removing a field**: Data and indexes are removed for the field.
-- **Changing the type of a field**: Existing data and indexes are removed for the field. For this reason, it is often preferable to add a new field instead, populate it, switch usages to the new field, then remove the old.
+- **Removing a field:** Data and indexes are removed for the field.
+- **Changing the type of a field:** Existing data and indexes are removed for the field. For this reason, it is often preferable to add a new field instead, populate it, switch usages to the new field, then remove the old.
 
 You can find the details in [modifying schemas](/en/reference/schemas/schemas#modifying-schemas).
 
-### Multiple schemas
-
-An application package has one or more schemas. There is no hard limit to number of schemas, the largest application have hundreds.
-
-A schema defines how data is stored in a [content cluster](/en/learn/overview#content-clusters). The most common approach is storing all schemas in a single content cluster. Use more content clusters to isolate load or scale the clusters differently.
-
-A schema defines a [document type](/en/schemas/documents). One can store documents with the same document type in different content clusters. Use cases are A/B testing and hot/cold variations of data. Vespa will update documents in all content clusters with the same document type, the mapping is set in [services.xml](/en/reference/applications/services/content#document) using *type*.
-
+#### Next: [Writing](/en/basics/writing)

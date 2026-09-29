@@ -1,5 +1,6 @@
 ---
 title: "Ranking Expressions and Features"
+sidebarTitle: "Ranking expressions and features"
 ---
 
 Read the [ranking introduction](/en/basics/ranking) first. This guide is about [ranking expressions](/en/reference/ranking/ranking-expressions) and [rank features](/en/reference/ranking/rank-features), find guides and examples below.
@@ -26,13 +27,13 @@ Vespa's [rank feature set](/en/reference/ranking/rank-features) contains a large
 
 Include [default rank features](https://github.com/vespa-engine/system-test/blob/master/tests/search/rankfeatures/dump.txt) in query results by adding [ranking.listFeatures](/en/reference/api/query#ranking.listfeatures) to the query. This is useful for tasks like recording the rank feature values for automated training - learn more in the [tutorial](/en/learn/tutorials/text-search-ml). If more rank features than is available in the default set is wanted, they can be added to the set in the [rank profile](/en/reference/schemas/schemas#rank-features):
 
-```bash
-rank-features: feature1 feature2 â€¦
+```txt
+rank-features: feature1 feature2 …
 ```
 
 It is also possible to control which features to dump - add this to the rank profile:
 
-```bash
+```txt
 ignore-default-rank-features
 ```
 
@@ -44,9 +45,9 @@ The rank features provided includes both features normalized to the range 0-1, a
 
 ### Configuration
 
-Some features, most notably the [fieldMatch](/en/reference/ranking/rank-features#fieldMatch(name)) features, have configuration parameters that enables the feature calculation to be tweaked per field for performance or relevance. Feature configuration values are set by adding to the rank profile:
+Some features, most notably the [fieldMatch](/en/reference/ranking/rank-features#field-match-features-normalized) features, have configuration parameters that enables the feature calculation to be tweaked per field for performance or relevance. Feature configuration values are set by adding to the rank profile:
 
-```bash
+```txt
 rank-properties {
     featureName.configurationProperty: "value"
 }
@@ -54,7 +55,7 @@ rank-properties {
 
 The values are set per field, like:
 
-```js
+```txt
 rank-properties {
     fieldMatch(title).maxAlternativeSegmentations: 10
     fieldMatch(title).maxOccurrences: 5
@@ -70,7 +71,7 @@ Vespa ranking features are linear. For example, the [earliness](/en/reference/ra
 
 To achieve this, pass the feature value through a function which turns the line into a curve matching the intent. This is easiest with normalized fields. The function begins and ends in the same point, f(0)=0 and f(1)=1, but which curves in between. To get the effect described above, a curve which starts almost flat and ends steep works - example:
 
-```bash
+```txt
 pow(0-x,2)
 ```
 
@@ -80,15 +81,16 @@ The second number decides how pronounced the curving is. A larger number will ma
 
 For a training set containing judgements for certain documents, it is useful to select those documents in the query by adding a term matching the document ID, but without impacting the values of any rank features. To do this, add that term with [ranked](/en/reference/querying/yql#ranked) set to false:
 
-```bash
+```sql
 select * from mydocumenttype where myidfield contains ({ranked: false}"mydocumentid" and ...)
 ```
 
+<a id="accessing-feature-function-values-in-results" />
 ### Accessing feature/function values in results
 
 Any feature can be returned in the hit producing it by adding it to the list of [summary-features](/en/reference/schemas/schemas#summary-features) of the rank profile. As all functions are features this allows the result of any computation to be accessible in results. Example:
 
-```bash
+```js
 rank-profile test {
 
     summary-features: tensor_join join_sum
@@ -106,7 +108,7 @@ rank-profile test {
 
 The results of these functions will be available in the Hits of the result as follows:
 
-```js
+```java
 import com.yahoo.search.result.FeatureData;
 
     FeatureData featureData = (FeatureData)hit.getField("summaryfeatures");
@@ -129,17 +131,19 @@ Ranking expressions support conditional logic to choose between different sub-ex
 
 ### The if function
 
+<a id="the-if-function-and-string-equality-tests" />
+
 `if` can be used for other purposes than encoding MLR trained decision trees. One use is to choose different ranking functions for different types of documents in the same search. Ranking expressions are able to do string equality tests, so to choose between different ranking sub-functions based on the value of a string attribute (say, "category"), use an expression like:
 
-```py
-if (attribute(category)=="restaurant",_â€¦restaurant function_, if (attribute(category)=="hotel",_â€¦hotel function_, â€¦))
+```txt
+if (attribute(category)=="restaurant",…restaurant function, if (attribute(category)=="hotel",…hotel function, …))
 ```
 
 This method is also used automatically when multiple schemas are deployed to the same cluster, and all is included in the same query to choose the ranking expression from the correct schema for each document.
 
 By using `if` functions, one can also implement strict tiering, ensuring that documents having some criterion always gets a higher score than the other documents. Example:
 
-```py
+```txt
 if (fieldMatch(business).fieldCompleteness==1, 0.8+document.distance*0.2,
                                                if (attribute(category)=="shop", 0.6+fieldMatch(title)*0.2,
                                                                                  match*attribute(popularity)*0.6 )
@@ -153,11 +157,12 @@ Also see [pin results](/en/ranking/multivalue-query-operators#pin-results-exampl
 
 When comparing many values against the same discriminant value, the `switch` function provides a more readable alternative to deeply nested `if` statements. For example, the nested if expression above can be written more clearly as:
 
-```py
+```txt
 switch (attribute(category)) {
-    case "restaurant":_â€¦restaurant function_,
-    case "hotel":_â€¦hotel function_,
-    default:_â€¦default function_}
+    case "restaurant": …restaurant function,
+    case "hotel": …hotel function,
+    default: …default function
+}
 ```
 
 Use `switch` when testing a single expression for equality against multiple values. Continue using `if` for different comparison operators or when each condition tests different expressions, such as in the tiering example above. See the [switch function reference](/en/reference/ranking/ranking-expressions#the-switch-function) for details.
@@ -166,7 +171,7 @@ Use `switch` when testing a single expression for equality against multiple valu
 
 Ranking expressions can refer to constants defined in a `constants` clause:
 
-```bash
+```txt
 first-phase {
     expression: myConst1 + myConst2
 }
@@ -185,7 +190,7 @@ For performance, always prefer constants to query variables (see below) whenever
 
 As ranking expressions can refer to any feature by name, one can use [query features](/en/reference/ranking/rank-features#feature-list) as ranking variables. These variables can be used for example to allow the query to specify the degree of importance to various parts of a ranking expression, or to quickly search large parameter spaces to find a good ranking, by trying different values in each query. These variables can be assigned default values in the [rank profile](/en/reference/schemas/schemas#rank-profile) by adding:
 
-```bash
+```txt
 inputs {
     query(myvalue) double: 0.5
 }
@@ -193,7 +198,7 @@ inputs {
 
 to the rank profile. These variables can then be overridden in the query by adding:
 
-```bash
+```txt
 input.query(myvalue)=0.1
 ```
 
@@ -207,7 +212,7 @@ Without the correct tensor type, a passed query feature is handled as a string t
 
 Tensors can be passed in requests using the [tensor literal form](/en/reference/ranking/tensor#tensor-literal-form), for example:
 
-```bash
+```txt
 input.query(user_profile)=%7B%7Bcat%3Apop%7D%3A0.8%2C%7Bcat%3Arock%7D%3A0.2%2C%7Bcat%3Ajazz%7D%3A0.1%7D
 ```
 
@@ -233,14 +238,16 @@ public class TensorInQuerySearcher extends Searcher {
     }
 }
 ```
+
 Refer to the [Tensor](https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html) Java API for details on how to construct tensors programmatically.
+
 ## Function snippets
 
 When using machine learned ranking, we are searching a function space which is much more limited than the space of functions supported by ranking expressions. We can increase the space of functions available to MLR because the primitive features used in MLR training do not need to be primitive features in Vespa - they can just as well be ranking expression snippets. If there are certain mathematical combinations of features believed to be useful in an application, these can be pre-calculated from the actual primitive features of Vespa and given to MLR as primitives. Such primitives can then be replaced textually by the corresponding ranking expression snippet, before the learned expression is deployed on Vespa.
 
 Vespa supports [expression functions](/en/reference/schemas/schemas#function-rank). Functions having zero arguments can be used as summary- and rank-features. For example, the function "myfeature":
 
-```bash
+```js
 rank-profile myrankprofile inherits default {
     function myfeature() {
       expression: fieldMatch(title).completeness * pow(0 - fieldMatch(title).earliness, 2)
@@ -250,7 +257,7 @@ rank-profile myrankprofile inherits default {
 
 becomes available as a feature as follows:
 
-```bash
+```txt
 summary-features {
     myfeature
 }
@@ -266,7 +273,7 @@ The relevance metrics are `relevance.at_1`, `relevance.at_3` and `relevance.at_1
 
 If the user is underage, assign 0 to adult content and use the average of match quality in the title field and popularity among kids. If the user is not, use the match quality in the title field:
 
-```py
+```txt
 if ( query(userage) < 18,
      if ( attribute(adultness) > 0.1, 0 , (fieldMatch(title)+attribute(kidspopularity)) / 2 ),
      fieldMatch(title) )
@@ -274,7 +281,7 @@ if ( query(userage) < 18,
 
 Use a weighted average of the match quality in some fields, multiplied by 1-exp of the document age:
 
-```py
+```txt
 ( 10*fieldMatch(title) + 5*fieldMatch(description) +
   7*attributeMatch(tags).normalizedWeight ) /22 * ( 1 - age(creationtime) )
 ```

@@ -1,0 +1,83 @@
+---
+title: "Resource Management and Scaling"
+sidebarTitle: "Resource Scaling"
+---
+
+Resources, namely CPU, memory (RAM), and disk (Persistent Volume) are specified through a combination of the Application Package and VespaSet CRD. We've maintained the familiar notion of [resources](https://docs.vespa.ai/en/performance/node-resources.html) from the Application Package, while allowing Kubernetes-specific overrides when necessary.
+
+## Vespa Application Resources
+
+Resources for the Vespa Application Pods, including the Container, Content, and Cluster Controller Pods, are configured through the [Application Package](https://docs.vespa.ai/en/reference/applications/services/services.html). The requests from the Application Package will be directly translated to \[Kubernetes request and limit\](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#requests-and-limits) constraints for the Application Pods.
+
+For CPU, a whole number will translate to a virtual core, and a float will translate to a fractional CPU request. Memory values will translate to a `Gi` suffix, and disk values will translate to a `G` suffix. The disk value will be rounded to the nearest whole integer if a float is provided.
+
+For example:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0" xmlns:deploy="vespa">
+
+    <container id="default" version="1.0">
+        <document-api/>
+        <nodes count="2" exclusive="true">
+            <resources vcpu="1" memory="2Gb" disk="10Gb" />
+        </nodes>
+        <search/>
+    </container>
+
+    <content id="documentation" version="1.0">
+        <min-redundancy>2</min-redundancy>
+        <documents>
+            <document type="music" mode="index" />
+        </documents>
+        <nodes count="2">
+            <resources vcpu="1" memory="2Gb" disk="10Gb"   />
+        </nodes>
+    </content>
+</services>
+```
+
+This application package will translate to the following Kubernetes requests and limits for the Container and Content Pod. The Operator will set the request and limit resources equally, which is often safer for latency-sensitive JVM services.
+
+```bash
+$ kubectl get pod default-100 -n test -o jsonpath='{range .spec.containers[?(@.name=="vespa")]}requests: {.resources.requests}{"\n"}limits: {.resources.limits}{"\n"}{end}'
+
+requests: {"cpu":"1","memory":"2Gi"}
+limits: {"cpu":"1","memory":"2Gi"}
+```
+
+Additionally, it will create a PersistentVolumeClaim (PVC) requesting `10G` of storage.
+
+For all practical purposes, the Operator will impose a hard floor of `CPU=0.5`, `memory=1Gi`, and `disk=10Gb`.
+
+### Autoscaling
+
+Vespa on Kubernetes supports autoscaling through ranges specified in the `resource` elements in the application package. The Vespa Autoscaler acts on metrics that are exposed via the `/metrics/v2/` API. This does not require the Kubernetes Metrics Server to be enabled.
+
+Refer to the [Autoscaling](https://docs.vespa.ai/en/operations/autoscaling.html) guide for more details.
+
+## ConfigServer Resources
+
+ConfigServer Pod resources can be configured by overriding the `vespa` container's resource specification via [PodTemplate Overrides](/en/operations/kubernetes/configuration/custom-overrides-podtemplate). The ConfigServer deduces its heap size from the Pod cgroup limits, which are derived from the `requests` and `limits` set on the Pod. Setting requests and limits to the same value is recommended. Horizontally scaling the replica count for ConfigServer Pods is not currently supported.
+
+For example, the following specification in `VespaSet.spec.configServer.podTemplate` will tune the ConfigServer's request and limit resources to `CPU=4` and `memory=8Gi`.
+
+```txt
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: sample-vespaset
+spec:
+  configServer:
+    podTemplate:
+      spec:
+        containers:
+          - name: vespa
+            resources:
+              requests:
+                cpu: "4"
+                memory: "8Gi"
+              limits:
+                cpu: "4"
+                memory: "8Gi"
+```

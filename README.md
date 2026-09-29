@@ -46,6 +46,25 @@ via the [Mintlify GitHub app](https://dashboard.mintlify.com/settings/organizati
 [scripts/](scripts/) contains the helper scripts used to convert the Jekyll HTML/Markdown
 sources to MDX during the Mintlify migration, e.g. [scripts/html_to_mdx.py](scripts/html_to_mdx.py).
 
+[scripts/compare_with_branch.py](scripts/compare_with_branch.py) converts the master pages that have not
+changed since the migration and compares the result with the MDX on this branch, to measure how much
+manual fixing a converter's output would need:
+
+    $ scripts/compare_with_branch.py --converter jekyll_to_mdx:convert --diff-dir /tmp/mdx-diffs
+
+[scripts/jekyll_to_mdx.py](scripts/jekyll_to_mdx.py) is the converter; `scripts/jekyll_to_mdx.py en/foo.html`
+converts a page from `origin/master` into the working tree.
+
+[scripts/port_redirects.py](scripts/port_redirects.py) adds the redirects from master's `redirects.yml` and
+`redirect_from` frontmatter to `docs.json`; running it again only adds new ones.
+
+[scripts/check_mdx.mjs](scripts/check_mdx.mjs) compiles MDX pages and reports parse errors, JavaScript
+expressions (such as an unescaped `{name}`, which breaks the page when rendered) and components Mintlify
+does not provide. It needs `@mdx-js/mdx`, `remark-gfm` and `remark-math` installed somewhere:
+
+    $ npm install --prefix /tmp/mdxcheck @mdx-js/mdx remark-gfm remark-math
+    $ scripts/compare_with_branch.py --converter jekyll_to_mdx:convert --mdx-modules /tmp/mdxcheck
+
 ## Writing documentation
 
 This explains the style and considerations to follow before contributing documentation.

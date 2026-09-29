@@ -1,10 +1,12 @@
 ---
-title: Using Features Together
+title: "Using Features Together"
 ---
 
-<Danger>
-**Important:** Some features described on this page (notably [Saved Search Notifications](/en/modules/e-commerce/saved-search)) are experimental and under active development. APIs and configuration may change in backwards-incompatible ways - see the individual feature pages for details.
-</Danger>
+<Warning>
+**Important:**
+
+Some features described on this page (notably [Saved Search Notifications](/en/modules/e-commerce/saved-search)) are experimental and under active development. APIs and configuration may change in backwards-incompatible ways — see the individual feature pages for details.
+</Warning>
 
 The e-commerce features are designed as standalone components that can be composed together. This page covers the configuration needed when features interact at feed time or query time. Read the individual feature pages before this one:
 
@@ -34,10 +36,12 @@ A saved search filtering on NOK prices can then use `price_NOK_DEFAULT in [1000.
 The predicate field's `upper-bound` in the saved search schema must be large enough to cover the highest possible scaled converted price. Because prices are both currency-converted and scaled by `priceScaleFactor`, the resulting values can be significantly larger than the original prices.
 
 <Warning>
- **Warning:** If any single range feature in a predicate query exceeds the `upper-bound`, Vespa rejects the **entire** predicate query for that document, not just the out-of-range feature. This means the product will not match any saved searches at all.
+**Warning:**
+
+If any single range feature in a predicate query exceeds the `upper-bound`, Vespa rejects the **entire** predicate query for that document, not just the out-of-range feature. This means the product will not match any saved searches at all.
 </Warning>
 
-For example, with a scale factor of 100 and a EUR-to-SEK rate of \~11.76: a product priced at 200 EUR produces `price_SEK_DEFAULT = 200 Ã— 11.76 Ã— 100 = 235,294`. The `upper-bound` must be at least 235,294 for this to work.
+For example, with a scale factor of 100 and a EUR-to-SEK rate of ~11.76: a product priced at 200 EUR produces `price_SEK_DEFAULT = 200 × 11.76 × 100 = 235,294`. The `upper-bound` must be at least 235,294 for this to work.
 
 Choose an upper bound that covers your highest-priced products converted to the weakest target currency, multiplied by the scale factor. A generous margin is recommended to accommodate price and exchange rate fluctuations.
 
@@ -49,7 +53,7 @@ The following are minimal examples showing the fields required from each feature
 
 The product schema must include fields from both features: the saved search attributes (`price`, `category`, etc.) and the multi-currency fields (`seller_currency`, `per_market_price`).
 
-```js expandable
+```xml
 schema product {
     document product {
 
@@ -90,7 +94,7 @@ schema product {
 
 Set the `upper-bound` high enough to cover scaled converted prices. See [Predicate Upper Bound](#predicate-upper-bound) above.
 
-```js expandable
+```xml
 schema saved_search {
     document saved_search {
         field filters type predicate {
@@ -109,9 +113,9 @@ schema saved_search {
 
 ### Services Configuration
 
-Both features are configured in the same container cluster. The example below shows a combined setup - the key addition is the `multicurrency` block inside the `ecommerce-schema-wiring` config of the document processor:
+Both features are configured in the same container cluster. The example below shows a combined setup — the key addition is the `multicurrency` block inside the `ecommerce-schema-wiring` config of the document processor:
 
-```xml expandable
+```xml
 <services version="1.0">
     <container id="default" version="1.0">
         <search>
@@ -200,6 +204,7 @@ Both features are configured in the same container cluster. The example below sh
 </services>
 ```
 
+<a id="multicurrency-config" />
 ### Multi-currency Configuration Reference
 
 These parameters are part of the `ecommerce-schema-wiring` config and only apply when the saved search document processor is used together with multi-currency:
@@ -215,29 +220,31 @@ These parameters are part of the `ecommerce-schema-wiring` config and only apply
   </thead>
   <tbody>
     <tr>
-      <td><code>{`multicurrency.enabled`}</code></td>
+      <td>`multicurrency.enabled`</td>
       <td>Enable generation of per-currency price features at feed time.</td>
-      <td><code>{`bool`}</code></td>
-      <td><code>{`false`}</code></td>
+      <td>`bool`</td>
+      <td>`false`</td>
     </tr>
     <tr>
-      <td><code>{`multicurrency.featurePrefix`}</code></td>
-      <td>Prefix for the generated predicate range features. A feature is named <code>{`{prefix}_{currency}_{market}`}</code>.</td>
-      <td><code>{`string`}</code></td>
-      <td><code>{`price`}</code></td>
+      <td>`multicurrency.featurePrefix`</td>
+      <td>Prefix for the generated predicate range features. A feature is named `{prefix}_{currency}_{market}`.</td>
+      <td>`string`</td>
+      <td>`price`</td>
     </tr>
     <tr>
-      <td><code>{`multicurrency.priceScaleFactor`}</code></td>
+      <td>`multicurrency.priceScaleFactor`</td>
       <td>Integer multiplier applied to converted prices before feeding as predicate range features. Predicate ranges require integer values, so this preserves decimal precision. A factor of 100 preserves two decimal places.</td>
-      <td><code>{`int`}</code></td>
-      <td><code>{`100`}</code></td>
+      <td>`int`</td>
+      <td>`100`</td>
     </tr>
   </tbody>
 </table>
 
-<Info>
- **Note:** The `productFields` config block is shared between both features. When combining, use the same field names in the searcher and document processor configurations.
-</Info>
+<Note>
+**Note:**
+
+The `productFields` config block is shared between both features. When combining, use the same field names in the searcher and document processor configurations.
+</Note>
 
 ### Feeding Workflow
 
@@ -245,10 +252,12 @@ When both features are active, the feeding workflow is:
 
 1. Feed the forex document (`id:forex:forex::forex`) and wait for the `CachedForexRateService` to reach `READY` state
 2. Feed saved search documents to the content cluster
-3. Feed products to the `notification-route` - the document processor will generate multi-currency predicate features and match against saved searches
+3. Feed products to the `notification-route` — the document processor will generate multi-currency predicate features and match against saved searches
 
 <Warning>
- **Warning:** The forex rates must be loaded before feeding products to the notification route. If the `ForexRateService` is not ready, the document processor cannot generate currency-converted price features.
+**Warning:**
+
+The forex rates must be loaded before feeding products to the notification route. If the `ForexRateService` is not ready, the document processor cannot generate currency-converted price features.
 </Warning>
 
 ## See Also

@@ -1,0 +1,296 @@
+---
+title: "Telemetry export"
+---
+
+Telemetry export lets you ship your application's metrics and logs from Vespa Cloud directly to your own observability backend — a fully self-service, push-based alternative to the pull-based [Prometheus metrics API](/en/operations/monitoring#prometheus-metrics-api). You declare one or more [exporters](#exporter) in [services.xml](/en/reference/applications/services/services); Vespa Cloud then runs a collector on your hosts that scrapes the selected metrics, tails the selected logs, and pushes them to the backend(s) you configure, authenticated with credentials from your vault. Configure your vault and secrets using the [Vespa secret store](/en/security/secret-store), grant infrastructure access, add the telemetry exporter configuration, deploy, and telemetry starts flowing in minutes.
+
+<Warning>
+**Important:**
+
+Telemetry export is available for [Vespa Cloud Enclave](/en/operations/enclave/enclave) only.
+</Warning>
+
+## Exporter
+
+An _exporter_ is a single export target: it defines one backend destination, how to authenticate to it, and which signals (metrics and/or logs) to send there. It is the [exporter](https://opentelemetry.io/docs/collector/configuration/#exporters) concept from the OpenTelemetry Collector — the component that delivers telemetry to a specific destination. Configure **up to three exporters** to fan your telemetry out to multiple backends — each with its own destination, authentication, metric set, and log selection.
+
+## How it works
+
+On deploy, Vespa Cloud provisions and runs a dedicated [OpenTelemetry collector](https://opentelemetry.io/docs/collector/) on each of your Enclave hosts — as of now, [Grafana Alloy](https://grafana.com/docs/alloy/latest/) — running isolated from Vespa's own observability so a failure in your export pipeline cannot affect your nodes. For each exporter, the system generates a collector configuration that scrapes the configured metric sets from the internal Vespa metrics endpoint, tails the selected log files, and enriches each metric point and log line with labels such as hostname, parent hostname, and zone. The collector then batches the data and pushes it to your backend over HTTPS.
+
+A [metric set](/en/operations/metrics#metric-sets) is a named selection of Vespa metrics, and is the unit the collector exports: the OpenTelemetry collector consumes the metric set(s) referenced by each exporter. To limit or customize which metrics are exported — rather than exporting a predefined set such as `default` — define your own metric set and configure the exporter to collect it.
+
+Authentication tokens for your telemetry backend stay in your [Vespa secret store](/en/security/secret-store) vault and are referenced from `services.xml` by name only — never embedded in the application package. They are resolved securely and used solely to authenticate the collector to your backend. To enable this, grant _infrastructure access_ to the vault once for your Enclave cloud account: the collector reads your secret once to set up the export, so the Vespa infrastructure needs read access to it. This access is given to the platform's identity, not to people — having access to a host does not let anyone read your secret. It stays within your own cloud account, is read-only, and is used only to set up the collector, so your secret is never exposed to others, including Vespa operators.
+
+<Frame>
+![Telemetry export architecture: a collector on the Vespa host scrapes metrics
+          and tails logs from the tenant container node and pushes them to one or more external backends.](/assets/img/telemetry-export-architecture.png)
+</Frame>
+
+### Labels
+
+Exported metrics and logs are labeled with metadata identifying where they came from, so you can filter and group them by host, application, zone, cluster, and cloud in your backend.
+
+**Metrics** carry Vespa's standard metric labels (such as `applicationId`, `clusterid`, `clustertype`, `vespa_service`), and the pipeline ensures these are present:
+
+- `host` — the node's hostname.
+- `parentHostname` — the host the node runs on.
+- `zone` — the zone, as `<environment>.<region>`.
+- `system` — the Vespa system (for example `publiccd`).
+
+**Logs** — each log line is labeled with these resource attributes, following [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/):
+
+- `ai.vespa.system` — the Vespa system.
+- `ai.vespa.zone` — the zone.
+- `ai.vespa.instance` — the application instance (`<tenant>.<application>.<instance>`).
+- `ai.vespa.node` — the Vespa node name.
+- `host.name` — the host the node runs on.
+- `ai.vespa.cluster` — the cluster name.
+- `ai.vespa.cluster_type` — the cluster type (`container`, `content`, …).
+- `ai.vespa.group` — the content group.
+- `log.file.name` — the source log file.
+
+Log lines are additionally parsed into structured fields such as timestamp, level, and component.
+
+**Cloud attributes** — for both metrics and logs, the collector detects the host's cloud environment and adds standard `cloud.*` and `host.*` resource attributes, such as `cloud.provider`, `cloud.account.id`, `cloud.region`, `cloud.availability_zone`, `host.id`, and `host.type`.
+
+<a id="prerequisites" />
+## Before you begin
+
+Complete the following before configuring telemetry export:
+
+1. Confirm your application runs on [Vespa Cloud Enclave](/en/operations/enclave/enclave).
+2. In the [Vespa secret store](/en/security/secret-store), create a vault and add the authentication secret(s) your backend requires.
+3. Grant _infrastructure access_ to the vault for your Enclave cloud account, so the Vespa hosts can read the secret.
+
+<Note>
+**Note:**
+
+A `googlecloud` exporter authenticates with the host's workload identity instead of a vault secret. In your Google Cloud project, enable the Cloud Monitoring and Cloud Logging APIs, and grant the Enclave host service account the `roles/monitoring.metricWriter` (metrics) and `roles/logging.logWriter` (logs) roles. Without these, the exporter runs but no data is recorded.
+</Note>
+
+## Configuration
+
+Telemetry export is configured under `<admin version="4.0"><telemetry>` in [services.xml](/en/reference/applications/services/services). Each `<exporter>` maps to a Grafana Alloy [exporter component](https://grafana.com/docs/alloy/latest/reference/components/otelcol/) and is configured with the attributes and child elements below. At most three exporters may be configured per application.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute / element</th>
+      <th>Required</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>`id`</td>
+      <td>Yes</td>
+      <td>A unique identifier for the exporter.</td>
+    </tr>
+    <tr>
+      <td>`type`</td>
+      <td>Yes</td>
+      <td>The exporter type: `otlp`, `otlphttp`, or `googlecloud`. Determines the Alloy exporter component the exporter maps to.</td>
+    </tr>
+    <tr>
+      <td>`endpoint`</td>
+      <td>For `otlp` / `otlphttp`</td>
+      <td>The telemetry backend URL.</td>
+    </tr>
+    <tr>
+      <td>`project`</td>
+      <td>For `googlecloud`</td>
+      <td>The Google Cloud project ID. Not used by `otlp` / `otlphttp`.</td>
+    </tr>
+    <tr>
+      <td>[`<auth>`](#auth)</td>
+      <td>If the backend requires authentication</td>
+      <td>Authenticates the exporter to your backend.</td>
+    </tr>
+    <tr>
+      <td>[`<metric-set>`](#metric-sets)</td>
+      <td>To export metrics</td>
+      <td>Selects a set of metrics to export.</td>
+    </tr>
+    <tr>
+      <td>[`<logs>`](#logs)</td>
+      <td>To export logs</td>
+      <td>Selects the log files to export.</td>
+    </tr>
+  </tbody>
+</table>
+
+<a id="auth" />
+### Authentication — `<auth>`
+
+For `otlp` / `otlphttp` exporters whose backend requires authentication, add an `<auth>` element with exactly one of the methods below. Each references a [vault](/en/security/secret-store) and the secret name(s) holding the credential; the secret values themselves stay in the vault. A `googlecloud` exporter does not use `<auth>`.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Method</th>
+      <th>Attributes</th>
+      <th>Sends</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>`<bearer-token>`</td>
+      <td>`vault`, `secret-name`</td>
+      <td>`Authorization: Bearer <token>`</td>
+    </tr>
+    <tr>
+      <td>`<api-key>`</td>
+      <td>`vault`, `secret-name`, `header`</td>
+      <td>The secret value in the header named by `header`.</td>
+    </tr>
+    <tr>
+      <td>`<basic-auth>`</td>
+      <td>`vault`, `username-secret-name`, `password-secret-name`</td>
+      <td>An HTTP Basic `Authorization` header.</td>
+    </tr>
+  </tbody>
+</table>
+
+<a id="metric-sets" />
+### Metrics — `<metric-set>`
+
+Add a `<metric-set>` for each metric set to export, referenced by `id`. Use a predefined set such as `default`, or a custom set defined as a [metrics consumer](/en/operations/metrics#metric-sets). An exporter may reference several metric sets.
+
+<a id="logs" />
+### Logs — `<logs>`
+
+Add a `<logs>` element containing one or more `<type>` entries, with `id` set to `container-logs` (the application's Vespa log) and/or `access-logs` (the container access log).
+
+## Examples
+
+Define a custom metric set and export it by `id`:
+
+```xml
+<admin version="4.0">
+  <metrics>
+    <consumer id="my-set">
+      <metric id="content.proton.documentdb.documents.active.last"/>
+      <metric id="content.proton.documentdb.matching.rank_profile.query_latency.average"/>
+    </consumer>
+  </metrics>
+  <telemetry>
+    <exporter id="my-backend" type="otlphttp" endpoint="https://otel.example.com:4318">
+      <auth>
+        <bearer-token vault="telemetry" secret-name="otlp-token"/>
+      </auth>
+      <metric-set id="my-set"/>
+    </exporter>
+  </telemetry>
+</admin>
+```
+
+OTLP over HTTP with a bearer token, exporting both metrics and logs:
+
+```xml
+<admin version="4.0">
+  <telemetry>
+    <exporter id="my-backend" type="otlphttp" endpoint="https://otel.example.com:4318">
+      <auth>
+        <bearer-token vault="telemetry" secret-name="otlp-token"/>
+      </auth>
+      <metric-set id="default"/>
+      <logs>
+        <type id="container-logs"/>
+        <type id="access-logs"/>
+      </logs>
+    </exporter>
+  </telemetry>
+</admin>
+```
+
+API key in a custom header:
+
+```xml
+<exporter id="metrics" type="otlphttp" endpoint="https://otel.example.com:4318">
+  <auth>
+    <api-key vault="telemetry" secret-name="api-key" header="X-API-Key"/>
+  </auth>
+  <metric-set id="default"/>
+</exporter>
+```
+
+Basic authentication:
+
+```xml
+<exporter id="metrics" type="otlphttp" endpoint="https://otel.example.com:4318">
+  <auth>
+    <basic-auth vault="telemetry"
+                username-secret-name="user"
+                password-secret-name="pass"/>
+  </auth>
+  <metric-set id="default"/>
+</exporter>
+```
+
+Google Cloud — metrics to Cloud Monitoring, logs to Cloud Logging (no `<auth>`; see [Before you begin](#prerequisites) for the required project setup):
+
+```xml
+<exporter id="gcp" type="googlecloud" project="my-gcp-project">
+  <metric-set id="default"/>
+  <logs>
+    <type id="container-logs"/>
+  </logs>
+</exporter>
+```
+
+Different backends per environment, using [deployment variants](/en/operations/deployment-variants):
+
+```xml
+<services version="1.0" xmlns:deploy="vespa">
+  <admin version="4.0">
+    <telemetry>
+      <exporter id="metrics" type="otlphttp" endpoint="https://otel.example.com:4318"
+                deploy:environment="prod">
+        <auth>
+          <bearer-token vault="telemetry" secret-name="prod-token"/>
+        </auth>
+        <metric-set id="default"/>
+      </exporter>
+      <exporter id="metrics" type="otlphttp" endpoint="https://otel-dev.example.com:4318"
+                deploy:environment="dev">
+        <auth>
+          <bearer-token vault="telemetry" secret-name="dev-token"/>
+        </auth>
+        <metric-set id="default"/>
+      </exporter>
+    </telemetry>
+  </admin>
+</services>
+```
+
+<a id="operations" />
+## Operations and troubleshooting
+
+By default, each exporter also sends the collector's own self-metrics to your backend, alongside your application metrics and logs. Use these to observe the export pipeline itself: include whichever are relevant in your dashboards, and define alerts both on their values and on _missing data_ — absent self-metrics can indicate the collector is no longer running.
+
+Recommended metrics to consume:
+
+- Metric points sent — `otelcol_exporter_sent_metric_points_total`
+- Metric points that failed to send — `otelcol_exporter_send_failed_metric_points_total`
+- Log records sent — `otelcol_exporter_sent_log_records_total`
+- Log records that failed to send — `otelcol_exporter_send_failed_log_records_total`
+- Collector CPU and memory usage — `alloy_resources_process_cpu_seconds_total`, `alloy_resources_process_resident_memory_bytes`
+- Configuration load success — `alloy_config_last_load_successful`
+- Running components — `alloy_component_controller_running_components`
+- Collector start time, to detect restarts — `alloy_resources_process_start_time_seconds`
+
+Vespa Cloud also monitors the collector's health and export success on its side and raises alarms on failures, such as the collector failing to start or persistent export errors.
+
+If a deployment fails, make sure the vault exists and that [infrastructure access](#prerequisites) to it has been granted for your Enclave cloud account.
+
+Operating the telemetry backend is your responsibility. If the endpoint rejects incoming data or becomes unavailable, the collector retries and buffers the data for a limited period, so brief interruptions are tolerated. A prolonged outage, however, exhausts the queue, and the affected telemetry — including the collector's self-metrics, which are delivered over the same path — is then permanently lost. We recommend monitoring the endpoint's availability independently and ensuring it remains in a healthy, operational state to prevent telemetry loss.
+
+Independently of telemetry export, application metrics remain available at all times in the [Vespa Cloud Console](/en/operations/monitoring), which you can rely on as a fallback should the export pipeline be unavailable.
+
+<a id="supported-signals" />
+## Supported signals and limitations
+
+- **Metrics** and **logs** are supported.
+- **Traces** are not supported yet.
+- Export is customizable by metric set and by log file. Additional customizations and transformations in the telemetry pipeline are not supported at this time. If you need additional capabilities, let us know through [support](/en/cloud/support).

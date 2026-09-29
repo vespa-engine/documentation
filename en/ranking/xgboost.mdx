@@ -15,7 +15,7 @@ Vespa supports two XGBoost model formats: UBJ (recommended) and JSON (legacy).
 
 The recommended way to export an XGBoost model for Vespa is using [`save_model()`](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.save_model) with the `.ubj` (Universal Binary JSON) extension. UBJ has been the default XGBoost model format since XGBoost 2.1.0 and preserves all model information: tree structure, `base_score`, feature names, and objective.
 
-
+&lt;pre>
 ```python
 import xgboost as xgb
 import numpy as np
@@ -29,26 +29,21 @@ model = xgb.train(param, dtrain, num_boost_round=10)
 # Export as UBJ
 model.save_model("my_model.ubj")
 ```
-
-
+&lt;/pre>
 
 <Warning>
-**Important:**
+**Warning:**
 
-Do **not** use `save_model("model.json")` — this produces a different JSON structure
-(with a `learner` wrapper) that Vespa cannot parse. Only `dump_model()` with `dump_format="json"` is supported for the JSON path.
+Do **not** use `save_model("model.json")` — this produces a different JSON structure (with a `learner` wrapper) that Vespa cannot parse. Only `dump_model()` with `dump_format="json"` is supported for the JSON path.
 </Warning>
-
 
 Since the UBJ format preserves the objective, Vespa automatically applies the correct transformation (e.g. sigmoid for logistic objectives) — no need to wrap the ranking expression manually.
 
 ### JSON format (legacy)
 
-Vespa also supports importing XGBoost's JSON model dump via
-[`dump_model()`](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.dump_model)
-with `dump_format="json"`.
+Vespa also supports importing XGBoost's JSON model dump via [`dump_model()`](https://xgboost.readthedocs.io/en/latest/python/python_api.html#xgboost.Booster.dump_model) with `dump_format="json"`.
 
-
+&lt;pre>
 ```python
 import xgboost as xgb
 
@@ -57,11 +52,11 @@ param = {"base_score": 0, "max_depth": 1, "objective": "reg:squarederror"}
 bst = xgb.train(param, dtrain, 2)
 bst.dump_model("trained-model.json", fmap="feature-map.txt", with_stats=False, dump_format="json")
 ```
-
+&lt;/pre>
 
 This produces a JSON array of tree objects:
 
-
+&lt;pre>
 ```json
 [
   { "nodeid": 0, "depth": 0, "split": "fieldMatch(title).completeness", "split_condition": 0.772132337, "yes": 1, "no": 2, "missing": 1, "children": [
@@ -74,21 +69,17 @@ This produces a JSON array of tree objects:
   ]}
 ]
 ```
-
+&lt;/pre>
 
 The `split` attribute represents the Vespa feature name and must resolve to a Vespa [rank feature](/en/reference/ranking/rank-features) defined in the [document schema](/en/basics/schemas), or a user-defined [function](/en/ranking/ranking-expressions-features#function-snippets).
 
 The training data is represented using [LibSVM text format](https://xgboost.readthedocs.io/en/latest/tutorials/input_format.html). See also a complete [XGBoost training notebook](https://github.com/vespa-engine/sample-apps/blob/master/commerce-product-ranking/notebooks/Train-xgboost.ipynb) using `ranking` objective.
 
-
 <Warning>
-**Important:**
+**Warning:**
 
-`dump_model()` JSON does **not** preserve `base_score`.
-Set `base_score=0` during training, or accept that Vespa predictions will be offset.
-For logistic objectives, you must manually wrap the expression in `sigmoid()` (see [Objective types](#xgboost-objective-types)).
+`dump_model()` JSON does **not** preserve `base_score`. Set `base_score=0` during training, or accept that Vespa predictions will be offset. For logistic objectives, you must manually wrap the expression in `sigmoid()` (see [Objective types](#xgboost-objective-types)).
 </Warning>
-
 
 ## Feature mappings from XGBoost to Vespa
 
@@ -98,18 +89,15 @@ Model feature names must map to Vespa [rank features](/en/reference/ranking/rank
 
 For UBJ models, place a features file named `<model_name>-features.txt` alongside the `.ubj` file in the `models` directory. The file contains one feature name per line, matching the training column order:
 
-
 ```txt
 feature_1
 feature_2
 feature_3
 ```
 
-
 For a model file named `my_model.ubj`, the features file must be named `my_model-features.txt`.
 
 Then define rank profile [functions](/en/ranking/ranking-expressions-features#function-snippets) that match the feature names and map them to Vespa document attributes or query features:
-
 
 ```js
 schema my_app {
@@ -138,20 +126,17 @@ schema my_app {
 }
 ```
 
-
 If the model was trained with feature names that are valid Vespa rank features (e.g. `attribute(price)`), the functions are not needed — Vespa resolves them directly.
 
 ### JSON feature mapping
 
 When using `dump_model()`, XGBoost names features by array index (`f0`, `f1`, ...) unless a feature map file (`fmap`) is provided. The `fmap` maps feature indices to named Vespa features:
 
-
 ```bash
 $ cat feature-map.txt | egrep "fieldMatch\(title\).completeness|fieldMatch\(title\).importance"
 36  fieldMatch(title).completeness q
 39  fieldMatch(title).importance q
 ```
-
 
 In this example, feature at index 36 maps to [fieldMatch(title).completeness](/en/reference/ranking/rank-features#fieldMatch(name).completeness) and index 39 maps to [fieldMatch(title).importance](/en/reference/ranking/rank-features#fieldMatch(name).importance).
 
@@ -167,8 +152,7 @@ When using Pandas `DataFrame`s with column names, the feature names are embedded
 
 To import an XGBoost model, add the model file to your application package under the `models` directory. For UBJ models, also include the corresponding `-features.txt` file:
 
-
-```bash
+```txt
 ├── models
 │   ├── my_model.ubj
 │   ├── my_model-features.txt
@@ -178,13 +162,11 @@ To import an XGBoost model, add the model file to your application package under
 └── services.xml
 ```
 
-
 An application package can have multiple models.
 
 ## Ranking with XGBoost models
 
 Vespa has a `xgboost` [ranking feature](/en/reference/ranking/rank-features). This ranking feature specifies the model to use in a ranking expression. Both UBJ and JSON models use the same ranking feature:
-
 
 ```js
 schema my_app {
@@ -199,12 +181,11 @@ schema my_app {
 }
 ```
 
-
 Here, we specify that the model `my_model.ubj` is applied to the top ranking documents by the first-phase ranking expression. The query request must specify `prediction` as the [ranking.profile](/en/reference/api/query#ranking.profile). See also [Phased ranking](/en/ranking/phased-ranking) on how to control number of data points/documents which is exposed to the model.
 
 Generally the run time complexity is determined by:
 
-* The number of documents evaluated [per thread](../performance/sizing-search.html) / number of nodes and the query filter
+* The number of documents evaluated [per thread](/en/performance/sizing-search) / number of nodes and the query filter
 * The complexity of computing features. For example `fieldMatch` features are 100x more expensive than `nativeFieldMatch/nativeRank`.
 * The number of XGBoost trees and the maximum depth per tree
 
@@ -228,6 +209,8 @@ rank-profile prediction inherits default {
 This is a rank profile setting, not a query parameter - it is applied when the model is compiled, so it cannot be toggled per query. To A/B test it, create a second rank profile that only adds this property.
 
 <Note>
+**Note:**
+
 Fast forest evaluation only applies when every split in the model is numeric (`<` or its inverted form), no tree has more than 2,048 leaves, and the root expression is the bare sum of trees. UBJ models are therefore never eligible: the importer always appends `base_score` to the tree sum. Legacy JSON models are eligible for `reg:squarederror` and ranking objectives, but not when the expression is wrapped in another function — for instance `sigmoid(xgboost(...))` for a logistic objective. In any of these cases the setting has no effect and Vespa silently falls back to the default evaluator.
 </Note>
 
@@ -235,19 +218,15 @@ The speedup depends more on the number of leaves per tree than on the number of 
 
 ## Categorical features
 
-
 <Warning>
-**Important:**
+**Warning:**
 
-Vespa does **not** support XGBoost's native categorical splits
-(`enable_categorical=True`). Deploying a model with native categorical splits will **silently produce
-wrong predictions** — Vespa interprets the categorical split condition as a numerical threshold.
+Vespa does **not** support XGBoost's native categorical splits (`enable_categorical=True`). Deploying a model with native categorical splits will **silently produce wrong predictions** — Vespa interprets the categorical split condition as a numerical threshold.
 </Warning>
-
 
 To use categorical features with XGBoost models in Vespa, integer-encode them before training:
 
-
+&lt;pre>
 ```python
 import xgboost as xgb
 import pandas as pd
@@ -262,7 +241,7 @@ param = {"max_depth": 4, "objective": "binary:logistic"}
 model = xgb.train(param, dtrain, num_boost_round=100)
 model.save_model("my_model.ubj")
 ```
-
+&lt;/pre>
 
 In the Vespa schema, store integer-encoded categoricals as `int` attributes and map them via rank profile functions like any other numerical feature.
 
@@ -282,7 +261,6 @@ Vespa evaluates XGBoost models by summing the tree outputs. The only objective-s
 
 For UBJ models, Vespa reads the objective from the model file. For logistic objectives, the `base_score` is automatically transformed (logit) so the model output matches XGBoost's predictions without manual adjustment:
 
-
 ```js
 schema my_app {
     rank-profile classify inherits default {
@@ -293,9 +271,7 @@ schema my_app {
 }
 ```
 
-
 Note that UBJ does not automatically apply a sigmoid to the final output. For logistic objectives, wrap the expression in `sigmoid()` if you need a probability:
-
 
 ```js
 schema my_app {
@@ -307,7 +283,6 @@ schema my_app {
 }
 ```
 
-
 For ranking objectives and `reg:squarederror`, the raw tree sum can be used directly.
 
 ### JSON models
@@ -318,7 +293,7 @@ For `reg:logistic` and `binary:logistic`, the raw margin tree sum needs to be pa
 
 An example using the sklearn toy datasets:
 
-
+&lt;pre>
 ```python
 from sklearn import datasets
 import xgboost as xgb
@@ -328,10 +303,9 @@ c.fit(breast_cancer.data, breast_cancer.target)
 c.get_booster().dump_model("binary_breast_cancer.json", fmap="feature-map.txt", dump_format="json")
 c.predict_proba(breast_cancer.data)[:, 1]
 ```
-
+&lt;/pre>
 
 To represent the `predict_proba` function of XGBoost for the binary classifier in Vespa, use the [sigmoid function](/en/reference/ranking/ranking-expressions):
-
 
 ```js
 schema my_app {
@@ -343,9 +317,7 @@ schema my_app {
 }
 ```
 
-
 When the `base_score` is not the default (0.5), the sigmoid alone is insufficient. The full formula accounting for `base_score` is:
-
 
 ```js
 schema my_app {
@@ -360,11 +332,13 @@ schema my_app {
 }
 ```
 
-
 Replace `0.5` with the actual `base_score` used during training. See the [XGBoost System Test](https://github.com/vespa-engine/system-test/tree/master/tests/search/xgboost) for a complete working example.
 
 ## Debugging Vespa inference score versus XGBoost predict score
 
-* For JSON models, the `base_score` and optimal number of trees (if trained with early stopping) are lost in the dump. UBJ models preserve this information. XGBoost also has different predict functions (e.g. predict/predict_proba). The following [XGBoost System Test](https://github.com/vespa-engine/system-test/tree/master/tests/search/xgboost) demonstrates how to represent different types of XGBoost models in Vespa.
-* For training, features should be scraped from Vespa, using either `match-features` or `summary-features` so that features from offline training matches the online Vespa computed features. Dumping features can also help debug any differences by zooming into specific query,document pairs using [recall](/en/reference/api/query#recall) parameter.
-* In a distributed setting when multiple nodes use the model, text matching features such as `nativeRank`, `nativeFieldMatch`, `bm25` and `fieldMatch` might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](/en/reference/ranking/rank-features#query-features), which is computed from the locally indexed corpus. The `term(n).significance` feature is related to *Inverse Document Frequency (IDF)*. The `term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.
+* For JSON models, the `base_score` and optimal number of trees (if trained with early stopping) are lost in the dump.
+  UBJ models preserve this information. XGBoost also has different predict functions (e.g. predict/predict_proba). The following [XGBoost System Test](https://github.com/vespa-engine/system-test/tree/master/tests/search/xgboost) demonstrates how to represent different types of XGBoost models in Vespa.
+* For training, features should be scraped from Vespa, using either `match-features` or `summary-features` so
+  that features from offline training matches the online Vespa computed features. Dumping features can also help debug any differences by zooming into specific query,document pairs using [recall](/en/reference/api/query#recall) parameter.
+* In a distributed setting when multiple nodes use the model, text matching features such as `nativeRank`, `nativeFieldMatch`, `bm25` and `fieldMatch`
+  might differ, depending on which node produced the hit. The reason is that all these features use [term(n).significance](/en/reference/ranking/rank-features#query-features), which is computed from the locally indexed corpus. The `term(n).significance` feature is related to *Inverse Document Frequency (IDF)*. The `term(n).significance` should be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus.

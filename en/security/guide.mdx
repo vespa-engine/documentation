@@ -2,12 +2,11 @@
 title: "Security Guide"
 ---
 
-Vespa Cloud has several security mechanisms it is important for developers to understand. Vespa Cloud has two different interaction paths, *Data Plane* and *Control Plane*. Communication with the Vespa application goes through the *Data Plane*, while the *Control Plane* is used to manage Vespa tenants and applications.
+Vespa Cloud has several security mechanisms it is important for developers to understand. Vespa Cloud has two different interaction paths, _Data Plane_ and _Control Plane_. Communication with the Vespa application goes through the _Data Plane_, while the _Control Plane_ is used to manage Vespa tenants and applications.
 
-The *Control Plane* and the *Data Plane* has different security mechanisms, described in this guide.
+The _Control Plane_ and the _Data Plane_ has different security mechanisms, described in this guide.
 
 ## SOC 2
-
 Vespa.ai has a SOC 2 attestation - read more in the [Trust Center](https://trust.vespa.ai/).
 
 ## Data Plane
@@ -29,7 +28,7 @@ Success: Private key written to '$HOME/.vespa/scoober.albums.default/data-plane-
 Success: Copied certificate from '$HOME/.vespa/scoober.albums.default/data-plane-public-cert.pem' to 'security/clients.pem'
 ```
 
-The certificates can be created regardless of the application existence in Vespa Cloud. One can use this command to generate `security/clients.pem` for an application package:
+The certificates can be created regardless of the application existence in Vespa Cloud. One can use this command to generate <code>security/clients.pem</code> for an application package:
 
 ```bash
 $ cp $HOME/.vespa/scoober.albums.default/data-plane-public-cert.pem security/clients.pem
@@ -51,28 +50,30 @@ This section provides a guide on how to rotate the certificate used for mTLS. Th
 
 #### Rotate mTLS with Vespa CLI
 
-<Steps>
-<Step title="Generate a new certificate and private key">
+**Step 1: Generate a new certificate and private key**
+
 ```bash
 $ vespa auth cert --new-key --application scoober.albums.default
 ```
 
 This prompts for confirmation, then:
-
-- backs up the current private key to `data-plane-private-key.pem.old`
-- writes a new private key to `data-plane-private-key.pem`
-- prepends the new certificate to `data-plane-public-cert.pem`, keeping the existing one
-- copies the resulting certificate file into `security/clients.pem` of the application package
+* backs up the current private key to `data-plane-private-key.pem.old`
+* writes a new private key to `data-plane-private-key.pem`
+* prepends the new certificate to `data-plane-public-cert.pem`, keeping the existing one
+* copies the resulting certificate file into `security/clients.pem` of the application package
 
 Add `-f` (`--force`) to skip the confirmation prompt, and `-N` (`--no-add`) to skip updating the application package. If a backup already exists, the command fails - complete or abandon the previous rotation and delete the backup file first.
-</Step>
-<Step title="Deploy the updated application package">
+
+**Step 2: Deploy the updated application package**
+
 Both old and new certificates are now accepted, so existing clients continue to work without interruption. Deploy the application.
-</Step>
-<Step title="Migrate clients to the new certificate">
+
+**Step 3: Migrate clients to the new certificate**
+
 Test that everything works with the new key and update all clients to use the new private key. The Vespa CLI already uses the new key pair after step 1.
-</Step>
-<Step title="Remove old certificates">
+
+**Step 4: Remove old certificates**
+
 Once all clients use the new key, remove the old certificates:
 
 ```bash
@@ -84,19 +85,17 @@ This keeps the newest certificate matching the current private key, and asks bef
 Add `-f` (`--force`) to remove all of them without prompting.
 
 Deploy again to complete the rotation. Any clients still using the old certificate will lose access once the old certificate is removed and deployed. When the deployment is complete, you may delete the `data-plane-private-key.pem.old` backup. A new rotation cannot start while it exists.
-</Step>
-</Steps>
 
 #### Rotate mTLS with OpenSSL
 
-<Steps>
-<Step title="Generate a new certificate and private key">
+**Step 1: Generate a new certificate and private key**
+
 ```bash
 $ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout new-key.pem -out new-cert.pem
 ```
 
-</Step>
-<Step title="Add the new certificate to security/clients.pem">
+**Step 2: Add the new certificate to `security/clients.pem`**
+
 Concatenate the existing and new certificates into a single `clients.pem`. Both certificates will be trusted simultaneously:
 
 ```bash
@@ -106,7 +105,7 @@ $ mv security/clients-combined.pem security/clients.pem
 
 The resulting `clients.pem` will look like:
 
-```text
+```txt
 -----BEGIN CERTIFICATE-----
 <new certificate data>
 -----END CERTIFICATE-----
@@ -115,14 +114,16 @@ The resulting `clients.pem` will look like:
 -----END CERTIFICATE-----
 ```
 
-</Step>
-<Step title="Deploy the updated application package">
+**Step 3: Deploy the updated application package**
+
 Deploy the application with the combined `clients.pem`. Both old and new certificates are now accepted, so existing clients continue to work without interruption or downtime.
-</Step>
-<Step title="Migrate clients to the new certificate">
+
+**Step 4: Migrate clients to the new certificate**
+
 Update all clients to use the new private key. Once all clients use the new certificate, the old certificate can be removed.
-</Step>
-<Step title="Remove the old certificate">
+
+**Step 5: Remove the old certificate**
+
 Remove the old certificate from `security/clients.pem`, leaving only the new one:
 
 ```bash
@@ -130,31 +131,25 @@ $ cp new-cert.pem security/clients.pem
 ```
 
 Deploy again to complete the rotation. The old certificate is no longer trusted.
-</Step>
-</Steps>
 
 ### Permissions
 
-To support different permissions for clients, it is possible to limit the permissions of a client. Only `read` or `write` permissions are supported.
+To support different permissions for clients, it is possible to limit the permissions of a client. Only `read` or `write` permissions are supported. 
 
 #### Request mapping
-
 The request actions are mapped from HTTP method. The default mapping rule is:
-
-- GET → `read`
-- PUT, POST, DELETE → `write`
+* GET &rarr; `read`
+* PUT, POST, DELETE &rarr; `write`
 
 For `/search/` this is replaced by:
-
-- GET, POST → `read`
+* GET, POST &rarr; `read`
 
 #### Example
 
-Create 3 different certificates, for three different use cases:
-
-- Serving - `read`
-- Ingest - `write`
-- Full access - `read, write`
+Create 3 different certificates, for three different use cases: 
+* Serving - `read`
+* Ingest - `write`
+* Full access - `read, write`
 
 ```bash
 $ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout key.pem -out security/serve.pem
@@ -162,18 +157,15 @@ $ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout key.pem -out sec
 $ openssl req -x509 -sha256 -days 1825 -newkey rsa:2048 -keyout key.pem -out security/full_access.pem
 ```
 
-<Note>
 Notes:
-
-- Files must be placed in the *security* folder inside the application package
-- Certificates must be unique
-- Certificate chains are currently not supported
-- Files must be written using PEM encoding
-</Note>
+* Files must be placed in the <em>security</em> folder inside the application package
+* Certificates must be unique
+* Certificate chains are currently not supported
+* Files must be written using PEM encoding
 
 Reference the certificate files from services xml using the `clients` element:
 
-```xml expandable
+```xml
 <container version='1.0'>
     ...
     <clients>
@@ -190,12 +182,11 @@ Reference the certificate files from services xml using the `clients` element:
   ...
 </container>
 ```
-
 #### Custom request mapping
 
 The default mapping can be changed by overriding `requestHandlerSpec()`:
 
-```java expandable
+```java
 /**
  * Example overriding acl mapping of POST requests to read
  */
@@ -219,66 +210,38 @@ public class CustomAclHandler extends ThreadedHttpRequestHandler {
 Application endpoints can also be configured with token based authentication. Note that it is still required to define at least one client for mTLS.
 
 <Note>
-**Note:**  
+**Note:**
 
-Token authentication must be explicitly enabled when used in combination with [Private Endpoints](/en/operations/private-endpoints).
+Token authentication must be explicitly enabled when used in combination with
+<a href="/en/operations/private-endpoints">Private Endpoints</a>.
 </Note>
 
 #### Creating tokens using the console
 
-Tokens are identified by a name, and can contain multiple versions to easily support token rotation.
+Tokens are identified by a name, and can contain multiple versions to easily support token rotation. 
 
 To create a new token:
-
-<Steps>
-<Step>
-In the [console](https://console.vespa.ai) tenant view, open [**Account > Tokens**](https://console.vespa-cloud.com/link/tenant/account/tokens)
-</Step>
-<Step>
-Click **Add token**
-</Step>
-<Step>
-Enter a name you'll reference in the application later and click **Add**. Remember to copy the token value and store it securely.
-</Step>
-</Steps>
+1. In the [console](https://console.vespa.ai) tenant view, open [**Account > Tokens**](https://console.vespa-cloud.com/link/tenant/account/tokens)
+1. Click **Add token**
+1. Enter a name you'll reference in the application later and click **Add**. Remember to copy the token value and store it securely.
 
 To add a new token *version*:
-
-<Steps>
-<Step>
-Find the existing token, click **Add version**
-</Step>
-<Step>
-Select expiration and click **Add**. Copy the token value and store securely.
-</Step>
-</Steps>
+1. Find the existing token, click **Add version**
+1. Select expiration and click **Add**. Copy the token value and store securely.
 
 To revoke a version:
-
-<Steps>
-<Step>
-Find the existing token version, click **Revoke**
-</Step>
-</Steps>
+1. Find the existing token version, click **Revoke**
 
 To manually rotate a token:
-
-<Steps>
-<Step>
-Add a new token *version* following the above steps
-</Step>
-<Step>
-Revoke the old version when no clients use the old version
-</Step>
-</Steps>
+1. Add a new token *version* following the above steps
+1. Revoke the old version when no clients use the old version
 
 #### Application configuration with token endpoints
 
 After creating a token, it must be configured in your application's services.xml by adding the [clients](/en/reference/applications/services/container#clients) element to your container cluster(s).
 
 Here is an example with multiple container clusters and tokens (you may only have one):
-
-```xml expandable
+```xml
 <container id="documentapi" version="1.0">
     ...
     <clients>
@@ -308,15 +271,13 @@ Here is an example with multiple container clusters and tokens (you may only hav
 #### Security recommendations
 
 The cryptographic properties of token authentication vs mTLS are comparable. There are however a few key differences in how they are used:
+* tokens are sent as a header with every request
+* since they are part of the request they are also more easily leaked in log outputs or source code (e.g. curl commands).
 
-- tokens are sent as a header with every request
-- since they are part of the request they are also more easily leaked in log outputs or source code (e.g. curl commands).
-
-It is therefore recommended to
-
-- create tokens with a short expiry (keeping the default of 30 days).
-- keep tokens in a secret provider, and remember to hide output.
-- never commit secret tokens into source code repositories!
+It is therefore recommended to 
+* create tokens with a short expiry (keeping the default of 30 days).
+* keep tokens in a secret provider, and remember to hide output.
+* never commit secret tokens into source code repositories!
 
 ### Use endpoints
 
@@ -343,8 +304,8 @@ $ vespa query \
   --header="Authorization: Bearer $TOKEN" \
   'yql=select * from music where album contains "head"'
 ```
-
-```bash
+{/* ToDo: Does this work with document api ? */}
+```txt
 curl -H "Authorization: Bearer $TOKEN" $ENDPOINT
 ```
 
@@ -356,7 +317,7 @@ $ export VESPA_CLI_DATA_PLANE_TOKEN=$TOKEN
 
 Then there is no need to manually specify the token in the header:
 
-```bash
+```txt
 vespa query \
   'yql=select * from music where album contains "head"'
 ```
@@ -371,44 +332,32 @@ $ curl --cert ./data-plane-public-cert.pem --key ./data-plane-private-key.pem $E
 
 To use a browser, install key/cert pair into KeyChain Access (MacOS Sonoma), assuming Certificate Common Name is "cloud.vespa.example" (as in the guides):
 
-<Steps>
-<Step>
-Install key/cert pair:
-
-```bash
-$ cat data-plane-public-cert.pem data-plane-private-key.pem > pkcs12.pem
-$ openssl pkcs12 -export -out pkcs12.p12 -in pkcs12.pem
-```
-
-</Step>
-<Step>
-New password will be requested, and it will be used in the next steps.
-</Step>
-<Step>
-In Keychain Access: With login keychain
-	- Click "File" -> Import Items.
-	- Choose pkcs12.p12 file created before and type the password.
-	- Double-click the imported certificate, open "Trust" and set "When using this certificate" to "Always Trust".
-	- Right-click and "New Certificate Preference...", then add the $ENDPOINT.
-</Step>
-<Step>
-Open the same URL in Chrome, choose the example.com certificate and allow Chrome to read the private key.
-</Step>
-</Steps>
+1. Install key/cert pair:
+   ```bash
+   $ cat data-plane-public-cert.pem data-plane-private-key.pem > pkcs12.pem
+   $ openssl pkcs12 -export -out pkcs12.p12 -in pkcs12.pem
+   ```
+2. New password will be requested, and it will be used in the next steps.
+3. In Keychain Access: With login keychain
+   - Click "File" -&gt; Import Items.
+   - Choose pkcs12.p12 file created before and type the password.
+   - Double-click the imported certificate, open "Trust" and set "When using this certificate" to "Always Trust".
+   - Right-click and "New Certificate Preference...", then add the &#36;ENDPOINT.
+4. Open the same URL in Chrome, choose the example.com certificate and allow Chrome to read the private key.
 
 #### Using Postman
 
-Many developers prefer interactive tools like [Postman](https://postman.com/). The Vespa blog has an article on [how to use Postman with Vespa](https://blog.vespa.ai/interface-with-vespa-apis-using-postman/).
+Many developers prefer interactive tools like
+<a href="https://postman.com/">Postman</a>. The Vespa blog has an article on
+<a href="https://blog.vespa.ai/interface-with-vespa-apis-using-postman/">how to
+use Postman with Vespa</a>.
 
 #### Using Cloudflare Workers
-
 See [Using Cloudflare Workers with Vespa Cloud](/en/security/cloudflare-workers).
 
 ### Different credentials per instance
-
-To use different credentials per [instance](/en/learn/tenant-apps-instances), use [services.xml variants](/en/operations/deployment-variants#servicesxml-variants). As an example, use this to have a separate MTLS keypair for production instances (use the same pattern if using tokens.):
-
-```xml expandable
+To use different credentials per [instance](/en/learn/tenant-apps-instances), use [services.xml variants](/en/operations/deployment-variants#services.xml-variants). As an example, use this to have a separate MTLS keypair for production instances (use the same pattern if using tokens.):
+```xml
 <container id="default" version="1.0">
     <clients>
         <client id="mtls" permissions="read" deploy:instance="default">
@@ -438,12 +387,14 @@ There are two different ways for access the Control Plane, using `vespa auth log
 
 Tenant administrators manage user access through the Vespa Console.
 
-<Frame>![Vespa Console user management](/assets/img/manage-users.png)</Frame>
+&lt;img src="/assets/img/manage-users.png" alt="Vespa Console user management"
+  width="800px" height="auto" />
 
 Users have two different privilege levels
 
 - **Admin:** Can administrate the tenants metadata and the users of the tenant.
 - **Developer:** Can administrate the applications deployed in the tenant.
+
 ### User access to Control Plane
 
 Outside using the Vespa Console, communicating with the Control Plane is easiest with the [Vespa CLI](/en/clients/vespa-cli).
@@ -472,7 +423,9 @@ If programmatic access to the Control Plane is needed, for example from a CI/CD 
 
 The Application Key can be generated in the Console from the Deployment Screen. The key is generated in the browser but the private key appears as a download in the browser. The public key can be downloaded separately from Deployment Screen. The private key is never persisted in Vespa Cloud, so it is important that the private key is kept securely. If lost, the private key is unrecoverable.
 
-<Frame>![Vespa Console application key management](/assets/img/application-key.png)</Frame>
+<Frame>
+![Vespa Console application key management](/assets/img/application-key.png)
+</Frame>
 
 The Application Key can also be generated using the Vespa CLI.
 
@@ -480,7 +433,7 @@ The Application Key can also be generated using the Vespa CLI.
 $ vespa auth api-key -a <tenant>.<app>.<instance>
 ```
 
-```bash expandable
+```bash
 $ vespa auth api-key -a scoober.albums.default
 Success: API private key written to $HOME/.vespa/scoober.api-key.pem
 
@@ -494,7 +447,7 @@ Its fingerprint is:
 91:1f:de:e3:9f:d3:21:28:1b:1b:05:40:52:72:81:4f
 
 To use this key in Vespa Cloud click 'Add custom key' at
-https://console.vespa-cloud.com/tenant/scoober/keys
+https://console.vespa-cloud.com/tenant/scoober/security/keys
 and paste the entire public key including the BEGIN and END lines.
 ```
 

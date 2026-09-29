@@ -2,17 +2,17 @@
 title: "Feed block"
 ---
 
-A content cluster blocks external write operations when at least one content node has reached the [resource limit](/en/reference/applications/services/content#resource-limits) of disk or memory. This is done to avoid saturating resource usage on content nodes. The *Cluster controller* monitors the resource usage of the content nodes and decides whether to block feeding. Transient resource usage (see details in the metrics below) is not included in the monitored usage. This ensures that transient resource usage is covered by the resource headroom on the content nodes, instead of leading to feed blocked due to natural fluctuations.
+A content cluster blocks external write operations when at least one content node has reached the [resource limit](/en/reference/applications/services/content#resource-limits) of disk or memory. This is done to avoid saturating resource usage on content nodes. The _Cluster controller_ monitors the resource usage of the content nodes and decides whether to block feeding. Transient resource usage (see details in the metrics below) is not included in the monitored usage. This ensures that transient resource usage is covered by the resource headroom on the content nodes, instead of leading to feed blocked due to natural fluctuations.
 
 <Note>
-**Note:** 
+**Note:**
 
 When running Vespa in a Docker image on a laptop, one can easily get `[UNKNOWN(251009) @ tcp/vespa-host:19112/default]: ReturnCode(NO_SPACE, External feed is blocked due to resource exhaustion: in content cluster 'example': disk on node 0 [vespa-host] is 81.7% full (the configured limit is 80.0%, effective limit lowered to 79.0% until feed unblocked)`. Fix this by increasing allocated storage for the Docker daemon, clean up unused volumes or remove unused Docker images.
 </Note>
 
-HTTP clients will see *507 Server Error: Insufficient Storage* when this happens.
+HTTP clients will see _507 Server Error: Insufficient Storage_ when this happens.
 
-When feed is blocked, write operations are rejected by *Distributors*. All Put operations and most Update operations are rejected. These operations are still allowed:
+When feed is blocked, write operations are rejected by _Distributors_. All Put operations and most Update operations are rejected. These operations are still allowed:
 
 - Remove operations
 - Update [assign](/en/reference/schemas/document-json-format#assign) operations to numeric single-value fields
@@ -20,66 +20,69 @@ When feed is blocked, write operations are rejected by *Distributors*. All Put o
 To remedy, add nodes to the content cluster. The data will [auto-redistribute](/en/content/elasticity), and feeding is unblocked when all content nodes are below the limits. For self-managed Vespa you can configure [resource-limits](/en/reference/applications/services/content#resource-limits), although this is not recommended. Increasing them too much might lead to OOM and content nodes being unable to start.
 
 <Warning>
-**Important:** 
+**Important:**
 
 Always **add** nodes, do not change node capacity - this is in practise safer and quicker. As most Vespa applications are set up on homogeneous nodes, changing node capacity can cause a full node set swap and more data copying than just adding more nodes of the same kind. Copying data will in itself stress nodes, adding one node is normally the smallest and safest change.
 </Warning>
 
-These [metrics](/en/operations/metrics) are used to monitor resource usage and whether feeding is blocked:
+<Note>
+**Note:**
+
+On **Vespa Cloud** the cluster controller is operated for you and the resource limits are managed defaults (memory `0.8`), so the self-managed `resource-limits` tuning above does not apply. Remedy a blocked feed by adding nodes — increase the cluster `nodes count` in _services.xml_ and redeploy; the data auto-redistributes and feeding unblocks once all content nodes are below the limits. If [autoscaling](/en/operations/autoscaling) is enabled (node or resource _ranges_ in services.xml), Vespa Cloud adds nodes automatically when utilization is high, and its target utilization already reserves headroom for a node being down or failing and for maintenance operations.
+</Note>
+
+The _Cluster controller_ compares each content node's disk and memory usage against the configured limits. Feeding is blocked for the whole cluster as soon as a **single** available content node exceeds the limit on a **single** resource — whichever of disk or memory crosses first. (A node that is `down` or in `maintenance` does not count.) The block is lifted only once _all_ content nodes are back below the limits (in fact slightly below — see the hysteresis note below).
+
+These [metrics](/en/operations/metrics) are used to monitor resource usage and whether feeding is blocked. `nodes_above_limit` is the authoritative "is feeding blocked" signal; the `max_*_utilization` metrics are the best _leading_ indicators of how close the cluster is to blocking; the per-node `content.proton.resource_usage.*` metrics show the underlying usage that drives them:
 
 <table className="vespa-table">
-  <thead>
-    <tr>
-      <th></th>
-      <th></th>
-    </tr>
-  </thead>
   <tbody>
     <tr>
-      <td><strong>cluster-controller.resource_usage.nodes_above_limit</strong></td>
-      <td>The number of content nodes that are above one or more resource limits. When above 0, feeding is blocked.</td>
+      <th>cluster-controller.resource_usage.nodes_above_limit</th>
+      <td>The number of content nodes that are above one or more resource limits. **When above 0, feeding is blocked.**</td>
     </tr>
     <tr>
-      <td><strong>content.proton.resource_usage.disk</strong></td>
-      <td>A number between 0 and 1, indicating how much disk (of total available) is used on the content node. Transient disk used during <a href="/en/content/proton#disk-index-fusion" aria-label="disk index fusion">disk index fusion</a> is not included.</td>
+      <th>cluster-controller.resource_usage.max_memory_utilization</th>
+      <td>The highest memory usage among all content nodes, relative to the memory limit (`usage / limit`). `1.0` means a node has reached the limit and feeding blocks; e.g. `0.95` means the most-loaded node is at 95% of the limit. This is the recommended signal to alert on _before_ feeding blocks.</td>
     </tr>
     <tr>
-      <td><strong>content.proton.resource_usage.memory</strong></td>
-      <td>A number between 0 and 1, indicating how much memory (of total available) is used on the content node. Transient memory used by <a href="/en/content/proton#memory-index-flush" aria-label="memory indexes">memory indexes</a> is not included.</td>
+      <th>cluster-controller.resource_usage.max_disk_utilization</th>
+      <td>As above, for disk: the highest disk usage among all content nodes, relative to the disk limit (`usage / limit`).</td>
+    </tr>
+    <tr>
+      <th>content.proton.resource_usage.disk</th>
+      <td>A number between 0 and 1, indicating how much disk (of total available) is used on the content node. Transient disk used during [disk index fusion](/en/content/proton#disk-index-fusion) is not included.</td>
+    </tr>
+    <tr>
+      <th>content.proton.resource_usage.memory</th>
+      <td>A number between 0 and 1, indicating how much memory (of total available) is used on the content node. Transient memory used by [memory indexes](/en/content/proton#memory-index-flush) is not included.</td>
     </tr>
   </tbody>
 </table>
 
 When feeding is blocked, error messages are returned in write operation replies - example:
 
-```text
+```txt
 ReturnCode(NO_SPACE, External feed is blocked due to resource exhaustion:
                      in content cluster 'example': memory on node 0 [my-vespa-node-0.example.com] is 82.0% full (the configured limit is 80.0%, effective limit lowered to 79.0% until feed unblocked))
 ```
 
 Note that when feeding is blocked resource usage needs to decrease below another, lower limit before getting unblocked. This is to avoid flip-flopping between blocking and unblocking feed when being near the limit. This lower limit is 1% lower than the configured limit.
 
-The address space used by data structures in attributes (*Multivalue Mapping*, *Enum Store*, and *Tensor Store*) can also go full and block feeding - see [attribute data structures](/en/content/attributes/#data-structures) for details. This will rarely happen. The following metric is used to monitor address space usage:
+The address space used by data structures in attributes (_Multivalue Mapping_, _Enum Store_, and _Tensor Store_) can also go full and block feeding - see [attribute data structures](/en/content/attributes#data-structures) for details. This will rarely happen. The following metric is used to monitor address space usage:
 
 <table className="vespa-table">
-  <thead>
-    <tr>
-      <th></th>
-      <th></th>
-    </tr>
-  </thead>
   <tbody>
     <tr>
-      <td><strong>content.proton.documentdb.attribute.resource_usage.address_space.max</strong></td>
+      <th>content.proton.documentdb.attribute.resource_usage.address_space.max</th>
       <td>A number between 0 and 1, indicating how much address space is used by the worst attribute data structure on the content node.</td>
     </tr>
   </tbody>
 </table>
 
-
 An error is returned when the address space limit (default value is 0.90) is exceeded:
 
-```text
+```txt
 ReturnCode(NO_SPACE, External feed is blocked due to resource exhaustion:
                      in content cluster 'example': attribute-address-space:example.ready.a1.enum-store on node 0 [my-vespa-node-0.example.com] is 91.0% full (the configured limit is 90.0%))
 ```

@@ -5,20 +5,11 @@ sidebarTitle: "AWS getting started"
 
 Setting up Vespa Cloud Enclave requires:
 
-<Steps>
-<Step>
-Registration at [Vespa Cloud](https://console.vespa-cloud.com), or use a pre-existing tenant.
-</Step>
-<Step>
-Running a [Terraform](https://www.terraform.io/) configuration to provision AWS resources in the account. Go through the [AWS tutorial](https://developer.hashicorp.com/terraform/tutorials/aws-get-started) as needed.
-</Step>
-<Step>
-Registration of the AWS account ID in Vespa Cloud
-</Step>
-<Step>
-Deployment of a Vespa application.
-</Step>
-</Steps>
+1. Registration at [Vespa Cloud](https://console.vespa-cloud.com), or use a pre-existing tenant.
+2. Running a [Terraform](https://www.terraform.io/) configuration to provision AWS resources in the account.
+   Go through the [AWS tutorial](https://developer.hashicorp.com/terraform/tutorials/aws-get-started) as needed.
+3. Registration of the AWS account ID in Vespa Cloud.
+4. Deployment of a Vespa application.
 
 ### 1. Vespa Cloud Tenant setup
 
@@ -27,9 +18,9 @@ Register at [Vespa Cloud](https://console.vespa-cloud.com) or use an existing te
 ### 2. Configure AWS Account
 
 <Note>
-**Note:** 
+**Note:**
 
-We recommend using a *dedicated* account for your Vespa Cloud Enclave. Vespa Cloud will manage resources in the Enclave VPCs created in the AWS resource provisioning step. Primarily EC2 instances, load balancers and service endpoints.
+We recommend using a _dedicated_ account for your Vespa Cloud Enclave. Vespa Cloud will manage resources in the Enclave VPCs created in the AWS resource provisioning step. Primarily EC2 instances, load balancers and service endpoints.
 </Note>
 
 One account can host all your Vespa applications, there is no need for multiple tenants or accounts.
@@ -37,10 +28,19 @@ One account can host all your Vespa applications, there is no need for multiple 
 The AWS account you intend to use for Vespa Cloud Enclave must be prepared for deploying Vespa applications using either *Terraform* or *Cloudformation*.
 
 #### Terraform
-
 Use [Terraform](https://www.terraform.io/) to set up the necessary resources using the [modules](https://registry.terraform.io/modules/vespa-cloud/enclave/aws/latest) published by the Vespa team.
 
-Modify the [multi-region Terraform files](https://github.com/vespa-cloud/terraform-aws-enclave/blob/main/examples/multi-region/main.tf) for your deployment.
+Start with the Terraform examples that match your deployment:
+
+- [Basic](https://github.com/vespa-cloud/terraform-aws-enclave/blob/main/examples/basic/main.tf): a single `dev` zone.
+- [Multi-region](https://github.com/vespa-cloud/terraform-aws-enclave/blob/main/examples/multi-region/main.tf):
+  `test` and `staging` zones, and several production zones.
+- [Multi-AZ](https://github.com/vespa-cloud/terraform-aws-enclave/blob/main/examples/multi-az/main.tf):
+  a multi-AZ production zone spanning multiple availability zones in one AWS region.
+
+Set `tenant_name` to your Vespa Cloud tenant and configure the AWS providers for the regions you will use. Include a zone module for each Vespa Cloud zone you will deploy to, including `test` and `staging` for the deployment pipeline. For a multi-AZ production zone such as `prod.aws-us-east-1`, use [`modules/zone_multi_az`](https://github.com/vespa-cloud/terraform-aws-enclave/tree/main/modules/zone_multi_az). Use `modules/zone` for single-AZ zones.
+
+The multi-AZ module always provisions networking in the AZs used by Vespa Cloud's configuration servers. Set `azs` to any additional AWS AZ IDs your applications need, such as `use1-az1`. Set `primary_zone_az` to one of the provisioned AZ IDs and keep it unchanged after applying Terraform; changing it forces VPC replacement.
 
 If you are unfamiliar with Terraform: It is a tool to manage resources and their configuration in various cloud providers, like AWS and GCP. Terraform has published an [AWS](https://developer.hashicorp.com/terraform/tutorials/aws-get-started) tutorial, and we strongly encourage enclave users to read and follow the Terraform recommendations for [CI/CD](https://developer.hashicorp.com/terraform/tutorials/automation/automate-terraform).
 
@@ -51,11 +51,10 @@ The Terraform module we provide is regularly updated to add new required resourc
 Once the AWS account is configured, contact [support@vespa.ai](mailto:support@vespa.ai) stating which tenant should be on-boarded to use Vespa Cloud Enclave. Also include the [AWS account ID](https://docs.aws.amazon.com/accounts/latest/reference/manage-acct-identifiers.html#FindAccountId) to associate with the tenant.
 
 <Note>
-**Note:** 
+**Note:**
 
 Wait for confirmation from the Vespa team that onboarding is complete before deploying an application in the next step.
 </Note>
-
 
 ### 4. Deploy a Vespa application
 
@@ -67,19 +66,21 @@ By default, all applications are deployed on resources in Vespa Cloud accounts. 
 </deployment>
 ```
 
-Useful resources are [getting started](/en/basics/deploy-an-application-java) and [migrating to Vespa Cloud](/en/learn/migrating-to-cloud) - put *deployment.xml* next to *services.xml*.
+Useful resources are [getting started](/en/basics/deploy-an-application-java) and [migrating to Vespa Cloud](/en/learn/migrating-to-cloud) - put _deployment.xml_ next to _services.xml_.
 
 ## Next steps
 
-After a successful deployment to the [dev](/en/operations/environments#dev) environment, iterate on the configuration to implement your application on Vespa. The *dev* environment is ideal for this, with rapid deployment cycles.
+After a successful deployment to the [dev](/en/operations/environments#dev) environment, iterate on the configuration to implement your application on Vespa. The _dev_ environment is ideal for this, with rapid deployment cycles.
 
-For production serving, deploy to the [prod](/en/operations/environments#prod) environment - follow the steps in [production deployment](/en/reference/applications/deployment).
+For production serving, deploy to the [prod](/en/operations/environments#prod) environment - follow the steps in [production deployment](/en/operations/production-deployment).
+
+For a [multi-AZ deployment](/en/operations/az), select the production region and its [`availability-zone`](../../reference/applications/deployment.html#availability-zone) elements in `deployment.xml`. Each selected AZ must have networking provisioned by the Terraform zone module.
 
 ## Enclave teardown
 
 To tear down a Vespa Cloud Enclave system, do the steps above in reverse order:
 
 1. [Undeploy the application(s)](/en/operations/deleting-applications)
-2. Undeploy the Terraform changes
+2. [Undeploy the Terraform changes](https://developer.hashicorp.com/terraform/cli/commands/destroy)
 
-It is important to undeploy the Vespa application(s) first. After running the Terraform, Vespa Cloud cannot manage the resources allocated, so you must clean up these yourself.
+It is important to undeploy the Vespa application(s) first. There will be a delay between when the application is deleted and all its supporting cloud resources are removed. After running the Terraform, Vespa Cloud cannot manage the resources allocated, so you must clean up these yourself.

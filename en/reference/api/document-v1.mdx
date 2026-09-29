@@ -1,7 +1,33 @@
 ---
 title: "/document/v1 API reference"
+sidebarTitle: "/document/v1 API"
 description: "/document/v1 API reference in Vespa applications."
 ---
+
+This is the /document/v1 API reference documentation. Use this API for synchronous [Document](/en/schemas/documents) operations to a Vespa endpoint - refer to [reads and writes](/en/writing/reads-and-writes) for other options.
+
+The [document/v1 API guide](/en/writing/document-v1-api-guide) has examples and use cases.
+
+<Note>
+**Note:**
+
+Mapping from document IDs to /document/v1/ URLs is found in [Document IDs](/en/schemas/documents#id-scheme) - also see [troubleshooting](/en/writing/document-v1-api-guide#troubleshooting).
+</Note>
+
+Some examples use _number_ and _group_ [document ID](/en/schemas/documents#document-ids) modifiers. These are special cases that only work as expected for document types with [mode=streaming or mode=store-only](/en/reference/applications/services/content#document). Do not use group or number modifiers with regular indexed mode document types.
+
+## Configuration
+
+To enable the API, add `document-api` in the serving container cluster - [services.xml](/en/reference/applications/services/container):
+
+```xml highlight={3}
+<services>
+    <container>
+        <document-api/>
+```
+
+## HTTP requests
+
 <table className="vespa-table">
   <thead>
     <tr>
@@ -12,60 +38,867 @@ description: "/document/v1 API reference in Vespa applications."
   </thead>
   <tbody>
     <tr>
-      <td>GET</td>
-      <td><em>Get</em> a document by ID or <em>Visit</em> a set of documents by selection.</td>
-      <td></td>
+      <th>GET</th>
+      <td colSpan="2"><a id="get" /> _Get_ a document by ID or _Visit_ a set of documents by selection.</td>
     </tr>
     <tr>
       <td></td>
-      <td>Get</td>
-      <td>Get a document: <code>{`/document/v1/<namespace>/<document-type>/docid/<document-id>`}</code> <code>{`/document/v1/<namespace>/<document-type>/number/<numeric-group-id>/<document-id>`}</code> <code>{`/document/v1/<namespace>/<document-type>/group/<text-group-id>/<document-id>`}</code> Optional parameters: <a href="#cluster" aria-label="cluster">cluster</a> <a href="#fieldset" aria-label="fieldSet">fieldSet</a> <a href="#timeout" aria-label="timeout">timeout</a> <a href="#tracelevel" aria-label="tracelevel">tracelevel</a></td>
+      <th>Get</th>
+      <td>
+
+Get a document:
+
+```txt
+/document/v1/<namespace>/<document-type>/docid/<document-id>
+/document/v1/<namespace>/<document-type>/number/<numeric-group-id>/<document-id>
+/document/v1/<namespace>/<document-type>/group/<text-group-id>/<document-id>
+```
+
+Optional parameters:
+
+- [cluster](#cluster)
+- [fieldSet](#fieldset)
+- [timeout](#timeout)
+- [tracelevel](#tracelevel)
+
+</td>
     </tr>
     <tr>
       <td></td>
-      <td>Visit</td>
-      <td>Iterate over and get all documents, or a <a href="#selection" aria-label="selection">selection</a> of documents, in chunks, using <a href="#continuation" aria-label="continuation">continuation</a> tokens to track progress. Visits are a linear scan over the documents in the cluster. <code>{`/document/v1/`}</code> It is possible to specify namespace and document type with the visit path: <code>{`/document/v1/<namespace>/<document-type>/docid`}</code> Documents can be grouped to limit accesses to a subset. A group is defined by a numeric ID or string — see <a href="/en/schemas/documents#id-scheme" aria-label="id scheme">id scheme</a> . <code>{`/document/v1/<namespace>/<document-type>/group/<group>`}</code> <code>{`/document/v1/<namespace>/<document-type>/number/<number>`}</code> Mandatory parameters: <a href="#cluster" aria-label="cluster">cluster</a> - Visits can only retrieve data from <em>one</em> content cluster, so <code>{`cluster`}</code> <strong>must</strong> be specified for requests at the root <code>{`/document/v1/`}</code> level, or when there is ambiguity. This is required even if the application has only one content cluster. Optional parameters: <a href="#bucketspace" aria-label="bucketSpace">bucketSpace</a> - Parent documents are <a href="/en/reference/applications/services/content#document" aria-label="global">global</a> and in the <code>{`global`}</code> <a href="#bucketspace" aria-label="bucket space">bucket space</a>. By default, visit will visit non-global documents in the <code>{`default`}</code> bucket space, unless document type is indicated, and is a global document type. <a href="#concurrency" aria-label="concurrency">concurrency</a> - Use to configure backend parallelism for each visit HTTP request. <a href="#continuation" aria-label="continuation">continuation</a> <a href="#fieldset" aria-label="fieldSet">fieldSet</a> <a href="#selection" aria-label="selection">selection</a> <a href="#sliceid" aria-label="sliceId">sliceId</a> <a href="#slices" aria-label="slices">slices</a> - Split visiting of the document corpus across more than one HTTP request—thus allowing the concurrent use of more HTTP containers—use the <code>{`slices`}</code> and <code>{`sliceId`}</code> parameters. <a href="#stream" aria-label="stream">stream</a> - It's recommended enabling streamed HTTP responses, with the <a href="#stream" aria-label="stream">stream</a> parameter, as this reduces memory consumption and reduces HTTP overhead. <a href="#timeout" aria-label="timeout">timeout</a> <a href="#tracelevel" aria-label="tracelevel">tracelevel</a> <a href="#wanteddocumentcount" aria-label="wantedDocumentCount">wantedDocumentCount</a> <a href="#fromtimestamp" aria-label="fromTimestamp">fromTimestamp</a> <a href="#totimestamp" aria-label="toTimestamp">toTimestamp</a> <a href="#includeRemoves" aria-label="includeRemoves">includeRemoves</a> Optional request headers: <a href="#accept" aria-label="Accept">Accept</a> - specify the desired response format.</td>
+      <th>Visit</th>
+      <td>
+
+<a id="visit" />
+
+Iterate over and get all documents, or a [selection](#selection) of documents, in chunks, using [continuation](#continuation) tokens to track progress. Visits are a linear scan over the documents in the cluster.
+
+```txt
+/document/v1/
+```
+
+It is possible to specify namespace and document type with the visit path:
+
+```txt
+/document/v1/<namespace>/<document-type>/docid
+```
+
+Documents can be grouped to limit accesses to a subset. A group is defined by a numeric ID or string — see [id scheme](/en/schemas/documents#id-scheme).
+
+```txt
+/document/v1/<namespace>/<document-type>/group/<group>
+/document/v1/<namespace>/<document-type>/number/<number>
+```
+
+Mandatory parameters:
+
+- [cluster](#cluster) - Visits can only retrieve data from _one_ content cluster, so `cluster` **must** be specified for requests at the root `/document/v1/` level, or when there is ambiguity. This is required even if the application has only one content cluster.
+
+Optional parameters:
+
+- [bucketSpace](#bucketspace) - Parent documents are [global](/en/reference/applications/services/content#document) and in the `global` [bucket space](#bucketspace). By default, visit will visit non-global documents in the `default` bucket space, unless document type is indicated, and is a global document type.
+- [concurrency](#concurrency) - Use to configure backend parallelism for each visit HTTP request.
+- [continuation](#continuation)
+- [fieldSet](#fieldset)
+- [selection](#selection)
+- [sliceId](#sliceid)
+- [slices](#slices) - Split visiting of the document corpus across more than one HTTP request—thus allowing the concurrent use of more HTTP containers—use the `slices` and `sliceId` parameters.
+- [stream](#stream) - It's recommended enabling streamed HTTP responses, with the [stream](#stream) parameter, as this reduces memory consumption and reduces HTTP overhead.
+- [timeout](#timeout)
+- [tracelevel](#tracelevel)
+- [wantedDocumentCount](#wanteddocumentcount)
+- [fromTimestamp](#fromtimestamp)
+- [toTimestamp](#totimestamp)
+- [includeRemoves](#includeRemoves)
+
+Optional request headers:
+
+- [Accept](#accept) - specify the desired response format.
+
+</td>
     </tr>
     <tr>
-      <td>POST</td>
-      <td><em>Put</em> a given document, by ID, or <em>Copy</em> a set of documents by selection from one content cluster to another.</td>
-      <td></td>
+      <th>POST</th>
+      <td colSpan="2"><a id="post" /> _Put_ a given document, by ID, or _Copy_ a set of documents by selection from one content cluster to another.</td>
     </tr>
     <tr>
       <td></td>
-      <td>Copy</td>
-      <td>Write documents visited in source <a href="#cluster" aria-label="cluster">cluster</a> to the <a href="#destinationcluster" aria-label="destinationCluster">destinationCluster</a> in the same application. A <a href="#selection" aria-label="selection">selection</a> is mandatory — typically the document type. Supported paths (see <a href="#visit" aria-label="visit">visit</a> above for semantics): <code>{`/document/v1/`}</code> <code>{`/document/v1/<namespace>/<document-type>/docid/`}</code> <code>{`/document/v1/<namespace>/<document-type>/group/<group>`}</code> <code>{`/document/v1/<namespace>/<document-type>/number/<number>`}</code> Mandatory parameters: <a href="#cluster" aria-label="cluster">cluster</a> <a href="#destinationcluster" aria-label="destinationCluster">destinationCluster</a> <a href="#selection" aria-label="selection">selection</a> Optional parameters: <a href="#bucketspace" aria-label="bucketSpace">bucketSpace</a> <a href="#continuation" aria-label="continuation">continuation</a> <a href="#timechunk" aria-label="timeChunk">timeChunk</a> <a href="#timeout" aria-label="timeout">timeout</a> <a href="#tracelevel" aria-label="tracelevel">tracelevel</a></td>
-    </tr>
-    <tr>
-      <td>PUT</td>
-      <td><em>Update</em> a document with the given partial update, by ID, or <em>Update where</em> the given selection is true.</td>
-      <td></td>
-    </tr>
-    <tr>
-      <td></td>
-      <td>Update</td>
-      <td>Update a document with the partial update contained in the request body in the <a href="/en/reference/schemas/document-json-format#update" aria-label="document update JSON format">document update JSON format</a> . <code>{`/document/v1/<namespace>/<document-type>/docid/<document-id>`}</code> Optional parameters: <a href="#condition" aria-label="condition">condition</a> - use for conditional writes <a href="#create" aria-label="create">create</a> - use to create empty documents when updating non-existent ones. <a href="#route" aria-label="route">route</a> <a href="#timeout" aria-label="timeout">timeout</a> <a href="#tracelevel" aria-label="tracelevel">tracelevel</a></td>
-    </tr>
-    <tr>
-      <td></td>
-      <td>Update where</td>
-      <td>Update visited documents in <a href="#cluster" aria-label="cluster">cluster</a> with the partial update contained in the request body in the <a href="/en/reference/schemas/document-json-format#update" aria-label="document update JSON format">document update JSON format</a>. Supported paths (see <a href="#visit" aria-label="visit">visit</a> above for semantics): <code>{`/document/v1/<namespace>/<document-type>/docid/`}</code> <code>{`/document/v1/<namespace>/<document-type>/group/<group>`}</code> <code>{`/document/v1/<namespace>/<document-type>/number/<number>`}</code> Mandatory parameters: <a href="#cluster" aria-label="cluster">cluster</a> <a href="#selection" aria-label="selection">selection</a> Optional parameters: <a href="#bucketspace" aria-label="bucketSpace">bucketSpace</a> - See <a href="#visit" aria-label="visit">visit</a>, <code>{`default`}</code> or <code>{`global`}</code> bucket space <a href="#continuation" aria-label="continuation">continuation</a> <a href="#stream" aria-label="stream">stream</a> <a href="#timechunk" aria-label="timeChunk">timeChunk</a> <a href="#timeout" aria-label="timeout">timeout</a> <a href="#tracelevel" aria-label="tracelevel">tracelevel</a></td>
-    </tr>
-    <tr>
-      <td>DELETE</td>
-      <td><em>Remove</em> a document, by ID, or <em>Remove where</em> the given selection is true.</td>
-      <td></td>
+      <th>Put</th>
+      <td>
+
+Write the document contained in the request body in JSON format.
+
+```txt
+/document/v1/<namespace>/<document-type>/docid/<document-id>
+/document/v1/<namespace>/<document-type>/group/<group>
+/document/v1/<namespace>/<document-type>/number/<number>
+```
+
+Optional parameters:
+
+- [condition](#condition) - Use for conditional writes.
+- [route](#route)
+- [timeout](#timeout)
+- [tracelevel](#tracelevel)
+
+</td>
     </tr>
     <tr>
       <td></td>
-      <td>Remove</td>
-      <td>Remove a document. <code>{`/document/v1/<namespace>/<document-type>/docid/<document-id>`}</code> Optional parameters: <a href="#condition" aria-label="condition">condition</a> <a href="#route" aria-label="route">route</a> <a href="#timeout" aria-label="timeout">timeout</a> <a href="#tracelevel" aria-label="tracelevel">tracelevel</a></td>
+      <th>Copy</th>
+      <td>
+
+<a id="copy" />
+
+Write documents visited in source [cluster](#cluster) to the [destinationCluster](#destinationcluster) in the same application. A [selection](#selection) is mandatory — typically the document type. Supported paths (see [visit](#visit) above for semantics):
+
+```txt
+/document/v1/
+/document/v1/<namespace>/<document-type>/docid/
+/document/v1/<namespace>/<document-type>/group/<group>
+/document/v1/<namespace>/<document-type>/number/<number>
+```
+
+Mandatory parameters:
+
+- [cluster](#cluster)
+- [destinationCluster](#destinationcluster)
+- [selection](#selection)
+
+Optional parameters:
+
+- [bucketSpace](#bucketspace)
+- [continuation](#continuation)
+- [timeChunk](#timechunk)
+- [timeout](#timeout)
+- [tracelevel](#tracelevel)
+
+</td>
+    </tr>
+    <tr>
+      <th>PUT</th>
+      <td colSpan="2"><a id="put" /> _Update_ a document with the given partial update, by ID, or _Update where_ the given selection is true.</td>
     </tr>
     <tr>
       <td></td>
-      <td>Delete where</td>
-      <td>Delete visited documents from <a href="#cluster" aria-label="cluster">cluster</a>. Supported paths (see <a href="#visit" aria-label="visit">visit</a> above for semantics): <code>{`/document/v1/`}</code> <code>{`/document/v1/<namespace>/<document-type>/docid/`}</code> <code>{`/document/v1/<namespace>/<document-type>/group/<group>`}</code> <code>{`/document/v1/<namespace>/<document-type>/number/<number>`}</code> Mandatory parameters: <a href="#cluster" aria-label="cluster">cluster</a> <a href="#selection" aria-label="selection">selection</a> Optional parameters: <a href="#bucketspace" aria-label="bucketSpace">bucketSpace</a> - See <a href="#visit" aria-label="visit">visit</a>, <code>{`default`}</code> or <code>{`global`}</code> bucket space <a href="#continuation" aria-label="continuation">continuation</a> <a href="#stream" aria-label="stream">stream</a> <a href="#timechunk" aria-label="timeChunk">timeChunk</a> <a href="#timeout" aria-label="timeout">timeout</a> <a href="#tracelevel" aria-label="tracelevel">tracelevel</a></td>
+      <th>Update</th>
+      <td>
+
+Update a document with the partial update contained in the request body in the [document update JSON format](/en/reference/schemas/document-json-format#update).
+
+```txt
+/document/v1/<namespace>/<document-type>/docid/<document-id>
+```
+
+Optional parameters:
+
+- [condition](#condition) - use for conditional writes
+- [create](#create) - use to create empty documents when updating non-existent ones.
+- [route](#route)
+- [timeout](#timeout)
+- [tracelevel](#tracelevel)
+
+</td>
+    </tr>
+    <tr>
+      <td></td>
+      <th>Update where</th>
+      <td>
+
+<a id="update-where" />
+
+Update visited documents in [cluster](#cluster) with the partial update contained in the request body in the [document update JSON format](/en/reference/schemas/document-json-format#update). Supported paths (see [visit](#visit) above for semantics):
+
+```txt
+/document/v1/<namespace>/<document-type>/docid/
+/document/v1/<namespace>/<document-type>/group/<group>
+/document/v1/<namespace>/<document-type>/number/<number>
+```
+
+Mandatory parameters:
+
+- [cluster](#cluster)
+- [selection](#selection)
+
+Optional parameters:
+
+- [bucketSpace](#bucketspace) - See [visit](#visit), `default` or `global` bucket space
+- [continuation](#continuation)
+- [stream](#stream)
+- [timeChunk](#timechunk)
+- [timeout](#timeout)
+- [tracelevel](#tracelevel)
+
+</td>
+    </tr>
+    <tr>
+      <th>DELETE</th>
+      <td colSpan="2"><a id="delete" /> _Remove_ a document, by ID, or _Remove where_ the given selection is true.</td>
+    </tr>
+    <tr>
+      <td></td>
+      <th>Remove</th>
+      <td>
+
+Remove a document.
+
+```txt
+/document/v1/<namespace>/<document-type>/docid/<document-id>
+```
+
+Optional parameters:
+
+- [condition](#condition)
+- [route](#route)
+- [timeout](#timeout)
+- [tracelevel](#tracelevel)
+
+</td>
+    </tr>
+    <tr>
+      <td></td>
+      <th>Delete where</th>
+      <td>
+
+<a id="delete-where" />
+
+Delete visited documents from [cluster](#cluster). Supported paths (see [visit](#visit) above for semantics):
+
+```txt
+/document/v1/
+/document/v1/<namespace>/<document-type>/docid/
+/document/v1/<namespace>/<document-type>/group/<group>
+/document/v1/<namespace>/<document-type>/number/<number>
+```
+
+Mandatory parameters:
+
+- [cluster](#cluster)
+- [selection](#selection)
+
+Optional parameters:
+
+- [bucketSpace](#bucketspace) - See [visit](#visit), `default` or `global` bucket space
+- [continuation](#continuation)
+- [stream](#stream)
+- [timeChunk](#timechunk)
+- [timeout](#timeout)
+- [tracelevel](#tracelevel)
+
+</td>
     </tr>
   </tbody>
 </table>
 
+## Request parameters
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th>Type</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>bucketSpace</th>
+      <td>String</td>
+      <td><a id="bucketspace" /> Specify the bucket space to visit. Document types marked as `global` exist in a separate _bucket space_ from non-global document types. When visiting a particular document type, the bucket space is automatically deduced based on the provided type name. When visiting at a root `/document/v1/` level this information is not available, and the non-global ("default") bucket space is visited by default. Specify `global` to visit global documents instead. Supported values: `default` (for non-global documents) and `global`.</td>
+    </tr>
+    <tr>
+      <th>cluster</th>
+      <td>String</td>
+      <td><a id="cluster" />Name of [content cluster](/en/content/content-nodes) to GET from, or visit.</td>
+    </tr>
+    <tr>
+      <th>concurrency</th>
+      <td>Integer</td>
+      <td>
+
+<a id="concurrency" />
+
+Sends the given number of visitors in parallel to the backend, improving throughput at the cost of resource usage. Default is 1. When `stream=true`, concurrency limits the maximum concurrency, which is otherwise unbounded, but controlled by a dynamic throttle policy.
+
+<Warning>
+**Important:**
+
+Given a concurrency parameter of _N_, the worst case for memory used while processing the request grows linearly with _N_, unless [stream](#stream) mode is turned on. This is because the container currently buffers all response data in memory before sending them to the client, and all sent visitors must complete before the response can be sent.
+</Warning>
+
+</td>
+    </tr>
+    <tr>
+      <th>condition</th>
+      <td>String</td>
+      <td><a id="condition" /> For test-and-set. Run a document operation conditionally — if the condition fails, a _412 Precondition Failed_ is returned. See [example](/en/writing/document-v1-api-guide#conditional-writes).</td>
+    </tr>
+    <tr>
+      <th>continuation</th>
+      <td>String</td>
+      <td><a id="continuation" /> When visiting, a continuation token is returned as the `"continuation"` field in the JSON response, as long as more documents remain. Use this token as the `continuation` parameter to visit the next chunk of documents. See [example](/en/writing/document-v1-api-guide#data-dump).</td>
+    </tr>
+    <tr>
+      <th>create</th>
+      <td>Boolean</td>
+      <td><a id="create" /> If `true`, updates to non-existent documents will create an empty document to update. See [create if nonexistent](/en/writing/document-v1-api-guide#create-if-nonexistent).</td>
+    </tr>
+    <tr>
+      <th>destinationCluster</th>
+      <td>String</td>
+      <td><a id="destinationcluster" /> Name of [content cluster](/en/content/content-nodes) to copy to, during a copy visit.</td>
+    </tr>
+    <tr>
+      <th>dryRun</th>
+      <td>Boolean</td>
+      <td><a id="dryrun" /> Used by the [vespa-feed-client](/en/clients/vespa-feed-client) using `--speed-test` for bandwidth testing, by setting to `true`.</td>
+    </tr>
+    <tr>
+      <th>fieldSet</th>
+      <td>String</td>
+      <td><a id="fieldset" /> A [field set string](/en/schemas/documents#fieldsets) with the set of document fields to fetch from the backend. Default is the special `[document]` fieldset, returning all _document_ fields. To fetch specific fields, use the name of the document type, followed by a comma-separated list of fields (for example `music:artist,song` to fetch two fields declared in `music.sd`).</td>
+    </tr>
+    <tr>
+      <th>route</th>
+      <td>String</td>
+      <td><a id="route" /> The route for single document operations, and for operations generated by [copy](#copy), [update](#update-where) or [deletion](#delete-where) visits. Default value is `default`. See [routes](/en/writing/document-routing).</td>
+    </tr>
+    <tr>
+      <th>selection</th>
+      <td>String</td>
+      <td><a id="selection" /> Select only a subset of documents when [visiting](/en/writing/visiting) — details in [document selector language](/en/reference/writing/document-selector-language).</td>
+    </tr>
+    <tr>
+      <th>sliceId</th>
+      <td>Integer</td>
+      <td>
+
+<a id="sliceid" />
+
+The slice number of the visit represented by this HTTP request. This number must be non-negative and less than the number of [slices](#slices) specified for the visit - e.g., if the number of slices is 10, `sliceId` is in the range \[0-9\].
+
+<Note>
+**Note:**
+
+If the number of distribution bits change during a sliced visit, the results are undefined. Thankfully, this is a very rare occurrence and is only triggered when adding content nodes.
+</Note>
+
+</td>
+    </tr>
+    <tr>
+      <th>slices</th>
+      <td>Integer</td>
+      <td><a id="slices" /> Split the document corpus into this number of independent slices. This lets multiple, concurrent series of HTTP requests advance the same logical visit independently, by specifying a different [sliceId](#sliceid) for each.</td>
+    </tr>
+    <tr>
+      <th>stream</th>
+      <td>Boolean</td>
+      <td><a id="stream" /> Whether to stream the HTTP response, allowing data to flow as soon as documents arrive from the backend. This obsoletes the [wantedDocumentCount](#wanteddocumentcount) parameter. The HTTP status code will always be 200 if the visit is successfully initiated. Default value is false.</td>
+    </tr>
+    <tr>
+      <th>format.tensors</th>
+      <td>String</td>
+      <td>
+
+<a id="format.tensors" />
+
+Controls how tensors are rendered in the result.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Value</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>`short`</td>
+      <td>**Default**. Render the tensor value in an object having two keys, "type" containing the value, and "cells"/"blocks"/"values" ([depending on the type](/en/reference/schemas/document-json-format#tensor)) containing the tensor content.<br/> Render the tensor content in the [type-appropriate short form](/en/reference/schemas/document-json-format#tensor).</td>
+    </tr>
+    <tr>
+      <td>`long`</td>
+      <td>Render the tensor value in an object having two keys, "type" containing the value, and "cells" containing the tensor content.<br/> Render the tensor content in the [general verbose form](/en/reference/schemas/document-json-format#tensor).</td>
+    </tr>
+    <tr>
+      <td>`short-value`</td>
+      <td>Render the tensor content directly.<br/> Render the tensor content in the [type-appropriate short form](/en/reference/schemas/document-json-format#tensor).</td>
+    </tr>
+    <tr>
+      <td>`long-value`</td>
+      <td>Render the tensor content directly.<br/> Render the tensor content in the [general verbose form](/en/reference/schemas/document-json-format#tensor).</td>
+    </tr>
+  </tbody>
+</table>
+
+</td>
+    </tr>
+    <tr>
+      <th>timeChunk</th>
+      <td>String</td>
+      <td><a id="timechunk" /> Target time to spend on one chunk of a copy, update or remove visit; with optional ks, s, ms or µs unit. Default value is 60.</td>
+    </tr>
+    <tr>
+      <th>timeout</th>
+      <td>String</td>
+      <td><a id="timeout" />Request timeout in seconds, or with optional ks, s, ms or µs unit. Default value is 180s.</td>
+    </tr>
+    <tr>
+      <th>tracelevel</th>
+      <td>Integer</td>
+      <td><a id="tracelevel" /> Number in the range \[0,9\], where higher gives more details. The trace dumps which nodes and chains the document operation has touched. See [routes](/en/writing/document-routing).</td>
+    </tr>
+    <tr>
+      <th>wantedDocumentCount</th>
+      <td>Integer</td>
+      <td>
+
+<a id="wanteddocumentcount" />
+
+Best effort attempt to not respond to the client before `wantedDocumentCount` number of documents have been visited. Response may still contain fewer documents if there are not enough matching documents left to visit in the cluster, or if the visiting times out. This parameter is intended for the case when you have relatively few documents in your cluster and where each visit request would otherwise process only a handful of documents.
+
+The maximum value of `wantedDocumentCount` is bounded by an implementation-specific limit to prevent excessive resource usage. If the cluster has many documents (on the order of tens of millions), there is no need to set this value.
+
+</td>
+    </tr>
+    <tr>
+      <th>fromTimestamp</th>
+      <td>Integer</td>
+      <td><a id="fromtimestamp" /> Filters the returned document set to only include documents that were last modified at a time point equal to or higher to the specified value, in microseconds from UTC epoch. Default value is 0 (include all documents).</td>
+    </tr>
+    <tr>
+      <th>toTimestamp</th>
+      <td>Integer</td>
+      <td><a id="totimestamp" /> Filters the returned document set to only include documents that were last modified at a time point lower than the specified value, in microseconds from UTC epoch. Default value is 0 (sentinel value; include all documents). If non-zero, must be greater than, or equal to, `fromTimestamp`.</td>
+    </tr>
+    <tr>
+      <th>includeRemoves</th>
+      <td>Boolean</td>
+      <td><a id="includeRemoves" /> Include recently removed document IDs, along with the set of returned documents. By default, only documents currently present in the corpus are returned in the `"documents"` array of the response; when this parameter is set to `"true"`, documents that were recently removed, and whose tombstones still exist, are also included in that array, as entries on the form `{ "remove": "id:ns:type::foobar" }`. See [here](/en/operations/self-managed/admin-procedures#data-retention-vs-size) for specifics on tombstones, including their lifetime.</td>
+    </tr>
+  </tbody>
+</table>
+
+## HTTP request headers
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Header</th>
+      <th>Values</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>Accept</th>
+      <td>`application/json` or `application/jsonl`</td>
+      <td>
+
+<a id="accept" />
+
+The [Accept](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept) header lets the client specify to the server what [media (MIME) types](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types) it accepts as the response format.
+
+All Document V1 API calls support `application/json` for returning [JSON](#json) responses. [Streaming visiting](#stream) additionally supports `application/jsonl` for returning [JSON Lines](#json-lines) (JSONL) since Vespa 8.593.
+
+To ensure compatibility with older versions, make sure to check the `Content-Type` [HTTP response header](#http-response-headers). A JSONL response will always have a `Content-Type` media type of `application/jsonl`, and JSON wil always have a media type of `application/json`.
+
+Multiple acceptable types can be specified. JSONL will be returned if (and only if) `application/jsonl` is part of the list _and_ no other media types have a higher [quality value](https://httpwg.org/specs/rfc9110.html#quality.values).
+
+Example:
+
+```txt
+Accept: application/jsonl
+```
+
+If the client accepts both JSON and JSONL, the server will respond with JSONL:
+
+```txt
+Accept: application/json, application/jsonl
+```
+
+For backwards compatibility, if no `Accept` header is provided (or if no provided media types are acceptable) `application/json` is assumed.
+
+</td>
+    </tr>
+  </tbody>
+</table>
+
+## Request body
+
+POST and PUT requests must include a body for single document operations; PUT must also include a body for [update where](#update-where) visits. A field has a _value_ for a POST and an _update operation object_ for PUT. Documents and operations use the [document JSON format](/en/reference/schemas/document-json-format). The document fields must match the [schema](/en/basics/schemas):
+
+```json
+{
+    "fields": {
+        "<fieldname>": "<value>"
+    }
+}
+```
+
+```json
+{
+    "fields": {
+        "<fieldname>": {
+            "<update-operation>" : "<value>"
+        }
+    }
+}
+```
+
+The _update-operation_ is most often `assign` - see [update operations](/en/reference/schemas/document-json-format#update-operations) for the full list. Values for `id` / `put` / `update` in the request body are silently dropped. The ID is generated from the request path, regardless of request body data - example:
+
+```json
+{
+    "put"   : "id:mynamespace:music::123",
+    "fields": {
+        "title": "Best of"
+    }
+}
+```
+
+This makes it easier to generate a feed file that can be used for both the [vespa-feed-client](/en/clients/vespa-feed-client) and this API.
+
+## HTTP status codes
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Code</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>200</th>
+      <td>OK. Attempts to remove or update a non-existent document also yield this status code (see 412 below).</td>
+    </tr>
+    <tr>
+      <th>204</th>
+      <td>No Content. Successful response to OPTIONS request.</td>
+    </tr>
+    <tr>
+      <th>400</th>
+      <td>Bad request. Returned for undefined document types + other request errors. See [13465](https://github.com/vespa-engine/vespa/issues/13465) for defined document types not assigned to a content cluster when using PUT. Inspect `message` for details.</td>
+    </tr>
+    <tr>
+      <th>404</th>
+      <td>Not found; the document was not found. This is only used when getting documents.</td>
+    </tr>
+    <tr>
+      <th>405</th>
+      <td>Method Not Allowed. HTTP method is not supported by the endpoint. Valid combinations are listed [above](#http-requests)</td>
+    </tr>
+    <tr>
+      <th>412</th>
+      <td>[condition](#condition) is not met. Inspect `message` for details. This is also the result when a condition if specified, but the document does not exist.</td>
+    </tr>
+    <tr>
+      <th>413</th>
+      <td>Content too large; used for POST and PUT requests that are above the [request size limit](/en/writing/document-v1-api-guide#request-size-limit).</td>
+    </tr>
+    <tr>
+      <th>429</th>
+      <td>Too many requests; the document API has too many inflight feed operations, retry later.</td>
+    </tr>
+    <tr>
+      <th>500</th>
+      <td>Server error; an unspecified error occurred when processing the request/response.</td>
+    </tr>
+    <tr>
+      <th>503</th>
+      <td>Service unavailable; the document API was unable to produce a response at this time.</td>
+    </tr>
+    <tr>
+      <th>504</th>
+      <td>Gateway timeout; the document API failed to respond within the given (or default 180s) timeout.</td>
+    </tr>
+    <tr>
+      <th>507</th>
+      <td>Insufficient storage; the content cluster is out of memory or disk space.</td>
+    </tr>
+  </tbody>
+</table>
+
+## HTTP response headers
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Header</th>
+      <th>Values</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>X-Vespa-Ignored-Operation</th>
+      <th>true</th>
+      <td><a id="x-vespa-ignored-operation" /> Will be present and set to the string 'true' if (and only if) the operation was ignored during routing. Operations are ignored when not matching the [document selection](/en/reference/writing/document-selector-language) for _all_ content clusters, e.g., for expired documents. Since `Vespa 8.680+`</td>
+    </tr>
+    <tr>
+      <th>X-Vespa-Ignored-Fields</th>
+      <th>true</th>
+      <td><a id="x-vespa-ignored-fields" /> Will be present and set to 'true' only when a put or update contains one or more fields which were [ignored since they are not present in the document type](/en/reference/applications/services/container#ignore-undefined-fields). Such operations will be applied exactly as if they did not contain the field operations referencing non-existing fields. References to non-existing fields in field _paths_ are not detected.</td>
+    </tr>
+    <tr>
+      <th>Content-Type</th>
+      <th>`application/json` or `application/jsonl`</th>
+      <td>
+
+<a id="content-type" />
+
+The [media type](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types) (MIME type) of the response body.
+
+Either `application/json` for [JSON](#json) responses or `application/jsonl` for [JSON Lines](#json-lines) (JSONL) responses.
+
+The content type may include additional parameters such as `charset`.
+
+Example header:
+
+```txt
+Content-Type: application/json; charset=UTF-8
+```
+
+</td>
+    </tr>
+  </tbody>
+</table>
+
+## Response formats
+
+Responses are by default in JSON format. [Streaming visiting](#stream) supports an optional [JSON Lines](#json-lines) (JSONL) response format since Vespa 8.593.
+
+### JSON
+
+JSON responses have the following fields:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>pathId</th>
+      <td>Request URL path — always included.</td>
+    </tr>
+    <tr>
+      <th>message</th>
+      <td>An error message — included for all failed requests.</td>
+    </tr>
+    <tr>
+      <th>id</th>
+      <td>Document ID — always included for single document operations, including _Get_.</td>
+    </tr>
+    <tr>
+      <th>fields</th>
+      <td>The requested document fields — included for successful _Get_ operations.</td>
+    </tr>
+    <tr>
+      <th>documents\[\]</th>
+      <td>Array of documents in a visit result — each document has the _id_ and _fields_.</td>
+    </tr>
+    <tr>
+      <th>documentCount</th>
+      <td>Number of visited and selected documents. If [includeRemoves](#includeRemoves) is `true`, this also includes the number of returned removes (tombstones).</td>
+    </tr>
+    <tr>
+      <th>continuation</th>
+      <td>Token to be used to get the next chunk of the corpus - see [continuation](#continuation).</td>
+    </tr>
+  </tbody>
+</table>
+
+GET can include a `fields` object if a document was found in a _GET_ request
+
+```json
+{
+    "pathId": "<pathid>",
+    "id":     "<id>",
+    "fields": {
+    }
+}
+```
+
+A GET _visit_ result can include an array of `documents` plus a [continuation](#continuation):
+
+```json
+{
+    "pathId":    "<pathid>",
+    "documents": [
+        {
+            "id":     "<id>",
+            "fields": {
+            }
+        }
+    ],
+    "continuation": "<continuation string>",
+    "documentCount": 123
+}
+```
+
+A continuation indicates the client should make further requests to get more data, while lack of a continuation indicates an error occurred, and that visiting should cease, or that there are no more documents.
+
+A `message` can be returned for failed operations:
+
+```json
+{
+    "pathId":  "<pathid>",
+    "message": "<message text>"
+}
+```
+
+### JSON Lines
+
+A JSON Lines (JSONL) response is a stream of newline-separated JSON objects. Each line contains exactly one JSON object, and each JSON object takes up exactly one line. No line breaks are allowed within an object.
+
+JSONL is an optional response format for [streaming visiting](#stream), enabling efficient client-side parsing and fine-grained, continuous tracking of visitor progress. The JSONL response format is currently not supported for any other operations than streaming visiting.
+
+The JSONL response format is enabled by providing a HTTP [Accept](#accept) request header that specifies `application/jsonl` as the preferred response type, and will have a [Content-Type](#content-type) of `application/jsonl` if the server is on a version that supports JSONL visiting. Clients must check the `Content-Type` header to ensure they are getting the format they expect.
+
+JSONL support requires Vespa 8.593 or newer.
+
+Example response body:
+
+```json
+{"put":"id:ns:music::one","fields":{"foo":"bar"}}
+{"put":"id:ns:music::two","fields":{"foo":"baz"}}
+{"continuation":{"token":"...","percentFinished":40.0}}
+{"put":"id:ns:music::three","fields":{"foo":"zoid"}}
+{"remove":"id:ns:music::four"}
+{"continuation":{"token":"...","percentFinished":50.0}}
+{"continuation":{"token":"...","percentFinished":60.0}}
+{"put":"id:ns:music::five","fields":{"foo":"berg"}}
+{"continuation":{"token":"...","percentFinished":70.0}}
+{"sessionStats":{"documentCount":5}}
+{"continuation":{"percentFinished":100.0}}
+```
+
+Note that the `"..."` values are placeholders for (from a client's perspective) opaque string values.
+
+#### JSONL response objects
+
+<Note>
+**Note:**
+
+To be forwards compatible with future extensions to the response format, ignore unknown objects and fields.
+</Note>
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Object</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>put</th>
+      <td>A document [Put](/en/reference/schemas/document-json-format#put) operation in the same format as that accepted by Vespa's JSONL feed API.</td>
+    </tr>
+    <tr>
+      <th>remove</th>
+      <td>A document [Remove](/en/reference/schemas/document-json-format#remove) operation in the same format as that accepted by Vespa's JSONL feed API. Only present if [includeRemoves](#includeRemoves) is `true`.</td>
+    </tr>
+    <tr>
+      <th>continuation</th>
+      <td>
+
+A visitor [continuation](#continuation).
+
+Possible sub-object fields:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Field name</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>`token`</td>
+      <td>An opaque string value representing the current visitor progress through the data space. This value can be provided as part of a subsequent visitor request to continue visiting from where the last request left off. Clients should not attempt to parse the contents of this string, as it's considered an internal implementation detail and may be changed (in a backwards compatible way) without any prior announcement.</td>
+    </tr>
+    <tr>
+      <td>`percentFinished`</td>
+      <td>A floating point number between 0 and 100 (inclusive) that gives an approximation of how far the visitor has progressed through the data space.</td>
+    </tr>
+  </tbody>
+</table>
+
+The last line of a successful request should always be a `continuation` object.
+
+If (and only if) visiting has completed, the last `continuation` object will have a `percentFinished` value of `100` and will _not_ have a `token` field.
+
+</td>
+    </tr>
+    <tr>
+      <th>message</th>
+      <td>
+
+A message received from the backend visitor session. Can be used by clients to report problems encountered during visiting.
+
+Possible sub-object fields:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Field name</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>`text`</td>
+      <td>The actual message, in unstructured text</td>
+    </tr>
+    <tr>
+      <td>`severity`</td>
+      <td>The severity of the message. One of `info`, `warning` or `error`.</td>
+    </tr>
+  </tbody>
+</table>
+
+</td>
+    </tr>
+    <tr>
+      <th>sessionStats</th>
+      <td>
+
+Statistics from the backend visitor session.
+
+Possible sub-object fields:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Field name</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>`documentCount`</td>
+      <td>The number of visited and selected documents. If [includeRemoves](#includeRemoves) is `true`, this also includes the number of returned removes (tombstones).</td>
+    </tr>
+  </tbody>
+</table>
+
+</td>
+    </tr>
+  </tbody>
+</table>
+
+Note that it's possible for a successful response to contain zero `put` or `remove` objects if the [selection](#selection) did not match any documents.
+
+<a id="differences-from-json-response-format" />
+#### Differences from the JSON format
+
+The biggest difference in semantics between the JSON and JSONL response formats is when, and how, [continuation](#continuation) objects are returned.
+
+In the JSON format a continuation is included _once_ at the very end of the response object and covers the progress made by the entire request. If the request somehow fails after receiving 99% of all documents but prior to receiving the continuation field, the client must retry the entire request from the previously known continuation value. This can result in getting many requested documents twice; once from the incomplete first request and once more from the second request that covers the same part of the data space.
+
+In the JSON Lines format, a contination object is emitted to the stream _every time_ a backend data [bucket](/en/content/buckets) has been fully visited, as well as at the end of the response stream. This may happen many times in a response. Each continuation object _subsumes_ the progress of previously emitted continuations, meaning that a client only needs to remember the _most recent_ continuation value it observed in the response. If the request fails prior to completion, the client can specify the most recent continuation in the next request; it will then only receive duplicates for the data buckets that were actively being processed when the request failed.

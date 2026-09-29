@@ -4,9 +4,9 @@ title: "Autoscaling"
 
 Autoscaling lets you adjust the hardware resources allocated to application clusters automatically depending on actual usage. It will attempt to keep utilization of all allocated resources close to ideal, and will automatically reconfigure to the cheapest option allowed by the ranges when necessary.
 
-You can turn it on by specifying *ranges* in square brackets for the [nodes](/en/reference/applications/services/services#nodes) and/or [node resource](/en/reference/applications/services/services#resources) values in *services.xml*. Vespa Cloud will monitor the resource utilization of your clusters and automatically choose the cheapest resource allocation within ranges that produces close to optimal utilization.
+You can turn it on by specifying _ranges_ in square brackets for the [nodes](/en/reference/applications/services/services#nodes) and/or [node resource](/en/reference/applications/services/services#resources) values in _services.xml_. Vespa Cloud will monitor the resource utilization of your clusters and automatically choose the cheapest resource allocation within ranges that produces close to optimal utilization.
 
-You can see the status and recent actions of the autoscaler in the *Resources* view under a deployment in the console.
+You can see the status and recent actions of the autoscaler in the _Resources_ view under a deployment in the console.
 
 Autoscaling is not considering latency differences achieved by different configurations. If your application has certain configurations that produce good throughput but too high latency, you should not include these configurations in your autoscaling ranges.
 
@@ -14,6 +14,7 @@ Adjusting the allocation of a cluster may happen quickly for stateless container
 
 The ideal utilization takes into account that a node may be down or failing, that another region may be down causing doubling of traffic, and that we need headroom for maintenance operations and handling requests with low latency. It acts on what it has observed on your system in the recent past. If you need much more capacity in the near future than you do currently, you may want to set the lower limit to take this into account. Upper limits should be set to the maximum size that makes business sense.
 
+<a id="When-to-use-autoscaling" />
 ## When to use autoscaling
 
 Autoscaling is useful in a number of scenarios. Some typical ones are:
@@ -34,19 +35,21 @@ Some other considerations when deciding resources:
 - As a consequence, during resource shortage (say almost full disk), add nodes and keep the rest unchanged.
 - It is easiest to reason over capacity when changing one thing at a time.
 
-It is often safe to follow the *suggested resources* advice when shown in the console and feel free to contact us if you have questions.
+It is often safe to follow the _suggested resources_ advice when shown in the console and feel free to contact us if you have questions.
+
+{/* ToDo: We can rewrite some of this when enabling shared hosts */}
 
 ## Mixed load
 
 A Vespa application must handle a combination of reads and writes, from multiple sources. User load often resembles a sine-like curve. Machine-generated load, like a batch job, can be spiky and abrupt.
 
-In the default Vespa configuration, all kinds of load uses *one* default container cluster. Example: An application where daily batch jobs update the corpus at high rate:
+In the default Vespa configuration, all kinds of load uses _one_ default container cluster. Example: An application where daily batch jobs update the corpus at high rate:
 
 <Frame>
 ![nodes and resources](/assets/img/load.png)
 </Frame>
 
-Autoscaling scales *up* much quicker than *down*, as the probability of a new spike is higher after one has been observed. In this example, see the rapid cluster growth for the daily load spike - followed by a slow decay.
+Autoscaling scales _up_ much quicker than _down_, as the probability of a new spike is higher after one has been observed. In this example, see the rapid cluster growth for the daily load spike - followed by a slow decay.
 
 The best solution for this case is to slow down the batch job, as it is of short duration. It is not always doable to slow down jobs - in these cases, setting up multiple [container clusters](/en/applications/containers) can be a smart thing - optimize each cluster for its load characteristics. This could be a combination of clusters using autoscale and clusters with a fixed size. Autoscaling often works best for the user-generated load, whereas the machine-generated load could either be tuned or routed to a different cluster in the same Vespa application.
 
@@ -59,7 +62,7 @@ The examples below show recommended starting points per cluster type. As a rule 
 Container clusters are stateless, so nodes can be added, removed or replaced quickly, and no data needs to move. Scaling the number of nodes is the simplest option and a good starting point:
 
 ```xml
-<nodes count="[2, 8]">
+  <nodes count="[2, 8]">
     <resources vcpu="4" memory="8Gb"/>
   </nodes>
 ```
@@ -67,7 +70,7 @@ Container clusters are stateless, so nodes can be added, removed or replaced qui
 You can also let autoscaling choose the node resources within ranges. Changing node resources usually means replacing nodes, but for a container cluster this causes little overhead:
 
 ```xml
-<nodes count="[2, 8]">
+  <nodes count="[2, 8]">
     <resources vcpu="[2, 4]" memory="[8Gb, 16Gb]"/>
   </nodes>
 ```
@@ -77,7 +80,7 @@ You can also let autoscaling choose the node resources within ranges. Changing n
 Content clusters hold data, so scaling them means redistributing documents. Changing vcpu, memory or disk usually leads to allocating new nodes to fulfil the new node resource spec, replacing all nodes in the cluster and redistributing all documents. Keep node resources fixed and autoscale the number of nodes instead - then only the data on added or removed nodes has to move:
 
 ```xml
-<nodes count="[2, 8]">
+  <nodes count="[2, 8]">
     <resources vcpu="4" memory="16Gb" disk="500Gb"/>
   </nodes>
 ```
@@ -85,7 +88,7 @@ Content clusters hold data, so scaling them means redistributing documents. Chan
 For content clusters using [groups](/en/reference/applications/services/services#nodes), express the topology with `groups` and `group-size` rather than a `count` range, and autoscale the number of groups:
 
 ```xml
-<nodes groups="[2, 4]" group-size="8">
+  <nodes groups="[2, 4]" group-size="8">
     <resources vcpu="4" memory="16Gb" disk="500Gb"/>
   </nodes>
 ```
@@ -93,13 +96,13 @@ For content clusters using [groups](/en/reference/applications/services/services
 This scales between 2 and 4 groups of 8 nodes each, 16 to 32 nodes in total. Since each query is handled by a single group, query capacity scales with the number of groups, and adding a group populates the new group without redistributing documents between the existing nodes.
 
 <Warning>
-**Important:** 
+**Important:**
 
 Autoscaling node resources (vcpu, memory, disk) in a content cluster is supported, but each resource change replaces all nodes and redistributes all documents, which might impact service quality to some degree. Using [paged attributes](/en/content/attributes#paged-attributes) or HNSW indexes makes redistribution more expensive and time-consuming.
 </Warning>
 
 <Note>
-**Note:** 
+**Note:**
 
 Avoid autoscaling during the initial feeding of a cluster, as changing the topology will require redistribution of documents, possibly several times - see [initial batch feed](/en/writing/initial-batch-feed).
 </Note>
@@ -109,7 +112,7 @@ Avoid autoscaling during the initial feeding of a cluster, as changing the topol
 For completeness, this is a configuration to avoid, in particular for content clusters:
 
 ```xml
-<nodes count="[2, 8]">
+  <nodes count="[2, 8]">
     <resources vcpu="[2, 8]" memory="[8Gb, 32Gb]" disk="[50Gb, 200Gb]"/>
   </nodes>
 ```
@@ -121,7 +124,7 @@ As node resources often come in increments of x2, these ranges span 7 node count
 Note that at the moment it is not possible to autoscale GPU resources per node, but you can scale the number of nodes with GPUs:
 
 ```xml
-<nodes count="[2, 8]">
+  <nodes count="[2, 8]">
     <resources vcpu="2" memory="16Gb" disk="50Gb">
       <gpu count="1" memory="16.0Gb"/>
     </resources>
@@ -136,7 +139,5 @@ Note that at the moment it is not possible to autoscale GPU resources per node, 
 
 ## Related reading
 
-<CardGroup>
-  <Card title="Feed sizing" icon="bar-chart" href="/en/performance/sizing-feeding" horizontal />
-  <Card title="Query sizing" icon="search" href="/en/performance/sizing-search" horizontal />
-</CardGroup>
+- [Feed sizing](/en/performance/sizing-feeding)
+- [Query sizing](/en/performance/sizing-search)

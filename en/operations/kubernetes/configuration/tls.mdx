@@ -1,6 +1,5 @@
 ---
-title: "Enable TLS Encryption for Vespa on Kubernetes"
-sidebarTitle: "Enable TLS Encryption"
+title: "Configure TLS Encryption with CertManager"
 ---
 
 TLS encryption for Vespa on Kubernetes can be configured for internal pod-to-pod communication using mutual TLS (mTLS) and for external ingress traffic. This guide demonstrates using [cert-manager](https://cert-manager.io/), a Kubernetes-native certificate management solution that automates certificate issuance and renewal, to set up TLS for the Vespa on Kubernetes deployment.
@@ -9,23 +8,24 @@ TLS encryption for Vespa on Kubernetes can be configured for internal pod-to-pod
 
 ## Prerequisites
 
-- Kubernetes cluster with Vespa Operator installed (see [Installation](/en/operations/kubernetes/deployment/installation))
+- Kubernetes cluster with Vespa Operator installed (see [Installation](/en/operations/kubernetes/operations/installation))
 - [cert-manager](https://cert-manager.io/docs/installation/) v1.13 or later
 - [cert-manager CSI driver](https://cert-manager.io/docs/usage/csi-driver/) installed
 - Kubernetes Command Line Tool ([kubectl](https://kubernetes.io/docs/reference/kubectl/))
 - OpenSSL (for CA generation)
 
+<a id="mtls" />
 ## Enable mTLS for Internal Communication
 
 Mutual TLS (mTLS) secures communication between Vespa services within the Kubernetes cluster. Each pod authenticates using client certificates issued by a namespace-local root Certificate Authority. It is also possible to configure the Certificate Authority to be cluster-global.
 
-This method is ideal for those who prefer TLS to terminate at the service, or those who have already integrated with mTLS from Vespa Cloud. For more details on Vespa's mTLS implementation, see the [Vespa mTLS documentation](/en/security/mtls).
+This method is ideal for those who prefer TLS to terminate at the service, or those who have already integrated with mTLS from Vespa Cloud. For more details on Vespa's mTLS implementation, see the [Vespa mTLS documentation](https://docs.vespa.ai/en/security/mtls.html).
 
 ### Step 1: Create Certificate Authority
 
 Create a self-signed issuer to bootstrap the certificate chain, then use it to create a namespace-local root CA certificate that acts as the trust anchor for all internal mTLS certificates.
 
-```yaml expandable
+```bash
 $ cat <<EOF | kubectl apply -f -
 # Create self-signed issuer
 apiVersion: cert-manager.io/v1
@@ -61,7 +61,7 @@ EOF
 
 The CA issuer uses the root CA to issue certificates to individual pods.
 
-```yaml
+```bash
 $ cat <<EOF | kubectl apply -f -
 apiVersion: cert-manager.io/v1
 kind: Issuer
@@ -78,7 +78,7 @@ EOF
 
 Create a `ConfigMap` that defines the location where Vespa loads TLS certificates and private keys. This configuration file is loaded through the `VESPA_TLS_CONFIG_FILE` environment variable in the Pod specification of the `VespaSet`.
 
-```yaml
+```bash
 $ cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap
@@ -99,11 +99,11 @@ EOF
 
 ### Step 4: Configure VespaSet with mTLS
 
-Update the VespaSet specification to mount the TLS configuration and use the cert-manager CSI driver for certificate injection via a `PodTempalte`. For more information on the `PodTemplate` specification, refer to the [Custom Overrides](/en/operations/kubernetes/custom-overrides-podtemplate) section.
+Update the VespaSet specification to mount the TLS configuration and use the cert-manager CSI driver for certificate injection via a `PodTempalte`. For more information on the `PodTemplate` specification, refer to the [Custom Overrides](/en/operations/kubernetes/configuration/custom-overrides-podtemplate) section.
 
 Set the `VESPA_TLS_CONFIG_FILE` environment variable to point to the TLS configuration file from the `ConfigMap`. The main container name will always be `vespa`.
 
-```yaml expandable
+```bash
 $ cat <<EOF | kubectl apply -f -
 apiVersion: k8s.ai.vespa/v1
 kind: VespaSet
@@ -201,6 +201,7 @@ The main `vespa` container in the `VespaSet` includes a new specification to mou
 
 The cert-manager CSI driver automatically injects certificates signed by the CA issuer through the `volume` override, with a 30-day validity period and automatic renewal 3 days before expiration in this example.
 
+<a id="ingress-tls" />
 ## Enabling TLS for Ingress Traffic
 
 Ingress TLS secures external traffic to Vespa's Data Plane HTTP port. This configuration allows using a separate certificate chain from mTLS, providing security boundary separation between internal and external communication. This is useful when you want to terminate TLS at the service but use different trust anchors for internal and external traffic. These settings apply only to application pods.
@@ -233,7 +234,7 @@ $ kubectl create secret tls ingress-ca \
 
 The ingress issuer references the externally-generated CA and uses it to sign certificates for ingress traffic, separate from the internal mTLS certificate chain.
 
-```yaml
+```bash
 $ cat <<EOF | kubectl apply -f -
 apiVersion: cert-manager.io/v1
 kind: Issuer
@@ -246,12 +247,11 @@ spec:
 EOF
 ```
 
-
 ### Step 4: Create Ingress TLS Configuration
 
 Create a separate ConfigMap for ingress TLS configuration. This configuration file is loaded through the `VESPA_TLS_CONFIG_FILE_INGRESS` environment variable in the Pod specification of the `VespaSet`.
 
-```yaml
+```bash
 $ cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: ConfigMap
@@ -274,7 +274,7 @@ EOF
 
 Update the VespaSet application pod template to include ingress TLS configuration. Set the `VESPA_TLS_CONFIG_FILE_INGRESS` environment variable to point to the ingress TLS configuration file.
 
-```yaml expandable
+```bash
 $ cat <<EOF | kubectl apply -f -
 apiVersion: k8s.ai.vespa/v1
 kind: VespaSet
@@ -377,7 +377,6 @@ $ openssl x509 -req -in ingress-client.csr \
   -out ingress-client.crt -days 365 -sha256
 ```
 
-
 Query Vespa using the client certificate by starting a port-forward to the DataPlane 4443 port.
 
 ```bash
@@ -386,7 +385,7 @@ $ kubectl -n mramdenbourg-upgradetest port-forward pod/$CONTAINER_POD_NAME 4443:
 
 Use the client certificate to query the DataPlane cluster.
 
-```curl
+```bash
 $ curl --cacert ingress-ca.crt \
   --key ingress-client.key \
   --cert ingress-client.crt \

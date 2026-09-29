@@ -4,9 +4,10 @@ title: "Data management and backup"
 
 This guide covers data management operations for Vespa Cloud applications, including automated backups, document export, feed, and bulk updates and removals.
 
+<a id="backup" />
 ## Automated Backups
 
-Depending on [plan](https://vespa.ai/pricing/), content clusters are automatically backed up when a [`<backup>`](/en/reference/applications/deployment#backup) element is specified in *deployment.xml*. Vespa Cloud manages the backup schedule, storage, and lifecycle with no external tooling required. Backups will run at the configured frequency while also respecting any [block windows](/en/reference/applications/deployment#block-change) defined for the instance.
+Depending on [plan](https://vespa.ai/pricing/), content clusters are automatically backed up when a [`<backup>`](/en/reference/applications/deployment#backup) element is specified in _deployment.xml_. Vespa Cloud manages the backup schedule, storage, and lifecycle with no external tooling required. Backups will run at the configured frequency while also respecting any [maintenance block windows](/en/reference/applications/deployment#block-change) (`<block-change maintenance="true">`) defined for the instance.
 
 ```xml
 <instance id="default">
@@ -23,6 +24,7 @@ Backups are retained for three backup intervals (e.g. 21 days for a 7-day freque
 
 If you prefer to manage backups yourself, documents can be exported manually using `vespa visit` as shown in the [Google Cloud Function example](https://github.com/vespa-engine/sample-apps/tree/master/examples/google-cloud/cloud-functions#backup---experimental).
 
+<a id="restore" />
 ## Restore from Backup
 
 Restoring from a backup is handled by Vespa Cloud. To initiate a restore, contact [Vespa Support](https://vespa.ai/support/). Response time and priority handling are governed by your [support plan](https://vespa.ai/pricing/).
@@ -37,7 +39,7 @@ Note that content redistribution is usually required after restoration. See [bac
 ## Export documents
 
 <Note>
-**Note:** 
+**Note:**
 
 The examples below use the [Vespa CLI](/en/clients/vespa-cli). Ensure you have the latest version installed.
 </Note>
@@ -59,7 +61,7 @@ $ vespa visit --zone prod.aws-us-east-1c --cluster default --selection doc --fie
 ```
 
 <Note>
-**Note:** 
+**Note:**
 
 Configuring the [`documentid`](/en/reference/schemas/schemas#documentid) field to be an attribute in the schema avoids that this requires disk access and, hence, speeds up the exporting process.
 </Note>
@@ -87,9 +89,9 @@ $ gunzip -c docs.gz | jq '.documents[]' | \
 
 ## Delete
 
-To remove all documents in a Vespa deployment—or a selection of them—run a *deletion visit*. Use the `DELETE` HTTP method, and fetch only the continuation token from the response:
+To remove all documents in a Vespa deployment—or a selection of them—run a _deletion visit_. Use the `DELETE` HTTP method, and fetch only the continuation token from the response:
 
-```bash expandable
+```txt
 #!/bin/bash
 
 set -x
@@ -116,9 +118,9 @@ do
 done
 ```
 
-Each request will return a response after roughly one minute—change this by specifying *timeChunk* (default 60).
+Each request will return a response after roughly one minute—change this by specifying _timeChunk_ (default 60).
 
-To purge all documents in a document export (above), generate a feed with `remove`\-entries for each document ID, like:
+To purge all documents in a document export (above), generate a feed with `remove`-entries for each document ID, like:
 
 ```bash
 $ gunzip -c docs.gz | jq '[ .documents[] | {remove: .id} ]' | head
@@ -141,9 +143,9 @@ $ gunzip -c docs.gz | jq '[ .documents[] | {remove: .id} ]' | \
 
 ## Update
 
-To update all documents in a Vespa deployment—or a selection of them—run an *update visit*. Use the `PUT` HTTP method, and specify a partial update in the request body:
+To update all documents in a Vespa deployment—or a selection of them—run an _update visit_. Use the `PUT` HTTP method, and specify a partial update in the request body:
 
-```bash expandable
+```txt
 #!/bin/bash
 
 set -x
@@ -171,11 +173,12 @@ do
 done
 ```
 
-Each request will return a response after roughly one minute—change this by specifying *timeChunk* (default 60).
+Each request will return a response after roughly one minute—change this by specifying _timeChunk_ (default 60).
 
+<a id="using-document-v1-api" />
 ## Using /document/v1/ api
 
-To get started with a document export, find the *namespace* and *document type* by listing a few IDs. Hit the [/document/v1/](/en/reference/api/document-v1) ENDPOINT. Restrict to one CLUSTER, see [content clusters](/en/reference/applications/services/content):
+To get started with a document export, find the _namespace_ and _document type_ by listing a few IDs. Hit the [/document/v1/](/en/reference/api/document-v1) ENDPOINT. Restrict to one CLUSTER, see [content clusters](/en/reference/applications/services/content):
 
 ```bash
 $ curl \
@@ -193,14 +196,14 @@ $ curl \
   "$ENDPOINT/document/v1/?cluster=$CLUSTER&fieldSet=%5Bid%5D"
 ```
 
-From an ID, like *id:open:doc::open/documentation/schemas.html*, extract
+From an ID, like _id:open:doc::open/documentation/schemas.html_, extract
 
 - NAMESPACE: open
 - DOCTYPE: doc
 
 Example script:
 
-```bash expandable
+```txt
 #!/bin/bash
 
 set -x
@@ -230,6 +233,6 @@ do
 done
 ```
 
-If only a few documents are returned per response, *wantedDocumentCount* (default 1, max 1024) can be specified for a lower bound on the number of documents per response, if that many documents still remain.
+If only a few documents are returned per response, _wantedDocumentCount_ (default 1, max 1024) can be specified for a lower bound on the number of documents per response, if that many documents still remain.
 
-Specifying *concurrency* (default 1, max 100) increases throughput, at the cost of resource usage. This also increases the number of documents per response, and *could* lead to excessive memory usage in the HTTP container when many large documents are buffered to be returned in the same response.
+Specifying _concurrency_ (default 1, max 100) increases throughput, at the cost of resource usage. This also increases the number of documents per response, and _could_ lead to excessive memory usage in the HTTP container when many large documents are buffered to be returned in the same response.
