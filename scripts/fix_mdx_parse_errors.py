@@ -269,9 +269,7 @@ def fix_tensor_pre_braces(text: str) -> str:
     return text  # handled by pre_parent_to_fences
 
 
-def process_file(path: Path) -> bool:
-    original = path.read_text(encoding="utf-8")
-    text = original
+def fix_text(text: str) -> str:
     text = fix_frontmatter(text)
     text = jekyll_note_to_mdx(text)
     text = html_comments_to_mdx(text)
@@ -285,6 +283,12 @@ def process_file(path: Path) -> bool:
     text = fix_angle_bracket_placeholders(text)
     text = wrap_inline_field_defs(text)
     text = fix_bash_completion_redirect(text)
+    return text
+
+
+def process_file(path: Path) -> bool:
+    original = path.read_text(encoding="utf-8")
+    text = fix_text(original)
     if text != original:
         path.write_text(text, encoding="utf-8")
         return True
