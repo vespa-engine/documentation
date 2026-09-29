@@ -401,6 +401,42 @@ def fence(code: str, lang: str = "", meta: str = "") -> str:
     return f"{ticks}{info}\n{code}\n{ticks}"
 
 
+# Highlighted with languages/vespa-schema.json, registered in docs.json
+SCHEMA_LANG = "vespa-schema"
+SCHEMA_KEYWORDS = (
+    r"(document-summary|rank-profile|rank-properties|summary-features|match-features|first-phase|second-phase|"
+    r"global-phase|match-phase|onnx-model|import\s+field|constants|constant|annotation|fieldset|function|"
+    r"document|schema|search|struct|inputs|macro|field)"
+)
+
+
+def is_schema(code: str) -> bool:
+    """Whether code is a schema (.sd) snippet: a whole schema or a part such as a field or rank profile."""
+    lines = [l for l in code.split("\n") if l.strip() and not l.strip().startswith(("#", "//"))]
+    if not lines:
+        return False
+    first = lines[0].strip()
+    if first.startswith(("$", "<", "{", "[")) or re.match(r'"\w|select\s', first, re.I):
+        return False
+    m = re.match(SCHEMA_KEYWORDS + r"(?![\w-])(.*)", first)
+    if not m:
+        # one-line statements from a field, e.g. "indexing: summary | index"
+        return bool(re.match(r"(indexing|attribute|index|match|summary|stemming|normalizing|rank-type)\s*[:{]", first)) and len(lines) <= 6
+    kw, rest = m.group(1), m.group(2)
+    if kw == "function":  # JavaScript has functions too
+        return bool(re.search(r"\bexpression\s*[:{]", code))
+    if kw == "document":  # e.g. document.getElementById
+        return bool(re.match(r"\s+[\w-]+(\s+inherits\s+[\w, -]+)?\s*\{", rest))
+    if kw == "field":
+        return bool(re.match(r"\s+[\w.-]+\s+type\s+", rest) or re.match(r"\s+[\w-]+\s*\{", rest))
+    if kw.startswith("import"):
+        return True
+    if kw in ("first-phase", "second-phase", "global-phase", "match-phase", "rank-properties", "summary-features",
+              "match-features"):
+        return bool(re.match(r"\s*[{:]", rest))
+    return bool(re.match(r"\s*[\w().\[\]-]*\s*(inherits\s+[\w\[\], .-]+)?\s*[{:]", rest)) or "{" in code
+
+
 def guess_lang(code: str) -> str:
     s = code.lstrip()
     first = s.split("\n", 1)[0]
@@ -412,8 +448,8 @@ def guess_lang(code: str) -> str:
         return "json"
     if re.match(r"(package |import |public |@Override)", s):
         return "java"
-    if re.match(r"(schema|document|rank-profile|field|search|struct|function)\s+[\w-]+", s):
-        return "js"  # no highlighter knows schemas; the branch uses js
+    if is_schema(code):
+        return SCHEMA_LANG
     if re.match(r"select\s", s, re.I):
         return "sql"
     return "txt"

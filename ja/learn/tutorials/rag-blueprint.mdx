@@ -100,7 +100,7 @@ RAG アプリケーションの品質を評価するためには、関連ドキ�
 
 以下は、このサンプルアプリケーションで使用するスキーマです。
 
-```txt expandable
+```vespa-schema expandable
 # Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 schema doc {
 
@@ -234,7 +234,7 @@ Vespa は、[インデックス言語](/ja/writing/indexing)における自動[�
 
 以下はスキーマの該当部分です。検索可能な単位をテキストフィールドを持つドキュメントとして定義し、それを 1024 文字の小さなパートに自動的にチャンク化し、各チャンクを個別に埋め込んでインデックスします:
 
-```txt
+```vespa-schema
 field chunks type array<string> {
     indexing: input text | chunk fixed-length 1024 | summary | index
     index: enable-bm25
@@ -252,7 +252,7 @@ Vespa では、サマリーフィーチャーによって返すチャンクを�
 
 サマリーフィーチャーは、rank-profile の中で次のように計算されます:
 
-```txt expandable
+```vespa-schema expandable
 # This function unpacks the bits of each dimension of the mapped chunk_embeddings attribute tensor
 function chunk_emb_vecs() {
     expression: unpack_bits(attribute(chunk_embeddings))
@@ -298,7 +298,7 @@ summary-features {
 
 これで、このサマリーフィーチャーをドキュメントサマリーで使用し、LLM のコンテキストとして使われるドキュメントの上位 3 チャンクを返すことができます。すべてのチャンクを返すドキュメントサマリーも定義できる点に注意してください。これはディープリサーチなど、別のユースケースで役立つ可能性があります。
 
-```txt
+```vespa-schema
 document-summary top_3_chunks {
       from-disk
       summary chunks_top3 {
@@ -331,7 +331,7 @@ field chunks type array<string> {
 
 このブループリントでは、バイナリベクトルを埋め込むことでコストの最小化を狙っているため、`title_embedding` フィールドと `chunk_embeddings` フィールドの両方をインデックスすることにしました。
 
-```txt
+```vespa-schema
 field title_embedding type tensor<int8>(title{}, x[96]) {
     indexing: input text | embed | pack_bits | attribute | index
     attribute {
@@ -627,7 +627,7 @@ Vespa は [Matryoshka 埋め込み](https://blog.vespa.ai/combining-matryoshka-w
 - クエリーとインデックス作成のコストを 30 倍削減
 - 品質の低下は多くの場合わずか数パーセントポイント
 
-```txt
+```vespa-schema
 field binary_chunk_embeddings type tensor<int8>(chunk{}, x) {
   indexing: input text | chunk fixed-length 1024 | embed | pack_bits | attribute | index 
   attribute { distance-metric: hamming }
@@ -636,7 +636,7 @@ field binary_chunk_embeddings type tensor<int8>(chunk{}, x) {
 
 より高精度なベクトル類似度が必要な場合は、bfloat16 精度を使用し、大きなメモリコストを避けるためにこれらのベクトルをディスクにページングすることを検討してください。この場合、ランキングでこのフィールドにアクセスする際にもディスクからの読み込みが必要になるため、パフォーマンス問題を避けるには、このフィールドにアクセスするヒット数を制限する必要がある点に注意してください。
 
-```txt
+```vespa-schema
 field chunk_embeddings type tensor<bfloat16>(chunk{}, x) {
   indexing: input text | chunk fixed-length 1024 | embed | attribute 
   attribute: paged
@@ -654,7 +654,7 @@ field chunk_embeddings type tensor<bfloat16>(chunk{}, x) {
 
 以下は、その方法を示したものです:
 
-```txt expandable
+```vespa-schema expandable
 rank-profile base-features {
  
         inputs {
@@ -928,7 +928,7 @@ userQuery()
 
 以下は、経験的に得られた、ほとんどのユースケースでうまく機能するデフォルトパラメータです:
 
-```txt
+```vespa-schema
 rank-profile optimized inherits baseline {
     filter-threshold: 0.05
     weakand {
@@ -974,7 +974,7 @@ a * bm25(title) + b * bm25(chunks) + c * max_chunk_sim_scores() + d * max_chunk_
 
 含めるフィーチャーは次のとおりです:(以下、)
 
-```txt expandable
+```vespa-schema expandable
 rank-profile base-features {
         inputs {
             query(embedding) tensor<int8>(x[96])
@@ -1203,7 +1203,7 @@ Intercept                    : -7.798639
 
 まず、学習した係数を Vespa で使えるように、スキーマ内の新しいランクプロファイルに入力として追加する必要があります。
 
-```txt expandable
+```vespa-schema expandable
 rank-profile learned-linear inherits collect-training-data {
         match-features: 
         inputs {
@@ -1424,7 +1424,7 @@ app/
 
 このモデルを使用する新しいランクプロファイルを作成します:
 
-```txt
+```vespa-schema
 rank-profile second-with-gbdt inherits collect-training-data {
     ...
 

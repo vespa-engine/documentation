@@ -58,6 +58,9 @@ converts a page from `origin/master` into the working tree.
 [scripts/port_redirects.py](scripts/port_redirects.py) adds the redirects from master's `redirects.yml` and
 `redirect_from` frontmatter to `docs.json`; running it again only adds new ones.
 
+[scripts/label_schema_code.py](scripts/label_schema_code.py) labels schema code blocks `vespa-schema`
+(the converter does this for the pages it writes).
+
 [scripts/check_mdx.mjs](scripts/check_mdx.mjs) compiles MDX pages and reports parse errors, JavaScript
 expressions (such as an unescaped `{name}`, which breaks the page when rendered) and components Mintlify
 does not provide. It needs `@mdx-js/mdx`, `remark-gfm` and `remark-math` installed somewhere:
@@ -119,6 +122,11 @@ Prioritize maintainability higher than usability:
 * Don't repeat information found in other documents. It is tempting to make life easier for users by writing use-case oriented documentation on how to accomplish specific tasks, but this backfires as it leads to a lot of repetition which we fail to maintain. In the long run it is better to explain the concepts clearly and succinctly and leave it to the users to piece together the information. **Use the same principles for documentation as for code: DRY, refactor for coherency etc.**
 
 * Be wary of adding code in the documentation. The code will become incorrect over time and should in most cases be placed in git as continuously built code and referenced from the doc.
+
+* Label schema snippets (`.sd` code, including parts such as a field or rank profile) `vespa-schema`, so they are
+  syntax highlighted: ```` ```vespa-schema ````. The grammar is [languages/vespa-schema.json](languages/vespa-schema.json),
+  a copy of the one generated in the [vespa repository](https://github.com/vespa-engine/vespa/tree/master/integration/tmgrammar);
+  update it with [scripts/update_schema_grammar.py](scripts/update_schema_grammar.py).
 
 ### Style
 
