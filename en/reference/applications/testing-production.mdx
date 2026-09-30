@@ -1,0 +1,1822 @@
+---
+title: "Production tests"
+sidebarTitle: "Production test"
+---
+
+This is the Vespa Testing reference for [production tests](/en/applications/testing).
+
+Production tests verify domain specific metrics for a production deployment, such as query latency or error rate. Unlike [system](/en/reference/applications/testing) and [staging](/en/reference/applications/testing-java) tests, production tests check a named [metric preset](#metric-presets) against expected bounds, using Grafana metrics for the application deployed to that zone.
+
+A production test is placed after a deployment zone in [deployment.xml](/en/reference/applications/deployment). It acts as a gate for the rollout: if it fails, the rollout stops and subsequent zones will not receive the new version. This is useful in multi-zone deployments where the first zone serves as a canary, but a production test can validate _any_ zone before the rollout proceeds to the next, as described in [production tests](/en/operations/automated-deployments#production-tests).
+
+<a id="normal-flow" />
+## Production test setup
+
+To use production tests, first deploy to a zone, use [&lt;delay&gt;](/en/reference/applications/deployment#delay) for some time, and then run the production tests against that zone. This pattern can be repeated for each zone in the pipeline, to validate it before the rollout proceeds to the next. In the following example, the zone is deployed, then the delay waits 10 minutes, and lastly the production test waits for an additional 10 minutes before aggregating the last 10 minutes of metrics data:
+
+```xml
+<prod>
+  <region>aws-us-east-1c</region>
+  <delay minutes="10" />
+  <test>aws-us-east-1c</test>
+  <!-- Deploy to the rest of the zones... -->
+</prod>
+```
+
+The declared production test:
+
+```yaml
+name: cpu check
+metric: cpu-utilization-container
+duration: 10m
+max: 85
+```
+
+<Note>
+**Note:**
+
+Tests based on traffic metrics, such as query or feed latency, need real queries or feeding against the zone during the test window, since without traffic there are no metrics to evaluate and the test will fail.
+</Note>
+
+## Test suites
+
+Production tests are placed under `tests/production-test/` in the application package, as one or more `.yaml` or `.json` files:
+
+```bash
+$ ls tests/production-test/
+
+tests/production-test/metrics-test.yaml
+```
+
+Each file describes one or more tests. A file may contain:
+
+- a single test, as one YAML or JSON object; or
+- multiple tests, as a YAML or JSON object with a `tests` field containing a list of test objects.
+
+## Test file structure
+
+Each test checks a named [metric preset](#metric-presets), over a `duration` window, against a `min` and/or `max` bound. A simple example:
+
+```yaml
+name: cpu check
+metric: cpu-utilization-container
+duration: 5m
+max: 85
+```
+
+This test fails the production test step if the average CPU utilization of the container cluster, over the last 5 minutes, exceeds 85%.
+
+To place multiple tests in one file, wrap them in a top-level `tests` field, containing a list of test objects. This works the same way for both YAML and JSON:
+
+```yaml
+tests:
+  - name: container cpu check
+    metric: cpu-utilization-container
+    duration: 5m
+    max: 35
+
+  - name: content cpu check
+    metric: cpu-utilization-content
+    duration: 5m
+    max: 85
+```
+
+<a id="test-yaml-and-json-specification" />
+### Test specification
+
+A full list of fields, with description:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Default</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>string</td>
+      <td>"&lt;unnamed test&gt;"</td>
+      <td>Name used for display purposes in logs and failure messages.</td>
+    </tr>
+    <tr>
+      <td>metric</td>
+      <td>string</td>
+      <td></td>
+      <td>Required. The name of one of the [metric presets](#metric-presets).</td>
+    </tr>
+    <tr>
+      <td>duration</td>
+      <td>number + granularity suffix</td>
+      <td></td>
+      <td>Required. The duration of the metrics aggregation. Suffix is one of `s|m|h|d`. For example, `duration: 10m` means: first wait 10 minutes, then aggregate the last 10 minutes of data. Tests can have different durations. Since tests run concurrently, the total waiting time is determined by the highest `duration` value, not the sum.</td>
+    </tr>
+    <tr>
+      <td>min</td>
+      <td>number</td>
+      <td></td>
+      <td>The inclusive lower bound the query result must satisfy. At least one of `min` and `max` is required. The unit depends on the [metric preset](#metric-presets) used, see its Unit column.</td>
+    </tr>
+    <tr>
+      <td>max</td>
+      <td>number</td>
+      <td></td>
+      <td>The inclusive upper bound the query result must satisfy. At least one of `min` and `max` is required. The unit depends on the [metric preset](#metric-presets) used, see its Unit column.</td>
+    </tr>
+  </tbody>
+</table>
+
+A test that is outside its `min`/`max` bounds fails the production test step immediately — production tests are not retried.
+
+## Examples
+
+A single test, in YAML:
+
+```yaml
+name: error rate check
+metric: error-rate-pct
+duration: 5m
+max: 1
+```
+
+Multiple tests in a single YAML file:
+
+```yaml
+tests:
+  - name: node count check
+    metric: node-count-max
+    duration: 5m
+    max: 10
+
+  - name: documents count check
+    metric: documents-count-active
+    duration: 5m
+    min: 1
+```
+
+A single test, in JSON:
+
+```json
+{
+    "name": "query latency check",
+    "metric": "query-latency-p95",
+    "duration": "5m",
+    "max": 200
+}
+```
+
+Multiple tests in a single JSON file:
+
+```json
+{
+    "tests": [
+        {
+            "name": "container feed latency check",
+            "metric": "container-feed-latency-max",
+            "duration": "5m",
+            "max": 100
+        },
+        {
+            "name": "content commit latency check",
+            "metric": "content-commit-latency-avg",
+            "duration": "5m",
+            "max": 50
+        }
+    ]
+}
+```
+
+## Metric presets
+
+Every test checks one of the following named presets, in its `metric` field. Each preset queries the same metrics that back the application's overview dashboard, reduced to a single number. Presets are grouped below by the dashboard tab they come from.
+
+The **Console name** column is a direct match to the graph title shown in that tab in the [Vespa Console](https://console.vespa-cloud.com/)'s metrics view. Use it to find the preset for a graph you're looking at there. The **Metric** column is the exact value to use in the `metric` field, e.g. `metric: query-latency-p95`.
+
+<a id="metric-presets-overview" />
+### Overview
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Console name</th>
+      <th>`metric`</th>
+      <th>Unit</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Buckets Out of Sync (%)</td>
+      <td>`buckets-out-of-sync`</td>
+      <td>percentage (0-100)</td>
+      <td>Percentage of buckets currently out of sync, fleet-wide.</td>
+    </tr>
+    <tr>
+      <td>Container: % Nodes Down</td>
+      <td>`container-nodes-down`</td>
+      <td>percentage (0-100)</td>
+      <td>Percentage of active container nodes with at least one service down, fleet-wide.</td>
+    </tr>
+    <tr>
+      <td>Container Thread Saturation — document-api only</td>
+      <td>`container-thread-saturation-document-api-only`</td>
+      <td>percentage (0-100)</td>
+      <td>Worst-case container thread-pool utilization, fleet-wide, restricted to deployments running document-api only (no search).</td>
+    </tr>
+    <tr>
+      <td>Container Thread Saturation — search + document-api</td>
+      <td>`container-thread-saturation-search-document-api`</td>
+      <td>percentage (0-100)</td>
+      <td>Worst-case container thread-pool utilization, fleet-wide, restricted to deployments running both search and document-api.</td>
+    </tr>
+    <tr>
+      <td>Container Thread Saturation — search only</td>
+      <td>`container-thread-saturation-search-only`</td>
+      <td>percentage (0-100)</td>
+      <td>Worst-case container thread-pool utilization, fleet-wide, restricted to deployments running search only (no document-api).</td>
+    </tr>
+    <tr>
+      <td>Content Executor Saturation</td>
+      <td>`content-executor-saturation`</td>
+      <td>percentage (0-100)</td>
+      <td>Worst-case content-node executor utilization/saturation across the match, docsum, and field-writer executors, fleet-wide.</td>
+    </tr>
+    <tr>
+      <td>Content: Groups/Nodes Down</td>
+      <td>`content-groups-nodes-down`</td>
+      <td>count</td>
+      <td>Fleet-wide count of cluster groups currently reporting at least one down node.</td>
+    </tr>
+    <tr>
+      <td>Core Dumps (1h)</td>
+      <td>`core-dumps`</td>
+      <td>count</td>
+      <td>Total number of core dumps processed across content clusters during the time window.</td>
+    </tr>
+    <tr>
+      <td>Disk Utilization (max per cluster)</td>
+      <td>`disk-utilization-container`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum disk utilization across nodes in container clusters (logs, working files).</td>
+    </tr>
+    <tr>
+      <td>Disk Utilization (max per cluster)</td>
+      <td>`disk-utilization-content`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum disk utilization across nodes in content clusters.</td>
+    </tr>
+    <tr>
+      <td>Documents per Content Cluster (max)</td>
+      <td>`documents-per-content-cluster-max`</td>
+      <td>count</td>
+      <td>Maximum number of unique documents stored, aggregated across content clusters.</td>
+    </tr>
+    <tr>
+      <td>Feed Blocked</td>
+      <td>`feed-blocked`</td>
+      <td>count</td>
+      <td>Total number of nodes currently above the feed-block resource limit, across all content clusters.</td>
+    </tr>
+    <tr>
+      <td>Feed Latency (max)</td>
+      <td>`feed-latency-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum feed latency observed (OK status only).</td>
+    </tr>
+    <tr>
+      <td>Headroom to Feed Block (per content cluster)</td>
+      <td>`headroom-to-feed-block-per-content-cluster`</td>
+      <td>percentage (0-100)</td>
+      <td>Smallest remaining headroom before the feed-block limit, across memory and disk, fleet-wide.</td>
+    </tr>
+    <tr>
+      <td>HTTP 2xx Responses (sum)</td>
+      <td>`http-2xx-responses-sum`</td>
+      <td>requests/second</td>
+      <td>Rate of successful (2xx) HTTP responses across the container cluster.</td>
+    </tr>
+    <tr>
+      <td>HTTP 4xx Responses (sum)</td>
+      <td>`http-4xx-responses-sum`</td>
+      <td>requests/second</td>
+      <td>Rate of client error (4xx) HTTP responses across the container cluster.</td>
+    </tr>
+    <tr>
+      <td>HTTP 5xx Responses (sum)</td>
+      <td>`http-5xx-responses-sum`</td>
+      <td>requests/second</td>
+      <td>Rate of server error (5xx) HTTP responses across the container cluster.</td>
+    </tr>
+    <tr>
+      <td>HTTP Read Latency (avg)</td>
+      <td>`http-read-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Average HTTP-level read latency, including time to receive the request and send the response.</td>
+    </tr>
+    <tr>
+      <td>HTTP Read Latency (max)</td>
+      <td>`http-read-latency-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum HTTP-level read latency observed.</td>
+    </tr>
+    <tr>
+      <td>HTTP Read Latency (p95)</td>
+      <td>`http-read-latency-p95`</td>
+      <td>milliseconds</td>
+      <td>95th percentile HTTP-level read latency.</td>
+    </tr>
+    <tr>
+      <td>HTTP Read Latency (p99)</td>
+      <td>`http-read-latency-p99`</td>
+      <td>milliseconds</td>
+      <td>99th percentile HTTP-level read latency.</td>
+    </tr>
+    <tr>
+      <td>HTTP Write Latency (max)</td>
+      <td>`http-write-latency-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum HTTP-level write latency observed.</td>
+    </tr>
+    <tr>
+      <td>JVM Heap Pressure</td>
+      <td>`jvm-heap-pressure`</td>
+      <td>percentage (0-100)</td>
+      <td>Fleet-wide average JVM heap utilization (heap used / heap capacity) across container clusters.</td>
+    </tr>
+    <tr>
+      <td>Memory Utilization (max per cluster)</td>
+      <td>`memory-utilization-node-container`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum OS-level memory utilization across nodes in container clusters.</td>
+    </tr>
+    <tr>
+      <td>Memory Utilization (max per cluster)</td>
+      <td>`memory-utilization-node-content`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum OS-level memory utilization across nodes in content clusters.</td>
+    </tr>
+    <tr>
+      <td>QoS - Read (success %)</td>
+      <td>`qos-read-success`</td>
+      <td>percentage (0-100)</td>
+      <td>Percentage of read requests that did not return a 5xx server error.</td>
+    </tr>
+    <tr>
+      <td>QoS - Write (success %)</td>
+      <td>`qos-write-success`</td>
+      <td>percentage (0-100)</td>
+      <td>Percentage of write requests that did not return a 5xx server error.</td>
+    </tr>
+    <tr>
+      <td>Query Latency (avg)</td>
+      <td>`query-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Average query latency across the container cluster (total latency divided by request count).</td>
+    </tr>
+    <tr>
+      <td>Query Latency (max)</td>
+      <td>`query-latency-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum query latency observed across the container cluster.</td>
+    </tr>
+    <tr>
+      <td>Restarts (1h)</td>
+      <td>`restarts`</td>
+      <td>count</td>
+      <td>Total number of Vespa service restarts across the fleet during the time window.</td>
+    </tr>
+  </tbody>
+</table>
+
+<a id="metric-presets-query" />
+### Query
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Console name</th>
+      <th>`metric`</th>
+      <th>Unit</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Degraded Queries (sum)</td>
+      <td>`degraded-queries-sum`</td>
+      <td>requests/second</td>
+      <td>Rate of queries that were degraded (soft-doomed or match-limited), summed across the container cluster.</td>
+    </tr>
+    <tr>
+      <td>Docs matched per query per rank profile</td>
+      <td>`docs-matched-per-query-per-rank-profile`</td>
+      <td>count</td>
+      <td>Average documents matched per query, aggregated across all rank profiles - a proxy for query selectivity.</td>
+    </tr>
+    <tr>
+      <td>Docsum executor accepted (rate)</td>
+      <td>`docsum-executor-accepted-rate`</td>
+      <td>operations/second</td>
+      <td>Average rate of docsum tasks accepted by the per-node docsum executor across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Docsum executor queue size (max)</td>
+      <td>`docsum-executor-queue-size-max`</td>
+      <td>count</td>
+      <td>Peak length of the per-node docsum thread-pool queue on any single content node.</td>
+    </tr>
+    <tr>
+      <td>Docsum latency</td>
+      <td>`docsum-latency-avg`</td>
+      <td>seconds</td>
+      <td>Average summary-rendering (docsum) latency across content nodes, in seconds.</td>
+    </tr>
+    <tr>
+      <td>Docsum latency</td>
+      <td>`docsum-latency-max`</td>
+      <td>seconds</td>
+      <td>Peak summary-rendering (docsum) latency observed on any content node, in seconds.</td>
+    </tr>
+    <tr>
+      <td>Document summaries requested (rate)</td>
+      <td>`document-summaries-requested-rate`</td>
+      <td>requests/second</td>
+      <td>Document summaries requested per second across content nodes, derived from the docsum-latency sample count.</td>
+    </tr>
+    <tr>
+      <td>Documents Coverage</td>
+      <td>`documents-coverage`</td>
+      <td>percentage (0-100)</td>
+      <td>Percentage of the document corpus actually covered by search (documents covered vs. documents total).</td>
+    </tr>
+    <tr>
+      <td>Documents Matched (rate)</td>
+      <td>`documents-matched-rate`</td>
+      <td>operations/second</td>
+      <td>Documents matched per second across the content cluster, summed across all content nodes and rank profiles.</td>
+    </tr>
+    <tr>
+      <td>Empty Results (sum)</td>
+      <td>`empty-results-sum`</td>
+      <td>requests/second</td>
+      <td>Rate of queries returning zero results, summed across the container cluster.</td>
+    </tr>
+    <tr>
+      <td>Failed Queries (sum)</td>
+      <td>`failed-queries-sum`</td>
+      <td>requests/second</td>
+      <td>Rate of queries that failed, summed across the container cluster.</td>
+    </tr>
+    <tr>
+      <td>Grouping time per rank profile (avg)</td>
+      <td>`grouping-time-per-rank-profile-avg`</td>
+      <td>milliseconds</td>
+      <td>Average post-match time per query (result construction, grouping, packing), aggregated across all rank profiles and content nodes.</td>
+    </tr>
+    <tr>
+      <td>Grouping time per rank profile (peak)</td>
+      <td>`grouping-time-per-rank-profile-peak`</td>
+      <td>milliseconds</td>
+      <td>Peak post-match (grouping/result-construction) time observed in any snapshot interval, aggregated across all rank profiles.</td>
+    </tr>
+    <tr>
+      <td>Hits per Query (avg)</td>
+      <td>`hits-per-query-avg`</td>
+      <td>count</td>
+      <td>Average number of hits returned per query, weighted across the container cluster.</td>
+    </tr>
+    <tr>
+      <td>Match executor accepted (rate)</td>
+      <td>`match-executor-accepted-rate`</td>
+      <td>operations/second</td>
+      <td>Average rate of tasks accepted into the match executor across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Match executor queue size (max)</td>
+      <td>`match-executor-queue-size-max`</td>
+      <td>count</td>
+      <td>Peak match thread-pool queue depth on any single content node.</td>
+    </tr>
+    <tr>
+      <td>Match Executor Utilization</td>
+      <td>`match-executor-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average match-thread-pool utilization across content nodes, as a percentage.</td>
+    </tr>
+    <tr>
+      <td>Match Executor Utilization</td>
+      <td>`match-executor-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Peak match-thread-pool utilization on any single content node, as a percentage.</td>
+    </tr>
+    <tr>
+      <td>Matching Queries (rate)</td>
+      <td>`matching-queries-rate`</td>
+      <td>requests/second</td>
+      <td>Per-node-average rate of queries being matched on content nodes.</td>
+    </tr>
+    <tr>
+      <td>Matching Query Latency (avg)</td>
+      <td>`matching-query-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Average matching-phase query latency across all content nodes and rank profiles.</td>
+    </tr>
+    <tr>
+      <td>Matching Query Setup Time (avg)</td>
+      <td>`matching-query-setup-time-avg`</td>
+      <td>milliseconds</td>
+      <td>Average per-query setup overhead (query decode, blueprint build, rank setup) on content nodes.</td>
+    </tr>
+    <tr>
+      <td>Queries per second by content group (min)</td>
+      <td>`queries-per-second-by-content-group-min`</td>
+      <td>requests/second</td>
+      <td>Lowest per-content-group query rate observed, deliberately using min to catch a failed node emitting stale/frozen metric values.</td>
+    </tr>
+    <tr>
+      <td>Queries per second per rank profile</td>
+      <td>`queries-per-second-per-rank-profile`</td>
+      <td>requests/second</td>
+      <td>Average per-(node, rank-profile) query rate observed at the content nodes.</td>
+    </tr>
+    <tr>
+      <td>Query Container Latency (avg)</td>
+      <td>`query-container-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Time spent inside the container processing the query, excluding backend dispatch.</td>
+    </tr>
+    <tr>
+      <td>Query Error Breakdown (sum)</td>
+      <td>`query-error-breakdown-backend-comm`</td>
+      <td>requests/second</td>
+      <td>Rate of queries that failed due to backend (content-node) communication errors.</td>
+    </tr>
+    <tr>
+      <td>Query Error Breakdown (sum)</td>
+      <td>`query-error-breakdown-empty-docsums`</td>
+      <td>requests/second</td>
+      <td>Rate of queries that failed because document summaries could not be retrieved.</td>
+    </tr>
+    <tr>
+      <td>Query Error Breakdown (sum)</td>
+      <td>`query-error-breakdown-invalid-param`</td>
+      <td>requests/second</td>
+      <td>Rate of queries that failed due to an invalid query parameter.</td>
+    </tr>
+    <tr>
+      <td>Query Error Breakdown (sum)</td>
+      <td>`query-error-breakdown-timeout`</td>
+      <td>requests/second</td>
+      <td>Rate of queries that failed due to a timeout error.</td>
+    </tr>
+    <tr>
+      <td>Query Error Breakdown (sum)</td>
+      <td>`query-error-breakdown-unhandled`</td>
+      <td>requests/second</td>
+      <td>Rate of queries that failed due to an unhandled exception in the container.</td>
+    </tr>
+    <tr>
+      <td>Query Latency (p95)</td>
+      <td>`query-latency-p95`</td>
+      <td>milliseconds</td>
+      <td>Average 95th percentile query latency.</td>
+    </tr>
+    <tr>
+      <td>Query Latency (p99)</td>
+      <td>`query-latency-p99`</td>
+      <td>milliseconds</td>
+      <td>Average 99th percentile query latency.</td>
+    </tr>
+    <tr>
+      <td>Query Rate (QPS)</td>
+      <td>`query-rate-qps-avg`</td>
+      <td>requests/second</td>
+      <td>Total application-wide query rate, summed across all container instances.</td>
+    </tr>
+    <tr>
+      <td>Query Rate (QPS)</td>
+      <td>`query-rate-qps-peak`</td>
+      <td>requests/second</td>
+      <td>Highest per-host peak queries-per-second observed across the container cluster.</td>
+    </tr>
+    <tr>
+      <td>Query Timeout (p99)</td>
+      <td>`query-timeout-p99`</td>
+      <td>milliseconds</td>
+      <td>99th percentile of the configured per-query timeout values actually applied by clients.</td>
+    </tr>
+    <tr>
+      <td>Rank Profile Query Latency (max)</td>
+      <td>`rank-profile-query-latency-max`</td>
+      <td>milliseconds</td>
+      <td>Peak per-query matching latency on content nodes, taken across all rank profiles combined.</td>
+    </tr>
+    <tr>
+      <td>Rerank time per rank profile (avg)</td>
+      <td>`rerank-time-per-rank-profile-avg`</td>
+      <td>milliseconds</td>
+      <td>Average second-phase rerank time per query, aggregated across all rank profiles and content nodes (no non-rank-profile-labeled equivalent metric exists to prefer instead).</td>
+    </tr>
+    <tr>
+      <td>Rerank time per rank profile (peak)</td>
+      <td>`rerank-time-per-rank-profile-peak`</td>
+      <td>milliseconds</td>
+      <td>Peak second-phase rerank time observed in any snapshot interval, aggregated across all rank profiles.</td>
+    </tr>
+    <tr>
+      <td>search-handler — Utilization</td>
+      <td>`search-handler-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average utilization of the container's search-handler thread pool.</td>
+    </tr>
+    <tr>
+      <td>search-handler — Utilization</td>
+      <td>`search-handler-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Peak utilization of the container's search-handler thread pool on any single host.</td>
+    </tr>
+    <tr>
+      <td>Search Protocol Query Latency (avg)</td>
+      <td>`search-protocol-query-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Average query latency measured at the search-protocol level on content nodes.</td>
+    </tr>
+    <tr>
+      <td>Search Protocol Query Latency (max)</td>
+      <td>`search-protocol-query-latency-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum query latency measured at the search-protocol level on any content node.</td>
+    </tr>
+    <tr>
+      <td>Soft doom factor per rank profile</td>
+      <td>`soft-doom-factor-per-rank-profile-avg`</td>
+      <td>count</td>
+      <td>Average adaptive soft-timeout multiplier per query, aggregated across all rank profiles.</td>
+    </tr>
+    <tr>
+      <td>Soft doom factor per rank profile</td>
+      <td>`soft-doom-factor-per-rank-profile-max`</td>
+      <td>count</td>
+      <td>Highest adaptive soft-timeout multiplier observed for any rank profile.</td>
+    </tr>
+    <tr>
+      <td>Soft doom factor per rank profile</td>
+      <td>`soft-doom-factor-per-rank-profile-min`</td>
+      <td>count</td>
+      <td>Lowest adaptive soft-timeout multiplier observed for any rank profile.</td>
+    </tr>
+    <tr>
+      <td>Soft-doomed queries per rank profile (sum)</td>
+      <td>`soft-doomed-queries-per-rank-profile-sum`</td>
+      <td>requests/second</td>
+      <td>Rate of queries that hit the soft timeout, summed across all rank profiles and content nodes.</td>
+    </tr>
+    <tr>
+      <td>Rank Profile Query Latency (avg)</td>
+      <td>`rank-profile-query-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Average per-query matching latency on content nodes, taken across all rank profiles combined.</td>
+    </tr>
+    <tr>
+      <td>Query setup time per rank profile (avg)</td>
+      <td>`query-setup-time-per-rank-profile-avg`</td>
+      <td>milliseconds</td>
+      <td>Average per-query setup overhead (query decode, blueprint build, rank setup, plus post-match finalisation) per rank profile.</td>
+    </tr>
+  </tbody>
+</table>
+
+<a id="metric-presets-feed" />
+### Feed
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Console name</th>
+      <th>`metric`</th>
+      <th>Unit</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Container Feed Latency (max)</td>
+      <td>`container-feed-latency-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum feed request latency observed at the container, across all operation types and clusters.</td>
+    </tr>
+    <tr>
+      <td>Container Feed Operations (sum)</td>
+      <td>`container-feed-operations-sum`</td>
+      <td>operations/second</td>
+      <td>Total feed operation rate (puts, updates, removes) handled by container clusters, summed across operation types.</td>
+    </tr>
+    <tr>
+      <td>Content: Commit Latency (avg)</td>
+      <td>`content-commit-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Average commit latency (time to commit fed changes to the index/store) on content nodes.</td>
+    </tr>
+    <tr>
+      <td>Content: Commit Operations (sum)</td>
+      <td>`content-commit-operations-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of commit operations (batched writes applied to the index/store) on content nodes.</td>
+    </tr>
+    <tr>
+      <td>Content: Storage Feed Rates (sum)</td>
+      <td>`content-storage-feed-rates-put`</td>
+      <td>operations/second</td>
+      <td>Rate of PUT operations processed by the storage/persistence-engine layer on content nodes, counted per document replica.</td>
+    </tr>
+    <tr>
+      <td>Content: Storage Feed Rates (sum)</td>
+      <td>`content-storage-feed-rates-remove`</td>
+      <td>operations/second</td>
+      <td>Rate of REMOVE operations processed by the storage/persistence-engine layer on content nodes, counted per document replica.</td>
+    </tr>
+    <tr>
+      <td>Content: Storage Feed Rates (sum)</td>
+      <td>`content-storage-feed-rates-update`</td>
+      <td>operations/second</td>
+      <td>Rate of UPDATE operations processed by the storage/persistence-engine layer on content nodes, counted per document replica.</td>
+    </tr>
+    <tr>
+      <td>Content: Storage Put Latency (max)</td>
+      <td>`content-storage-put-latency-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum PUT operation latency observed at the storage/persistence-engine layer on content nodes.</td>
+    </tr>
+    <tr>
+      <td>Content: Storage Update Latency</td>
+      <td>`content-storage-update-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Average UPDATE operation latency at the storage/persistence-engine layer on content nodes.</td>
+    </tr>
+    <tr>
+      <td>Content: Storage Update Latency</td>
+      <td>`content-storage-update-latency-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum UPDATE operation latency observed at the storage/persistence-engine layer on content nodes.</td>
+    </tr>
+    <tr>
+      <td>Distributor Latency - gets (max)</td>
+      <td>`distributor-latency-gets-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum get operation latency observed at the distributor level.</td>
+    </tr>
+    <tr>
+      <td>Distributor Latency - puts (max)</td>
+      <td>`distributor-latency-puts-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum put operation latency observed at the distributor level.</td>
+    </tr>
+    <tr>
+      <td>Distributor Latency - removes (max)</td>
+      <td>`distributor-latency-removes-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum remove operation latency observed at the distributor level.</td>
+    </tr>
+    <tr>
+      <td>Distributor Latency - updates (max)</td>
+      <td>`distributor-latency-updates-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum update operation latency observed at the distributor level.</td>
+    </tr>
+    <tr>
+      <td>Distributor Latency - visitor (max)</td>
+      <td>`distributor-latency-visitor-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum visitor operation latency observed at the distributor level.</td>
+    </tr>
+    <tr>
+      <td>Distributor Operation - gets - Failures (sum)</td>
+      <td>`distributor-operation-gets-failures-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of failed get operations at the distributor level; non-zero values indicate issues with writes.</td>
+    </tr>
+    <tr>
+      <td>Distributor Operation - puts - Failures (sum)</td>
+      <td>`distributor-operation-puts-failures-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of failed put operations at the distributor level; non-zero values indicate issues with writes.</td>
+    </tr>
+    <tr>
+      <td>Distributor Operation Rates - gets - OK (sum)</td>
+      <td>`distributor-operation-rates-gets-ok-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of successfully completed (OK) get operations at the distributor level.</td>
+    </tr>
+    <tr>
+      <td>Distributor Operation Rates - puts - OK (sum)</td>
+      <td>`distributor-operation-rates-puts-ok-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of successfully completed (OK) put operations at the distributor level.</td>
+    </tr>
+    <tr>
+      <td>Distributor Operation Rates - removes - OK (sum)</td>
+      <td>`distributor-operation-rates-removes-ok-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of successfully completed (OK) remove operations at the distributor level.</td>
+    </tr>
+    <tr>
+      <td>Distributor Operation Rates - updates - OK (sum)</td>
+      <td>`distributor-operation-rates-updates-ok-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of successfully completed (OK) update operations at the distributor level.</td>
+    </tr>
+    <tr>
+      <td>Distributor Operation Rates - visitor - OK (sum)</td>
+      <td>`distributor-operation-rates-visitor-ok-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of successfully completed (OK) visitor operations at the distributor level.</td>
+    </tr>
+    <tr>
+      <td>Distributor Operation - removes - Failures (sum)</td>
+      <td>`distributor-operation-removes-failures-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of failed remove operations at the distributor level; non-zero values indicate issues with writes.</td>
+    </tr>
+    <tr>
+      <td>Distributor Operation - updates - Failures (sum)</td>
+      <td>`distributor-operation-updates-failures-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of failed update operations at the distributor level; non-zero values indicate issues with writes.</td>
+    </tr>
+    <tr>
+      <td>Distributor Operation - visitor - Failures (sum)</td>
+      <td>`distributor-operation-visitor-failures-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of failed visitor operations at the distributor level; non-zero values indicate issues with writes.</td>
+    </tr>
+    <tr>
+      <td>Document Processing Latency (avg)</td>
+      <td>`document-processing-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Average document processing (docproc chain) latency.</td>
+    </tr>
+    <tr>
+      <td>Document Processing Rate (sum)</td>
+      <td>`document-processing-rate-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of documents processed through document processing (docproc) chains, summed across all chains and clusters.</td>
+    </tr>
+    <tr>
+      <td>Feed Blocked (nodes above resource limit)</td>
+      <td>`feed-blocked-nodes-above-resource-limit`</td>
+      <td>count</td>
+      <td>Number of content nodes currently exceeding a resource usage limit; when greater than zero, feeding is blocked for that cluster.</td>
+    </tr>
+    <tr>
+      <td>Feed Latency (avg)</td>
+      <td>`feed-latency-avg-ms`</td>
+      <td>milliseconds</td>
+      <td>Average feed latency, in milliseconds, for successful feed operations.</td>
+    </tr>
+    <tr>
+      <td>HTTP API Feed Rates (sum)</td>
+      <td>`http-api-feed-rates-put`</td>
+      <td>operations/second</td>
+      <td>Rate of PUT operations received via the Document/HTTP API.</td>
+    </tr>
+    <tr>
+      <td>HTTP API Feed Rates (sum)</td>
+      <td>`http-api-feed-rates-remove`</td>
+      <td>operations/second</td>
+      <td>Rate of REMOVE operations received via the Document/HTTP API.</td>
+    </tr>
+    <tr>
+      <td>HTTP API Feed Rates (sum)</td>
+      <td>`http-api-feed-rates-update`</td>
+      <td>operations/second</td>
+      <td>Rate of UPDATE operations received via the Document/HTTP API.</td>
+    </tr>
+    <tr>
+      <td>HTTP API Latency (avg)</td>
+      <td>`http-api-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Average latency of Document/HTTP API requests, distinct from the generic jdisc HTTP layer latency.</td>
+    </tr>
+    <tr>
+      <td>HTTP API Pending Requests (max)</td>
+      <td>`http-api-pending-requests-max`</td>
+      <td>count</td>
+      <td>Maximum number of Document/HTTP API requests pending (in-flight, not yet completed) on the container.</td>
+    </tr>
+    <tr>
+      <td>HTTP API Success vs Failures (sum)</td>
+      <td>`http-api-success-vs-failures-failed`</td>
+      <td>operations/second</td>
+      <td>Rate of failed Document/HTTP API operations.</td>
+    </tr>
+    <tr>
+      <td>HTTP API Success vs Failures (sum)</td>
+      <td>`http-api-success-vs-failures-parse-error`</td>
+      <td>operations/second</td>
+      <td>Rate of Document/HTTP API operations rejected due to document parse errors.</td>
+    </tr>
+    <tr>
+      <td>HTTP API Success vs Failures (sum)</td>
+      <td>`http-api-success-vs-failures-success`</td>
+      <td>operations/second</td>
+      <td>Rate of successful Document/HTTP API operations.</td>
+    </tr>
+    <tr>
+      <td>HTTP Write Latency (avg)</td>
+      <td>`http-write-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Average end-to-end HTTP write request latency at the container's HTTP layer.</td>
+    </tr>
+    <tr>
+      <td>HTTP Write Latency (p95)</td>
+      <td>`http-write-latency-p95`</td>
+      <td>milliseconds</td>
+      <td>95th percentile HTTP write request latency at the container's HTTP layer.</td>
+    </tr>
+    <tr>
+      <td>HTTP Write Latency (p99)</td>
+      <td>`http-write-latency-p99`</td>
+      <td>milliseconds</td>
+      <td>99th percentile HTTP write request latency at the container's HTTP layer.</td>
+    </tr>
+    <tr>
+      <td>Memory Index — Documents (per document type)</td>
+      <td>`memory-index-docs-in-memory-max`</td>
+      <td>count</td>
+      <td>Maximum number of documents held in the in-memory index on content nodes, summed per content group (to combine per-node/stripe values) and maxed across groups (since each group holds a full replica) to avoid double-counting.</td>
+    </tr>
+    <tr>
+      <td>Persistence engine input queue</td>
+      <td>`persistence-engine-input-queue-avg`</td>
+      <td>count</td>
+      <td>Average depth of the per-node persistence engine's input operation queue (operations waiting to be dispatched to Proton) over the time window.</td>
+    </tr>
+    <tr>
+      <td>Persistence engine input queue</td>
+      <td>`persistence-engine-input-queue-max`</td>
+      <td>count</td>
+      <td>Maximum depth of the per-node persistence engine's input operation queue observed during the time window.</td>
+    </tr>
+    <tr>
+      <td>Persistence engine throttle saturation (max)</td>
+      <td>`persistence-engine-throttle-saturation-active`</td>
+      <td>count</td>
+      <td>Maximum number of concurrently active (in-flight) operations in the content node's persistence engine.</td>
+    </tr>
+    <tr>
+      <td>Persistence engine throttle saturation (max)</td>
+      <td>`persistence-engine-throttle-saturation-throttle`</td>
+      <td>count</td>
+      <td>Maximum size of the adaptive throttle window that caps concurrent operations in the content node's persistence engine.</td>
+    </tr>
+  </tbody>
+</table>
+
+<a id="metric-presets-nearest-neighbor-search" />
+### Nearest Neighbor Search
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Console name</th>
+      <th>`metric`</th>
+      <th>Unit</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ANN Timeout Rate (sum)</td>
+      <td>`ann-timeout-rate-sum`</td>
+      <td>requests/second</td>
+      <td>Rate of queries per second that terminated an approximate NNS search early after hitting the ANN timeout.</td>
+    </tr>
+    <tr>
+      <td>Approximate NNS Distances Computed (rate)</td>
+      <td>`approximate-nns-distances-computed-rate`</td>
+      <td>operations/second</td>
+      <td>Rate of distance computations performed during approximate NNS across the content cluster.</td>
+    </tr>
+    <tr>
+      <td>Approximate NNS Nodes Visited (rate)</td>
+      <td>`approximate-nns-nodes-visited-rate`</td>
+      <td>operations/second</td>
+      <td>Rate of HNSW graph nodes visited during approximate NNS across the content cluster.</td>
+    </tr>
+    <tr>
+      <td>Query Rate of Approximate Nearest Neighbor Search Queries</td>
+      <td>`approximate-nns-query-rate`</td>
+      <td>requests/second</td>
+      <td>Rate of incoming queries per second that perform an approximate nearest-neighbor search.</td>
+    </tr>
+    <tr>
+      <td>Query Approximate Nearest Neighbor Search Time</td>
+      <td>`approximate-nns-time-avg`</td>
+      <td>milliseconds</td>
+      <td>Average time spent performing approximate NNS, measured only across queries that actually perform it.</td>
+    </tr>
+    <tr>
+      <td>Query Approximate Nearest Neighbor Search Time</td>
+      <td>`approximate-nns-time-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum time observed for a single query's approximate NNS work, on any content node.</td>
+    </tr>
+    <tr>
+      <td>Approximate NNS Visit Efficiency (nodes visited / distances computed)</td>
+      <td>`approximate-nns-visit-efficiency`</td>
+      <td>ratio (dimensionless)</td>
+      <td>Ratio of HNSW graph nodes visited to distances computed during approximate NNS; values above 1.0 indicate the filter-first (Acorn-1) heuristic is active.</td>
+    </tr>
+    <tr>
+      <td>Buckets Pending Merge (sum)</td>
+      <td>`buckets-pending-merge-sum`</td>
+      <td>count</td>
+      <td>Number of buckets currently pending merge across distributors, which rises during data redistribution or node recovery.</td>
+    </tr>
+    <tr>
+      <td>Documents Active (per document type)</td>
+      <td>`documents-active-total`</td>
+      <td>count</td>
+      <td>Total number of active documents (primary copies) across all document types and content nodes in the cluster.</td>
+    </tr>
+    <tr>
+      <td>Documents Ready (per document type)</td>
+      <td>`documents-ready-total`</td>
+      <td>count</td>
+      <td>Total number of ready (searchable) documents across all document types and content nodes in the cluster.</td>
+    </tr>
+    <tr>
+      <td>Exact NNS Distance Computation Ratio (exact / total)</td>
+      <td>`exact-nns-distance-ratio-pct`</td>
+      <td>percentage (0-100)</td>
+      <td>Share of NNS distance computations done via exact (brute-force) search rather than approximate search; high values may indicate the approximate-threshold is set too high.</td>
+    </tr>
+    <tr>
+      <td>Exact NNS Distances Computed (rate)</td>
+      <td>`exact-nns-distances-computed-rate`</td>
+      <td>operations/second</td>
+      <td>Rate of distance computations performed during exact (brute-force) NNS across the content cluster.</td>
+    </tr>
+    <tr>
+      <td>Query Latency</td>
+      <td>`nns-query-latency-avg`</td>
+      <td>milliseconds</td>
+      <td>Average total time (matching plus ranking) spent per query on the content nodes, specific to the NNS/matching pipeline.</td>
+    </tr>
+    <tr>
+      <td>Query Latency</td>
+      <td>`nns-query-latency-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum total time (matching plus ranking) observed for a single query on any content node, specific to the NNS/matching pipeline.</td>
+    </tr>
+    <tr>
+      <td>Query Rate of Non-Approximate Nearest Neighbor Search Queries</td>
+      <td>`non-approximate-nns-query-rate`</td>
+      <td>requests/second</td>
+      <td>Rate of incoming queries per second that do not perform approximate NNS, including queries that fall back to exact search.</td>
+    </tr>
+    <tr>
+      <td>Query Matching Time</td>
+      <td>`query-matching-time-avg`</td>
+      <td>milliseconds</td>
+      <td>Average time spent on the core query matching process, computed as query latency minus query setup time; includes exact NNS.</td>
+    </tr>
+    <tr>
+      <td>Query Matching Time</td>
+      <td>`query-matching-time-max`</td>
+      <td>milliseconds</td>
+      <td>Approximate maximum time spent on the core query matching process, computed as max query latency minus max query setup time (not a directly measured value, since the two maxima may occur on different queries).</td>
+    </tr>
+    <tr>
+      <td>Query Rate</td>
+      <td>`query-rate`</td>
+      <td>requests/second</td>
+      <td>Rate of incoming queries per second against the content cluster's document matching pipeline (equal to approximate-nns-query-rate plus non-approximate-nns-query-rate).</td>
+    </tr>
+    <tr>
+      <td>Query Setup Time</td>
+      <td>`query-setup-time-avg`</td>
+      <td>milliseconds</td>
+      <td>Average time spent setting up and tearing down queries, including filter computation and approximate NNS overhead.</td>
+    </tr>
+    <tr>
+      <td>Query Setup Time Without Approximate Nearest Neighbor Search Time</td>
+      <td>`query-setup-time-excl-ann-avg`</td>
+      <td>milliseconds</td>
+      <td>Average time spent on query setup and teardown excluding approximate NNS time, isolating filter computation and other overhead.</td>
+    </tr>
+    <tr>
+      <td>Query Setup Time</td>
+      <td>`query-setup-time-max`</td>
+      <td>milliseconds</td>
+      <td>Maximum observed time spent setting up and tearing down a single query on any content node.</td>
+    </tr>
+    <tr>
+      <td>Soft Timeout Rate (sum)</td>
+      <td>`soft-timeout-rate-sum`</td>
+      <td>requests/second</td>
+      <td>Rate of queries per second terminated early due to hitting the soft timeout, aggregated across rank profiles.</td>
+    </tr>
+    <tr>
+      <td>Thread Pool - Match Utilization</td>
+      <td>`thread-pool-match-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average utilization of the match thread pool across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Thread Pool - Match Utilization</td>
+      <td>`thread-pool-match-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Peak utilization of the match thread pool observed on any content node.</td>
+    </tr>
+    <tr>
+      <td>Total Distances Computed (sum)</td>
+      <td>`total-distances-computed-sum`</td>
+      <td>operations/second</td>
+      <td>Total NNS distance computations per second, combining exact and approximate search, as an overall indicator of NNS-related CPU cost.</td>
+    </tr>
+  </tbody>
+</table>
+
+<a id="metric-presets-content-node" />
+### Content Node
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Console name</th>
+      <th>`metric`</th>
+      <th>Unit</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Attribute Resource Usage - Feeding Blocked (max)</td>
+      <td>`attribute-feeding-blocked-pct`</td>
+      <td>percentage (0-100)</td>
+      <td>Percentage of the time window during which feeding was blocked due to attribute resource usage limits on any content node.</td>
+    </tr>
+    <tr>
+      <td>Bucket Move Pending (max)</td>
+      <td>`bucket-move-pending-max`</td>
+      <td>count</td>
+      <td>Maximum number of buckets pending a move operation (e.g. during cluster resizing or redistribution) on any content node.</td>
+    </tr>
+    <tr>
+      <td>Document Store Cache Hit Rate (max)</td>
+      <td>`document-store-cache-hit-rate-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Cache hit rate for the ready document store's summary-field cache, as a percentage; low values on quiescent clusters often show up as elevated CPU IOWait from disk-backed docsum reads.</td>
+    </tr>
+    <tr>
+      <td>Document Store Disk Usage (max)</td>
+      <td>`document-store-disk-usage-max`</td>
+      <td>bytes</td>
+      <td>Maximum disk space used by the ready document store on any content node.</td>
+    </tr>
+    <tr>
+      <td>Documents Active (per document type)</td>
+      <td>`documents-count-active`</td>
+      <td>count</td>
+      <td>Number of active/searchable document copies, summed across content clusters after taking the max across replica groups within each cluster to avoid double counting.</td>
+    </tr>
+    <tr>
+      <td>Documents Ready (per document type)</td>
+      <td>`documents-count-ready`</td>
+      <td>count</td>
+      <td>Number of documents available for search (ready), summed across content clusters after taking the max across replica groups within each cluster to avoid double counting.</td>
+    </tr>
+    <tr>
+      <td>Field Writer Utilization & Saturation</td>
+      <td>`field-writer-saturation-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum observed saturation of Proton's field writer executor thread pool; high saturation indicates a write bottleneck.</td>
+    </tr>
+    <tr>
+      <td>Field Writer Utilization & Saturation</td>
+      <td>`field-writer-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average utilization of Proton's field writer executor thread pool across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Filestor Average Queue Wait (avg)</td>
+      <td>`filestor-average-queue-wait-avg`</td>
+      <td>milliseconds</td>
+      <td>Average time operations spent waiting in the filestor queue across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Filestor Queue Size (max)</td>
+      <td>`filestor-queue-size-max`</td>
+      <td>count</td>
+      <td>Maximum filestor queue size observed on any content node; a growing queue indicates storage cannot keep up with incoming operations.</td>
+    </tr>
+    <tr>
+      <td>Maintenance Job Activity (max)</td>
+      <td>`maintenance-job-activity-attr-flush`</td>
+      <td>percentage (0-100)</td>
+      <td>Activity level of the attribute-flush maintenance job (0% = idle, 100% = fully active), maximum across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Maintenance Job Activity (max)</td>
+      <td>`maintenance-job-activity-disk-idx-fusion`</td>
+      <td>percentage (0-100)</td>
+      <td>Activity level of the disk-index-fusion maintenance job (0% = idle, 100% = fully active), maximum across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Maintenance Job Activity (max)</td>
+      <td>`maintenance-job-activity-docstore-compact`</td>
+      <td>percentage (0-100)</td>
+      <td>Activity level of the document-store-compaction maintenance job (0% = idle, 100% = fully active), maximum across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Maintenance Job Activity (max)</td>
+      <td>`maintenance-job-activity-lid-compact`</td>
+      <td>percentage (0-100)</td>
+      <td>Activity level of the LID (local document id) space-compaction maintenance job (0% = idle, 100% = fully active), maximum across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Maintenance Job Activity (max)</td>
+      <td>`maintenance-job-activity-mem-idx-flush`</td>
+      <td>percentage (0-100)</td>
+      <td>Activity level of the memory-index-flush maintenance job (0% = idle, 100% = fully active), maximum across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Proton Disk Usage (avg)</td>
+      <td>`proton-disk-usage-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Relative disk usage of the content node's Proton process, as a percentage of the available disk; 100% means feeding is blocked.</td>
+    </tr>
+    <tr>
+      <td>Proton Executor Utilization</td>
+      <td>`proton-executor-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average utilization of Proton's own executor thread pool across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Proton Executor Utilization</td>
+      <td>`proton-executor-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum observed utilization of Proton's own executor thread pool on any content node.</td>
+    </tr>
+    <tr>
+      <td>Proton Memory Usage (avg)</td>
+      <td>`proton-memory-usage-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Relative memory usage of the content node's Proton process, as a percentage of the available memory.</td>
+    </tr>
+    <tr>
+      <td>Shared Executor Queue Size (max)</td>
+      <td>`shared-executor-queue-size-max`</td>
+      <td>count</td>
+      <td>Maximum shared executor queue size observed on any content node during the time window.</td>
+    </tr>
+    <tr>
+      <td>Shared Executor Utilization</td>
+      <td>`shared-executor-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average utilization of Proton's shared executor thread pool across content nodes.</td>
+    </tr>
+    <tr>
+      <td>Shared Executor Utilization</td>
+      <td>`shared-executor-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum observed utilization of Proton's shared executor thread pool on any content node.</td>
+    </tr>
+  </tbody>
+</table>
+
+<a id="metric-presets-resources" />
+### Resources
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Console name</th>
+      <th>`metric`</th>
+      <th>Unit</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>CPU IOWait (avg/max/min)</td>
+      <td>`cpu-iowait-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average per-host CPU I/O-wait percentage across the cluster over the time window, indicating time spent waiting on disk I/O rather than doing CPU work.</td>
+    </tr>
+    <tr>
+      <td>CPU IOWait (avg/max/min)</td>
+      <td>`cpu-iowait-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum per-host CPU I/O-wait percentage across the cluster over the time window; high values point to disk being the bottleneck rather than CPU.</td>
+    </tr>
+    <tr>
+      <td>CPU IOWait (avg/max/min)</td>
+      <td>`cpu-iowait-min`</td>
+      <td>percentage (0-100)</td>
+      <td>Minimum per-host CPU I/O-wait percentage across the cluster over the time window.</td>
+    </tr>
+    <tr>
+      <td>CPU Throttled Time (sum)</td>
+      <td>`cpu-throttled-time-sum`</td>
+      <td>count</td>
+      <td>Sum of per-node CPU cgroup-throttling rate across the cluster over the time window; non-zero values indicate nodes are hitting their CPU resource limits.</td>
+    </tr>
+    <tr>
+      <td>CPU Utilization (max per cluster)</td>
+      <td>`cpu-utilization-container`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum CPU utilization across the nodes of the container cluster.</td>
+    </tr>
+    <tr>
+      <td>CPU Utilization (max per cluster)</td>
+      <td>`cpu-utilization-content`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum CPU utilization across the nodes of the content cluster.</td>
+    </tr>
+    <tr>
+      <td>default-handler-common — Utilization</td>
+      <td>`default-handler-common-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average active threads as a percentage of pool size for the default-handler-common thread pool over the time window.</td>
+    </tr>
+    <tr>
+      <td>default-handler-common — Utilization</td>
+      <td>`default-handler-common-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Peak active threads as a percentage of pool size for the default-handler-common thread pool over the time window.</td>
+    </tr>
+    <tr>
+      <td>default-handler-common — Work Queue Size</td>
+      <td>`default-handler-common-work-queue-size-avg`</td>
+      <td>count</td>
+      <td>Average number of pending tasks queued for the default-handler-common thread pool over the time window.</td>
+    </tr>
+    <tr>
+      <td>default-handler-common — Work Queue Size</td>
+      <td>`default-handler-common-work-queue-size-max`</td>
+      <td>count</td>
+      <td>Peak number of pending tasks queued for the default-handler-common thread pool observed during the time window.</td>
+    </tr>
+    <tr>
+      <td>default-handler-common — Work Queue Utilization</td>
+      <td>`default-handler-common-work-queue-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average queue fill percentage (size / capacity) for the default-handler-common thread pool over the time window.</td>
+    </tr>
+    <tr>
+      <td>default-handler-common — Work Queue Utilization</td>
+      <td>`default-handler-common-work-queue-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Peak queue fill percentage (size / capacity) for the default-handler-common thread pool observed during the time window.</td>
+    </tr>
+    <tr>
+      <td>Disk Utilization (avg/max/min)</td>
+      <td>`disk-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average OS-level disk utilization percentage across the cluster's nodes.</td>
+    </tr>
+    <tr>
+      <td>Disk Utilization (avg/max/min)</td>
+      <td>`disk-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum OS-level disk utilization percentage across the cluster's nodes; sustained high values risk feed/query slowdowns from disk saturation.</td>
+    </tr>
+    <tr>
+      <td>Disk Utilization (avg/max/min)</td>
+      <td>`disk-utilization-min`</td>
+      <td>percentage (0-100)</td>
+      <td>Minimum OS-level disk utilization percentage across the cluster's nodes.</td>
+    </tr>
+    <tr>
+      <td>feedapi-handler — Utilization</td>
+      <td>`feedapi-handler-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average active threads as a percentage of pool size for the feedapi-handler thread pool over the time window.</td>
+    </tr>
+    <tr>
+      <td>feedapi-handler — Utilization</td>
+      <td>`feedapi-handler-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Peak active threads as a percentage of pool size for the feedapi-handler thread pool over the time window.</td>
+    </tr>
+    <tr>
+      <td>feedapi-handler — Work Queue Size</td>
+      <td>`feedapi-handler-work-queue-size-avg`</td>
+      <td>count</td>
+      <td>Average number of pending tasks queued for the feedapi-handler thread pool over the time window.</td>
+    </tr>
+    <tr>
+      <td>feedapi-handler — Work Queue Size</td>
+      <td>`feedapi-handler-work-queue-size-max`</td>
+      <td>count</td>
+      <td>Peak number of pending tasks queued for the feedapi-handler thread pool observed during the time window.</td>
+    </tr>
+    <tr>
+      <td>feedapi-handler — Work Queue Utilization</td>
+      <td>`feedapi-handler-work-queue-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average queue fill percentage (size / capacity) for the feedapi-handler thread pool over the time window.</td>
+    </tr>
+    <tr>
+      <td>feedapi-handler — Work Queue Utilization</td>
+      <td>`feedapi-handler-work-queue-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Peak queue fill percentage (size / capacity) for the feedapi-handler thread pool observed during the time window.</td>
+    </tr>
+    <tr>
+      <td>GPU Memory Utilization (max)</td>
+      <td>`gpu-memory-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum GPU memory utilization (used/total) across GPU-equipped nodes, averaged over the time window.</td>
+    </tr>
+    <tr>
+      <td>GPU Utilization (max)</td>
+      <td>`gpu-utilization-container-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum GPU utilization across container-cluster nodes with GPUs attached, averaged over the time window (only produces data for GPU-equipped nodes).</td>
+    </tr>
+    <tr>
+      <td>JVM Direct Memory (avg)</td>
+      <td>`jvm-direct-memory-capacity`</td>
+      <td>bytes</td>
+      <td>Average configured JVM direct (off-heap) memory capacity on container nodes.</td>
+    </tr>
+    <tr>
+      <td>JVM Direct Memory (avg)</td>
+      <td>`jvm-direct-memory-used`</td>
+      <td>bytes</td>
+      <td>Average JVM direct (off-heap) memory currently in use on container nodes.</td>
+    </tr>
+    <tr>
+      <td>JVM GC Overhead (max)</td>
+      <td>`jvm-gc-overhead-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Approximate percentage of CPU time spent in JVM garbage collection on container nodes, averaged over the time window.</td>
+    </tr>
+    <tr>
+      <td>JVM GC Pause Duration</td>
+      <td>`jvm-gc-pause-duration-avg`</td>
+      <td>seconds</td>
+      <td>Average stop-the-world JVM GC pause duration on container nodes over the time window.</td>
+    </tr>
+    <tr>
+      <td>JVM GC Pause Duration</td>
+      <td>`jvm-gc-pause-duration-max`</td>
+      <td>seconds</td>
+      <td>Worst single stop-the-world JVM GC pause observed on container nodes during the time window.</td>
+    </tr>
+    <tr>
+      <td>JVM Heap Usage (avg)</td>
+      <td>`jvm-heap-usage-capacity`</td>
+      <td>bytes</td>
+      <td>Average configured JVM heap memory capacity (max heap size) on container nodes.</td>
+    </tr>
+    <tr>
+      <td>JVM Heap Usage (avg)</td>
+      <td>`jvm-heap-usage-used`</td>
+      <td>bytes</td>
+      <td>Average JVM heap memory currently in use on container nodes.</td>
+    </tr>
+    <tr>
+      <td>JVM Native Memory (avg)</td>
+      <td>`jvm-native-memory-avg`</td>
+      <td>bytes</td>
+      <td>Average native (off-JVM) memory used by C++ libraries loaded via JNI (e.g. ONNX Runtime for embedders, linguistics) on container nodes.</td>
+    </tr>
+    <tr>
+      <td>Memory Utilization (avg/max/min)</td>
+      <td>`memory-node-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average OS-level memory utilization across the cluster's nodes (physical RAM usage), distinct from the Vespa-computed content memory-utilization metric.</td>
+    </tr>
+    <tr>
+      <td>Memory Utilization (avg/max/min)</td>
+      <td>`memory-node-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum OS-level memory utilization across the cluster's nodes (physical RAM usage), distinct from the Vespa-computed content memory-utilization metric.</td>
+    </tr>
+    <tr>
+      <td>Memory Utilization (avg/max/min)</td>
+      <td>`memory-node-utilization-min`</td>
+      <td>percentage (0-100)</td>
+      <td>Minimum OS-level memory utilization across the cluster's nodes (physical RAM usage).</td>
+    </tr>
+    <tr>
+      <td>Resource Usage: Max Memory Utilization vs Limit</td>
+      <td>`memory-utilization-content`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum memory utilization of the content cluster's cluster controller.</td>
+    </tr>
+    <tr>
+      <td>Network Throughput (bytes received/sent)</td>
+      <td>`network-throughput-bytes-received-sent-received`</td>
+      <td>bytes</td>
+      <td>Average per-interval network bytes received by container nodes, summed across the cluster over the time window.</td>
+    </tr>
+    <tr>
+      <td>Network Throughput (bytes received/sent)</td>
+      <td>`network-throughput-bytes-received-sent-sent`</td>
+      <td>bytes</td>
+      <td>Average per-interval network bytes sent by container nodes, summed across the cluster over the time window.</td>
+    </tr>
+    <tr>
+      <td>Open Server Connections (max)</td>
+      <td>`open-server-connections-max`</td>
+      <td>count</td>
+      <td>Peak number of open HTTP server connections on container nodes observed during the time window.</td>
+    </tr>
+    <tr>
+      <td>Requests per HTTP Connection</td>
+      <td>`requests-per-http-connection-avg`</td>
+      <td>count</td>
+      <td>Average number of HTTP requests served per connection over its lifetime on container nodes during the time window.</td>
+    </tr>
+    <tr>
+      <td>Requests per HTTP Connection</td>
+      <td>`requests-per-http-connection-max`</td>
+      <td>count</td>
+      <td>Peak number of HTTP requests served by a single connection over its lifetime on container nodes during the time window.</td>
+    </tr>
+    <tr>
+      <td>search-handler — Work Queue Size</td>
+      <td>`search-handler-work-queue-size-avg`</td>
+      <td>count</td>
+      <td>Average number of pending tasks queued for the search-handler thread pool over the time window.</td>
+    </tr>
+    <tr>
+      <td>search-handler — Work Queue Size</td>
+      <td>`search-handler-work-queue-size-max`</td>
+      <td>count</td>
+      <td>Peak number of pending tasks queued for the search-handler thread pool observed during the time window.</td>
+    </tr>
+    <tr>
+      <td>search-handler — Work Queue Utilization</td>
+      <td>`search-handler-work-queue-utilization-avg`</td>
+      <td>percentage (0-100)</td>
+      <td>Average queue fill percentage (size / capacity) for the search-handler thread pool over the time window.</td>
+    </tr>
+    <tr>
+      <td>search-handler — Work Queue Utilization</td>
+      <td>`search-handler-work-queue-utilization-max`</td>
+      <td>percentage (0-100)</td>
+      <td>Peak queue fill percentage (size / capacity) for the search-handler thread pool observed during the time window.</td>
+    </tr>
+  </tbody>
+</table>
+
+<a id="metric-presets-health" />
+### Health
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Console name</th>
+      <th>`metric`</th>
+      <th>Unit</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Cluster State Changes (sum)</td>
+      <td>`cluster-state-changes-sum`</td>
+      <td>count</td>
+      <td>Number of cluster state changes observed in the given time window. Frequent changes are most often caused by Vespa upgrades or required node restarts.</td>
+    </tr>
+    <tr>
+      <td>Core Dumps (1h)</td>
+      <td>`core-dumps-processed-max`</td>
+      <td>count</td>
+      <td>Number of core dumps processed across all nodes in the given time window; should be 0.</td>
+    </tr>
+    <tr>
+      <td>Deactivated Containers</td>
+      <td>`deactivated-containers`</td>
+      <td>count</td>
+      <td>Average number of deactivated container instances per sample, over the given time window. Brief spikes during deployments are normal; persistently high values may indicate resource leaks.</td>
+    </tr>
+    <tr>
+      <td>Estimated Time to In-Sync</td>
+      <td>`estimated-time-to-in-sync`</td>
+      <td>seconds</td>
+      <td>Rough estimate, from the recent (fixed 30-minute) convergence rate, of the time remaining until all buckets are back in sync; capped at 7 days.</td>
+    </tr>
+    <tr>
+      <td>Failed Component Graphs</td>
+      <td>`failed-component-graphs`</td>
+      <td>operations/second</td>
+      <td>Rate of failed application component-graph reconfigurations, averaged over the given time window; nonzero after a deployment may indicate a configuration or component issue.</td>
+    </tr>
+    <tr>
+      <td>HTTP Requests Prematurely Closed</td>
+      <td>`http-requests-prematurely-closed`</td>
+      <td>operations/second</td>
+      <td>Rate of HTTP requests closed by the client before the server finished responding, averaged over the given time window.</td>
+    </tr>
+    <tr>
+      <td>Merge Bucket Pending</td>
+      <td>`merge-bucket-pending`</td>
+      <td>count</td>
+      <td>Number of pending bucket merge operations across all distributors, summed per application.</td>
+    </tr>
+    <tr>
+      <td>Node count (max)</td>
+      <td>`node-count-max`</td>
+      <td>count</td>
+      <td>Total number of nodes currently in the active state for the application.</td>
+    </tr>
+    <tr>
+      <td>Node Events (sum)</td>
+      <td>`node-events-sum`</td>
+      <td>count</td>
+      <td>Number of node events reported by the cluster controller in the given time window.</td>
+    </tr>
+    <tr>
+      <td>Node state: down (max)</td>
+      <td>`node-state-down-max`</td>
+      <td>count</td>
+      <td>Number of content nodes in the 'down' state per cluster (nodes considered unavailable by the cluster controller).</td>
+    </tr>
+    <tr>
+      <td>Node state: initializing (max)</td>
+      <td>`node-state-initializing-max`</td>
+      <td>count</td>
+      <td>Number of content nodes in the 'initializing' state per cluster (nodes currently starting up and not yet serving).</td>
+    </tr>
+    <tr>
+      <td>Node state: maintenance (max)</td>
+      <td>`node-state-maintenance-max`</td>
+      <td>count</td>
+      <td>Number of content nodes in the 'maintenance' state per cluster (nodes intentionally taken down for maintenance).</td>
+    </tr>
+    <tr>
+      <td>Node state: retired (max)</td>
+      <td>`node-state-retired-max`</td>
+      <td>count</td>
+      <td>Number of content nodes in the 'retired' state per cluster (nodes being decommissioned).</td>
+    </tr>
+    <tr>
+      <td>Node state: up (max)</td>
+      <td>`node-state-up-max`</td>
+      <td>count</td>
+      <td>Number of content nodes in the 'up' state per cluster.</td>
+    </tr>
+    <tr>
+      <td>Re-indexing remaining</td>
+      <td>`re-indexing-remaining`</td>
+      <td>percentage (0-100)</td>
+      <td>Worst-case document reindexing progress remaining across document types, as a percentage (100 = not started, 0 = complete or no reindex running).</td>
+    </tr>
+    <tr>
+      <td>Resource Usage: Attribute Address Space</td>
+      <td>`resource-usage-attribute-address-space`</td>
+      <td>percentage (0-100)</td>
+      <td>Worst-case attribute address-space utilization across content nodes; feed is blocked when this approaches 100%.</td>
+    </tr>
+    <tr>
+      <td>Resource Usage: Max Disk Utilization vs Limit</td>
+      <td>`resource-usage-max-disk-utilization-vs-limit`</td>
+      <td>percentage (0-100)</td>
+      <td>Maximum disk utilization vs the configured limit; feed is blocked when utilization exceeds the limit.</td>
+    </tr>
+    <tr>
+      <td>Service Restarts (total)</td>
+      <td>`service-restarts-total`</td>
+      <td>count</td>
+      <td>Total service restarts across all nodes, as tracked by the config sentinel. Increases indicate services crashing or being restarted.</td>
+    </tr>
+    <tr>
+      <td>Rate-Limited Requests</td>
+      <td>`rate-limited-requests-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of requests checked by the RateLimitingSearcher (i.e. requests with rate.id and rate.quota set); only present if the searcher is in use.</td>
+    </tr>
+    <tr>
+      <td>Requests Rejected (Over Quota)</td>
+      <td>`requests-rejected-over-quota-sum`</td>
+      <td>operations/second</td>
+      <td>Rate of requests rejected by the RateLimitingSearcher for exceeding their quota (rate.quota); in dry-run mode these are counted but not actually rejected.</td>
+    </tr>
+  </tbody>
+</table>
+
+<a id="metric-presets-autoscaling-content" />
+### Autoscaling: Content
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Console name</th>
+      <th>`metric`</th>
+      <th>Unit</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Active nodes (max)</td>
+      <td>`active-nodes-count`</td>
+      <td>count</td>
+      <td>Maximum number of active nodes in the content cluster during the test window.</td>
+    </tr>
+    <tr>
+      <td>Active nodes (max)</td>
+      <td>`active-nodes-non-active-fraction`</td>
+      <td>fraction (0-1)</td>
+      <td>Fraction of content-cluster nodes that are not yet active, indicating an in-progress resize or data redistribution.</td>
+    </tr>
+    <tr>
+      <td>Autoscaling actions (sum)</td>
+      <td>`autoscaling-actions-sum`</td>
+      <td>count</td>
+      <td>Number of autoscaler rescale actions taken for the content cluster during the test window.</td>
+    </tr>
+    <tr>
+      <td>CPU load adjustment (peak / ideal)</td>
+      <td>`cpu-load-adjustment-ratio`</td>
+      <td>ratio (peak / ideal, 1.0 = ideally scaled)</td>
+      <td>Ratio of peak to ideal CPU load for the content cluster; above 1.0 signals scale-up pressure and below 1.0 signals the cluster is over-provisioned for CPU.</td>
+    </tr>
+    <tr>
+      <td>CPU load — peak vs ideal (max)</td>
+      <td>`cpu-load-peak-vs-ideal-ideal`</td>
+      <td>percentage (0-100)</td>
+      <td>The autoscaler's ideal CPU load target for the content cluster, as a percentage (already includes growth and failover headroom, so normally below 100).</td>
+    </tr>
+    <tr>
+      <td>CPU load — peak vs ideal (max)</td>
+      <td>`cpu-load-peak-vs-ideal-peak`</td>
+      <td>percentage (0-100)</td>
+      <td>The autoscaler's peak observed CPU load for the content cluster, as a percentage, from the config server's cluster.load.peak.cpu signal.</td>
+    </tr>
+    <tr>
+      <td>Query growth (rate vs 3h average)</td>
+      <td>`query-growth-rate-vs-3h-average-content`</td>
+      <td>ratio (test-window average / trailing 3h average)</td>
+      <td>Ratio of the content cluster's query rate during the test window to its own trailing 3-hour average, a proxy for the autoscaler's internal query-growth headroom factor.</td>
+    </tr>
+    <tr>
+      <td>Query vs write rate — CPU mix driver (sum)</td>
+      <td>`query-vs-write-rate-cpu-mix-driver-query-content`</td>
+      <td>operations/second</td>
+      <td>Query rate for the content cluster, one half of the query/write mix that determines the autoscaler's ideal CPU target.</td>
+    </tr>
+    <tr>
+      <td>Query vs write rate — CPU mix driver (sum)</td>
+      <td>`query-vs-write-rate-cpu-mix-driver-write-content`</td>
+      <td>operations/second</td>
+      <td>Write rate (put + update + remove operations per second) for the content cluster, the other half of the query/write mix that determines the autoscaler's ideal CPU target.</td>
+    </tr>
+  </tbody>
+</table>
+
+<a id="metric-presets-autoscaling-container" />
+### Autoscaling: Container
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Console name</th>
+      <th>`metric`</th>
+      <th>Unit</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Active nodes (max)</td>
+      <td>`active-nodes-container`</td>
+      <td>count</td>
+      <td>Maximum number of active container nodes in the cluster during the test window.</td>
+    </tr>
+    <tr>
+      <td>Active nodes (max)</td>
+      <td>`non-active-node-fraction-container`</td>
+      <td>fraction</td>
+      <td>Peak fraction of non-active (mid-transition) nodes in the container cluster during the test window, non-zero while a resize is in progress.</td>
+    </tr>
+    <tr>
+      <td>Query growth (rate vs 3h average)</td>
+      <td>`query-growth-rate-vs-3h-average`</td>
+      <td>ratio</td>
+      <td>Ratio of the container cluster's query rate during the test window to its trailing 3-hour average, a proxy for the autoscaler's growth-headroom signal (values above 1.0 indicate rising traffic).</td>
+    </tr>
+    <tr>
+      <td>Query vs write rate — CPU mix driver (sum)</td>
+      <td>`query-vs-write-rate-cpu-mix-driver-query`</td>
+      <td>operations/second</td>
+      <td>Average query rate across the container cluster during the test window; one side of the query/write mix that shapes the autoscaler's ideal CPU target.</td>
+    </tr>
+    <tr>
+      <td>Query vs write rate — CPU mix driver (sum)</td>
+      <td>`query-vs-write-rate-cpu-mix-driver-write`</td>
+      <td>operations/second</td>
+      <td>Average write (feed) operation rate across the container cluster during the test window; the other side of the query/write mix that shapes the autoscaler's ideal CPU target.</td>
+    </tr>
+  </tbody>
+</table>

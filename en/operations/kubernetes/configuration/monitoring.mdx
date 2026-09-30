@@ -1,5 +1,5 @@
 ---
-title: "Monitor a Vespa on Kubernetes Deployment"
+title: "Configure Monitoring"
 ---
 
 Use the Prometheus Operator to collect metrics from a Vespa on Kubernetes deployment. This guide covers the installation of the monitoring stack, configuration of `PodMonitor` resources for Vespa components, and forwarding metrics to Grafana Cloud.
@@ -11,7 +11,7 @@ Use the Prometheus Operator to collect metrics from a Vespa on Kubernetes deploy
 - Kubernetes Command Line Tool ([kubectl](https://kubernetes.io/docs/reference/kubectl/))
 - A Grafana Cloud account
 
-## 1. Install Prometheus Operator
+## Step 1: Install Prometheus Operator
 
 The recommended way to install Prometheus on Kubernetes is via the [kube-prometheus-stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack) Helm chart. Add the repository and create a monitoring namespace.
 
@@ -23,7 +23,7 @@ $ kubectl create namespace monitoring
 
 ### Configure Grafana Cloud Credentials
 
-If you intend to forward metrics to Grafana Cloud, create a Kubernetes Secret with your credentials. Retrieve your **Instance ID** (User) and **API Token** (Password) from the Grafana Cloud Portal under *Configure Prometheus*.
+If you intend to forward metrics to Grafana Cloud, create a Kubernetes Secret with your credentials. Retrieve your **Instance ID** (User) and **API Token** (Password) from the Grafana Cloud Portal under _Configure Prometheus_.
 
 ```bash
 $ kubectl create secret generic grafana-cloud-prometheus -n monitoring --from-literal=username=$INSTANCE_ID --from-literal=password=$API_TOKEN
@@ -33,7 +33,7 @@ $ kubectl create secret generic grafana-cloud-prometheus -n monitoring --from-li
 
 Create a `prometheus-values.yaml` file. This configuration enables remote writing to Grafana Cloud, configures the Prometheus Operator to select all `PodMonitors`, and disables the local Grafana instance.
 
-```yaml expandable
+```txt
 prometheus:
   prometheusSpec:
   # Allow Prometheus to discover PodMonitors in other namespaces
@@ -72,7 +72,7 @@ Install the stack using Helm:
 $ helm install prometheus prometheus-community/kube-prometheus-stack --namespace monitoring --values prometheus-values.yaml
 ```
 
-## 2. Configure PodMonitors
+## Step 2: Configure PodMonitors
 
 Vespa exposes metrics on specific ports that differ from standard web traffic ports. We use the `PodMonitor` Custom Resource to define how Prometheus should scrape these endpoints.
 
@@ -80,7 +80,7 @@ Vespa exposes metrics on specific ports that differ from standard web traffic po
 
 ConfigServers expose metrics on port **19071** at the path `/configserver-metrics`. Apply the following configuration to scrape these metrics.
 
-```yaml expandable
+```txt
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
@@ -111,7 +111,7 @@ spec:
 
 Container and Content Pods expose metrics on the state API port **19092** at `/prometheus/v1/values`. The following example defines a PodMonitor for Vespa application pods.
 
-```yaml expandable
+```txt
 apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
@@ -140,7 +140,7 @@ spec:
           replacement: node
 ```
 
-## 3. Verify Metrics
+## Step 3: Verify Metrics
 
 Once the `PodMonitors` are applied, verify that Prometheus is successfully scraping the targets.
 
@@ -158,7 +158,7 @@ Navigate to [http://localhost:9090/targets](http://localhost:9090/targets). You 
 
 You can verify the data using PromQL queries in the Prometheus UI or Grafana Explore:
 
-```js
+```txt
 # Check availability of Config Servers
 up{vespa_role="configserver"}
 

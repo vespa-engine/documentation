@@ -1,0 +1,327 @@
+---
+title: "Configure Custom Overrides"
+---
+
+While `services.xml` defines the Vespa application specification, it abstracts away the underlying Kubernetes infrastructure. Advanced users often need to configure Kubernetes-specific settings for Vespa Pods to integrate Vespa within their broader platform ecosystem.
+
+The VespaSet supports three override targets — ConfigServer, profiles (container and content clusters), and ClusterControllers — each with a typed merge policy that controls which fields may be added or modified. All overrides accept a standard Kubernetes [`PodTemplateSpec`](https://kubernetes.io/docs/reference/kubernetes-api/core/pod-template-v1/#PodTemplateSpec).
+
+The `vespa` container is the main container in every Pod type.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>ConfigServer</th>
+      <th>Container</th>
+      <th>Content</th>
+      <th>ClusterControllers</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>`storageClass`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`labels`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`annotations`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`volumes`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`nodeSelector`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`imagePullSecrets`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`tolerations`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`podAffinity`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`podAntiAffinity`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`nodeAffinity`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`containers[vespa].env`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`containers[vespa].volumeMounts`</td>
+      <td>✅</td>
+      <td>❌</td>
+      <td>❌</td>
+      <td>❌</td>
+    </tr>
+    <tr>
+      <td>`containers[vespa].resources`</td>
+      <td>✅</td>
+      <td>❌</td>
+      <td>❌</td>
+      <td>❌</td>
+    </tr>
+    <tr>
+      <td>`containers[]`</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+    </tr>
+  </tbody>
+</table>
+
+Any overlay field marked ❌ is explicitly rejected at admission time.
+
+Overrides to the `containers[vespa]` are intentionally restricted to prevent corruption of operator-managed configuration. On application Pods (container, content, ClusterControllers), setting these fields is rejected to protect the integrity of the running Vespa process and prevent conflicts with `services.xml`.
+
+## ConfigServer Overrides
+
+ConfigServer overrides are defined under `spec.configServer.podTemplate` in the `VespaSet` resource. The override policy explicitly allows adding volume mounts and overriding CPU and memory resources on the main `vespa` container.
+
+### Example: spreading ConfigServer Pods across hosts
+
+A production Vespa cluster typically runs three ConfigServer Pods. To guarantee that no two ConfigServer Pods share the same Kubernetes node — and therefore survive a single-node failure — add a `podAntiAffinity` rule with `topologyKey: kubernetes.io/hostname`.
+
+```txt
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+spec:
+  configServer:
+    storageClass: standard
+    podTemplate:
+      spec:
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/component: configserver
+                topologyKey: kubernetes.io/hostname
+```
+
+The VespaSet appends this anti-affinity term to the base template rather than replacing it, so any operator-managed affinity rules remain in effect.
+
+### Example: tuning resources and adding volume mounts
+
+Unlike application Pods, the ConfigServer override policy allows overriding CPU and memory resources and adding volume mounts on the main `vespa` container. The following example raises the resource requests and limits, and mounts an additional volume.
+
+```txt
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+spec:
+  configServer:
+    storageClass: standard
+    podTemplate:
+      spec:
+        containers:
+          - name: vespa
+            resources:
+              requests:
+                cpu: "2"
+                memory: 8Gi
+              limits:
+                cpu: "4"
+                memory: 8Gi
+            volumeMounts:
+              - name: extra-config
+                mountPath: /opt/vespa/var/extra-config
+                readOnly: true
+        volumes:
+          - name: extra-config
+            configMap:
+              name: my-extra-config
+```
+
+The overrides are merged into the operator-managed container: the resource settings replace the defaults, while the volume mount and volume are appended alongside the operator-managed ones. On application Pods, both of these fields are rejected at admission time.
+
+## Profile Overrides
+
+Profile overrides allow different Pod configurations for different cluster types within the same `VespaSet`. A profile maps a `id` as defined in `services.xml` to an `PodTemplateSpec` overlay. This mapping can be set for an arbitrary number of Vespa Clusters.
+
+### Example: routing clusters to dedicated node pools
+
+A common pattern is to isolate each Vespa cluster type on its own node pool — container nodes for stateless query processing and content nodes for storage and search. The following example uses `nodeSelector` in each profile.
+
+In `services.xml`, declare a profile on each cluster:
+
+```xml
+<container id="default" version="1.0" profile="default">
+  <!-- ... -->
+</container>
+
+<content id="music" version="1.0" profile="music">
+  <!-- ... -->
+</content>
+```
+
+In the `VespaSet`, define a profile for each name:
+
+```txt
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+spec:
+  profiles:
+    default:
+      storageClass: standard
+      podTemplate:
+        spec:
+          nodeSelector:
+            node-pool: vespa-container
+    music:
+      storageClass: local-storage
+      podTemplate:
+        spec:
+          nodeSelector:
+            node-pool: vespa-content
+```
+
+The VespaSet resolves the profile for each cluster at reconciliation time and overlays the corresponding `podTemplate` onto the base `PodSpec`. Pods belonging to clusters with no matching profile entry receive no overlay.
+
+A profile can also set `storageClass` to select the [StorageClass](https://kubernetes.io/docs/concepts/storage/storage-classes/) used for the persistent volumes of the pods in that profile, as in the example above — see [Configure Local Storage Type](/en/operations/kubernetes/configuration/configure-local-storage-type). It is resolved the same way as `podTemplate`: if the cluster names a profile, the profile's `storageClass` is used; otherwise it falls back to `spec.application.storageClass`.
+
+## ClusterController Overrides
+
+`clusterControllers` is a reserved profile name. The VespaSet automatically applies this profile to all cluster-controller Pods. If no `clusterControllers` profile is defined, cluster-controller Pods receive no overlay.
+
+### Example: pinning cluster-controller Pods to a dedicated admin node pool
+
+```txt
+apiVersion: k8s.ai.vespa/v1
+kind: VespaSet
+metadata:
+  name: my-vespa-cluster
+spec:
+  profiles:
+    clusterControllers:
+      storageClass: standard
+      podTemplate:
+        spec:
+          nodeSelector:
+            node-pool: vespa-admin
+```
+
+## Reconciliation
+
+When a `VespaSet` is updated, the VespaSet evaluates the delta between the current and desired `PodTemplateSpec` for each Pod and determines the minimum action required. Changes that do not affect scheduling — such as a label update — only require the Pod to be recreated, leaving its Persistent Volume intact. Changes to scheduling constraints — such as `nodeSelector` or affinity rules — require both the Pod and its Persistent Volume to be recreated, so that the Pod can be placed on a new node and its data redistributed accordingly.
+
+Redistributing data across content nodes after a Pod and Volume recreation may take time, depending on the size of the dataset.
+
+### Action Precedence
+
+Each detected change resolves to one of three actions, ordered from most to least disruptive:
+
+1. `RECREATE_POD_AND_VOLUME` — drift was detected, and data redistribution is necessary. The Pod and its Persistent Volume are recreated.
+2. `RECREATE_POD` — drift was detected, but data redistribution is not necessary. Only the Pod is recreated; its Persistent Volume is left intact.
+3. `UNCHANGED` — no drift was detected.
+
+When multiple fields change simultaneously, the most disruptive action takes precedence: `RECREATE_POD_AND_VOLUME` takes precedence over `RECREATE_POD`, which takes precedence over `UNCHANGED`. If any change requires a Pod and Volume recreation, that action is applied regardless of whether other changes would have required only a Pod restart.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Recreate Pod</th>
+      <th>Recreate Pod and volume</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>`labels`</td>
+      <td>✅</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>`annotations`</td>
+      <td>✅</td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>`nodeSelector`</td>
+      <td></td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`nodeAffinity`</td>
+      <td></td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`podAffinity`</td>
+      <td></td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`podAntiAffinity`</td>
+      <td></td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`tolerations`</td>
+      <td></td>
+      <td>✅</td>
+    </tr>
+    <tr>
+      <td>`storageClass`</td>
+      <td></td>
+      <td>✅</td>
+    </tr>
+  </tbody>
+</table>
+
+This set is representative. If a spec is not listed on the table, then automatic reconciliation will not take effect. In this case, you should manually delete the Pod and allow the Operator to recreate it

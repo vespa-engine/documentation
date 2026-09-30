@@ -1,5 +1,6 @@
 ---
 title: "Query API"
+sidebarTitle: "The query api"
 ---
 
 Use the Vespa Query API to query, rank and organize data. Example:
@@ -12,12 +13,16 @@ $ vespa query "select * from music where year > 2001" \
 
 Simplified, a query has the following components:
 
--   Input data
--   Ranking and grouping specification
--   Results
--   Other execution parameters
+- Input data
+- Ranking and grouping specification
+- Results
+- Other execution parameters
 
-This guide is an introduction to the more important elements in the API - refer to the [Query API reference](../reference/api/query) for details. See [query execution](#query-execution) below for data flow.
+This guide is an introduction to the more important elements in the API - refer to the [Query API reference](/en/reference/api/query) for details. See [query execution](#query-execution) below for data flow.
+
+Best practice for lexical queries is submitting the user-generated query as-is, then use [Searcher components](/en/applications/searchers) to implement additional logic.
+
+See the [client library](https://github.com/vespa-engine/vespa/tree/master/client) for options.
 
 ## Input
 
@@ -26,9 +31,14 @@ Input data is both structured data and unstructured text:
 ```bash
 $ vespa query "select * from music where artist contains \"coldplay\" and default contains text(@q)" \
   "q=head"
-```bash
-$ vespa query "select * from music where artist contains \"coldplay\" and default contains text(@q)" \
-  "q=head"
+```
+
+The first line is the [YQL](/en/querying/query-language) query string, that has both structured input (artist=coldplay) and a reference to unstructured user input. The user input is then given in the second line in the _q_ parameter.
+
+Separating the structured data from the unstructured reliefs the application code from interpreting and sanitizing the input data - it is essentially a blob. Vespa can then use heuristics to deduct the user's intention. User input can also be expressed in the [simple query language](/en/reference/querying/simple-query-language) using the [userQuery](/en/reference/querying/yql#userquery) operator.
+
+Finally, input data can also be ranking query features - here the query feature is called _user_profile_:
+
 ```bash
 $ vespa query "select * from music where artist contains \"coldplay\" and default contains text(@q)" \
   "q=head" \
@@ -45,9 +55,11 @@ $ vespa query "select * from sources * where default contains text(@animal)" \
   "animal=panda"
 ```
 
-The text() operator will access the query property "animal", and tokenize the property value into a [weakAnd](../reference/querying/yql#grammar) query, resulting in:
+The text() operator will access the query property "animal", and tokenize the property value into a [weakAnd](/en/reference/querying/yql#grammar) query, resulting in:
 
-`select * from sources * where weakAnd(default contains "panda")`
+` select * from sources * where weakAnd(default contains "panda") `
+
+---
 
 Changing the value of "animal" without changing the rest of the expression:
 
@@ -58,7 +70,9 @@ $ vespa query "select * from sources * where default contains text(@animal)" \
 
 The result is:
 
-`select * from sources * where weakAnd(default contains "panda", default contains "smokey")`
+` select * from sources * where weakAnd(default contains "panda", default contains "smokey") `
+
+---
 
 Combining multiple query properties, and having a more complex expression:
 
@@ -70,13 +84,13 @@ $ vespa query "select * from sources * where range(year, 1963, 2014) and (defaul
 
 The resulting YQL expression is:
 
-`select * from sources * where range(year, 1963, 2014) and (weakAnd(default contains "panda") or weakAnd(default contains "bear", default contains "roosevelt"))`
+` select * from sources * where range(year, 1963, 2014) and (weakAnd(default contains "panda") or weakAnd(default contains "bear", default contains "roosevelt")) `
 
 ### Fieldset
 
 Use a fieldset to query multiple fields in the `where` clause. In the schema:
 
-```sd
+```vespa-schema
 fieldset text_content {
     fields: title, description
 }
@@ -89,33 +103,33 @@ $ vespa query 'select * from sources where text_content contains text(@q)' \
   'q=query a fieldset'
 ```
 
-Fields in the fields set must have the same match modes - read more in the [reference](../reference/schemas/schemas#fieldset).
+Fields in the fields set must have the same match modes - read more in the [reference](/en/reference/schemas/schemas#fieldset).
 
 ### Query Profiles
 
-Use a [query profile](../reference/api/query#queryprofile) to store query parameters in configuration. This makes query strings shorter, and makes it easy to modify queries by modifying configuration only. Use cases are setting query properties for different markets, parameters that do not change, and so on. Query profiles can be nested, versioned and use inheritance.
+Use a [query profile](/en/reference/api/query#queryprofile) to store query parameters in configuration. This makes query strings shorter, and makes it easy to modify queries by modifying configuration only. Use cases are setting query properties for different markets, parameters that do not change, and so on. Query profiles can be nested, versioned and use inheritance.
 
 ### Geo Filter and Ranking
 
-Filter by position using latitude and longitude to implement [geo search](/en/querying/geo-search). [DistanceToPath](../reference/ranking/rank-features#distanceToPath\(name\).distance) is a [rank function](../basics/ranking) based on closeness. Using ranking can often improve results instead of geo filtering.
+Filter by position using latitude and longitude to implement [geo search](/en/querying/geo-search). [DistanceToPath](/en/reference/ranking/rank-features#distanceToPath(name).distance) is a [rank function](/en/basics/ranking) based on closeness. Using ranking can often improve results instead of geo filtering.
 
 ### Parameter substitution
 
 Parameter substitution lets you provide query values as request parameters instead of inserting this into the YQL string itself. This simplifies query generation, separating the value of the string/set/array from the YQL string - i.e. the value will not corrupt the YQL string if it contains YQL-like syntax:
 
--   Simplify query generation, separating the value of the set/array from the YQL string.
--   Speed up query parsing. Using parameter substitution accelerates string parsing.
--   Reduce duplication.
+- Simplify query generation, separating the value of the set/array from the YQL string.
+- Speed up query parsing. Using parameter substitution accelerates string parsing.
+- Reduce duplication.
 
-In its simplest form, use [text()](../reference/querying/yql#text) for strings:
+In its simplest form, use [text()](/en/reference/querying/yql#text) for strings:
 
-```text
+```txt
 ... where default contains text(@user_input)&user_input=free+text
 ```
 
 Lists, maps and arrays can also be used - examples:
 
-```text
+```txt
 # Simple example: provide a set for the IN operator
 ... where id in (@my_set)&my_set=10,20,30
 
@@ -128,7 +142,7 @@ Lists, maps and arrays can also be used - examples:
 
 It is also great to eliminate data duplication, from Vespa 8.287 one can use parameter substitution with `embed`:
 
-```bash
+```bash highlight={2-5}
 $ vespa query \
   'yql=select id, from product where {targetHits:10}nearestNeighbor(embedding, query_embedding) or userQuery()' \
   'input.query(query_embedding)=embed(transformer, @query)' \
@@ -136,15 +150,15 @@ $ vespa query \
   'query=running shoes for kids, white'
 ```
 
-Note the use of the parameter named [query](../reference/api/query#model.querystring) used by the [userQuery()](../reference/querying/yql#userquery) operator. Also note the value substituted in the [embed](../rag/embedding#embedding-a-query-text) functions.
+Note the use of the parameter named [query](/en/reference/api/query#model.querystring) used by the [userQuery()](/en/reference/querying/yql#userquery) operator. Also note the value substituted in the [embed](/en/rag/embedding#embedding-a-query-text) functions.
 
-See the [reference](../reference/querying/yql#parameter-substitution) for a complete list of formats.
+See the [reference](/en/reference/querying/yql#parameter-substitution) for a complete list of formats.
 
 ## Ranking
 
-[Ranking](../basics/ranking) specifies the computation of the query and data. It assigns scores to documents, and returns documents ordered by score. A [rank profile](../reference/api/query#ranking.profile) is a specification for how to compute a document's score. An application can have multiple rank profiles, to run different computations. Example, a query specifies query categories and a user embedding (from the [tensor user guide](../ranking/tensor-user-guide#ranking-with-tensors)):
+[Ranking](/en/basics/ranking) specifies the computation of the query and data. It assigns scores to documents, and returns documents ordered by score. A [rank profile](/en/reference/api/query#ranking.profile) is a specification for how to compute a document's score. An application can have multiple rank profiles, to run different computations. Example, a query specifies query categories and a user embedding (from the [tensor user guide](/en/ranking/tensor-user-guide#ranking-with-tensors)):
 
-```sd
+```vespa-schema
 rank-profile product_ranking inherits default {
     inputs {
         query(q_category) tensor<float>(category{})
@@ -166,7 +180,7 @@ rank-profile product_ranking inherits default {
 }
 ```
 
-```bash
+```shell
 vespa query 'yql=select * from product where {targetHits:1}nearestNeighbor(embedding,q_embedding)' \
   'input.query(q_embedding)=[1,2,3,4]' \
   'input.query(q_category)={"Tablet Keyboard Cases":0.8, "Keyboards":0.3}' \
@@ -176,10 +190,10 @@ vespa query 'yql=select * from product where {targetHits:1}nearestNeighbor(embed
 <Note>
 **Note:**
 
-In this example, `input.query(q_embedding)` is short for `ranking.features.query(q_embedding)` - see the [reference](../reference/api/query#ranking.features) for tensor formats.
+In this example, `input.query(q_embedding)` is short for `ranking.features.query(q_embedding)` - see the [reference](/en/reference/api/query#ranking.features) for tensor formats.
 </Note>
 
-Results can be ordered using [sorting](../reference/querying/sorting-language) instead of ranking.
+Results can be ordered using [sorting](/en/reference/querying/sorting-language) instead of ranking.
 
 The above rank profile does not do text ranking - there are however such profiles built-in. Text search is described in more detail in [Text Matching](/en/querying/text-matching) - find information about normalizing, prefix search and linguistics there.
 
@@ -191,103 +205,73 @@ The above rank profile does not do text ranking - there are however such profile
 $ vespa query "select * from music where true limit 0 | all(group(year) each(max(3) each(output(summary())) ) )"
 ```
 
-Fields used in grouping must be [attributes](../content/attributes). The grouping expression is part of the YQL query string, appended at the end.
+Fields used in grouping must be [attributes](/en/content/attributes). The grouping expression is part of the YQL query string, appended at the end.
 
-Applications can group *all* documents (select all documents in YQL). Using `limit 0` returns grouping results only.
+Applications can group _all_ documents (select all documents in YQL). Using `limit 0` returns grouping results only.
 
 ## Results
 
-All fields are returned in results by default. To specify a subset of fields, use [document summaries](/en/querying/document-summaries). When searching text, having a static abstract of the document in a field, or using a [dynamic summary](../reference/schemas/schemas#summary) can both improve the visual relevance of the search, and cut bandwidth used.
+All fields are returned in results by default. To specify a subset of fields, use [document summaries](/en/querying/document-summaries). When searching text, having a static abstract of the document in a field, or using a [dynamic summary](/en/reference/schemas/schemas#summary) can both improve the visual relevance of the search, and cut bandwidth used.
 
-The default output format is [JSON](../reference/querying/default-result-format). A binary [CBOR](https://cbor.io/) format is also available via [format=cbor](../reference/api/query#presentation.format) - responses are smaller and faster to render, especially for numeric data, and is a drop-in replacement that produces identical results when deserialized. Write a custom [Renderer](../applications/result-renderers) to generate results in other formats.
+The default output format is [JSON](/en/reference/querying/default-result-format). A binary [CBOR](https://cbor.io/) format is also available via [format=cbor](/en/reference/api/query#presentation.format) - responses are smaller and faster to render, especially for numeric data, and is a drop-in replacement that produces identical results when deserialized. Write a custom [Renderer](/en/applications/result-renderers) to generate results in other formats.
 
-Read more on [request-response](../applications/processing) processing - use this to write code to manipulate results.
+Read more on [request-response](/en/applications/processing) processing - use this to write code to manipulate results.
 
 ## Query execution
 
-<Frame>![Query execution - from query to response](/assets/img/query-to-response.svg)</Frame>
+<Frame>
+![Query execution - from query to response](/assets/img/query-to-response.svg)
+</Frame>
 
 Phases:
 
-<Steps>
-<Step>
-**Query processing**: Normalizations, rewriting and enriching. Custom logic in search chains
-</Step>
-<Step>
-**Matching, ranking and grouping/aggregation:** This phase dispatches the query to content nodes
-</Step>
-<Step>
-**Result processing, rendering:** Content fetching and snippeting of the top global hits found in the query phase
-</Step>
-</Steps>
+1. **Query processing**: Normalizations, rewriting and enriching. Custom logic in search chains
+2. **Matching, ranking and grouping/aggregation:** This phase dispatches the query to content nodes
+3. **Result processing, rendering:** Content fetching and snippeting of the top global hits found in the query phase
 
-The above is a simplification - if the query also specifies [result grouping](/en/querying/grouping), the query phase might involve multiple phases or round-trips between the container and content nodes. See [life of a query](../performance/sizing-search#life-of-a-query-in-vespa) for a deeper dive into query execution details.
+The above is a simplification - if the query also specifies [result grouping](/en/querying/grouping), the query phase might involve multiple phases or round-trips between the container and content nodes. See [life of a query](/en/performance/sizing-search#life-of-a-query-in-vespa) for a deeper dive into query execution details.
 
-Use [trace.explainlevel](../reference/api/query#trace.explainlevel) to analyze the query plan. Use these hints to modify the query plan:
+Use [trace.explainlevel](/en/reference/api/query#trace.explainlevel) to analyze the query plan. Use these hints to modify the query plan:
 
--   Use [ranked: false](../reference/querying/yql#ranked) query annotations to speed up evaluation
--   Use [capped range search](../reference/querying/yql#numeric) to efficiently implement top-k selection for ranking a subset of the documents in the index.
+- Use [ranked: false](/en/reference/querying/yql#ranked) query annotations to speed up evaluation
+- Use [capped range search](/en/reference/querying/yql#numeric) to efficiently implement top-k selection for ranking a subset of the documents in the index.
 
+<a id="query-processing-dispatch" />
 ### Query processing and dispatch
 
-<Steps>
-<Step>
-A query is sent from a front-end application to a container node using the *Query API* or in any custom request format handled by a custom [request handler](../applications/request-handlers), which translates the custom request format to native Vespa APIs.
-</Step>
-<Step>
-Query pre-processing, like [linguistic processing](../linguistics/linguistics) and [query rewriting](../linguistics/query-rewriting), is done in built-in and custom [search chains](../applications/chaining) - see [searcher development](../applications/searchers).
+1. A query is sent from a front-end application to a container node using the _Query API_ or in any custom request format handled by a custom [request handler](/en/applications/request-handlers), which translates the custom request format to native Vespa APIs.
 
-The default search chain is *vespa* - find installed components in this chain by inspecting `ApplicationStatus` like in the [quick-start](../basics/deploy-an-application-local). Adding `&trace.level=4` (or higher) to the query will emit the components invoked in the query, and is useful to analyze ordering.
+2. Query pre-processing, like [linguistic processing](/en/linguistics/linguistics) and [query rewriting](/en/linguistics/query-rewriting), is done in built-in and custom [search chains](/en/applications/chaining) - see [searcher development](/en/applications/searchers).
 
-This is the integration point to plug in code to enrich a query - example: Look up user profile data from a user ID in the request. Set *&trace.level=2* to inspect the search chain components.
-</Step>
-<Step>
-The query is sent from the container to the *content cluster* - see [federation](/en/querying/federation) for more details. An application can have multiple content clusters - Vespa searches in all by default. [Federation](/en/querying/federation) controls how to query the clusters, [sources](../reference/api/query#model.sources) names the clusters The illustration above has one content cluster but multiple is fully supported and allows scaling [document types](../basics/schemas) differently. E.g. a *tweet* document type can be indexed in a separate content cluster from a *user* document type, enabling independent scaling of the two.
+   The default search chain is _vespa_ - find installed components in this chain by inspecting `ApplicationStatus` like in the [quick-start](/en/basics/deploy-an-application-local). Adding `&trace.level=4` (or higher) to the query will emit the components invoked in the query, and is useful to analyze ordering.
 
-<Frame>![Query processing and dispatch](/assets/img/query-dispatch.svg)</Frame>
-</Step>
-</Steps>
+   This is the integration point to plug in code to enrich a query - example: Look up user profile data from a user ID in the request. Set _&trace.level=2_ to inspect the search chain components.
+
+3. The query is sent from the container to the _content cluster_ - see [federation](/en/querying/federation) for more details. An application can have multiple content clusters - Vespa searches in all by default. [Federation](/en/querying/federation) controls how to query the clusters, [sources](/en/reference/api/query#model.sources) names the clusters The illustration above has one content cluster but multiple is fully supported and allows scaling [document types](/en/basics/schemas) differently. E.g. a _tweet_ document type can be indexed in a separate content cluster from a _user_ document type, enabling independent scaling of the two.
+
+   <Frame>
+   ![Query processing and dispatch](/assets/img/query-dispatch.svg)
+   </Frame>
 
 ### Matching, ranking, grouping
 
-<Steps>
-<Step>
-At this point the query enters one or more [content clusters](../reference/applications/services/content). In a content cluster with [grouped distribution](../content/elasticity#grouped-distribution), the query is dispatched to all content nodes within a single group using a [dispatch policy](../reference/applications/services/content#dispatch-tuning), while with a flat single group content cluster the query is dispatched to all content nodes.
-</Step>
-<Step>
-The query arrives at the content nodes which performs matching, [ranking](../basics/ranking) and aggregation/grouping over the set of documents in the [Ready sub database](../content/proton). By default, Vespa uses [DAAT](../performance/feature-tuning#hybrid-taat-daat) where the matching and first-phase score calculation is interleaved and not two separate, sequential phases. *vespa-proton* does matching over the *ready* documents and [ranks](../basics/ranking) as specified with the request/schema. Each content node matches and ranks a subset of the total document corpus and returns the hits along with meta information like total hits and sorting and grouping data, if requested.
+1. At this point the query enters one or more [content clusters](/en/reference/applications/services/content). In a content cluster with [grouped distribution](/en/content/elasticity#grouped-distribution), the query is dispatched to all content nodes within a single group using a [dispatch policy](/en/reference/applications/services/content#dispatch-tuning), while with a flat single group content cluster the query is dispatched to all content nodes.
+2. The query arrives at the content nodes which performs matching, [ranking](/en/basics/ranking) and aggregation/grouping over the set of documents in the [Ready sub database](/en/content/proton). By default, Vespa uses [DAAT](/en/performance/feature-tuning#hybrid-taat-daat) where the matching and first-phase score calculation is interleaved and not two separate, sequential phases. _vespa-proton_ does matching over the _ready_ documents and [ranks](/en/basics/ranking) as specified with the request/schema. Each content node matches and ranks a subset of the total document corpus and returns the hits along with meta information like total hits and sorting and grouping data, if requested.
 
-<Frame>![Queries](/assets/img/proton-query.svg)</Frame>
-
-</Step>
-<Step>
-Once the content nodes within the group have replied within the [timeout](../performance/graceful-degradation), [max-hits / top-k](../reference/applications/services/content#dispatch-tuning) results are returned to the container for query phase result processing. In this phase, the only per hit data available is the internal global document ID (gid) and the ranking score. There is also result meta information like coverage and total hit count. Additional hit specific data, like the contents of fields, is not available until the result processing phase has completed the content fetching.
-</Step>
-</Steps>
+   <Frame>
+   ![Queries](/assets/img/proton-query.svg)
+   </Frame>
+3. Once the content nodes within the group have replied within the [timeout](/en/performance/graceful-degradation), [max-hits / top-k](/en/reference/applications/services/content#dispatch-tuning) results are returned to the container for query phase result processing. In this phase, the only per hit data available is the internal global document ID (gid) and the ranking score. There is also result meta information like coverage and total hit count. Additional hit specific data, like the contents of fields, is not available until the result processing phase has completed the content fetching.
 
 ### Result processing (fill) phase
 
-<Steps>
-<Step>
-When the result from the query phase is available, a custom chained [searcher component](../applications/searchers#multiphase-searching) can process the limited data available from the first search phase before contents of the hits is fetched from the content nodes. The fetching from content nodes is lazy and is not invoked before rendering the response, unless asked for earlier by a custom searcher component.
-</Step>
-<Step>
-Only fields in the requested [document summaries](/en/querying/document-summaries) is fetched from content nodes. The summary request goes directly to the content nodes that produced the result from the query phase.
-</Step>
-<Step>
-After the content node requests have completed, the full result set can be processed further by custom components (e.g. doing result deduping, top-k re-ranking), before [rendering](../applications/result-renderers) the response.
-</Step>
-</Steps>
+1. When the result from the query phase is available, a custom chained [searcher component](/en/applications/searchers#multiphase-searching) can process the limited data available from the first search phase before contents of the hits is fetched from the content nodes. The fetching from content nodes is lazy and is not invoked before rendering the response, unless asked for earlier by a custom searcher component.
+2. Only fields in the requested [document summaries](/en/querying/document-summaries) is fetched from content nodes. The summary request goes directly to the content nodes that produced the result from the query phase.
+3. After the content node requests have completed, the full result set can be processed further by custom components (e.g. doing result deduping, top-k re-ranking), before [rendering](/en/applications/result-renderers) the response.
 
 ## HTTP
 
-<Note>
-**Note:**
-
-Vespa does not provide a java client library for the query API. Best practice for queries is submitting the user-generated query as-is, then use [Searcher components](../applications/searchers) to implement additional logic.
-</Note>
-
-The Vespa Team does not recommend any specific HTTP client, since we haven't done any systematic evaluation. We have most experience with the Apache HTTP client. See also [HTTP best practices](/en/clients/http-best-practices) (for Vespa Cloud, but most of it is generally applicable). Also see a discussion in [#24534](https://github.com/vespa-engine/vespa/issues/24534).
+The Vespa Team does not recommend any specific HTTP client, since we haven't done any systematic evaluation. We have most experience with the Apache HTTP client. See also [HTTP best practices](https://cloud.vespa.ai/en/http-best-practices) (for Vespa Cloud, but most of it is generally applicable). Also see a discussion in [#24534](https://github.com/vespa-engine/vespa/issues/24534).
 
 Use GET or POST. Parameters can either be sent as GET-parameters or posted as JSON, these are equivalent:
 
@@ -301,7 +285,7 @@ $ curl http://localhost:8080/search/?yql=select+%2A+from+sources+%2A+where+defau
 
 ### Using POST
 
-The format is based on the [Query API reference](../reference/api/query), and has been converted from the *flat* dot notation to a *nested* JSON-structure. The request-method must be POST and the *Content-Type* must be *"application/json"*, e.g.:
+The format is based on the [Query API reference](/en/reference/api/query), and has been converted from the _flat_ dot notation to a _nested_ JSON-structure. The request-method must be POST and the _Content-Type_ must be _"application/json"_, e.g.:
 
 ```bash
 $ curl -X POST -H "Content-Type: application/json" --data '
@@ -326,15 +310,18 @@ $ curl -X POST -H "Content-Type: application/json" --data '
 **Note:**
 
 Try the [Query Builder](https://github.com/vespa-engine/vespa/tree/master/client/js/app#query-builder) application!
-</Note> <Warning>
+</Note>
+
+<Warning>
 **Important:**
 
 Security filters can block GET and POST requests differently. This can block POSTed queries.
 </Warning>
 
+<a id="jetty" />
 ### HTTP
 
-Configure the [http server](../reference/applications/services/http#server) - e.g. set *requestHeaderSize* to configure URL length (including headers):
+Configure the [http server](/en/reference/applications/services/http#server) - e.g. set _requestHeaderSize_ to configure URL length (including headers):
 
 ```xml
 <container version="1.0">
@@ -352,13 +339,13 @@ HTTP keepalive is supported.
 
 Values must be encoded according to standard URL encoding. Thus, space is encoded as +, + as %2b and so on - see [RFC 2396](https://www.ietf.org/rfc/rfc2396.txt).
 
-HTTP status codes are found in the [Query API reference](../reference/api/query#http-status-codes). Also see [Stack Overflow question](https://stackoverflow.com/questions/54340386/how-should-i-customize-my-search-result-in-vespa/54344429#54344429).
+HTTP status codes are found in the [Query API reference](/en/reference/api/query#http-status-codes). Also see [Stack Overflow question](https://stackoverflow.com/questions/54340386/how-should-i-customize-my-search-result-in-vespa/54344429#54344429).
 
 When implementing a client for the query API, consider the following guidelines for handling HTTP status codes:
 
 #### Client errors vs. server errors
 
-In general clients should only retry requests on *server errors* (5xx) - not on *client errors* (4xx). For example, a client should **not** retry a request after receiving a `400 Bad Request` response.
+In general clients should only retry requests on _server errors_ (5xx) - not on _client errors_ (4xx). For example, a client should **not** retry a request after receiving a `400 Bad Request` response.
 
 #### Back-pressure handling
 
@@ -366,24 +353,23 @@ Be careful when handling 5xx responses, especially `503 Service Unavailable` and
 
 ## Timeout
 
-See the [reference](../reference/api/query#timeout) for how to set the query timeout. Common questions:
+See the [reference](/en/reference/api/query#timeout) for how to set the query timeout. Common questions:
 
--   *Does the timeout apply to the whole query or just from when it is sent to the content cluster? If a [Searcher](../applications/searchers) goes to sleep in the container for 2*timeout, will the caller still get a response indicating a timeout?*
-    
-    The timeout applies to the whole query, both container and content node processing. However, the timeout handling is cooperative - if having Searchers that are time-consuming or access external resources, the Searcher code should check [Query.getTimeLeft()](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/Query.java). So, in this case, you will time out, but only after 2*timeout + some more.
-    
--   *During multiphase searching, is the query timeout set for each individual searcher, or is the query timeout set for the entire search chain?*
-    
-    The timeout is for the entire query (and most Searchers don’t check timeout - use `Query.getTimeLeft()`). E.g., if a Search Chain has 3 Searchers, it is OK for 1 Searcher to take 497 ms and 2 Searchers to each take 1 ms for a query timeout of 500 ms.
-    
--   *If we asynchronously execute several search chains, can we set different query timeouts for each of these chains plus a separate overall timeout for the searcher that performs the asynchronous executions?*
-    
-    You can set a different timeout in each cloned query you send to any of those chains, and you can specify the timeout when waiting for responses from them.
-    
+- _Does the timeout apply to the whole query or just from when it is sent to the content cluster? If a [Searcher](/en/applications/searchers) goes to sleep in the container for 2\*timeout, will the caller still get a response indicating a timeout?_
+
+  The timeout applies to the whole query, both container and content node processing. However, the timeout handling is cooperative - if having Searchers that are time-consuming or access external resources, the Searcher code should check [Query.getTimeLeft()](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/Query.java). So, in this case, you will time out, but only after 2\*timeout + some more.
+
+- _During multiphase searching, is the query timeout set for each individual searcher, or is the query timeout set for the entire search chain?_
+
+  The timeout is for the entire query (and most Searchers don’t check timeout - use `Query.getTimeLeft()`). E.g., if a Search Chain has 3 Searchers, it is OK for 1 Searcher to take 497 ms and 2 Searchers to each take 1 ms for a query timeout of 500 ms.
+
+- _If we asynchronously execute several search chains, can we set different query timeouts for each of these chains plus a separate overall timeout for the searcher that performs the asynchronous executions?_
+
+  You can set a different timeout in each cloned query you send to any of those chains, and you can specify the timeout when waiting for responses from them.
 
 ## Error handling
 
-Check for a `root: error` element in the [result](../reference/querying/default-result-format#error):
+Check for a `root: error` element in the [result](/en/reference/querying/default-result-format#error):
 
 ```json
 {
@@ -400,19 +386,19 @@ Check for a `root: error` element in the [result](../reference/querying/default-
 
 ## Troubleshooting
 
-If Vespa cannot generate a valid search expression from the query string, it will issue the error message *Null query*. To troubleshoot, add [&trace.level=2](../reference/api/query#trace.level) to the request. A missing *yql* parameter will also emit this error message.
+If Vespa cannot generate a valid search expression from the query string, it will issue the error message _Null query_. To troubleshoot, add [&trace.level=2](/en/reference/api/query#trace.level) to the request. A missing _yql_ parameter will also emit this error message.
 
 ### Query tracing
 
-Use *query tracing* to debug query execution. Enable by using [trace.level=1](../reference/api/query#trace.level) (or higher). Add [trace.timestamps=true](../reference/api/query#trace.timestamps) for timing info for every searcher invoked. Find a trace example in the result examples below, and try the [practical search performance guide](../performance/practical-search-performance-guide#advanced-query-tracing).
+Use _query tracing_ to debug query execution. Enable by using [trace.level=1](/en/reference/api/query#trace.level) (or higher). Add [trace.timestamps=true](/en/reference/api/query#trace.timestamps) for timing info for every searcher invoked. Find a trace example in the result examples below, and try the [practical search performance guide](/en/performance/practical-search-performance-guide#advanced-query-tracing).
 
-In custom code, use [Query.trace](https://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/Query) to add trace output.
+In custom code, use [Query.trace](https://javadoc.io/page/com.yahoo.vespa/container-search/latest/com/yahoo/search/Query.html) to add trace output.
 
 ### Large memory usage
 
 Queries that allocate more than 2G RAM will log messages like:
 
-```text
+```txt
 mmap 2727 of size 8589934592 from : search::attribute::PostingListMerger<int>::reserveArray(unsigned int, unsigned long)(0x40001513eef0)
 
 (0x400013595334) from (0x400013593acc) from operator new(unsigned long)(0x400013592f88) from search::attribute::PostingListMerger<int>::reserveArray(unsigned int, unsigned long)(0x40001513eef0) from search::attribute::PostingListSearchContextT<int>::fetchPostings(search::queryeval::ExecuteInfo const&, bool)(0x400015159a38) from search::queryeval::SameElementBlueprint::fetchPostings(search::queryeval::ExecuteInfo const&)(0x4000154f36fc) from search::queryeval::IntermediateBlueprint::fetchPostings(search::queryeval::ExecuteInfo const&)(0x40001549ad38) from proton::matching::MatchToolsFactory::MatchToolsFactory(proton::matching::QueryLimiter&, vespalib::Doom const&, proton::matching::ISearchContext&, search::attribute::IAttributeContext&, search::engine::Trace&, std::basic_string_view<char, std::char_traits<char> >, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, ...
@@ -426,7 +412,7 @@ This does not necessarily indicate that something is wrong, e.g., range searches
 
 A regular query result:
 
-```json expandable
+```json
 {
     "root": {
         "id": "toplevel",
@@ -496,9 +482,11 @@ An empty result:
 }
 ```
 
+<a id="error-result" />
+
 An error result:
 
-```json expandable
+```json
 {
     "root": {
         "id": "toplevel",
@@ -526,7 +514,7 @@ An error result:
 
 A simple search application, many undefined fields. Result for the query `/search/?query=blues&hits=3&trace.level=2`
 
-```json expandable
+```json
 {
 
     "trace": {
@@ -535,7 +523,7 @@ A simple search application, many undefined fields. Result for the query `/searc
                 "message": "No query profile is used"
             },
             {
-                "message": "Invoking chain 'vespa' [com.yahoo.prelude.statistics.StatisticsSearcher@native -> com.yahoo.prelude.querytransform.PhrasingSearcher@vespa -> ... -> federation@native]"
+                "message": "Invoking chain 'vespa' [com.yahoo.prelude.statistics.StatisticsSearcher@native -&gt; com.yahoo.prelude.querytransform.PhrasingSearcher@vespa -&gt; ... -&gt; federation@native]"
             },
             {
                 "children": [
@@ -616,7 +604,7 @@ A simple search application, many undefined fields. Result for the query `/searc
                     "pto": -1,
                     "mid": 2,
                     "ew": "blues",
-                    "surl": "https://shopping.yahoo.com/shop?d=hab&id=1807865261",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&amp;id=1807865261",
                     "userrate": "NaN",
                     "pid": "",
                     "weight": "NaN",
@@ -640,7 +628,7 @@ A simple search application, many undefined fields. Result for the query `/searc
                     "scorekey": "NaN",
                     "cbid": "NaN",
                     "summaryfeatures": "",
-                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&id=1807865261"
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&amp;id=1807865261"
                 }
             },
             {
@@ -657,7 +645,7 @@ A simple search application, many undefined fields. Result for the query `/searc
                     "pto": -1,
                     "mid": 2,
                     "ew": "blues",
-                    "surl": "https://shopping.yahoo.com/shop?d=hab&id=1804905714",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&amp;id=1804905714",
                     "userrate": "NaN",
                     "pid": "",
                     "weight": "NaN",
@@ -681,7 +669,7 @@ A simple search application, many undefined fields. Result for the query `/searc
                     "scorekey": "NaN",
                     "cbid": "NaN",
                     "summaryfeatures": "",
-                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&id=1804905714"
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&amp;id=1804905714"
                 }
             },
             {
@@ -698,7 +686,7 @@ A simple search application, many undefined fields. Result for the query `/searc
                     "pto": -1,
                     "mid": 2,
                     "ew": "blues",
-                    "surl": "https://shopping.yahoo.com/shop?d=hab&id=1804905710",
+                    "surl": "https://shopping.yahoo.com/shop?d=hab&amp;id=1804905710",
                     "userrate": "NaN",
                     "pid": "",
                     "weight": "NaN",
@@ -722,7 +710,7 @@ A simple search application, many undefined fields. Result for the query `/searc
                     "scorekey": "NaN",
                     "cbid": "NaN",
                     "summaryfeatures": "",
-                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&id=1804905710"
+                    "documentid": "id:test:music::https://shopping.yahoo.com/shop?d=hab&amp;id=1804905710"
                 }
             }
         ]
@@ -730,9 +718,9 @@ A simple search application, many undefined fields. Result for the query `/searc
 }
 ```
 
-Result for the grouping query `/search/?hits=0&yql=select * from sources * where sddocname contains purchase | all(group(customer) each(output(sum(price))))`
+Result for the grouping query ` /search/?hits=0&yql=select * from sources * where sddocname contains purchase | all(group(customer) each(output(sum(price)))) `
 
-```json expandable
+```json
 {
 
     "trace": {

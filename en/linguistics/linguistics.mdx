@@ -12,21 +12,29 @@ Vespa uses a _linguistics_ module to process text in queries and documents durin
 Linguistic processing is run when writing documents, and when querying:
 
 <Frame>
- ![Overview: linguistic processing in Vespa](/assets/img/vespa-overview-linguistics.svg)
+![Overview: linguistic processing in Vespa](/assets/img/vespa-overview-linguistics.svg)
 </Frame>
 
 The processing is run on [string](/en/reference/schemas/schemas#string) fields with `index` indexing mode. Overview:
 
-1. When writing documents, string fields with `indexing: index` are by default processed. A field's language will configure this processing. A document/fields can have the language set explicitly, if not, it is [detected](/en/linguistics/linguistics#field-language-detection). 
-2. The field's content is processed (e.g., tokenized, normalized, stemmed, etc.), and the resulting terms are added to the index. 
-<Info>
- **Note:** The language for the field is not persisted on the content node, just the processed terms themselves
-</Info>
-3. A query is also processed in a similar fashion. Typically through the same [linguistics profile](/en/reference/schemas/schemas#linguistics) as the field content, producing the same terms from the same text. The language of query strings is [detected](/en/linguistics/linguistics#query-language-detection) unless specified using [model.locale](/en/reference/api/query#model.locale) or [annotations](/en/reference/querying/yql#annotations) like `language`. 
-<Info>
- **Note:** This is a very common query problem - it is hard to detect language precisely from short strings.
-</Info>
-4. The processed query is evaluated on the content nodes, and will only work as expected if both documents and queries produce the same terms. 
+1. When writing documents, string fields with `indexing: index` are by default processed. A field's language will configure this processing. A document/fields can have the language set explicitly, if not, it is [detected](#field-language-detection).
+
+   {/* ToDo: link to detector / info here */}
+2. The field's content is processed (e.g., tokenized, normalized, stemmed, etc.), and the resulting terms are added to the index.
+
+   <Note>
+   **Note:**
+
+   The language for the field is not persisted on the content node, just the processed terms themselves
+   </Note>
+3. A query is also processed in a similar fashion. Typically through the same [linguistics profile](/en/reference/schemas/schemas#linguistics) as the field content, producing the same terms from the same text. The language of query strings is [detected](#query-language-detection) unless specified using [model.locale](/en/reference/api/query#model.locale) or [annotations](/en/reference/querying/yql#annotations) like `language`.
+
+   <Note>
+   **Note:**
+
+   This is a very common query problem - it is hard to detect language precisely from short strings.
+   </Note>
+4. The processed query is evaluated on the content nodes, and will only work as expected if both documents and queries produce the same terms.
 
 These operations can be turned on or off per field in the [schema](/en/basics/schemas). See [implicitTransforms](/en/reference/querying/yql#implicittransforms) for how to enable/disable transforms per query term.
 
@@ -39,7 +47,9 @@ You can also implement a custom [Linguistics](/en/linguistics/linguistics-custom
 The default linguistics variant is [OpenNLP](/en/linguistics/linguistics-opennlp), but for the rest of this page we'll go through common options, such as language handling, inherited by all implementations.
 
 <Note>
- **Note:** Linguistics implementations only control how text is tokenized, including positional information. These tokens are stored in the same way in the underlying index. For example, if you use Lucene linguistics, Vespa does not store information such as positions in Lucene segment files. Storage is the same as with OpenNLP, only resulting tokens might differ.
+**Note:**
+
+Linguistics implementations only control how text is tokenized, including positional information. These tokens are stored in the same way in the underlying index. For example, if you use Lucene linguistics, Vespa does not store information such as positions in Lucene segment files. Storage is the same as with OpenNLP, only resulting tokens might differ.
 </Note>
 
 ## Language handling
@@ -55,9 +65,9 @@ A document that contains the exact same word as a query might not be recall-able
 
 ### Indexing with language
 
-The indexing process run by Vespa is a sequential execution of the indexing scripts of each field in the schema, in the declared order. At any point, the script may set the language that will be used for indexing statements for subsequent fields, using [set\_language](/en/reference/writing/indexing-language#set_language). Example:
+The indexing process run by Vespa is a sequential execution of the indexing scripts of each field in the schema, in the declared order. At any point, the script may set the language that will be used for indexing statements for subsequent fields, using [set_language](/en/reference/writing/indexing-language#set_language). Example:
 
-```yaml
+```vespa-schema
 schema doc {
     document doc {
         field language type string {
@@ -70,11 +80,11 @@ schema doc {
 }
 ```
 
-If a language has not been set when tokenization of a field is run, the language is determined by [language detection](/en/linguistics/linguistics#field-language-detection).
+If a language has not been set when tokenization of a field is run, the language is determined by [language detection](#field-language-detection).
 
 If all documents have the same language, the language can be hardcoded it the schema in this way:
 
-```yaml
+```vespa-schema
 schema doc {
 
     field language type string {
@@ -85,9 +95,9 @@ schema doc {
     ...
 ```
 
-If the same document contains fields in multiple languages, set\_language can be invoked multiple times, e.g.:
+If the same document contains fields in multiple languages, set_language can be invoked multiple times, e.g.:
 
-```yaml
+```vespa-schema
 schema doc {
     document doc {
         field language_title1 type string {
@@ -108,7 +118,7 @@ schema doc {
 
 Or, if fixed per field, use multiple indexing statements in each field:
 
-```yaml
+```vespa-schema
 schema doc {
     document doc {
         field my_english_field type string {
@@ -131,7 +141,7 @@ schema doc {
 
 When indexing a document, if a field has unknown language (i.e. not set using `set_language`), language detection is run on the field's content. This means, language detection is per field, not per document.
 
-See [query language detection](/en/linguistics/linguistics#query-language-detection) for detection confidence, fields with little text will default to English.
+See [query language detection](#query-language-detection) for detection confidence, fields with little text will default to English.
 
 ### Querying with language
 
@@ -167,14 +177,14 @@ Vespa supports having documents in multiple languages in the same schema, but do
 
 Approaches to overcome this limitation include:
 
-1. Use semantic retrieval using a multilingual text embedding model (see [blog post](https://blog.vespa.ai/simplify-search-with-multilingual-embeddings/)) which has been trained on multilingual corpus and can be used to retrieve documents in multiple languages. 
-2. Stem and tokenize the query using the relevant languages, build a query tree using [weakAnd](/en/reference/querying/yql#weakand) / [or](/en/reference/querying/yql#or) and using [equiv](/en/reference/querying/yql#equiv) per stem variant. This is easiest done in a custom [Searcher](/en/applications/searchers) as mentioned in [#12154](https://github.com/vespa-engine/vespa/issues/12154). 
+1. Use semantic retrieval using a multilingual text embedding model (see [blog post](https://blog.vespa.ai/simplify-search-with-multilingual-embeddings/)) which has been trained on multilingual corpus and can be used to retrieve documents in multiple languages.
+2. Stem and tokenize the query using the relevant languages, build a query tree using [weakAnd](/en/reference/querying/yql#weakand) / [or](/en/reference/querying/yql#or) and using [equiv](/en/reference/querying/yql#equiv) per stem variant. This is easiest done in a custom [Searcher](/en/applications/searchers) as mentioned in [#12154](https://github.com/vespa-engine/vespa/issues/12154).
 
 Example:
 
-**language=fr:** machine learning =\> machin learn
+**language=fr:** machine learning =&gt; machin learn
 
-**language=en:** machine learning =\> machine learn
+**language=en:** machine learning =&gt; machine learn
 
 Using _weakAnd_ here as example as that technique is already mentioned in #12154:
 
@@ -193,13 +203,13 @@ We now retrieve using all possible stems/base forms with _weakAnd_, and use the 
 
 ## Linguistics profiles
 
-Linguistics profiles are used to configure linguistics processing for a field in the schema. They are typically used with the [Lucene linguistics implementation](/en/linguistics/lucene-linguistics), but can be used in e.g., [custom linguistics implementations](/en/linguistics/linguistics-custom) as well.
+The [linguistics](/en/reference/schemas/schemas#linguistics) block of a field in the schema configures the linguistics processing of that field. It has two settings: a _profile_, which names how the linguistics implementation should process the text, and [_tokens_](#choosing-which-tokens-to-use), which decides which of the tokens that processing produces for each word are used. Profiles are typically used with the [Lucene linguistics implementation](/en/linguistics/lucene-linguistics), but can be used in e.g., [custom linguistics implementations](/en/linguistics/linguistics-custom) as well.
 
 ### Symmetrical processing
 
 For example, a definition like this:
 
-```yaml 
+```vespa-schema
 field title type string {
   indexing: summary | index
   linguistics {
@@ -211,7 +221,7 @@ field title type string {
 Will look for a profile named `whitespaceLowercase`, which could be defined like this in `services.xml`:
 
 ```xml
-<item key="profile=whitespaceLowercase;language=en">
+  <item key="profile=whitespaceLowercase;language=en">
     <tokenizer>
       <name>whitespace</name>
     </tokenizer>
@@ -232,7 +242,7 @@ For some use cases, you may want to process the query string differently than th
 To do this, you'd define a different profile for the query string. Like:
 
 ```xml
-<item key="profile=whitespaceLowercaseSynonyms;language=en">
+  <item key="profile=whitespaceLowercaseSynonyms;language=en">
     <tokenizer>
       <name>whitespace</name>
     </tokenizer>
@@ -256,8 +266,8 @@ To do this, you'd define a different profile for the query string. Like:
 
 Then, in the schema, expand `profile` to `profile.index` and `profile.search`:
 
-```yaml
-field title type string {
+```vespa-schema
+  field title type string {
     indexing: summary | index
     linguistics {
         profile {
@@ -270,28 +280,116 @@ field title type string {
 
 At this point, `where synonyms_test contains 'dog'` will match a document containing `puppy`.
 
+The same can be written with an `index` and a `search` block, each holding the settings for that side. This form is needed when the [tokens](#choosing-which-tokens-to-use) setting should also differ between indexing and searching:
+
+```vespa-schema
+field title type string {
+  indexing: summary | index
+  linguistics {
+      index {
+          profile: whitespaceLowercase
+      }
+      search {
+          profile: whitespaceLowercaseSynonyms
+      }
+  }
+}
+```
+
+### Choosing which tokens to use
+
+Linguistics processing often produces more than one token for a word: the stems of it, the parts of a compound, its n-grams, or synonyms like in the example above. By default, Vespa only uses one of them per word, both when indexing and when searching. The `tokens` setting of the linguistics block controls which tokens are used:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>tokens</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>original</td>
+      <td>Use the original word only, disregarding any alternatives produced for it. Equivalent to [stemming](/en/reference/schemas/schemas#stemming): none.</td>
+    </tr>
+    <tr>
+      <td>first-alternative</td>
+      <td>Use the one alternative the linguistics implementation considers best for each word, which is the first one it produces for most implementations. This is the default, equivalent to stemming: best.</td>
+    </tr>
+    <tr>
+      <td>alternatives</td>
+      <td>Use all the alternatives produced for each word, but not the original word itself.</td>
+    </tr>
+    <tr>
+      <td>original-and-alternatives</td>
+      <td>Use the original word and all the alternatives produced for it. Equivalent to stemming: multiple.</td>
+    </tr>
+  </tbody>
+</table>
+
+For example, with the n-gram profile from [Indexing all stems](/en/linguistics/lucene-linguistics#indexing-all-stemmed-words), this indexes `dog` as `dog`, `do` and `og`, so that a search for `og` matches it:
+
+```vespa-schema
+field title_grams type string {
+  indexing: summary | index
+  linguistics {
+      profile: ngram
+      tokens: original-and-alternatives
+  }
+}
+```
+
+As with the profile, `tokens` given directly in the linguistics block applies both when indexing and when searching, while `tokens` in an `index` or `search` block applies to that side only. This indexes the original words, and expands each query term to the term itself and all its synonyms:
+
+```vespa-schema
+field title type string {
+  indexing: summary | index
+  linguistics {
+      index {
+          profile: whitespaceLowercase
+          tokens: original
+      }
+      search {
+          profile: whitespaceLowercaseSynonyms
+          tokens: original-and-alternatives
+      }
+  }
+}
+```
+
+Rules for the `tokens` setting:
+
+- It takes precedence over any [stemming](/en/reference/schemas/schemas#stemming) setting which applies to the field: in the field, in the schema, or in an `index` block. Deployment warns when such a setting is overridden by a different value.
+- It only applies to string fields with `indexing: index` and the default text matching. Fields with `word`, `exact` or `gram` matching, uri fields and fields of other types produce a single token per word regardless, so `tokens` is ignored for them, with a warning.
+- All fields of a [fieldset](/en/reference/schemas/schemas#fieldset) are searched as one, so they must use the same tokens when searching, whether that follows from `tokens` or from `stemming`. A fieldset where they differ, and at least one field sets `tokens`, fails deployment.
+- Setting it for one side only makes the other side follow the `stemming` setting, which is warned about: the index and the query normally need to produce the same tokens to match.
+
 ### Overriding profile for query strings
 
 At query time, you can tell Vespa to use a specific profile to process the query string via [grammar.profile](/en/reference/querying/yql#grammar). This works with the [userInput()](/en/reference/querying/yql#userinput) and [text()](/en/reference/querying/yql#text) operators. For example, to use the `whitespaceLowercase` profile for the query string:
 
-```sql
+```txt
 where title contains ({grammar.profile: 'whitespaceLowercase'}text('dog'))
 ```
+
 Equivalent expression via `userInput()`:
-```sql
+
+```txt
 where {defaultIndex:'title', grammar.profile: 'whitespaceLowercase', grammar: 'linguistics'}userInput('dog')
 ```
 
 <Note>
- **Note:** You should use grammar=linguistics (like in the example above) with grammar.profile to ensure that there is no additional processing (e.g., tokenization) besides what is already defined in the profile.
+**Note:**
+
+You should use grammar=linguistics (like in the example above) with grammar.profile to ensure that there is no additional processing (e.g., tokenization) besides what is already defined in the profile.
 </Note>
 
 ## Troubleshooting linguistics processing
 
 If your documents don't match as expected, there are two ways to get more information. First, you can get the tokenized text for a field by using [tokens](/en/reference/schemas/schemas#tokens) in the [document summary](/en/querying/document-summaries). For example, to get the original text and tokens for the `title` field:
 
-```yaml
-document-summary debug-text-tokens {
+```vespa-schema
+  document-summary debug-text-tokens {
     summary title {}
     summary title_tokens {
         source: title

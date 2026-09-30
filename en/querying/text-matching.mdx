@@ -1,23 +1,26 @@
 ---
 title: "Text Matching"
+sidebarTitle: "Text matching"
 ---
 
-This guide demonstrates tokenization, linguistic processing and matching over [string](../reference/schemas/schemas#string) fields in Vespa. The guide features examples based on the [quick start](../basics/deploy-an-application-local).
+{/* ToDo: Rewrite to better intro */}
 
-Refer to the [ranking](../basics/ranking) introduction for ranking, and review the different [match modes](../reference/schemas/schemas#match) that Vespa supports per field. See the [text search](../learn/tutorials/text-search) and [text search through ML](../learn/tutorials/text-search-ml) tutorials. Finally, refer to [linguistics](../linguistics/linguistics) for linguistic processing in Vespa.
+This guide demonstrates tokenization, linguistic processing and matching over [string](/en/reference/schemas/schemas#string) fields in Vespa. The guide features examples based on the [quick start](/en/basics/deploy-an-application-local).
+
+Refer to the [ranking](/en/basics/ranking) introduction for ranking, and review the different [match modes](/en/reference/schemas/schemas#match) that Vespa supports per field. See the [text search](/en/learn/tutorials/text-search) and [text search through ML](/en/learn/tutorials/text-search-ml) tutorials. Finally, refer to [linguistics](/en/linguistics/linguistics) for linguistic processing in Vespa.
 
 Using [query tracing](#query-trace) is useful when debugging text matching.
 
 ## Index and attribute
 
-Vespa string fields can have a mix of settings specified per field, such as the [indexing](../reference/schemas/schemas#indexing) and [match modes](../reference/schemas/schemas#match).
+Vespa string fields can have a mix of settings specified per field, such as the [indexing](/en/reference/schemas/schemas#indexing) and [match modes](/en/reference/schemas/schemas#match).
 
--   The *index* for free-text search with default match mode *text*, integrating with linguistic processing such as [tokenization and stemming](../linguistics/linguistics).
--   The *attribute* indexing is used for database-style of string matching without linguistic processing and where the exact string contents are matched.
+- The _index_ for free-text search with default match mode _text_, integrating with linguistic processing such as [tokenization and stemming](/en/linguistics/linguistics).
+- The _attribute_ indexing is used for database-style of string matching without linguistic processing and where the exact string contents are matched.
 
-Free-text search is normally solved using a string field in *index* mode:
+Free-text search is normally solved using a string field in _index_ mode:
 
-```js
+```vespa-schema
 field album type string {
     indexing: summary | index
 }
@@ -25,7 +28,7 @@ field album type string {
 
 If both index and attribute are configured for string-type fields, Vespa will search and match against the index with default match `text`. When the field is both index and attribute, the index aspect is used for matching. (The attribute could still be useful in general, for grouping and sorting.) To get multiple match modes on a single source field you could define a synthetic field outside the document block:
 
-```js
+```vespa-schema
 schema music {
 
   document music {
@@ -47,13 +50,15 @@ If you want substring matching for indexed search, consider using [n-gram matchi
 
 Below, find details on transformations to the text for text indexing and search using the quick start sample application as an example.
 
-The *album* field has [index](../reference/schemas/schemas#indexing) mode. For text fields, this enables transformations of the string field to increase query recall.
+The _album_ field has [index](/en/reference/schemas/schemas#indexing) mode. For text fields, this enables transformations of the string field to increase query recall.
+
+<a id="tokens-example" />
 
 The following is useful for dumping the resulting text tokens after indexing, to understand the transformations. This coupled with [query tracing](#query-trace) can help us understand why a document field doesn't match or match a query.
 
-Add another [document summary](/en/querying/document-summaries) to [schemas/music.sd](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/app/schemas/music.sd) that contains an extra summary field using [tokens](../reference/schemas/schemas#tokens) with the [source](../reference/schemas/schemas#source) set to the proper index field:
+Add another [document summary](/en/querying/document-summaries) to [schemas/music.sd](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/app/schemas/music.sd) that contains an extra summary field using [tokens](/en/reference/schemas/schemas#tokens) with the [source](/en/reference/schemas/schemas#source) set to the proper index field:
 
-```js
+```vespa-schema
 document-summary my-debug-summary {
     summary album { }
     summary album_tokens {
@@ -98,7 +103,7 @@ $ vespa query "select * from music where true" summary=my-debug-summary | \
 ["love","is","here","to","stay"]
 ```
 
-Observe the [linguistic transformations](../linguistics/linguistics) to the data before indexed:
+Observe the [linguistic transformations](/en/linguistics/linguistics) to the data before indexed:
 
 <table className="vespa-table">
   <thead>
@@ -127,9 +132,9 @@ Observe the [linguistic transformations](../linguistics/linguistics) to the data
   </tbody>
 </table>
 
-Then, change from *index* to [attribute](../reference/schemas/schemas#indexing) in [schemas/music.sd](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/app/schemas/music.sd) (and remove all bm25 settings):
+Then, change from _index_ to [attribute](/en/reference/schemas/schemas#indexing) in [schemas/music.sd](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation/app/schemas/music.sd) (and remove all bm25 settings):
 
-```js
+```txt
 @@ -13,8 +13,7 @@
          }
  
@@ -162,21 +167,23 @@ $ vespa query "select * from music where true" summary=my-debug-summary | \
 ["hardwired...to self-destruct"]
 ```
 
-The most important observation is that the strings are added *as-is* for attributes and matching considers the full value, including whitespace (no tokenization).
+The most important observation is that the strings are added _as-is_ for attributes and matching considers the full value, including whitespace (no tokenization).
 
-The only transformation is lowercasing, both query terms and attribute data are lowercased before matching unless the `match` setting for the field has been set to `cased`. Read more about the attribute [word match mode](../reference/schemas/schemas#match).
+The only transformation is lowercasing, both query terms and attribute data are lowercased before matching unless the `match` setting for the field has been set to `cased`. Read more about the attribute [word match mode](/en/reference/schemas/schemas#match).
+
+{/* ToDo: Add more match examples for indexed search */}
 
 ## Prefix match
 
-Use the [prefix](../reference/querying/yql#prefix) annotation to match string prefixes in attributes of type string:
+Use the [prefix](/en/reference/querying/yql#prefix) annotation to match string prefixes in attributes of type string:
 
-```js
+```vespa-schema
 field album type string {
     indexing: summary | attribute
 }
 ```
 
-Note that regular *index* fields does not support prefix matching.
+Note that regular _index_ fields does not support prefix matching.
 
 ```bash
 $ vespa query 'select * from music where album contains ({prefix: true}"a hea")'
@@ -186,7 +193,7 @@ The [search-suggestions](https://github.com/vespa-engine/sample-apps/tree/master
 
 To prefix-match individual terms in a string, use an attribute with array of strings in addition to the index string field, e.g.:
 
-```js
+```vespa-schema
 schema company {
     document company {
         field company_name_string type string {
@@ -199,13 +206,13 @@ schema company {
 }
 ```
 
-Use the [indexing-language](../reference/writing/indexing-language) to split the string, as shown above. Adding "Goldman" and "Sachs" will match query terms like "Gold" and "Sach".
+Use the [indexing-language](/en/reference/writing/indexing-language) to split the string, as shown above. Adding "Goldman" and "Sachs" will match query terms like "Gold" and "Sach".
 
 ## Fuzzy match
 
-Use [fuzzy](../reference/querying/yql#fuzzy) matching to match in string attributes with configurable edit distance. Field configuration:
+Use [fuzzy](/en/reference/querying/yql#fuzzy) matching to match in string attributes with configurable edit distance. Field configuration:
 
-```js
+```vespa-schema
 field album type string {
     indexing:  summary | attribute
     attribute: fast-search
@@ -216,15 +223,15 @@ field album type string {
 $ vespa query 'select * from music where album contains ({maxEditDistance: 1}fuzzy("A Head Full of Dreems"))'
 ```
 
-Fuzzy matching is great for misspellings. See use of *prefixLength* and *fast-search* in the [reference](../reference/querying/yql#fuzzy).
+Fuzzy matching is great for misspellings. See use of _prefixLength_ and _fast-search_ in the [reference](/en/reference/querying/yql#fuzzy).
 
-Character [normalization](../linguistics/linguistics-opennlp#normalization) is not performed for fuzzy matches.
+Character [normalization](/en/linguistics/linguistics-opennlp#normalization) is not performed for fuzzy matches.
 
 ### Fuzzy prefix match
 
-By default, `fuzzy` matches *full* strings against the query. For use-cases such as type-ahead search this means a user query such as "Ahead Full" will fail to match the document string "A Head Full of Dreams", both when using fuzzy matching (too many characters missing) as well as regular, *non-fuzzy* prefix matching (prefixes do not exactly match).
+By default, `fuzzy` matches _full_ strings against the query. For use-cases such as type-ahead search this means a user query such as "Ahead Full" will fail to match the document string "A Head Full of Dreams", both when using fuzzy matching (too many characters missing) as well as regular, _non-fuzzy_ prefix matching (prefixes do not exactly match).
 
-Adding `prefix:true` enables *fuzzy prefix* semantics. If a string has a *prefix* that can match the query string within the specified maximum number of edits, it will be considered a match.
+Adding `prefix:true` enables _fuzzy prefix_ semantics. If a string has a _prefix_ that can match the query string within the specified maximum number of edits, it will be considered a match.
 
 ```bash
 $ vespa query 'select * from music where album contains ({maxEditDistance: 1, prefix: true}fuzzy("Ahead Full"))'
@@ -232,19 +239,23 @@ $ vespa query 'select * from music where album contains ({maxEditDistance: 1, pr
 
 This query will match strings such as "A Head Full of Dreams", "A Head Full of Clouds", "Ahead Full Steam" etc.
 
-Exact prefix locking (`prefixLength:n`) can be used alongside fuzzy prefix matching to constrain the candidate set to strings that have prefix that *exactly* matches *n* characters of the query. Fuzzy prefix matching then applies to the remainder (suffix) of the candidate string. This greatly speeds up dictionary scans since only a subset of the dictionary needs to be considered.
+Exact prefix locking (`prefixLength:n`) can be used alongside fuzzy prefix matching to constrain the candidate set to strings that have prefix that _exactly_ matches _n_ characters of the query. Fuzzy prefix matching then applies to the remainder (suffix) of the candidate string. This greatly speeds up dictionary scans since only a subset of the dictionary needs to be considered.
 
 <Warning>
 **Important:**
 
-Fuzzy prefix matching often matches many more documents than non-prefix fuzzy matching. For instance, a query such as `{maxEditDistance:2,prefix:true}fuzzy("XY")` will end up matching *every* document, since *all possible strings* can have their prefix transformed to "XY" with at most 2 edits. This is the case for all fuzzy prefix queries where the length of the query string is equal to, or lower than, `maxEditDistance`. This should be taken into consideration when constructing queries based on user input.
+Fuzzy prefix matching often matches many more documents than non-prefix fuzzy matching. For instance, a query such as `{maxEditDistance:2,prefix:true}fuzzy("XY")` will end up matching _every_ document, since _all possible strings_ can have their prefix transformed to "XY" with at most 2 edits. This is the case for all fuzzy prefix queries where the length of the query string is equal to, or lower than, `maxEditDistance`. This should be taken into consideration when constructing queries based on user input.
 </Warning>
+
+{/* ToDo: Add a note on why fast-search is better here (posting list lookup) */}
+
+{/* ToDo: More examples illustrating edit distance / prefix */}
 
 ### Test fuzzy matching
 
 Use a synthetic (derived) field to easily test fuzzy matching:
 
-```js expandable
+```vespa-schema
 schema music {
 
     document music {
@@ -261,7 +272,7 @@ schema music {
 }
 ```
 
-In the example above, you have a field with an array of song titles (in the `document`) section in the schema. Take the value of that field, and input into an [attribute](../content/attributes), which is a field type that supports fuzzy matching.
+In the example above, you have a field with an array of song titles (in the `document`) section in the schema. Take the value of that field, and input into an [attribute](/en/content/attributes), which is a field type that supports fuzzy matching.
 
 Add this field and deploy to Vespa. On Vespa Cloud, the data is automatically reindexed, so the `songs_attr` field is populated with data. This might take a little time on a large corpus. Then test with a query:
 
@@ -271,9 +282,9 @@ $ vespa query 'select * from music where songs_attr contains ({maxEditDistance: 
 
 ## Regular expression match
 
-Using [regular expressions](../reference/querying/yql#matches) is supported in attributes. In the general case, there are however no optimizing data structures for query speed, it runs the expression over all attribute values. If *fast-search* is present on the attribute, explicitly prefix anchored regex queries (e.g. `^abc.*`") will run more efficiently, i.e. only over the range of potentially matching attribute values (must start with "abc").
+Using [regular expressions](/en/reference/querying/yql#matches) is supported in attributes. In the general case, there are however no optimizing data structures for query speed, it runs the expression over all attribute values. If _fast-search_ is present on the attribute, explicitly prefix anchored regex queries (e.g. `^abc.*`") will run more efficiently, i.e. only over the range of potentially matching attribute values (must start with "abc").
 
-```js
+```vespa-schema
 field album type string {
     indexing:  summary | attribute
 }
@@ -291,15 +302,15 @@ A substring search:
 $ vespa query 'select * from music where album matches "head"'
 ```
 
-A regular expression can also be used to select documents where a string attribute has a *non-empty* value - `^.` matches any value with at least one character:
+A regular expression can also be used to select documents where a string attribute has a _non-empty_ value - `^.` matches any value with at least one character:
 
 ```bash
 $ vespa query 'select * from music where album matches "^."'
 ```
 
-This works on any string attribute field. Without *fast-search*, the expression is evaluated over the value of every document, which is slow on a large corpus. Add [fast-search](../reference/schemas/schemas#attribute) to the attribute to make this more efficient. For the complementary query - listing documents *missing* a value - see [count and list fields with NaN](/en/querying/grouping#count-fields-with-nan).
+This works on any string attribute field. Without _fast-search_, the expression is evaluated over the value of every document, which is slow on a large corpus. Add [fast-search](/en/reference/schemas/schemas#attribute) to the attribute to make this more efficient. For the complementary query - listing documents _missing_ a value - see [count and list fields with NaN](/en/querying/grouping#count-fields-with-nan).
 
-Character [normalization](../linguistics/linguistics-opennlp#normalization) is not performed for regular expression matches.
+Character [normalization](/en/linguistics/linguistics-opennlp#normalization) is not performed for regular expression matches.
 
 ## N-Gram match
 
@@ -307,7 +318,7 @@ N-gram matching splits text into subword tokens ("grams") of the specified N siz
 
 Vespa will by default combine the grams it creates from a text in queries into an AND item, requiring all of them to match. This can be overridden by sending the query parameter `gram.match`, which can be set to the name of any composite query item: `all` (default), `any`, `weakAnd`, `phrase`, `near`, or `onear`.
 
-```js
+```txt
 Example: Input text "滿腦子的夢想" with these settings
 
     field album type string {
@@ -328,25 +339,26 @@ Any query which contains at least two tokens frmo this text will therefore be ma
 
 ## Example use case
 
-*What is the best way to index short word-length documents, like names of all locations/towns in the world, such that they:*
+_What is the best way to index short word-length documents, like names of all locations/towns in the world, such that they:_
 
--   *Are robust to misspelling in user queries eg: "Amsterdam" --> "amstredam"*
--   *Are cross-lingual for search, e.g.: "America" --> "美國"*
+- _Are robust to misspelling in user queries eg: "Amsterdam" --&gt; "amstredam"_
+- _Are cross-lingual for search, e.g.: "America" --&gt; "美國"_
 
-To make this multilingual, use an [array`<string>`](../reference/schemas/schemas#array) field to store all the alternatives. One can also translate to a canonical single language used in indexing at query time, but in cases with very short documents, opt for doing it indexing time.
+To make this multilingual, use an [array&lt;string&gt;](/en/reference/schemas/schemas#array) field to store all the alternatives. One can also translate to a canonical single language used in indexing at query time, but in cases with very short documents, opt for doing it indexing time.
 
 Alternatives for matching with spell checking:
-    1. Make the field an attribute and use [fuzzy matching](#fuzzy-match).
-    2. Make the field an index with [gram matching](#n-gram-match).
-    3. Having an array of alternatives anyway, just stuff all the misspellings to match into it. Consider using a [weighted set](../reference/schemas/schemas#weightedset) instead to weight them by closeness to the original.
 
-3\. will give the cheapest queries and exact control over misspelled matching, but a larger index, more work for the developer, and adjusting spell correction becomes more complicated. 1. will be most expensive, but maybe also most convenient There are currently no rank signals giving you the match quality. 2. Is in between, and will probably work best when incorporating ranking signals that use proximity (such as e.g. [nativeRank](../ranking/nativerank) but not [bm25](../ranking/bm25)).
+1. Make the field an attribute and use [fuzzy matching](#fuzzy-match).
+2. Make the field an index with [gram matching](#n-gram-match).
+3. Having an array of alternatives anyway, just stuff all the misspellings to match into it. Consider using a [weighted set](/en/reference/schemas/schemas#weightedset) instead to weight them by closeness to the original.
+
+3\. will give the cheapest queries and exact control over misspelled matching, but a larger index, more work for the developer, and adjusting spell correction becomes more complicated. 1. will be most expensive, but maybe also most convenient There are currently no rank signals giving you the match quality. 2. Is in between, and will probably work best when incorporating ranking signals that use proximity (such as e.g. [nativeRank](/en/ranking/nativerank) but not [bm25](/en/ranking/bm25)).
 
 Read [Simplify Search with Multilingual Embedding Models](https://blog.vespa.ai/simplify-search-with-multilingual-embeddings/) for semantic matching and ranking.
 
 ## Query Trace
 
-Adding [trace.level=2](../reference/api/query#trace.level) gives insight when testing queries - example attribute lowercasing (observe that queries with "Liebe" and "liebe" give the same result):
+Adding [trace.level=2](/en/reference/api/query#trace.level) gives insight when testing queries - example attribute lowercasing (observe that queries with "Liebe" and "liebe" give the same result):
 
 ```bash
 $ vespa config set target local
@@ -355,21 +367,21 @@ $ vespa query 'select * from music where album contains "Liebe ist für alle da"
   trace.level=2
 ```
 
-Also try query tracing to see how query parsing changes with *index* and *attribute* indexing modes.
+Also try query tracing to see how query parsing changes with _index_ and _attribute_ indexing modes.
 
 ## Appendix: Match Configuration Debugging
 
 Inspect generated configuration to understand or validate the match configuration. Run this to find the value of the -i argument used below:
 
-```bash
+```bash highlight={3}
 $ docker exec vespa sh -c vespa-configproxy-cmd | grep IndexingProcessor
 
   vespa.configdefinition.ilscripts,default/docprocchains/chain/indexing/component/com.yahoo.docprocs.indexing.IndexingProcessor, ...
 ```
 
-Start over, deploy with the indexing settings below and feed data. Note the difference for the *artist* (with exact matching) and *album* fields:
+Start over, deploy with the indexing settings below and feed data. Note the difference for the _artist_ (with exact matching) and _album_ fields:
 
-```js
+```vespa-schema
 field artist type string {
     indexing: summary | index
     match   : exact

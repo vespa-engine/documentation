@@ -163,7 +163,7 @@ $ mkdir -p app/schemas; mkdir -p app/search/query-profiles/
 
 Vespaの[スキーマ](/ja/basics/schemas)は、ドキュメントタイプと、ランキングおよび計算仕様の設定です。このアプリでは、以下のように定義された`track`スキーマを使用します:
 
-```js expandable
+```vespa-schema expandable
 schema track {
 
     document track {
@@ -457,7 +457,7 @@ $ vespa query \
 
 `track_id`フィールドのみを含む専用の[document-summary](/ja/querying/document-summaries)を作成するとパフォーマンスが向上します。`track_id`はスキーマ内で`attribute`として定義されているため、このドキュメントサマリーを使用するサマリーフェッチはすべてインメモリのデータを読み取ります。さらに、このサマリーは1つのフィールドしか含まないため、サマリーフィルフェーズで転送されるデータが少なくなり、ネットワーク時間を節約できます。
 
-```js
+```vespa-schema
 document-summary track_id {
     summary track_id { }
 }
@@ -465,7 +465,7 @@ document-summary track_id {
 
 新しいスキーマは次のようになります:
 
-```js expandable
+```vespa-schema expandable
 schema track {
 
     document track {
@@ -553,7 +553,7 @@ Accept-Encoding: gzip
 
 以降のセクションでは、`attribute`で定義した`tags`フィールドに焦点を当てます。このフィールドでのマッチングは、`indexing: attribute`を持つstringフィールドのデフォルトのマッチモードである`match:word`を使用して実行されます。`tags`フィールドは[weightedset](/ja/reference/schemas/schemas#weightedset)型です。
 
-```js
+```vespa-schema
  field tags type weightedset<string> {
       indexing: summary | attribute
  }
@@ -600,7 +600,7 @@ $ vespa query \
 
 このセクションでは、検索を制限する他のクエリーフィルターがない場合の検索を高速化するために、`tags`フィールドに`fast-search`を追加します。`fast-search`を追加したスキーマ:
 
-```js expandable
+```vespa-schema expandable
 schema track {
 
     document track {
@@ -702,7 +702,7 @@ $ vespa query \
 
 マッチのランク機能を必要としないフィールドには、[rank: filter](/ja/reference/schemas/schemas#rank)の使用を強くお勧めします。
 
-```js
+```vespa-schema
 field availability type int {
     indexing: summary | attribute
     rank: filter
@@ -726,7 +726,7 @@ field availability type int {
 
 [ランキング](/ja/basics/ranking)を設定するには、スキーマに`rank-profile`を追加します:
 
-```js expandable
+```vespa-schema expandable
 schema track {
 
     document track {
@@ -888,7 +888,7 @@ $ vespa query \
 
 `track`スキーマは、1つの名前付き *mapped* 次元を持つ`similar`テンソルフィールドで定義されています。*Mapped* テンソルは、`weightedset`フィールドと同様に、スパースな特徴表現を表すために使用できますが、より汎用的な方法で、ここではテンソルセルの値の表現に`float`を使用しています。
 
-```js
+```vespa-schema
 field similar type tensor<float>(trackid{}) {
       indexing: summary | attribute
 }
@@ -1013,7 +1013,7 @@ input.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0
 
 ドキュメントテンソルとクエリーテンソルの両方が、*名前付き* の *mapped* 次元として`trackid{}`で定義されています。スパースなテンソルのドット積は、`rank-profile`で次のように表現できます:
 
-```js
+```vespa-schema
 rank-profile similar {
     inputs {
         query(user_liked) tensor<float>(trackid{})
@@ -1026,7 +1026,7 @@ rank-profile similar {
 
 テンソルフィールドとVespaでのテンソル計算の詳細については、[テンソルユーザーガイド](/ja/ranking/tensor-user-guide)を参照してください。この`rank-profile`をドキュメントスキーマに追加します:
 
-```js expandable
+```vespa-schema expandable
 schema track {
 
     document track {
@@ -1230,7 +1230,7 @@ vespa query \
 
 スパースなテンソル積は、mappedフィールドテンソルに`attribute: fast-search`を追加することで最適化できます。`attribute: fast-search`は、mapped次元を使用する`tensor`フィールド、またはmapped次元とdense次元の両方を使用するmixedテンソルでサポートされています。その代償はメモリ使用量の増加です。`similar`テンソルフィールドに`attribute: fast-search`を追加したスキーマ:
 
-```js expandable
+```vespa-schema expandable
 schema track {
     document track {
 
@@ -1398,7 +1398,7 @@ vespa query \
 
 以下は、グローバルな4の設定の代わりに`num-threads-per-search: 2`を使用する新しい`rank-profile`の`similar-t2`を追加します。[ranking.matching.numThreadsPerSearch](/ja/reference/api/query#ranking.matching)を使用して、クエリーリクエストでスレッド数を設定することもできます。
 
-```js expandable
+```vespa-schema expandable
 schema track {
 
     document track {
@@ -1549,7 +1549,7 @@ $ python3 create-popularity-updates.py lastfm_test > updates.jsonl
 
 `fast-search`で定義された`popularity`フィールドを`track`スキーマに追加します。また、検索ごとに1スレッドを使用する`popularity`ランクプロファイルも追加します:
 
-```js expandable
+```vespa-schema expandable
 schema track {
 
     document track {
@@ -1754,7 +1754,7 @@ $ vespa query \
 
 この場合、totalCountは1,476となり、`hitLimit`を伴う`range`検索よりも少し多くなりました。`coverage:degraded`の存在にも注目してください。これは、この結果がマッチしたすべてのドキュメントに対して完全には評価されなかったことをクライアントに知らせます。詳細は[graceful result degradation](/ja/performance/graceful-degradation)をお読みください。この例では、検索ごとに1スレッドで設定された`popularity`ランクプロファイルを使用していることに注意してください。`maxHits`の設定値が低い場合には、これが推奨される設定です。
 
-```js
+```vespa-schema
 rank-profile popularity {
     num-threads-per-search: 1
     first-phase {

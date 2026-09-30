@@ -465,8 +465,8 @@ def first_description(root: Node) -> str:
     return ""
 
 
-def convert_file(path: Path) -> None:
-    raw = path.read_text(encoding="utf-8")
+def convert_text(raw: str, path: Path) -> str:
+    """Convert Jekyll source text to MDX. `path` locates the source for relative links."""
     meta, body = parse_frontmatter(raw)
     title = meta.get("title", path.stem.replace("-", " ").title())
 
@@ -475,15 +475,7 @@ def convert_file(path: Path) -> None:
         mdx_body = body.strip() + "\n"
         desc_m = re.search(r"^([^\n#].+?\.)", mdx_body, re.MULTILINE)
         description = desc_m.group(1).strip() if desc_m else f"{title} in Vespa applications."
-        out_path = path.with_suffix(".mdx")
-        out_path.write_text(
-            f'---\ntitle: "{title}"\ndescription: {description}\n---\n\n{mdx_body}',
-            encoding="utf-8",
-        )
-        if path != out_path:
-            path.unlink()
-        print(f"Converted {path.name} -> {out_path.name}")
-        return
+        return f'---\ntitle: "{title}"\ndescription: {description}\n---\n\n{mdx_body}'
 
     body = preprocess_body(body.strip())
     builder = TreeBuilder()
@@ -491,15 +483,14 @@ def convert_file(path: Path) -> None:
     builder.close()
     mdx_body = block_md(builder.root, path.parent)
     description = first_description(builder.root) or f"{title} in Vespa applications."
+    return f'---\ntitle: "{title}"\ndescription: {description}\n---\n\n{mdx_body}'
 
+
+def convert_file(path: Path) -> None:
+    mdx = convert_text(path.read_text(encoding="utf-8"), path)
     out_path = path.with_suffix(".mdx")
-    out_path.write_text(
-        f'---\ntitle: "{title}"\ndescription: {description}\n---\n\n{mdx_body}',
-        encoding="utf-8",
-    )
-    if path.suffix == ".html":
-        path.unlink()
-    elif path.suffix == ".md":
+    out_path.write_text(mdx, encoding="utf-8")
+    if path != out_path:
         path.unlink()
     print(f"Converted {path.name} -> {out_path.name}")
 

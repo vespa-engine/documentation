@@ -18,15 +18,16 @@ In this part, we will build upon the minimal Vespa application in the previous p
 
 For reference, the final state of this tutorial can be found in the [app-2-feed-and-query](https://github.com/vespa-engine/sample-apps/tree/master/news/app-2-feed-and-query) subdirectory of the `news` sample application.
 
-
 ## The Microsoft News Dataset
 
-During these tutorials, we will use the [Microsoft News Dataset](https://msnews.github.io/) (MIND). This is a large-scale dataset for news recommendation research. It contains over 160.000 articles, 15 million impressions logs, and 1 million users. We will not use the full dataset in this tutorial. To make the tutorial easier to follow along, we will use the much smaller DEMO part containing only 5000 users. However, readers are free to use the entire dataset at their own discretion.
+During these tutorials, we will use the [Microsoft News Dataset](https://msnews.github.io/) (MIND).  This is a large-scale dataset for news recommendation research. It contains over 160.000 articles, 15 million impressions logs, and 1 million users. We will not use the full dataset in this tutorial. To make the tutorial easier to follow along, we will use the much smaller DEMO part containing only 5000 users. However, readers are free to use the entire dataset at their own discretion.
 
 The [MIND dataset description](https://github.com/msnews/msnews.github.io/blob/master/assets/doc/introduction.md) contains an introduction to the contents of this dataset. For this tutorial, there are particularly two pieces of data that we will use:
 
-- News article content which contains data such as title, abstract, news category, and entities extracted from the title and abstract.
-- Impressions which contain a list of news articles that were shown to a user, labeled with whether the user clicked on them or not.
+- News article content which contains data such as title, abstract, news
+  category, and entities extracted from the title and abstract.
+- Impressions which contain a list of news articles that were shown to a user,
+  labeled with whether the user clicked on them or not.
 
 We'll start with developing a search application, so we'll focus on the news content at first. We'll use the impression data as we begin building the recommendation system later in this series.
 
@@ -61,7 +62,7 @@ The argument defines which dataset to download. Here, we download the `small` da
 
 Taking a look at the data, in `mind/train/news.tsv`, we see tab-separated lines like the following:
 
-```
+```txt
 N16680  travel  traveltripideas The Most Beautiful Natural Wonder in Every State        While humans have built some impressive, gravity-defying, and awe-inspiring marvels   here are the most photographed structures in the world   the natural world may have us beat.      https://www.msn.com/en-us/travel/traveltripideas/the-most-beautiful-natural-wonder-in-every-state/ss-AAF8Brj?ocid=chopendata    []      []
 ```
 
@@ -75,21 +76,21 @@ Let's start building a Vespa application to make this data searchable. We'll cre
 $ mkdir -p my-app/schemas
 ```
 
-
 ## Application Packages
 
+<Frame>
 ![Vespa Overview](/assets/img/vespa-overview.svg)
+</Frame>
 
 A Vespa [application package](/en/basics/applications) is the set of configuration files and Java plugins that together define the behavior of a Vespa system: what functionality to use, the available document types, how ranking will be done and how data will be processed during feeding and indexing. The schema, e.g., `news.sd`, is a required part of an application package — the other file needed is `services.xml`.
 
 We mentioned these files in the previous part but didn't really explain them at the time. We'll go through them here, starting with the specification of services.
 
-
 ### Services Specification
 
 The [services.xml](/en/reference/applications/services/services) file defines the services that make up the Vespa application — which services to run and how many nodes per service. Write the following to `news/my-app/services.xml`:
 
-```xml expandable
+```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <services version="1.0">
 
@@ -110,16 +111,22 @@ The [services.xml](/en/reference/applications/services/services) file defines th
 </services>
 ```
 
+`Paste the above into file news/my-app/services.xml`
+
 Quite a lot is set up here:
 
-- `<container>` defines the stateless [container cluster](/en/applications/containers) for document, query and result processing
-- `<search>` sets up the [query endpoint](/en/querying/query-api). The default port is 8080.
-- `<document-api>` sets up the [document endpoint](/en/reference/api/document-v1) for feeding and visiting.
-- `<nodes count="1" />` defines the number of nodes for the service. (See the [reference](/en/reference/applications/services/container) for more on container cluster setup).
+- `<container>` defines the stateless [container cluster](/en/applications/containers) for
+  document, query and result processing
+- `<search>` sets up the [query endpoint](/en/querying/query-api).  The default port
+  is 8080. See also [Securing Vespa with mutually authenticated TLS (mTLS)](https://blog.vespa.ai/securing-vespa-with-mutually-authenticated-tls/) for how to use mTLS with Vespa.
+- `<document-api>` sets up the [document
+  endpoint](../../reference/api/document-v1.html) for feeding and visiting.
+- `<nodes count="1" />` defines the number of nodes for the service. (See the
+  [reference](/en/reference/applications/services/container) for more on container cluster setup).
 - `<content>` The stateful content cluster
 - `<redundancy>` denotes how many copies to store of each document.
-- `<documents>` assigns the document types in the *schema* — the content cluster capacity can be increased by raising the node count — see [elasticity](/en/content/elasticity). (See also the [reference](/en/reference/applications/services/content) for more on content cluster setup.)
-
+- `<documents>` assigns the document types in the _schema_ — the content
+  cluster capacity can be increased by raising the node count — see [elasticity](/en/content/elasticity). (See also the [reference](/en/reference/applications/services/content) for more on content cluster setup.)
 
 ### Schema
 
@@ -129,7 +136,7 @@ The `news` document type mentioned in the `services.xml` file above is defined i
 
 Given the MIND dataset described above, we'll set up the schema as follows. Write the following to `news/my-app/schemas/news.sd`:
 
-```sd expandable
+```vespa-schema
 schema news {
     document news {
         field news_id type string {
@@ -176,25 +183,28 @@ schema news {
 }
 ```
 
+`Paste the above into file news/my-app/schemas/news.sd`
+
 The `document` is wrapped inside another element called `schema`. The name following these elements, here `news`, must be exactly the same for both.
 
-This document contains several fields. Each field has a [type](/en/reference/schemas/schemas#field), such as `string`, `int`, or `tensor`. Fields also have properties. For instance, property `indexing` configures the *indexing pipeline* for a field, which defines how Vespa will treat input during indexing — see [indexing language](/en/reference/writing/indexing-language). Each part of the indexing pipeline is separated by the pipe character '|':
+This document contains several fields. Each field has a [type](/en/reference/schemas/schemas#field), such as `string`, `int`, or `tensor`. Fields also have properties. For instance, property `indexing` configures the _indexing pipeline_ for a field, which defines how Vespa will treat input during indexing — see [indexing language](../../reference/writing/indexing-language.html). Each part of the indexing pipeline is separated by the pipe character '|':
 
 - `index:` Create a search index for this field.
-- `attribute:` Store this field in memory as an [attribute](/en/content/attributes) — for [sorting](/en/reference/querying/sorting-language), [querying](/en/querying/query-api), [ranking](/en/basics/ranking) and [grouping](/en/querying/grouping).
-- `summary:` Lets this field be part of the [document summary](/en/querying/document-summaries) in the result set.
+- `attribute:` Store this field in memory as an [attribute](/en/content/attributes)
+  — for [sorting](/en/reference/querying/sorting-language), [querying](/en/querying/query-api), [ranking](/en/basics/ranking) and [grouping](/en/querying/grouping).
+- `summary:` Lets this field be part of the [document
+  summary](../../querying/document-summaries.html) in the result set.
 
 Here, we also use the [index](/en/reference/schemas/schemas#index) property, which sets up parameters for how Vespa should index the field. For the `title`, `abstract`, and `body` fields, we configure Vespa to set up an index compatible with [bm25 ranking](/en/reference/ranking/rank-features#bm25) for text search.
-
 
 ## Deploy the Application Package
 
 With the two necessary files above, we are ready to deploy the application package. Make sure it looks like this (use `ls` if `tree` is not installed):
 
-```
+```txt
 my-app/
 ├── schemas
-│   └── news.sd
+│   └── news.sd
 └── services.xml
 ```
 
@@ -223,10 +233,9 @@ Finally, deploy the application package to Vespa Cloud:
 $ vespa deploy --wait 600 my-app
 ```
 
-
 ## Feeding data
 
-The data fed to Vespa must match the schema for the document type. The downloaded MIND data must be converted to a valid Vespa JSON [document format](/en/reference/schemas/document-json-format) before it can be fed to Vespa:
+The data fed to Vespa must match the schema for the document type. The downloaded MIND data must be converted to a valid Vespa JSON [document format](../../reference/schemas/document-json-format.html) before it can be fed to Vespa:
 
 ```bash
 $ python3 src/python/convert_to_vespa_format.py mind
@@ -250,12 +259,11 @@ You can verify that specific documents are indexed by fetching documents by docu
 $ vespa document -v get id:news:news::N10864
 ```
 
-
 ## The first query
 
 Searching with Vespa is done using HTTP(S) GET or HTTP(S) POST requests, like:
 
-```
+```xml
 <host:port>/search?yql=select..&hits=1...
 ```
 
@@ -278,7 +286,7 @@ Given the above schema, where the fields `title`, `abstract` and `body` are part
 $ vespa query -v 'yql=select * from news where default contains "music"'
 ```
 
-or a POST JSON query. The values can be found by using the previous `vespa query -v` command. The content type should be changed to `application/json`. It's also possible to use `vespa status` to find the url of your cloud instance:
+or a POST JSON query. The values can be found by using the previous `vespa query -v` command. The content type should be changed to `application/json`. It's also possible to use `vespa status` to find the url of your cloud instance. :
 
 ```bash
 $ curl --key /path/to/key \
@@ -289,20 +297,29 @@ $ curl --key /path/to/key \
 ```
 
 <Note>
-Try the [Query Builder](https://github.com/vespa-engine/vespa/tree/master/client/js/app#query-builder) application!
+**Note:**
+
+Try the
+<a>Query Builder</a>
+application!
 </Note>
 
 Looking at the output, please note:
 
-- The field `documentid` in the output and how it matches the value we assigned to each put operation when feeding data to Vespa.
-- Each hit has a property named relevance, which indicates how well the given document matches our query, using a pre-defined default ranking function. You have full control over ranking — more about ranking and ordering later. The hits are sorted by this value (descending).
-- When multiple hits have the same relevance score, their internal ordering is undefined. However, their internal ordering will not change unless the documents are re-indexed.
-- You can add `&trace.level=3` to dump query parsing details and execution plan, see [query tracing](/en/querying/query-api#query-tracing).
-- The `totalCount` field at the top level contains the number of documents that *matched* the query.
-- Also note the `coverage` element, this tells us how many documents and nodes we searched over. Coverage might be degraded, see [graceful degradation](/en/performance/graceful-degradation).
+- The field `documentid` in the output and how it matches the value
+  we assigned to each put operation when feeding data to Vespa.
+- Each hit has a property named relevance, which indicates how well the given
+  document matches our query, using a pre-defined default ranking function. You have full control over ranking — more about ranking and ordering later. The hits are sorted by this value (descending).
+- When multiple hits have the same relevance score, their internal ordering is undefined.
+  However, their internal ordering will not change unless the documents are re-indexed.
+- You can add `&trace.level=3` to dump query parsing details and execution plan,
+  see [query tracing](/en/querying/query-api#query-tracing).
+- The `totalCount` field at the top level contains the number of documents
+  that *matched* the query.
+- Also note the `coverage` element, this tells us how many documents and nodes we searched over.
+Coverage might be degraded, see [graceful degradation](/en/performance/graceful-degradation).
 
-Prefer HTTP POST over GET in production due to limitations on URI length (64 Kb).
-
+Prefer HTTP POST over GET in production due to limitations on URI length (64 Kb). 
 
 ### Query examples
 
@@ -353,7 +370,6 @@ $ vespa query -v \
 ```
 
 Search for "music" in the default fieldset, boost documents with festival in the title. The [rank()](/en/reference/querying/yql#rank) query operator allows us to retrieve on the first operand, and have match ranking features calculated for the second operand argument. The second and further operands does not impact recall (which documents match the query), but can be used to tune precision (ordering of the results). More on ranking in the next part of the tutorial.
-
 
 ## Conclusion
 
