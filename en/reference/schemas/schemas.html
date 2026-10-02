@@ -82,6 +82,7 @@ Names are <em>identifiers</em>, they must match <code>["a"-"z","A"-"Z", "_"]["a"
                 <a href="#distance-metric">distance-metric</a>
             <a href="#bolding">bolding</a>
             <a href="#dictionary">dictionary</a>
+            <a href="#fast-search-map-field">fast-search-map-field</a>
             <a href="#id">id</a>
             <a href="#index">index</a>
                 <a href="#index-hnsw">hnsw</a>
@@ -684,8 +685,12 @@ field identities type map&lt;string, person&gt; {
         to reduce the amount of data in the document summary.
         </p>
       <p>
-        <a href="/en/performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields">fast-search</a>
-        is used to make query access faster by creating an index structure for lookups.
+        The <a href="/en/performance/feature-tuning.html#when-to-use-fast-search-for-attribute-fields">fast-search</a>
+        setting is used to make query access faster by creating an index structure for lookups.
+        However, using the <a href="/en/reference/querying/yql.html#sameelement">sameElement</a> operator
+        to require matches in the same map entry can still be slow since this boils down to
+        to searching two arrays and taking the intersection of the matching indices.
+        A <a href="#fast-search-map-field">fast-search map field</a> can offer faster map lookup if needed.
       </p>
       <p>
         As an alternative to a map,
@@ -693,8 +698,10 @@ field identities type map&lt;string, person&gt; {
       </p>
       <p>Restrictions:</p>
       <ul>
-        <li>Map of struct or primitive types do not support <a href="../../basics/ranking.html">ranking features</a>
-          and can only be used for matching and filtering.</li>
+        <li>Maps of struct or primitive types do not support most <a href="../../basics/ranking.html">ranking features</a>.
+        When using a <a href="#fast-search-map-field">fast-search map field</a>, make sure to use ranking features for the fast-search map field
+        and not the containing map field.
+        </li>
         <li>All map types can be fed, retrieved, and used in document summaries.</li>
         <li>Some map types can be searched in <a href="../applications/services/content.html#document">indexed search mode</a>,
         while all map types can be searched in <a href="../../performance/streaming-search.html">streaming search</a>.
@@ -1182,6 +1189,13 @@ document ppl {
   <td>Zero to one</td>
   <td><p id="field-bolding">Specifies whether the content of this field should be bolded.
     Only supported for <a href="#indexing-index">index</a> fields of type string or array&lt;string&gt;.</p></td>
+</tr>
+
+<tr><td><a href="#fast-search-map-field">fast-search-map-field</a></td>
+  <td>Zero to many</td>
+  <td><p id="field-fast-search-map-field">Define a synthetic, map-like attribute from this field
+    that allows for faster lookups.
+    Only supported for certain fields of type array&lt;struct&gt; and map.</p></td>
 </tr>
 
 <tr><td><a href="#id">id</a></td>
@@ -3006,7 +3020,6 @@ Both <em>index</em> and <em>attribute</em> can be set on a field.
 </p>
 
 
-
 <h2 id="sorting">sorting</h2>
 <p>
 Contained in <a href="#attribute">attribute</a> or
@@ -3490,6 +3503,76 @@ bolding: on
 </p>
 
 
+<h2 id="fast-search-map-field">fast-search-map-field</h2>
+<p>Available since {% include version.html version="8.123.45" %}.</p>
+<p>Contained in <a href="#field">field</a> of type <a href="#map">map</a> or <a href="#array">array&lt;struct&gt;</a>.
+Creates a synthetic, map-like fast-search attribute from the field that allows for faster lookups
+than the containing field does via <a href="/en/reference/querying/yql.html#sameelement">sameElement</a>.
+</p>
+
+<p>
+    If the containing field is of type <a href="#map">map</a>, only the name of the synthetic field to be created has to be specified:
+<pre>
+fast-search-map-field [synthetic-field-name]
+</pre>
+
+    If the containing field is of type <a href="#array">array&lt;struct&gt;</a>,
+    one additionally has to specify which fields of the struct to use as key and value:
+<pre>
+fast-search-map-field [synthetic-field-name] {
+    key: [struct-field-name-to-use-as-key]
+    value: [struct-field-name-to-use-as-value]
+}
+</pre>
+    In both cases, the full name for the synthetic field is <code>[containing-field-name].[synthetic-field-name]</code>.
+</p>
+
+<p>
+    Example:
+<pre>
+field my_map type map&lt;string,string&gt; {
+    indexing: summary
+    fast-search-map-field my_lookup
+}
+
+struct string_pair {
+    field my_key type string { }
+    field my_value type string { }
+}
+field my_array type array&lt;string_pair&gt; {
+    indexing: summary
+    fast-search-map-field my_lookup {
+        key: my_key
+        value: my_value
+    }
+}
+</pre>
+    The names of the synthetic fields are <code>my_array.my_lookup</code> and <code>my_map.my_lookup</code>.
+</p>
+
+<p>
+    {% include important.html content="
+    The only way to search these fields is via the <a href='/en/reference/querying/yql.html#mapmatch'>mapMatch</a> operator.
+    "%}
+</p>
+
+<p>
+    The types that are supported for the key are int, long, and string.
+    The types that are supported for the value are int, long, float, double, and string.
+</p>
+
+<p>
+Adding a map-like field this way requires re-indexing before the field can be searched, see <a href="#add-a-fast-search-map-field">add a fast-search map field</a>.
+</p>
+<table class="table">
+<thead>
+<tr><th style="width:150px">Property</th><th>Description</th></tr>
+</thead><tbody>
+<tr><td>key</td><td>Which field of the struct to use as the keys of the map. Defaults to <code>key</code> if the containing field is of type map.</td></tr>
+<tr><td>value</td><td>Which fields of the struct to use as the values of the map. Defaults to <code>value</code> if the containing field is of type map.</td></tr>
+</tbody>
+</table>
+
 
 <h2 id="id">id</h2>
 <p>
@@ -3875,7 +3958,6 @@ linguistics {
 all fields must use the same tokens when searching, whether that follows from <code>tokens</code> or
 from <a href='#stemming'>stemming</a>. A fieldset where they differ, and at least one field sets
 <code>tokens</code>, fails deployment."%}
-
 
 
 <h2 id="match">match</h2>
@@ -5077,6 +5159,21 @@ reindexing is enabled and started automatically on deployment, and is controlled
           <p>
             Also see <a href="#add-or-remove-an-existing-document-field-from-document-summary">attribute</a> fields.
           </p>
+        </td>
+      </tr>
+
+      <tr>
+        <th>Add a fast-search map field</th>
+        <td>
+          <p id="add-a-fast-search-map-field">
+            Adding a <a href="#fast-search-map-field">fast-search map field</a> to a <a href="#map">map</a> or <a href="#array">array</a> field is equivalent to adding a synthetic field outside the document and, thus, requires re-indexing to fill the new field:
+          </p>
+<pre>
+field my_map type map&lt;string,int&gt; {
+    indexing: summary
+    <span class="pre-hilite">fast-search-map-field my_lookup</span>
+}
+</pre>
         </td>
       </tr>
 

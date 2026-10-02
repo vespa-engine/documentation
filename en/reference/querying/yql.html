@@ -95,32 +95,48 @@ select * from music where title contains "madonna"
   <tr><th>numeric</th><td>
     <p id="numeric">
     The following numeric operators are available:
-    <code>= &lt; &gt; &lt;= &gt;= range(field, lower bound, upper bound)</code>.
+    <code>= &lt; &gt; &lt;= &gt;=</code>.
+    In addition to that, the <a href="#range">range</a> operator can be used for numeric fields.
     </p>
 <pre>
 where 500 >= price
 </pre>
-<pre>
-where range(fieldname, 0, 5000000000L)
-</pre>
+  </td></tr>
+
+  <tr><th>range</th><td>
+    <p id="range">The range operator <code>range(field, lower bound, upper bound)</code> is supported for numeric and string fields. On numeric fields, it uses the intuitive ordering of numbers, and on string fields, it uses the lexicographical order.</p>
+    <p>Support for string fields available since {% include version.html version="8.755.13" %}.</p>
     <p>
       Numbers must be in the signed 32-bit range.
       Input 64-bit signed numbers using <code>L</code> as suffix.
     </p>
+<pre>
+where range(numeric_field_name, 0, 5000000000L)
+</pre>
     <p>
-      For the <code>range</code> operator, one can also use
-      the strings <code>Infinity</code> or <code>-Infinity</code>:
+      When used with a string field, the string bounds have to be enclosed in (single or double) quotes.
+    </p>
+<pre>
+where range(string_field_name, "A", "C")
+</pre>
+    <p>
+      One can also use the strings <code>-Infinity</code> or <code>Infinity</code>
+      as the lower or upper bound, respectively, to express unbounded ranges.
+      Note that these strings must not be enclosed in quotes:
     </p>
 <pre>
 where (range(year, 2000, Infinity))
 </pre>
     <p>
-      An all-encompassing range matches every document that has a value set for the field.
+      An all-encompassing numeric range matches every document that has a value set for the field.
       This is a way to select the documents where a numeric field is present:
     </p>
 <pre>
 where range(size, -Infinity, Infinity)
 </pre>
+      {% include important.html content="This does not work for single-value string fields as these
+      represent absent values by the empty string. Hence, this would match all documents regardless of whether
+      a value for the field was set or not."%}
     <p>
       Documents where the field is unset are not matched.
       For the complementary query - finding documents <em>missing</em> a value - see
@@ -364,7 +380,10 @@ where field contains onear("java", "tutorial", !"script")
       <p>By default, sameElement uses <code>AND</code> to combine the conditions: <i>All</i> the conditions
       must match in the same element to produce a match.</p>
 
-      <p>For example, given this <b>struct</b>:</p>
+      <p>Usage examples for the <code>sameElement()</code> operator:</p>
+      <ul>
+        <li><b>array-of-struct</b> fields</li>
+          <p>For example, given the struct and array of this struct</p>
 <pre>
 struct person {
     field first_name    type string {}
@@ -379,15 +398,16 @@ field persons type array&lt;person&gt; {
     struct-field year_of_birth { indexing: attribute }
 }
 </pre>
-      <p>We can use this query:</p>
+      <p>we can use the query</p>
 <pre>
 where persons contains sameElement(first_name contains 'Joe', last_name contains 'Smith', year_of_birth < 1940)
 </pre>
-      <p>to return all documents containing a Joe Smith born before 1940 in the <code>persons</code> array.</p>
+          <p>to return all documents containing a Joe Smith born before 1940 in the <code>persons</code> array.</p>
 
-      <p>Searching a <b>map</b> is done by treating it as an array of a struct with the field members <code>key</code> and <code>value</code>.
-        For example, given this map:
-      </p>
+        <li>Search <b>map</b> fields</li>
+          <p>Searching a map is done by treating it as an array of a struct with the field members <code>key</code> and <code>value</code>.
+            For example, given the map
+          </p>
 <pre>
 field identities type map&lt;string, person&gt; {
     indexing: summary
@@ -397,24 +417,25 @@ field identities type map&lt;string, person&gt; {
     struct-field value.year_of_birth { indexing: attribute }
 }
 </pre>
-      <p>We can use this query:</p>
-      <pre>
+          <p>we can use the query</p>
+<pre>
 where identities contains sameElement(key contains 'father', value.first_name contains 'Joe', value.last_name contains 'Smith', value.year_of_birth < 1940)
 </pre>
-      <p>to return all documents that have a Joe Smith born before 1940 keyed as a 'father'.</p>
+          <p>to return all documents that have a Joe Smith born before 1940 keyed as a 'father'.</p>
 
-      <p><code>sameElement()</code> may also be used to search <b>array of string</b> fields. Supported query operators
-      inside sameElement() are <code>and</code>, <code>equiv</code>,
-      <code>near</code>, <code>onear</code>, <code>or</code>, <code>rank</code> and <code>phrase</code>.
-      <code>and</code> can be used with <code>!</code>.</p>
-      <p>For example given this field:
-      <pre>
+        <li><b>array-of-string</b> fields</li>
+          <p><code>sameElement()</code> may also be used to search array of string fields. Supported query operators
+          inside sameElement() are <code>and</code>, <code>equiv</code>,
+          <code>near</code>, <code>onear</code>, <code>or</code>, <code>rank</code> and <code>phrase</code>.
+          <code>and</code> can be used with <code>!</code>.</p>
+          <p>For example given the field
+<pre>
 field chunks type array&lt;string&gt; {
     indexing: index | summary
 }
 </pre>
 
-      <p>We can use these queries:</p>
+          <p>we can use the following queries:</p>
 
 <pre>
 where chunks contains sameElement("one" and "two")
@@ -425,27 +446,112 @@ where chunks contains sameElement("one" and !"two")
 where chunks contains sameElement("one" or "two")
 where chunks contains sameElement(rank("one" and "two", "three"))
 </pre>
-      <p>
-	Features inside sameElement() for indexed fields are filtered based on the matching elements, e.g.
-	<a href="../ranking/rank-features.html#elementwise-bm25">elementwise(bm25(descriptions),x,double)</a> will only
-	contain tensor cells based on the matching elements.
-      </p>
+          <p>
+        Features inside sameElement() for indexed fields are filtered based on the matching elements, e.g.,
+        <a href="../ranking/rank-features.html#elementwise-bm25">elementwise(bm25(descriptions),x,double)</a> will only
+        contain tensor cells based on the matching elements.
+          </p>
 
-      <p>Use the <a href="#elementfilter"><code>elementFilter</code></a> annotation
-      to restrict matching to specific element indices.
-      For example, given a field <code>my_numbers type array&lt;int&gt;</code>:</p>
+        <li><b>array fields</b> at <b>specific indices</b></li>
+          <p>Use the <a href="#elementfilter"><code>elementFilter</code></a> annotation
+          to restrict matching to specific element indices.
+          For example, given a field <code>my_numbers type array&lt;int&gt;</code>:</p>
 <pre>
 where my_numbers contains ({elementFilter:[2]}sameElement("42"))
 </pre>
-      <p>This only matches the element at index 2 in the array field.
-      Multiple indices can be given: <code>{elementFilter:[0, 2, 5]}</code>.</p>
+          <p>This only matches the element at index 2 in the array field.
+          Multiple indices can be given: <code>{elementFilter:[0, 2, 5]}</code>.</p>
 
-      <p>A shorthand form is also available:</p>
+          <p>A shorthand form is also available:</p>
 <pre>
 where my_numbers[2] = 42
 </pre>
-      <p>The shorthand form only supports a single index.
-      Use the <a href="#elementfilter"><code>elementFilter</code></a> annotation to match multiple indices.</p>
+          <p>The shorthand form only supports a single index.
+          Use the <a href="#elementfilter"><code>elementFilter</code></a> annotation to match multiple indices.
+          </p>
+      </ul>
+    </td>
+  </tr>
+
+  <tr>
+    <th>mapMatch</th>
+    <td>
+      <p>Available since {% include version.html version="8.123.45" %}.</p>
+      <p id="mapmatch">The <code>mapMatch()</code> operator represents a restricted variant of the <a href="#sameelement"><code>sameElement()</code></a>
+      operator for searching map-like fields.
+      Map-like fields are fields of type <a href="../schemas/schemas.html#map">map</a>
+      and <a href="../schemas/schemas.html#fast-search-map-field">fast-search map fields</a>, where
+      the latter can <em>only</em> be searched via the <code>mapMatch()</code> operator.
+      </p>
+      <p>
+      In contrast to the <a href="#sameelement"><code>sameElement()</code></a> operator,
+      the <code>mapMatch()</code> always takes two arguments and is limited in which
+      operators can be used inside of it:
+      The first argument has to use <code>key</code> with
+      <ul>
+        <li>a <a href="#contains">contains</a> operator if the key type is string or</li>
+        <li>a <a href="#numeric">numeric</a> equality operator if the key type is numeric.</li>
+      </ul>
+      The second argument has to use <code>value</code> with
+      <ul>
+        <li>a <a href="#contains">contains</a> operator if the value type is string or</li>
+        <li>a <a href="#numeric">numeric</a> operator or <a href="#range">range</a> operator if the value type is numeric.</li>
+      </ul>
+      </p>
+
+      <p>Usage examples for the <code>mapMatch()</code> operator:</p>
+      <ul>
+        <li><b><a href="../schemas/schemas.html#map">map</a></b> fields</li>
+          <p>
+            Searching a map is done analogously to the <code>sameElement()</code> operator.
+            For example, given the map
+          </p>
+<pre>
+field my_map type map&lt;string, string&gt; {
+    indexing: summary
+    struct-field key   { indexing: attribute }
+    struct-field value { indexing: attribute }
+}
+</pre>
+          <p>we can use the query</p>
+<pre>
+where my_map contains mapMatch(key contains 'color', value contains 'black')
+</pre>
+          <p>or its shorthand form</p>
+<pre>
+where my_map{'color'} contains 'black'
+</pre>
+          <p>to return all documents that have 'black' as their 'color'.
+
+        <li><b><a href="../schemas/schemas.html#fast-search-map-field">fast-search map fields</a></b></li>
+          <p>
+            The syntax is the same as for fields of type map; just use
+            the full name of the fast-search map field instead. For example, given the map
+          </p>
+<pre>
+field my_map type map&lt;string, int&gt; {
+    indexing: summary
+    fast-search-map-field my_lookup
+}
+</pre>
+          <p>we can search its fast-search map field via the query</p>
+<pre>
+where my_map.my_lookup contains mapMatch(key contains 'price', value = 50)
+</pre>
+          <p>or its shorthand form</p>
+<pre>
+where my_map.my_lookup{'price'} = 50
+</pre>
+          <p>to return all documents that have a 'price' of exactly 50. We can use the query
+<pre>
+where my_map.my_lookup contains mapMatch(key contains 'price', range(value, 0, 99))
+</pre>
+          <p>or its shorthand form</p>
+<pre>
+where range(my_map.my_lookup{'price'}, 0, 99)
+</pre>
+          <p>to return all documents that have a 'price' between 0 and 99.</p>
+      </ul>
     </td>
   </tr>
 
