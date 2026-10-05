@@ -7,7 +7,8 @@
 #
 # Changed and added elements are tinted, with the new words inside a changed
 # element tinted more strongly. Removed text is not shown: a thin red marker
-# shows where something was removed, and hovering it shows what.
+# shows where something was removed, and hovering over it shows what. Click a
+# dashed marker to show the removed elements as they were rendered.
 #
 # The baseline page is rendered and diffed only when a request asks for it.
 # Nothing is written to _site, and `jekyll build` is unaffected.
@@ -37,9 +38,27 @@ module BranchDiff
     .bd-added { box-shadow: inset 0 0 0 9999px rgba(45, 164, 78, 0.10); border-radius: 3px; }
     .bd-changed { box-shadow: inset 0 0 0 9999px rgba(212, 167, 44, 0.12); border-radius: 3px; }
     .bd-word { background: rgba(212, 167, 44, 0.30); border-radius: 2px; }
-    div.bd-gap { height: 0; margin: 4px 0; border-top: 2px dashed rgba(207, 34, 46, 0.55); cursor: help; }
-    span.bd-gap { display: inline-block; width: 0; height: 1em; margin: 0 2px; vertical-align: text-bottom;
-                  border-left: 2px solid rgba(207, 34, 46, 0.55); cursor: help; }
+    /* Removal markers: a thin visible line inside a larger hit area (the
+       padding), drawn above neighbouring elements so they can be hovered.
+       Removed blocks sit in a <details>, opened by clicking its line. */
+    span.bd-gap, details.bd-gap > summary { position: relative; z-index: 1; box-sizing: content-box; }
+    span.bd-gap { display: inline-block; width: 2px; height: 1em; padding: 0 4px; margin: 0 -2px; cursor: help;
+                  vertical-align: text-bottom; background: rgba(207, 34, 46, 0.55) content-box; }
+    details.bd-gap { display: block; margin: 0; }
+    details.bd-gap > summary { display: block; list-style: none; height: 2px; padding: 5px 0; cursor: pointer;
+                               background: repeating-linear-gradient(90deg, rgba(207, 34, 46, 0.55) 0 6px,
+                                                                     transparent 6px 10px) content-box; }
+    details.bd-gap > summary::-webkit-details-marker { display: none; }
+    span.bd-gap:hover, details.bd-gap > summary:hover { background-color: rgba(207, 34, 46, 0.9); }
+    span.bd-gap:hover::after, details.bd-gap > summary:hover::after {
+      content: attr(data-removed); position: absolute; left: 0; top: 100%; z-index: 100001;
+      width: max-content; max-width: 480px; margin-top: 4px; padding: 6px 10px; border-radius: 4px;
+      background: #24292f; color: #f6f8fa; font: 13px/1.4 sans-serif; font-weight: normal;
+      white-space: normal; text-align: left; text-transform: none; pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+    details.bd-gap[open] > summary:hover::after { content: "Click to hide the removed text."; }
+    .bd-removed-content { margin: 4px 0 12px; padding: 4px 12px; border-left: 3px solid rgba(207, 34, 46, 0.55);
+                          box-shadow: inset 0 0 0 9999px rgba(207, 34, 46, 0.06); }
     #bd-banner { position: fixed; right: 16px; bottom: 16px; z-index: 100000; max-width: 420px;
                  padding: 10px 14px; border-radius: 6px; font: 13px/1.4 sans-serif;
                  background: #24292f; color: #f6f8fa; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); }
@@ -257,14 +276,14 @@ module BranchDiff
       inss.each do |ins|
         match = (di...dels.size).find { |k| similarity(dels[k], ins) >= PAIR_THRESHOLD }
         if match
-          dels[di...match].each { |d| show_removed(d, ins, nil) }
+          show_removed(dels[di...match], ins, nil)
           show_changed(dels[match], ins)
           di = match + 1
         else
           show_added(ins)
         end
       end
-      dels[di..].each { |d| show_removed(d, next_new, inss.last || prev_new) }
+      show_removed(dels[di..], next_new, inss.last || prev_new)
     end
 
     def similarity(a, b)
@@ -324,28 +343,67 @@ module BranchDiff
       end
     end
 
-    # Marks where a block was removed, next to `before` (or after `after` when
-    # there is nothing left to place it before).
-    def show_removed(block, before, after)
-      @stats[:removed] += 1
+    # Marks where blocks were removed, next to `before` (or after `after` when
+    # there is nothing left to place them before).
+    def show_removed(removed, before, after)
+      return if removed.empty?
+
+      @stats[:removed] += removed.size
       anchor = before || after
       return if anchor.nil?
 
-      text = block.words.join(' ')
       if anchor.leaf? && !%w[td th].include?(anchor.node.name)
-        marker = gap_marker('div', text)
+        marker = removed_details(removed)
         before ? anchor.node.add_previous_sibling(marker) : anchor.node.add_next_sibling(marker)
       else
-        marker = gap_marker('span', text)
+        marker = gap_marker(removed.map { |b| b.words.join(' ') }.join(' '))
         # A block placed before has not been annotated yet, so its first text
         # node is still in the tree. A block placed after may have been.
         before ? anchor.text_nodes.first.add_previous_sibling(marker) : anchor.node.add_child(marker)
       end
     end
 
-    def gap_marker(tag, text)
-      text = "#{text[0, 300]}…" if text.size > 300
-      @new.create_element(tag, class: 'bd-gap', title: "Removed: #{text}")
+    # A dashed line that, when clicked, shows the removed blocks as they were
+    # rendered.
+    def removed_details(removed)
+      words = removed.sum { |b| b.words.size }
+      preview = removed.first.words.first(25).join(' ')
+      preview += ' …' if words > 25
+      details = @new.create_element('details', class: 'bd-gap')
+      details.add_child(@new.create_element('summary', 'data-removed': "Removed: #{preview} (#{words} words, click to show)"))
+      content = details.add_child(@new.create_element('div', class: 'bd-removed-content'))
+      removed.each do |block|
+        copy = removed_copy(block)
+        last = content.children.last
+        # Keep consecutive removed list items in one list.
+        if %w[ul ol].include?(copy.name) && last&.name == copy.name
+          last.add_child(copy.children.first)
+        else
+          content.add_child(copy)
+        end
+      end
+      details
+    end
+
+    def removed_copy(block)
+      copy = if block.leaf? && !%w[td th].include?(block.node.name)
+               block.node.dup(1, @new)
+             else
+               @new.create_element('p', block.words.join(' '))
+             end
+      copy.xpath('descendant-or-self::*[@id]').each { |n| n.remove_attribute('id') }
+      return copy unless copy.name == 'li'
+
+      list = @new.create_element(block.node.parent&.name == 'ol' ? 'ol' : 'ul')
+      list.add_child(copy)
+      list
+    end
+
+    # A thin line within the text where words were removed. Hovering over it
+    # shows them.
+    def gap_marker(text)
+      text = "#{text[0, 600]} …" if text.size > 600
+      @new.create_element('span', class: 'bd-gap', 'data-removed': "Removed: #{text}")
     end
 
     def replace_text(text_node, segments)
@@ -359,7 +417,7 @@ module BranchDiff
       merged.each do |type, s|
         node = case type
                when :text then @new.create_text_node(s)
-               when :gap then gap_marker('span', s)
+               when :gap then gap_marker(s)
                else @new.create_element('span', s, class: 'bd-word')
                end
         text_node.add_previous_sibling(node)
