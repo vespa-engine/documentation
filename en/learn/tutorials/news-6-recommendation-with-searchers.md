@@ -123,7 +123,7 @@ So, we implement our `UserProfileSearcher` like this:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre>{% highlight java %}
 public class UserProfileSearcher extends Searcher {
 
     public Result search(Query query, Execution execution) {
@@ -168,7 +168,7 @@ public class UserProfileSearcher extends Searcher {
     }
 
 }
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 First, we retrieve the `user_id` from the query.

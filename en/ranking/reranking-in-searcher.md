@@ -81,7 +81,7 @@ schema doc {
 
 The searcher implementing the re-ranking logic:
 
-<pre data-test="file" data-path="my-app/src/main/java/ai/vespa/example/searcher/ReRankingSearcher.java">
+<pre data-test="file" data-path="my-app/src/main/java/ai/vespa/example/searcher/ReRankingSearcher.java">{% highlight java %}
 package ai.vespa.example.searcher;
 
 import com.yahoo.search.Query;
@@ -129,7 +129,7 @@ public class ReRankingSearcher extends Searcher {
         return result;
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 [services.xml](../reference/applications/services/services.html) is needed 
 to make up a Vespa [application package](../reference/applications/application-packages.html). 
