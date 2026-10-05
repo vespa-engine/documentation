@@ -4,6 +4,32 @@ require 'reverse_markdown'
 require 'fileutils'
 require 'parallel'
 
+# Rouge-highlighted code blocks come out of Jekyll in two shapes:
+#   Markdown fences:   <div class="language-xml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>
+#   {% highlight %}:   <figure class="highlight"><pre><code class="language-xml" data-lang="xml">
+# The HTML pages often wrap {% highlight %} in its own <pre>, nesting one <pre> in another.
+# The default converter emits a fence for each <pre> and finds the language in neither shape,
+# so convert the innermost <pre> only, and take the language from where Rouge put it.
+class HighlightedPre < ReverseMarkdown::Converters::Pre
+  def convert(node, state = {})
+    inner = node.at_css('pre')
+    return convert(inner, state) if inner
+    super
+  end
+
+  private
+
+  def language(node)
+    code = node.at_css('code')
+    lang = code && code['data-lang']
+    lang ||= node.ancestors('[class*="language-"]').first.to_h['class'].to_s[/\blanguage-([\w+-]+)/, 1]
+    lang = nil if lang == 'plaintext'
+    lang || super
+  end
+end
+
+ReverseMarkdown::Converters.register :pre, HighlightedPre.new
+
 Jekyll::Hooks.register :site, :post_write do |site|
   # Filter HTML pages and gather the necessary data upfront.
   # Complex objects (like Jekyll::Page) don't work well across processes,
