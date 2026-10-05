@@ -1,10 +1,12 @@
-# Checks the Rouge lexers that _plugins/rouge_textmate.rb builds from the grammars in _grammars/.
+# Checks the Rouge lexers that _plugins/rouge_textmate.rb builds from the grammars in _grammars/,
+# and the C++ lexer extension in _plugins/rouge_cpp_types.rb.
 #
 # Run from the repository root:
 #   bundle exec ruby test/test_rouge_lexers.rb
 
 require 'rouge'
 require_relative '../_plugins/rouge_textmate'
+require_relative '../_plugins/rouge_cpp_types'
 
 SCHEMA_SAMPLE = <<~'SD'
   # A schema with the main constructs
@@ -66,6 +68,22 @@ SCHEMA_EXPECTATIONS = [
   ['match-features', 1, 'Keyword'],
 ].freeze
 
+CPP_SAMPLE = <<~'CPP'
+  ConfigSubscriber subscriber;
+  ConfigHandle<FooConfig>::UP fooHandle = subscriber.subscribe<FooConfig>(configId);
+  if (fooHandle->isChanged() && config != NULL) {
+      std::unique_ptr<FooConfig> foo = fooHandle->getConfig();
+  }
+CPP
+
+CPP_EXPECTATIONS = [
+  ['ConfigSubscriber', 1, 'Name.Class'],
+  ['FooConfig',        1, 'Name.Class'],
+  ['subscriber',       1, 'Name'],
+  ['if',               1, 'Keyword'],
+  ['NULL',             1, 'Name.Builtin'],
+].freeze
+
 def check_lexer(tag, sample, expectations, failures)
   lexer = Rouge::Lexer.find(tag)
   return failures << "#{tag}: no lexer registered" unless lexer
@@ -90,6 +108,7 @@ end
 
 failures = VespaTextMate.unmapped_scopes.map { |tag, scopes| "#{tag}: no token for scopes #{scopes.join(', ')}" }
 check_lexer('schema', SCHEMA_SAMPLE, SCHEMA_EXPECTATIONS, failures)
+check_lexer('cpp', CPP_SAMPLE, CPP_EXPECTATIONS, failures)
 
 if failures.empty?
   puts 'Rouge lexers OK'
