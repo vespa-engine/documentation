@@ -256,7 +256,7 @@ Well done!
 
 ## Managing the Vespa Cloud application
 
-Application instances in the [dev zone](../operations/environments.html#dev) will by default keep running for 14 days after the last deployment.
+Application instances in the [dev zone](../../operations/environments.html#dev) will by default keep running for 14 days after the last deployment.
 You can control this in the [console](https://console.vespa-cloud.com/).
 
 The [Vespa Cloud console](https://console.vespa-cloud.com) can also be used to delete the application instance.
