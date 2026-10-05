@@ -82,7 +82,7 @@ Vespa has a [ranking feature](../reference/ranking/rank-features.html)
 called `lightgbm`. This ranking feature specifies the model to use in a ranking
 expression, relative under the `models` directory. Consider the following example:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema test {
     rank-profile classify inherits default {
         first-phase {
@@ -90,7 +90,7 @@ schema test {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Here, we specify that the model `lightgbm_model.json` (directly under the
 `models` directory) is applied to all documents matching a query which uses
@@ -130,7 +130,7 @@ or possibly from other more complex rank features such as `fieldMatch(name)`.
 You can also define [functions](/en/ranking/ranking-expressions-features.html#function-snippets) (which are valid rank features) with the LightGBM
 feature name to perform the mapping. An example:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema test {
     document test {
         field doc_attrib type double {
@@ -152,7 +152,7 @@ schema test {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Here, when Vespa evaluates the model, it retrieves the value of `feature_1`
 from a document attribute called `doc_attrib`, and the value if `feature_2`
@@ -180,7 +180,7 @@ For large forests, an alternative GBDT evaluator can further reduce evaluation c
 Enable it by setting the `vespa.eval.use_fast_forest`
 [rank-property](../reference/ranking/rank-feature-configuration.html) to `true` in the rank profile:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile classify inherits default {
     rank-properties {
         vespa.eval.use_fast_forest: true
@@ -189,7 +189,7 @@ rank-profile classify inherits default {
         expression: lightgbm("lightgbm_model.json")
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 This is a rank profile setting, not a query parameter: it is applied when the model is compiled,
 so it cannot be toggled per query. To A/B test it, create a second rank profile that only adds this property.
@@ -247,7 +247,7 @@ on Pandas tables and use the `category` dtype on categorical columns.
 In Vespa categorical features are strings, so mapping the above feature
 for instance to a document field would be:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema test {
     document test {
         field numeric_attrib type double {
@@ -269,7 +269,7 @@ schema test {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Here, the string value of the document would be used as the feature value when evaluating
 this model for every document.

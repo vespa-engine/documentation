@@ -25,7 +25,7 @@ That is, for any query, return the documents with most in-links first in the res
 The score, named `relevance` in query results, is the size of the `inlinks` attribute array in the document,
 as configured in the `expression`:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile inlinks {
     first-phase {
         expression: attribute(inlinks).count
@@ -34,7 +34,7 @@ rank-profile inlinks {
         attribute(inlinks).count
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 
 Count the number of entries in `inlinks` in the result and compare with `relevance` - it will be the same.
@@ -61,7 +61,7 @@ Notes:
 
 <a class="querystring-x">yql=select * from doc where true&ranking=inlinks_age</a>
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile inlinks_age {
     first-phase {
         expression: rank_score
@@ -91,7 +91,7 @@ rank-profile inlinks_age {
         expression: num_inlinks * age_decay
     }
 }
-</pre>
+{% endhighlight %}</pre>
 In the query results, here we observe a document with 27 in-links, 9703 seconds old, get at relevance at 20.32
 (the age of documents will vary with query time):
 <pre>
@@ -127,7 +127,7 @@ so let's add an [input.query()](../reference/api/query.html#ranking.features) fo
     $$ 1 - \frac{fabs(attribute(term\_count) - query(q\_term\_count))}{1 + attribute(term\_count) + query(q\_term\_count)} $$
 </p>
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile term_count_similarity {
     first-phase {
         expression {
@@ -141,7 +141,7 @@ rank-profile term_count_similarity {
         query(q_term_count)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 This rank function will score documents [0-1>, closer to 1 is more similar:
 <pre>
 "relevance": 0.9985029940119761,
@@ -177,10 +177,10 @@ it must be configured using [inputs](../reference/schemas/schemas.html#inputs)."
 As the in-link data is represented in a weightedset,
 we use the [tensorFromWeightedSet](../reference/ranking/rank-features.html#document-features)
 rank feature to transform it into a tensor named _links_:
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile inlink_similarity  {
     inputs {
-        query(links) tensor&lt;float&gt;(links{})
+        query(links) tensor<float>(links{})
     }
     first-phase {
         expression: sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
@@ -190,7 +190,7 @@ rank-profile inlink_similarity  {
         tensorFromWeightedSet(attribute(inlinks), links)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 <a class="querystring-x">yql=select * from doc where true&ranking=inlink_similarity&input.query(links)={
   {links:/en/query-profiles.html}:1,
@@ -290,7 +290,7 @@ Let's try the same query again, with a two-phase rank-profile that also does an 
 
 <a class="querystring-x">yql=select * from doc where title contains "attribute"&ranking=inlinks_twophase</a>
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile inlinks_twophase inherits inlinks_age {
     first-phase {
         total-keep-rank-count : 50
@@ -301,7 +301,7 @@ rank-profile inlinks_twophase inherits inlinks_age {
         expression            : rank_score
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Note how using rank-profile `inherits` is a smart way to define functions once,
 then use in multiple rank-profiles.
@@ -377,7 +377,7 @@ Note that this blurs the distinction between filtering (retrieval) and ranking a
 here the `weakAnd` does <span style="text-decoration: underline">both</span> filtering and ranking
 to optimize the number of candidates for the later rank phases.
 The default rank-profile is used:
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile documentation inherits default {
     inputs {
         query(titleWeight): 2.0
@@ -387,7 +387,7 @@ rank-profile documentation inherits default {
         expression: query(titleWeight) * bm25(title) + query(contentsWeight) * bm25(content)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 Observe we are here using text matching rank features,
 which fits well with weakAnd's scoring function that also uses text matching features.
 

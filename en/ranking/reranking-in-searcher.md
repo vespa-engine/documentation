@@ -48,7 +48,8 @@ Start by defining a simple schema with two fields.
 We also define a rank profile with two [rank features](../reference/ranking/rank-features.html)
 to be used in the searcher for re-ranking:
 
-<pre data-test="file" data-path="my-app/src/main/application/schemas/doc.sd"> 
+<pre data-test="file" data-path="my-app/src/main/application/schemas/doc.sd">{% highlight vespa-schema-language %}
+ 
 schema doc {
 
     document doc {
@@ -77,7 +78,7 @@ schema doc {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 The searcher implementing the re-ranking logic:
 
