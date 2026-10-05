@@ -10,7 +10,7 @@ this is a guide on how to migrate from Vespa 7 to Vespa 8 when using position fi
 The guide is relevant for applications having a `position` field in a schema.
 
 For the rest of this document, we assume a schema containing:
-```
+```vespa-schema-language
 field myfield type position {...}
 ```
 
