@@ -166,3 +166,92 @@ jobs:
           commit-message: "Update 'Metric' reference documentation."
           files: "en/reference/operations/metrics/*.html"
           push: ${{ contains(fromJSON('["workflow_dispatch", "schedule"]'), github.event_name) && github.ref_name == 'master' }}
+
+  update-grammars:
+    #
+    # This job copies the TextMate grammars in _grammars/ from vespa-engine/vespa, where they are
+    # maintained, and opens a pull request for review when they have changed. It does not merge:
+    # pull requests opened with the workflow token do not trigger the PR build, so the copy is
+    # checked here before the pull request is opened.
+    # Ref https://github.com/vespa-engine/vespa/tree/master/integration/tmgrammar/grammars
+    #
+    runs-on: ubuntu-latest
+
+    # Make sure each job runs after the previous one, regardless of the outcome.
+    if: ${{ success() || failure() }}
+    needs:
+      - update-metric-reference
+
+    env:
+      VESPA_GRAMMARS: integration/tmgrammar/grammars
+      PR_BRANCH: update-grammars
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Copy grammars from vespa-engine/vespa
+        id: update-grammars
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Copy from one commit, so that all grammars and the pull request refer to the same version.
+          VESPA_SHA=$(gh api repos/vespa-engine/vespa/commits/master --jq .sha)
+          echo "Using vespa-engine/vespa@${VESPA_SHA}"
+          echo "vespa-sha=${VESPA_SHA}" >> "${GITHUB_OUTPUT}"
+
+          for f in _grammars/*.tmLanguage.json; do
+            curl -sSfL -o "${f}" "https://raw.githubusercontent.com/vespa-engine/vespa/${VESPA_SHA}/${VESPA_GRAMMARS}/$(basename "${f}")"
+          done
+
+          git diff --stat -- _grammars
+          echo "has-changes=$(git status --short -- _grammars | wc -l)" >> "${GITHUB_OUTPUT}"
+
+      - name: Setup Ruby
+        if: ${{ steps.update-grammars.outputs.has-changes != '0' }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.3"
+          bundler-cache: true
+          cache-version: 0
+
+      - name: Check the grammars
+        if: ${{ steps.update-grammars.outputs.has-changes != '0' }}
+        run: |
+          bundle exec ruby test/test_rouge_lexers.rb
+          bundle exec jekyll build
+        env:
+          JEKYLL_ENV: production
+
+      - name: Open or update pull request
+        if: ${{ steps.update-grammars.outputs.has-changes != '0' && contains(fromJSON('["workflow_dispatch", "schedule"]'), github.event_name) && github.ref_name == 'master' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VESPA_SHA: ${{ steps.update-grammars.outputs.vespa-sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          git config --global user.email "bot+actions@vespa.ai"
+          git config --global user.name "${{ github.actor }}"
+
+          # Leave an open pull request alone until vespa-engine/vespa changes the grammars again.
+          if git fetch -q origin "${PR_BRANCH}" 2>/dev/null && git diff --quiet FETCH_HEAD -- _grammars; then
+            echo "Branch ${PR_BRANCH} already has these grammars."
+            exit 0
+          fi
+
+          # One branch for all grammar updates: a newer copy replaces the one in an open pull request.
+          git checkout -B "${PR_BRANCH}"
+          git add _grammars
+          git commit -m "Update grammars from vespa-engine/vespa" -m "Copied from vespa-engine/vespa@${VESPA_SHA}."
+          git push --force origin "${PR_BRANCH}"
+
+          cat > pr-body.md <<BODY
+          The grammars in \`_grammars/\` are copies of the ones in [vespa-engine/vespa/${VESPA_GRAMMARS}](https://github.com/vespa-engine/vespa/tree/${VESPA_SHA}/${VESPA_GRAMMARS}), copied from vespa-engine/vespa@${VESPA_SHA}. Change the grammars in vespa-engine/vespa; this pull request is opened or updated by the nightly [Autoupdate Documentation](${RUN_URL}) workflow when they change.
+
+          The workflow checked the copy with \`test/test_rouge_lexers.rb\` and a site build before opening this pull request. Review the highlighting of a page with a changed language before merging.
+          BODY
+
+          if [ -z "$(gh pr list --head "${PR_BRANCH}" --state open --json number --jq '.[].number')" ]; then
+            gh pr create --base master --head "${PR_BRANCH}" --title "Update grammars from vespa-engine/vespa" --body-file pr-body.md
+          else
+            gh pr edit "${PR_BRANCH}" --body-file pr-body.md
+          fi
