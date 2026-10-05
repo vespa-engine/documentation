@@ -1,7 +1,8 @@
 # _plugins/rouge_textmate.rb
 #
 # Rouge lexers built from TextMate grammars, so that code blocks tagged with a Vespa language
-# (```schema, {% highlight schema %}) are highlighted from the same grammar as the editors use.
+# (```vespa-schema-language, {% highlight vespa-schema-language %}) are highlighted from the same
+# grammar as the editors use.
 # The grammars live in _grammars/ as unmodified copies of the ones in vespa-engine/vespa.
 #
 # A TextMate pattern list maps onto a Rouge state: at each position the patterns are tried in
@@ -219,8 +220,8 @@ module Rouge
     class VespaSchema < RegexLexer
       title 'Vespa schema'
       desc 'Vespa schema language, from the TextMate grammar in vespa-engine/vespa'
-      tag 'schema'
-      aliases 'sd', 'vespa-schema'
+      tag 'vespa-schema-language'
+      aliases 'vespa-schema'
       filenames '*.sd'
 
       VespaTextMate.define(self, File.expand_path('../_grammars/vespa-schema.tmLanguage.json', __dir__))

@@ -107,7 +107,7 @@ def check_lexer(tag, sample, expectations, failures)
 end
 
 failures = VespaTextMate.unmapped_scopes.map { |tag, scopes| "#{tag}: no token for scopes #{scopes.join(', ')}" }
-check_lexer('schema', SCHEMA_SAMPLE, SCHEMA_EXPECTATIONS, failures)
+check_lexer('vespa-schema-language', SCHEMA_SAMPLE, SCHEMA_EXPECTATIONS, failures)
 check_lexer('cpp', CPP_SAMPLE, CPP_EXPECTATIONS, failures)
 
 if failures.empty?
