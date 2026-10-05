@@ -1,12 +1,15 @@
 # Checks the Rouge lexers that _plugins/rouge_textmate.rb builds from the grammars in _grammars/,
-# and the C++ lexer extension in _plugins/rouge_cpp_types.rb.
+# the C++ lexer extension in _plugins/rouge_cpp_types.rb, and the pre-hilite marks in highlighted
+# code from _plugins/highlight_marks.rb.
 #
 # Run from the repository root:
 #   bundle exec ruby test/test_rouge_lexers.rb
 
+require 'cgi'
 require 'rouge'
 require_relative '../_plugins/rouge_textmate'
 require_relative '../_plugins/rouge_cpp_types'
+require_relative '../_plugins/highlight_marks'
 
 SCHEMA_SAMPLE = <<~'SD'
   # A schema with the main constructs
@@ -106,9 +109,38 @@ def check_lexer(tag, sample, expectations, failures)
   end
 end
 
+# [language, code with marks, the marked texts expected in the output]
+MARK_CASES = [
+  # A mark around one token
+  ['vespa-schema-language', %(field title type string {\n    indexing: summary | <span class="pre-hilite">index</span>\n}\n), ['index']],
+  # Marks that start and end inside tokens, and a mark across lines
+  ['java', %(String na<span class="pre-hilite">me = "Hel</span>lo";\n<span class="pre-hilite">int a;\nint b;</span>\n), ['me = "Hel', "int a;\nint b;"]],
+].freeze
+
+def check_marks(lang, code, expected_marks, failures)
+  plain, ranges = HighlightMarks.extract(code)
+  html = HighlightMarks.format(Rouge::Lexer.find(lang).new.lex(plain), ranges)
+  text = ->(s) { CGI.unescapeHTML(s.gsub(/<[^>]+>/, '')) }
+
+  failures << "marks (#{lang}): highlighted text differs from the code" unless text.(html) == plain
+
+  # The text inside each mark, found by matching the mark's closing tag past the token spans in it.
+  segments = html.split(HighlightMarks::OPEN).drop(1).map do |rest|
+    depth = 1
+    pos = 0
+    while depth.positive? && (m = rest.match(%r{<span class="[^"]+">|</span>}, pos))
+      depth += m[0] == '</span>' ? -1 : 1
+      pos = m.end(0)
+    end
+    text.(rest[0...(pos - '</span>'.length)])
+  end
+  failures << "marks (#{lang}): marked #{segments.inspect}, expected #{expected_marks.inspect}" unless segments == expected_marks
+end
+
 failures = VespaTextMate.unmapped_scopes.map { |tag, scopes| "#{tag}: no token for scopes #{scopes.join(', ')}" }
 check_lexer('vespa-schema-language', SCHEMA_SAMPLE, SCHEMA_EXPECTATIONS, failures)
 check_lexer('cpp', CPP_SAMPLE, CPP_EXPECTATIONS, failures)
+MARK_CASES.each { |lang, code, marks| check_marks(lang, code, marks, failures) }
 
 if failures.empty?
   puts 'Rouge lexers OK'
