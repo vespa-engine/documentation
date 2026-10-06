@@ -62,8 +62,8 @@ as distances are calculated for every document which matches the query filters.
 To enable fast approximate matching, the tensor field definition
 needs an `index` directive. A Vespa [document schema](../basics/schemas.html) can declare multiple tensor fields with `HNSW` enabled.
 
-<pre>
-field image_embeddings type tensor&lt;float&gt;(i{},x[512]) {
+<pre>{% highlight vespa-schema-language %}
+field image_embeddings type tensor<float>(i{},x[512]) {
   indexing: summary | attribute | index
   attribute {
     distance-metric: angular
@@ -76,7 +76,7 @@ field image_embeddings type tensor&lt;float&gt;(i{},x[512]) {
   }
 }
 
-field text_embedding type tensor&lt;float&gt;(x[384]) {
+field text_embedding type tensor<float>(x[384]) {
   indexing: summary | attribute | index
   attribute {
     distance-metric: prenormalized-angular
@@ -88,7 +88,7 @@ field text_embedding type tensor&lt;float&gt;(x[384]) {
     }
   }
 }
-</pre>
+{% endhighlight %}</pre>
 
 In the schema snippet above, fast approximate search is enabled by building an `HNSW` index for the
 `image_embeddings` and the `text_embedding` tensor fields.

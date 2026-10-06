@@ -27,7 +27,7 @@ m.graph.input # check input format
 m.graph.output # check output format
 {% endhighlight %}</pre>
 - Include the model on Vespa .sd file
-<pre>
+<pre>{% highlight vespa-schema-language %}
     schema msmarco {
         document msmarco {
             field id type string {
@@ -45,7 +45,7 @@ m.graph.output # check output format
         rank-profile tensorflow {
             function vespa_input() {
                 expression {
-                    tensor&lt;float&gt;(x[1],y[3]):[
+                    tensor<float>(x[1],y[3]):[
                     	[fieldMatch(text).queryCompleteness, 
                     	fieldMatch(text).significance, 
                     	nativeRank(text)]
@@ -63,4 +63,4 @@ m.graph.output # check output format
             }
         }
     }
-</pre>
+{% endhighlight %}</pre>

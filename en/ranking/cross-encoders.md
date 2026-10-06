@@ -89,16 +89,17 @@ map (embed) query text to language model tokens.
 Assuming we have two fields that we want to index and use for re-ranking (title, body), we
 can use the `embed` indexing expression to invoke the tokenizer configured above:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema my_document {
     document my_document {
         field title type string {..}
         field body type string {..}
     }
-    field tokens type tensor&lt;float&gt;(d0[512]) {
+    field tokens type tensor<float>(d0[512]) {
         indexing: (input title || "") . " "  .  (input body || "") | embed tokenizer | attribute
     }
-}</pre>
+}
+{% endhighlight %}</pre>
 
 The above will concat the title and body input document fields, and input to the 
 `hugging-face-tokenizer` tokenizer which saves the output tokens as float (101.0).  
@@ -122,10 +123,10 @@ Notice also the [GPU](../operations/self-managed/vespa-gpu-container.html).
 GPU inference is not required, and Vespa will fall back to CPU if no GPU device is found.
 See the section on [performance](#performance).
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile bert-ranker inherits default {
     inputs {
-        query(q_tokens) tensor&lt;float&gt;(d0[32])
+        query(q_tokens) tensor<float>(d0[32])
     }
     onnx-model cross_encoder {
         file: models/model.onnx
@@ -155,7 +156,8 @@ rank-profile bert-ranker inherits default {
         rerank-count: 25
         expression: onnx(cross_encoder){d0:0,d1:0}
     }
-}</pre>
+}
+{% endhighlight %}</pre>
 
 The example above limits the sequence length to `256` using the built-in 
 [convenience functions](../reference/ranking/rank-features.html#tokenInputIds(length,%20input_1,%20input_2,%20...)) 
@@ -171,10 +173,10 @@ start of sequence token is 1 and end of sequence is 2. In this case we use the
 `customTokenInputIds` function in `my_input_ids` function. See
 [customTokenInputIds](../reference/ranking/rank-features.html#customTokenInputIds(start_sequence_id, sep_sequence_id, length, input_1, input_2, ...)).
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile roberta-ranker inherits default {
     inputs {
-        query(q_tokens) tensor&lt;float&gt;(d0[32])
+        query(q_tokens) tensor<float>(d0[32])
     }
     onnx-model cross_encoder {
         file: models/model.onnx
@@ -199,7 +201,8 @@ rank-profile roberta-ranker inherits default {
         rerank-count: 25
         expression: onnx(cross_encoder){d0:0,d1:0}
     }
-}</pre>
+}
+{% endhighlight %}</pre>
 
 
 ## Using the cross-encoder model at query time 
@@ -245,26 +248,27 @@ When using [multi-vector indexing](https://blog.vespa.ai/semantic-search-with-mu
 we can do the following to feed the best (closest) paragraph using the 
 [closest()](../reference/ranking/rank-features.html#closest(name)) feature into re-ranking with the cross-encoder model. 
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema my_document {
     document my_document {  
-        field paragraphs type array&lt;string&gt;string {..}
+        field paragraphs type array<string>string {..}
     }
-    field tokens type tensor&lt;float&gt;(p{}, d0[512]) {
+    field tokens type tensor<float>(p{}, d0[512]) {
         indexing: input paragraphs | embed tokenizer | attribute
     }
-    field embedding type tensor&lt;float&gt;(p{}, x[768]) {
+    field embedding type tensor<float>(p{}, x[768]) {
         indexing: input paragraphs | embed embedder | attribute
     }
-}</pre>
+}
+{% endhighlight %}</pre>
 
 Notice that both tokens use the same mapped embedding dimension name `p`. 
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile max-paragraph-into-cross-encoder inherits default {
     inputs {
-        query(tokens) tensor&lt;float&gt;(d0[32])
-        query(q) tensor&lt;float&gt;(x[768])
+        query(tokens) tensor<float>(d0[32])
+        query(q) tensor<float>(x[768])
     }
     first-phase {
         expression: closeness(field, embedding)
@@ -288,7 +292,7 @@ rank-profile max-paragraph-into-cross-encoder inherits default {
         expression: onnx(cross_encoder){d0:0,d1:0} #Slice 
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 The `best_input` uses a tensor join between the `closest(embedding)` tensor and the `tokens` tensor,
 which then returns the tokens of the best-matching (closest) paragraph. 

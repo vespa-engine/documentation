@@ -34,7 +34,7 @@ to filter out non-diverse results before second-phase ranking (and during match-
 
 Example:
 
-```
+```vespa-schema-language
 field domain type string {
     indexing: attribute | summary
 }
@@ -88,7 +88,7 @@ by limiting hits exposed to first-phase ranking to the highest (lowest) values o
 Adding the diversity element when using match-phase means that the diversity field attribute
 is also used to produce the set of matches returned from the match-phase attribute.
 
-```
+```vespa-schema-language
 field popularity type int {
     indexing: attribute | summary
 }

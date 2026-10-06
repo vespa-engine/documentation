@@ -105,7 +105,7 @@ The order in which the models are specified determines the model precedence, see
 In addition to adding models in [services.xml](../reference/applications/services/search.html#significance),
 the `significance` feature must be enabled in the [`rank-profile` section of the schema](../reference/schemas/schemas.html#significance), e.g.
 
-```xml
+```vespa-schema-language
 schema example {
     document example {
         field content type string {

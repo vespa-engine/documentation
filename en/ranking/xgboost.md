@@ -104,7 +104,7 @@ For a model file named `my_model.ubj`, the features file must be named `my_model
 Then define rank profile [functions](ranking-expressions-features.html#function-snippets)
 that match the feature names and map them to Vespa document attributes or query features:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema my_app {
     document my_app {
         field price type double {
@@ -129,7 +129,7 @@ schema my_app {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 If the model was trained with feature names that are valid Vespa rank features
 (e.g. `attribute(price)`), the functions are not needed — Vespa resolves them directly.
@@ -182,7 +182,7 @@ Vespa has a `xgboost` [ranking feature](../reference/ranking/rank-features.html)
 This ranking feature specifies the model to use in a ranking expression.
 Both UBJ and JSON models use the same ranking feature:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema my_app {
     rank-profile prediction inherits default {
         first-phase {
@@ -193,7 +193,7 @@ schema my_app {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Here, we specify that the model `my_model.ubj` is applied to the top ranking documents
 by the first-phase ranking expression.
@@ -214,7 +214,7 @@ For large forests, an alternative GBDT evaluator can further reduce evaluation c
 Enable it by setting the `vespa.eval.use_fast_forest`
 [rank-property](../reference/ranking/rank-feature-configuration.html) to `true` in the rank profile:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile prediction inherits default {
     rank-properties {
         vespa.eval.use_fast_forest: true
@@ -223,7 +223,7 @@ rank-profile prediction inherits default {
         expression: xgboost("my_model.json")
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 This is a rank profile setting, not a query parameter - it is applied when the model is compiled,
 so it cannot be toggled per query. To A/B test it, create a second rank profile that only adds this property.
@@ -286,7 +286,7 @@ For UBJ models, Vespa reads the objective from the model file.
 For logistic objectives, the `base_score` is automatically transformed (logit)
 so the model output matches XGBoost's predictions without manual adjustment:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema my_app {
     rank-profile classify inherits default {
         first-phase {
@@ -294,12 +294,12 @@ schema my_app {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Note that UBJ does not automatically apply a sigmoid to the final output.
 For logistic objectives, wrap the expression in `sigmoid()` if you need a probability:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema my_app {
     rank-profile classify inherits default {
         first-phase {
@@ -307,7 +307,7 @@ schema my_app {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 For ranking objectives and `reg:squarederror`, the raw tree sum can be used directly.
 
@@ -336,7 +336,7 @@ c.predict_proba(breast_cancer.data)[:, 1]
 To represent the `predict_proba` function of XGBoost for the binary classifier in Vespa,
 use the [sigmoid function](../reference/ranking/ranking-expressions.html):
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema my_app {
     rank-profile prediction-binary inherits default {
         first-phase {
@@ -344,12 +344,12 @@ schema my_app {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 When the `base_score` is not the default (0.5), the sigmoid alone is insufficient.
 The full formula accounting for `base_score` is:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema my_app {
     rank-profile prediction-binary inherits default {
         constants {
@@ -360,7 +360,7 @@ schema my_app {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Replace `0.5` with the actual `base_score` used during training.
 See the [XGBoost System Test](https://github.com/vespa-engine/system-test/tree/master/tests/search/xgboost) for a complete working example.

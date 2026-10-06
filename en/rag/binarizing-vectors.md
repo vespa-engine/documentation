@@ -57,7 +57,7 @@ Vespa’s built-in indexing language [converters](../reference/writing/indexing-
 `binarize` and `pack_bits` let you easily generate binarized vectors.
 Example schema definitions used to generate the vectors in the table above:
 
-```
+```vespa-schema-language
 schema doc {
 
     document doc {
@@ -119,7 +119,7 @@ Adding a new field takes resources, on disk and in memory.
 A new binarized embedding field is smaller - above, it is 1/32 of the original field.
 Also note that embedding fields often have an index configured, like:
 
-```
+```vespa-schema-language
 field doc_embeddings type tensor<float>(x[8]) {
     indexing: summary | attribute | index
     attribute {
@@ -188,7 +188,7 @@ As an extra index is 13G, the temporal incremental memory usage is approximately
 
 ## Define the binarized embedding field
 The new field is _added_ to the schema, example schema, before:
-```
+```vespa-schema-language
 schema doc {
 
     document doc {
@@ -200,7 +200,7 @@ schema doc {
 ```
 
 After:
-```
+```vespa-schema-language
 schema doc {
 
     document doc {
@@ -218,7 +218,7 @@ schema doc {
 The above are simple examples, with no ANN settings on the fields.
 Following is a more complex example - schema before:
 
-```
+```vespa-schema-language
 schema doc {
 
     document doc {
@@ -239,7 +239,7 @@ schema doc {
 ```
 
 Schema after:
-```
+```vespa-schema-language
 schema doc {
 
     document doc {
@@ -351,7 +351,7 @@ See distance calculated to 3.0, which is the number of bits different in the bin
 ## Rank profiles and queries
 Assuming a rank profile like:
 
-```
+```vespa-schema-language
 rank-profile app_ranking {
     match-features {
         distance(field, doc_embedding)
@@ -377,7 +377,7 @@ $ vespa query \
 
 A binarized version is like:
 
-```
+```vespa-schema-language
 rank-profile app_ranking_bin {
     match-features {
         distance(field, doc_embedding_binarized)
@@ -404,7 +404,7 @@ $ vespa query \
 
 Query with full-precision query vector, against a binarized vector - rank profile:
 
-```
+```vespa-schema-language
 rank-profile app_ranking_bin_full {
     match-features {
         distance(field, doc_embedding_binarized)
@@ -496,7 +496,7 @@ print(f"Hits different: {num_hits}")
 The purpose of the binarization is reducing memory footprint.
 Given the results of the evaluation above, store the full-precision embeddings on disk or remove them altogether.
 Example with paging the attribute to disk-only:
-```
+```vespa-schema-language
 schema doc {
 
     document doc {
@@ -523,7 +523,7 @@ schema doc {
 
 This example only indexes the binarized embedding, with data binarized before indexing:
 
-```
+```vespa-schema-language
 schema doc {
 
     document doc {
@@ -549,7 +549,7 @@ schema doc {
 To generate the embedding from other data types, like text,
 use the [converters](../reference/writing/indexing-language.html#converters) - example:
 
-```
+```vespa-schema-language
     field doc_embedding type tensor<int8>(x[1]) {
         indexing: (input title || "") . " " . (input content || "") | embed | attribute
         attribute {

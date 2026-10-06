@@ -29,7 +29,7 @@ This section provides guidelines for configuring document enrichment, using the
 Enrichments are defined in a schema using a [generate indexing expression](../reference/writing/indexing-language.html#generate).
 For example the following schema defines two [synthetic fields](../operations/reindexing.html) with `generate`:
 
-```
+```vespa-schema-language
 schema passage {
     document passage {
         field id type string {
@@ -427,7 +427,7 @@ To be used with `generate` indexing expression this component should be added to
 ```
 
 The last step is to use it in a document schema, e.g.:
-```
+```vespa-schema-language
 schema passage {
     document passage {
         field text type string {

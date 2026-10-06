@@ -21,11 +21,11 @@ Also see the [pyvespa examples](https://vespa-engine.github.io/pyvespa/examples/
 
 A nearest neighbor search has at least these components: a document vector, a query vector,
 a rank profile using `closeness()` and a query with the `nearestNeighbor` operator:
-<pre>
+<pre>{% highlight vespa-schema-language %}
     # Schema definition of the vector in documents
     document doc {
 
-        field <span class="pre-hilite">d_vector</span> type tensor&lt;float&gt;(d[3]) {
+        field <span class="pre-hilite">d_vector</span> type tensor<float>(d[3]) {
             indexing: attribute | index
             attribute {
                 distance-metric: angular
@@ -39,7 +39,7 @@ a rank profile using `closeness()` and a query with the `nearestNeighbor` operat
     #  - using the closeness() rank feature in the ranking expression
     rank-profile rank_docs inherits default {
         inputs {
-            query(<span class="pre-hilite">q_vector</span>) tensor&lt;float&gt;(d[3])
+            query(<span class="pre-hilite">q_vector</span>) tensor<float>(d[3])
         }
         first-phase {
             expression: <span class="pre-hilite">closeness</span>(field, d_vector)
@@ -60,8 +60,7 @@ a rank profile using `closeness()` and a query with the `nearestNeighbor` operat
 $ vespa query 'select * from docs where {targetHits: 3}<span class="pre-hilite">nearestNeighbor</span>(d_vector, q_vector)' \
   <span class="pre-hilite">ranking=rank_docs</span> \
   'input.query(q_vector)'='[1,2,3]'
-
-</pre>
+{% endhighlight %}</pre>
 The `nearestNeighbor` query operator will calculate values
 used by the [closeness()](../reference/ranking/rank-features.html#closeness(dimension,name)) rank feature.
 {% include note.html content='closeness(`field`, d_vector)
@@ -88,29 +87,29 @@ Document vectors are stored in a
 [tensor field](../reference/schemas/schemas.html#tensor)
 defined in the document [schema](../reference/schemas/schemas.html).
 A tensor type (dense) with one indexed dimension stores a single vector per document:
-<pre>
-field doc_embedding type tensor&lt;float&gt;(x[384]) {
+<pre>{% highlight vespa-schema-language %}
+field doc_embedding type tensor<float>(x[384]) {
     indexing: attribute
 }
-</pre>
+{% endhighlight %}</pre>
 
 A tensor type (mixed) with one or more mapped dimensions and one indexed dimension stores multiple vectors per document:
-<pre>
-field doc_embeddings type tensor&lt;float&gt;(m{},x[384]) {
+<pre>{% highlight vespa-schema-language %}
+field doc_embeddings type tensor<float>(m{},x[384]) {
     indexing: attribute
 }
-</pre>
+{% endhighlight %}</pre>
 
 Similarly, the type of a query vector is defined in a
 [rank-profile](../reference/schemas/schemas.html#rank-profile):
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile my_profile {
     inputs {
-        query(query_embedding) tensor&lt;float&gt;(x[384])
+        query(query_embedding) tensor<float>(x[384])
     }
     ...
 }
-</pre>
+{% endhighlight %}</pre>
 
 This all ties together with the [nearestNeighbor](../reference/querying/yql.html#nearestneighbor) query operator
 that expects two arguments; the document tensor field name which is searched and the input query tensor name.
@@ -149,7 +148,7 @@ the [Approximate Nearest Neighbor Search](approximate-nn-hnsw) document.
 The following [document schema](../basics/schemas.html) is used to illustrate Vespa's support for 
 vector search, or nearest neighbor search:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema product {
 
     document product {
@@ -164,14 +163,14 @@ schema product {
             indexing: summary | attribute
         }
 
-        field text_embedding type tensor&lt;float&gt;(x[384]) {
+        field text_embedding type tensor<float>(x[384]) {
             indexing: summary | attribute
             attribute {
                 distance-metric: prenormalized-angular
             }
         }
 
-        field image_embeddings type tensor&lt;float&gt;(i{},x[512]) {
+        field image_embeddings type tensor<float>(i{},x[512]) {
             indexing: summary | attribute
             attribute {
                 distance-metric: angular
@@ -181,7 +180,7 @@ schema product {
     }
 
 }
-</pre>
+{% endhighlight %}</pre>
 
 The `product` document schema has 4 fields.
 The fields of type [tensor](../ranking/tensor-user-guide.html) represent vector embeddings:
@@ -221,10 +220,10 @@ as the field values are often produced using a specific distance metric.
 Lastly, one need to configure how to [rank](../basics/ranking.html) products which 
 are retrieved by the nearest neighbor search:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile semantic_similarity {
     inputs {
-        query(query_embedding) tensor&lt;float&gt;(x[384])
+        query(query_embedding) tensor<float>(x[384])
     }
     first-phase {
         expression: closeness(field, text_embedding)
@@ -233,13 +232,13 @@ rank-profile semantic_similarity {
 
 rank-profile image_similarity {
     inputs {
-        query(image_query_embeddings) tensor&lt;float&gt;(x[512]])
+        query(image_query_embeddings) tensor<float>(x[512]])
     }
     first-phase {
         expression: closeness(field, image_embeddings)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 The `rank-profile` specifies the query input tensor names and types. The query input tensors
 must be of the same dimensionality as the document vector and have the same dimension name. 
@@ -266,10 +265,10 @@ the default [Vespa JSON result format](../reference/querying/default-result-form
 of the hit becomes 0.0 one usually have forgotten to specify the correct ranking profile. 
 
 An example of a `rank-profile` also specifying an additional [re-ranking phase](../ranking/phased-ranking.html):
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile image_similarity_with_reranking {
     inputs {
-        query(image_query_embedding) tensor&lt;float&gt;(x[512]])
+        query(image_query_embedding) tensor<float>(x[512]])
     }
     first-phase {
         expression: closeness(field, image_embeddings)
@@ -279,7 +278,7 @@ rank-profile image_similarity_with_reranking {
         expression: closeness(field, image_embeddings) * attribute(popularity)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 In this case, hits retrieved by the
 [nearestNeighbor](../reference/querying/yql.html#nearestneighbor)
 query operator are re-scored also using
@@ -415,9 +414,9 @@ for an example of how the `NearestNeighborItem` is used.
 ## Using binary embeddings with hamming distance
 The following packs a 128 bit embedding representation into a 16 dimensional dense tensor 
 using `int8` tensor value precision (16 x 8 = 128 bit):
-<pre>
+<pre>{% highlight vespa-schema-language %}
 document vector {
-    field vector type tensor&lt;int8&gt;(x[16]) {
+    field vector type tensor<int8>(x[16]) {
         indexing: summary | attribute
         attribute {
             distance-metric: hamming
@@ -430,7 +429,7 @@ rank-profile hamming-nn {
         expression: closeness(field,vector)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Hamming distance search over binary vectors is implemented with xor and pop count cpu instructions.
 The rank-profile specifies 
