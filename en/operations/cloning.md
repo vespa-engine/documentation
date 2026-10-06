@@ -123,11 +123,11 @@ EOF
     vespa-documentation-search</a> as an example and add/replace <code>nodes</code> elements
     for <code>container</code> and <code>content</code> clusters.
     If in doubt, just add a small config to start with, and change later:
-<pre>
-&lt;nodes count="2"&gt;
-    &lt;resources vcpu="2" memory="8Gb" disk="10Gb" /&gt;
-&lt;/nodes&gt;
-</pre>
+<pre>{% highlight xml %}
+<nodes count="2">
+    <resources vcpu="2" memory="8Gb" disk="10Gb" />
+</nodes>
+{% endhighlight %}</pre>
     Deploy the application package:
 <pre>
 $ vespa prod deploy
