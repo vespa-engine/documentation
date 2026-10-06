@@ -71,15 +71,15 @@ To speed up inference, Vespa avoids re-tokenizing the document tokens, so we nee
 [huggingface-tokenizer-embedder](../reference/rag/embedding.html#huggingface-tokenizer-embedder) 
 in the `services.xml` file:
 
-<pre>
-&lt;container id="default" version="1.0"&gt;
+<pre>{% highlight xml %}
+<container id="default" version="1.0">
     ..
-    &lt;component id="tokenizer" type="hugging-face-tokenizer"&gt;
-      &lt;model path="models/tokenizer.json"&gt;
-    &lt;/component&gt;
+    <component id="tokenizer" type="hugging-face-tokenizer">
+      <model path="models/tokenizer.json">
+    </component>
     ..
-&lt;/container&gt;
-</pre>
+</container>
+{% endhighlight %}</pre>
 
 This allows us to use the tokenizer while indexing documents in Vespa and also at query time to
 map (embed) query text to language model tokens.
