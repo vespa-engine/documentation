@@ -611,11 +611,11 @@ only contain the `track_id` field can improve performance, since `track_id` is d
 In addition, since the summary only contain one field, it saves network time as less data is
 transferred during the summary fill phase. 
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 document-summary track_id {
     summary track_id { }
 }
-</pre>
+{% endhighlight %}</pre>
 
 The new schema then becomes:
 
@@ -745,11 +745,11 @@ matching in this field will be performed using `match:word` which is the
 default match mode for string fields with `indexing: attribute`.
 The `tags` field is of type [weightedset](../reference/schemas/schemas.html#weightedset).
 
-<pre>
- field tags type weightedset&lt;string&gt; {
+<pre>{% highlight vespa-schema-language %}
+ field tags type weightedset<string> {
       indexing: summary | attribute
  }
-</pre>
+{% endhighlight %}</pre>
 
 `weightedset` is a field type that allows representing a tag with an integer weight, which can be used for ranking.
 In this case, there is no inverted index structure,
@@ -934,7 +934,7 @@ like [weightedset](../reference/schemas/schemas.html#weightedset), see
 For fields that don't need any match ranking features, it's strongly recommended
 to use [rank: filter](../reference/schemas/schemas.html#rank).
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 field availability type int {
     indexing: summary | attribute
     rank: filter
@@ -942,7 +942,7 @@ field availability type int {
         fast-search
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 With the settings above, bit vector posting list representations are used. This is especially efficient
 when used in combination with [TAAT (term at a time)](feature-tuning.html#hybrid-taat-daat) 
@@ -1162,11 +1162,11 @@ The `track` schema was defined with a `similar` tensor field with one named *map
 to the `weightedset` field, but in a more generic way, and here using `float` to represent
 the tensor cell value. 
 
-<pre>
-field similar type tensor&lt;float&gt;(trackid{}) {
+<pre>{% highlight vespa-schema-language %}
+field similar type tensor<float>(trackid{}) {
       indexing: summary | attribute
 }
-</pre>
+{% endhighlight %}</pre>
 
 Inspecting one document, using the vespa-cli (Wraps [Vespa document/v1 api](../writing/document-v1-api-guide.html)):
 
@@ -1299,16 +1299,16 @@ input.query(user_liked)={{trackid:TRUAXHV128F42694E8 }:1.0,{trackid:TRQIQMT128E0
 Both the document tensor and the query tensor are defined with `trackid{}` as the *named* *mapped* dimension. The 
 sparse tensor dot product can then be expression in a `rank-profile`:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile similar {
     inputs {
-        query(user_liked) tensor&lt;float&gt;(trackid{})
+        query(user_liked) tensor<float>(trackid{})
     }
     first-phase {
         expression: sum(attribute(similar) * query(user_liked))
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 See [tensor user guide](../ranking/tensor-user-guide.html) for more on tensor fields and tensor computations
 with Vespa. Adding this `rank-profile` to the document schema:
@@ -2213,14 +2213,14 @@ over all matched documents. Read more about [graceful result degradation](gracef
 Note that the example uses the `popularity` rank-profile which was configured with one 
 thread per search, for low settings of `maxHits`, this is the recommended setting. 
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile popularity {
     num-threads-per-search: 1
     first-phase {
         expression: attribute(popularity)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 The core difference from capped range search is that `match-phase` is safe, as filters work inline
 with the search and are not applied after finding the top-k documents.

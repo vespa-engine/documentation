@@ -8,7 +8,7 @@ redirect_from:
 
 The [schema](../basics/schemas.html) defines fields, types of fields and settings per field, e.g.
 
-```
+```vespa-schema-language
 schema product {
 
     document product {
