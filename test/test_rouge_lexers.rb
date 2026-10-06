@@ -109,32 +109,51 @@ def check_lexer(tag, sample, expectations, failures)
   end
 end
 
-# [language, code with marks, the marked texts expected in the output]
+# [language, code with markup, [opening tag, text inside it] for each kept tag, outermost first]
 MARK_CASES = [
   # A mark around one token
-  ['vespa-schema-language', %(field title type string {\n    indexing: summary | <span class="pre-hilite">index</span>\n}\n), ['index']],
+  ['vespa-schema-language', %(field title type string {\n    indexing: summary | <span class="pre-hilite">index</span>\n}\n),
+   [['<span class="pre-hilite">', 'index']]],
   # Marks that start and end inside tokens, and a mark across lines
-  ['java', %(String na<span class="pre-hilite">me = "Hel</span>lo";\n<span class="pre-hilite">int a;\nint b;</span>\n), ['me = "Hel', "int a;\nint b;"]],
+  ['java', %(String na<span class="pre-hilite">me = "Hel</span>lo";\n<span class="pre-hilite">int a;\nint b;</span>\n),
+   [['<span class="pre-hilite">', 'me = "Hel'], ['<span class="pre-hilite">', "int a;\nint b;"]]],
+  # A link, and a link inside a mark
+  ['vespa-schema-language', %(indexing: input myField | <a href="../rag/embedding.html">embed</a> | attribute\n),
+   [['<a href="../rag/embedding.html">', 'embed']]],
+  ['vespa-schema-language', %(<span class="pre-hilite">field <a href="#title">title</a> type string</span> {\n}\n),
+   [['<span class="pre-hilite">', 'field title type string'], ['<a href="#title">', 'title']]],
+  # Emphasis inside an XML attribute value
+  ['xml', %(<node hostalias="<em>node1</em>"/>\n), [['<em>', 'node1']]],
+  # A closing tag without an opening tag is code, and a tag that is not closed leaves the code as it is
+  ['java', %(String s = "</b>";\n), []],
+  ['java', %(String s = "<em>x";\n), []],
 ].freeze
 
-def check_marks(lang, code, expected_marks, failures)
-  plain, ranges = HighlightMarks.extract(code)
-  html = HighlightMarks.format(Rouge::Lexer.find(lang).new.lex(plain), ranges)
-  text = ->(s) { CGI.unescapeHTML(s.gsub(/<[^>]+>/, '')) }
-
-  failures << "marks (#{lang}): highlighted text differs from the code" unless text.(html) == plain
-
-  # The text inside each mark, found by matching the mark's closing tag past the token spans in it.
-  segments = html.split(HighlightMarks::OPEN).drop(1).map do |rest|
-    depth = 1
-    pos = 0
-    while depth.positive? && (m = rest.match(%r{<span class="[^"]+">|</span>}, pos))
-      depth += m[0] == '</span>' ? -1 : 1
-      pos = m.end(0)
+# Returns [opening tag, text inside it] for each kept tag in the HTML, outermost first.
+def kept_tags(html)
+  found = []
+  open = []
+  html.scan(%r{<(/?)(\w+)[^>]*>|[^<]+}) do
+    tag = Regexp.last_match[0]
+    if !tag.start_with?('<')
+      open.each { |entry| entry[1] << CGI.unescapeHTML(tag) }
+    elsif Regexp.last_match[1].empty?
+      entry = [tag, +'']
+      found << entry if tag.match?(/\A<(a\s|em>|b>|strong>|i>|span class="pre-hilite">)/)
+      open << entry
+    else
+      open.pop
     end
-    text.(rest[0...(pos - '</span>'.length)])
   end
-  failures << "marks (#{lang}): marked #{segments.inspect}, expected #{expected_marks.inspect}" unless segments == expected_marks
+  found
+end
+
+def check_marks(lang, code, expected, failures)
+  plain, marks = HighlightMarks.extract(code)
+  html = HighlightMarks.format(Rouge::Lexer.find(lang).new.lex(plain), marks)
+  failures << "marks (#{lang}): highlighted text differs from the code" unless CGI.unescapeHTML(html.gsub(/<[^>]+>/, '')) == plain
+  actual = kept_tags(html)
+  failures << "marks (#{lang}): kept #{actual.inspect}, expected #{expected.inspect}" unless actual == expected
 end
 
 failures = VespaTextMate.unmapped_scopes.map { |tag, scopes| "#{tag}: no token for scopes #{scopes.join(', ')}" }
