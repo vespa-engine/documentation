@@ -1,6 +1,6 @@
 # Checks the Rouge lexers that _plugins/rouge_textmate.rb builds from the grammars in _grammars/,
-# the C++ lexer extension in _plugins/rouge_cpp_types.rb, and the pre-hilite marks in highlighted
-# code from _plugins/highlight_marks.rb.
+# the C++ lexer extension in _plugins/rouge_cpp_types.rb, the console lexer adaptation in
+# _plugins/rouge_console.rb, and the markup kept in highlighted code by _plugins/highlight_marks.rb.
 #
 # Run from the repository root:
 #   bundle exec ruby test/test_rouge_lexers.rb
@@ -9,6 +9,7 @@ require 'cgi'
 require 'rouge'
 require_relative '../_plugins/rouge_textmate'
 require_relative '../_plugins/rouge_cpp_types'
+require_relative '../_plugins/rouge_console'
 require_relative '../_plugins/highlight_marks'
 
 SCHEMA_SAMPLE = <<~'SD'
@@ -87,6 +88,28 @@ CPP_EXPECTATIONS = [
   ['NULL',             1, 'Name.Builtin'],
 ].freeze
 
+CONSOLE_SAMPLE = <<~'SH'
+  $ vespa-sentinel-cmd list
+  container state=RUNNING mode=AUTO id="default/container.0"
+  # Find DEBUG log messages for component creation, like:
+  $ curl -s -H "Content-Type: application/json" \
+    --data @feed.json \
+    http://localhost:8080/document/v1/
+  $ vespa query 'yql=select * from music
+    where artist contains "coldplay"'
+  [2021-01-07 10:13:37.006] DEBUG : container > a; b
+SH
+
+CONSOLE_EXPECTATIONS = [
+  ['$',              1, 'Generic.Prompt'],
+  ['container state', 1, 'Generic.Output'],
+  ['# Find',         1, 'Comment'],
+  ['--data',         1, 'Name.Tag'],                   # continues the command after "\"
+  ['where artist',   1, 'Literal.String.Single'],      # continues the quoted argument
+  ['[2021',          1, 'Generic.Output'],
+  ['> a; b',         1, 'Generic.Output'],             # not a prompt
+].freeze
+
 def check_lexer(tag, sample, expectations, failures)
   lexer = Rouge::Lexer.find(tag)
   return failures << "#{tag}: no lexer registered" unless lexer
@@ -159,6 +182,7 @@ end
 failures = VespaTextMate.unmapped_scopes.map { |tag, scopes| "#{tag}: no token for scopes #{scopes.join(', ')}" }
 check_lexer('vespa-schema-language', SCHEMA_SAMPLE, SCHEMA_EXPECTATIONS, failures)
 check_lexer('cpp', CPP_SAMPLE, CPP_EXPECTATIONS, failures)
+check_lexer('console', CONSOLE_SAMPLE, CONSOLE_EXPECTATIONS, failures)
 MARK_CASES.each { |lang, code, marks| check_marks(lang, code, marks, failures) }
 
 if failures.empty?
