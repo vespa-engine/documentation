@@ -75,6 +75,8 @@ SCHEMA_EXPECTATIONS = [
 YQL_SAMPLE = <<~'YQL'
   select id from music where ({targetHits: 10}nearestNeighbor(embedding, q)) and year >= 2000
   | all(group(time.year(ts)) each(output(count()))) # count per year
+  select * from music where text contains text(@query)
+  all(group(genre) filter(in(genre, "rock")) each(output(count())))
 YQL
 
 YQL_EXPECTATIONS = [
@@ -82,11 +84,15 @@ YQL_EXPECTATIONS = [
   ['music',           1, 'Name'],
   ['10',              1, 'Literal.Number'],
   ['nearestNeighbor', 1, 'Name.Function'],
+  ['and',             1, 'Operator.Word'],
   ['>=',              1, 'Operator'],
   ['all',             1, 'Keyword'],
   ['time',            1, 'Name.Class'],
   ['count',           1, 'Name.Function'],
   ['# count',         1, 'Comment.Single'],
+  ['@query',          1, 'Name.Variable'],
+  ['all',             2, 'Keyword'],                   # grouping on its own, without "|"
+  ['in(genre',        1, 'Operator.Word'],
 ].freeze
 
 CPP_SAMPLE = <<~'CPP'

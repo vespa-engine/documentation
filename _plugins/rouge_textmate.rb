@@ -31,6 +31,7 @@ module VespaTextMate
     ['constant.numeric.integer',           Rouge::Token::Tokens::Literal::Number::Integer],
     ['constant.numeric',                   Rouge::Token::Tokens::Literal::Number],
     ['keyword.declaration',                Rouge::Token::Tokens::Keyword::Declaration],
+    ['keyword.operator.wordlike',          Rouge::Token::Tokens::Operator::Word],
     ['keyword.operator',                   Rouge::Token::Tokens::Operator],
     ['keyword',                            Rouge::Token::Tokens::Keyword],
     ['storage.type',                       Rouge::Token::Tokens::Keyword::Type],
