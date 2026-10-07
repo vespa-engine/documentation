@@ -72,7 +72,7 @@ Change from using the `pos.ll` / `pos.radius` / `pos.bb` / `pos.attribute` param
 pos.ll=63.4225N+10.3637E&pos.radius=5km
 ```
 to using [YQL](../../querying/query-language.html):
-```
+```vespa-yql
 where geoLocation(myfieldname, 63.5, 10.5, "5 km")
 ```
 
