@@ -211,9 +211,9 @@ Now, we can use this tensor to calculate the global CTR score for an article's c
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre>{% highlight vespa-ranking-expression %}
     attribute(category_tensor) * attribute(global_category_ctrs)
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 Given the global category CTR example above, this would result in the value `0.1`.

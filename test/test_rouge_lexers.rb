@@ -76,6 +76,18 @@ SCHEMA_EXPECTATIONS = [
   ['match-features', 1, 'Keyword'],
 ].freeze
 
+EXPRESSION_SAMPLE = <<~'EXPR'
+  closeness(field, embedding) * (1 + bm25(title) + bm25(text))
+EXPR
+
+EXPRESSION_EXPECTATIONS = [
+  ['closeness', 1, 'Name.Builtin'],
+  ['field',     1, 'Name'],                            # an argument, not the schema keyword
+  ['*',         1, 'Operator'],
+  ['1',         1, 'Literal.Number.Integer'],
+  ['bm25',      1, 'Name.Builtin'],
+].freeze
+
 YQL_SAMPLE = <<~'YQL'
   select id from music where ({targetHits: 10}nearestNeighbor(embedding, q)) and year >= 2000
   | all(group(time.year(ts)) each(output(count()))) # count per year
@@ -237,6 +249,7 @@ end
 
 failures = VespaTextMate.unmapped_scopes.map { |tag, scopes| "#{tag}: no token for scopes #{scopes.join(', ')}" }
 check_lexer('vespa-schema-language', SCHEMA_SAMPLE, SCHEMA_EXPECTATIONS, failures)
+check_lexer('vespa-ranking-expression', EXPRESSION_SAMPLE, EXPRESSION_EXPECTATIONS, failures)
 check_lexer('vespa-yql', YQL_SAMPLE, YQL_EXPECTATIONS, failures)
 check_lexer('cpp', CPP_SAMPLE, CPP_EXPECTATIONS, failures)
 check_lexer('console', CONSOLE_SAMPLE, CONSOLE_EXPECTATIONS, failures)

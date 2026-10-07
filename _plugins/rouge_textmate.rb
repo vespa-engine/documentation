@@ -113,10 +113,11 @@ module VespaTextMate
   # (rule, mixin) are protected, as they are meant to be called from a literal state block, so
   # they are called with send.
   class Builder
-    def initialize(lexer_class, grammar_path)
+    def initialize(lexer_class, grammar_path, root)
       @lexer = lexer_class
       @tag = lexer_class.tag
       @grammar = JSON.parse(File.read(grammar_path))
+      @root = root
       @inner_states = 0
     end
 
@@ -125,7 +126,8 @@ module VespaTextMate
       @grammar.fetch('repository', {}).each do |name, rule|
         define_state(repository_state(name), [rule], TEXT, fallback: false)
       end
-      define_state(:root, @grammar.fetch('patterns'), TEXT, fallback: true)
+      root_patterns = @root ? [{ 'include' => "##{@root}" }] : @grammar.fetch('patterns')
+      define_state(:root, root_patterns, TEXT, fallback: true)
       # Rouge evaluates state definitions on first use. Load them all now, so that an invalid
       # regex or include fails the site build rather than the first page that uses the language.
       @lexer.state_definitions.keys.each { |name| @lexer.get_state(name) }
@@ -213,8 +215,9 @@ module VespaTextMate
     end
   end
 
-  def self.define(lexer_class, grammar_path)
-    Builder.new(lexer_class, grammar_path).build
+  # With root, the lexer starts in that repository rule instead of the grammar's top-level patterns.
+  def self.define(lexer_class, grammar_path, root: nil)
+    Builder.new(lexer_class, grammar_path, root).build
   end
 end
 
@@ -228,6 +231,16 @@ module Rouge
       filenames '*.sd'
 
       VespaTextMate.define(self, File.expand_path('../_grammars/vespa-schema.tmLanguage.json', __dir__))
+    end
+
+    # A ranking expression on its own, as written after "expression:" in a schema.
+    class VespaRankingExpression < RegexLexer
+      title 'Vespa ranking expression'
+      desc 'Vespa ranking expression, from the schema TextMate grammar in vespa-engine/vespa'
+      tag 'vespa-ranking-expression'
+
+      VespaTextMate.define(self, File.expand_path('../_grammars/vespa-schema.tmLanguage.json', __dir__),
+                           root: 'ranking-expression')
     end
 
     class VespaYql < RegexLexer
