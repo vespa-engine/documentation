@@ -35,7 +35,7 @@ to hold the embedding and a recommendation rank profile:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="news/my-app/schemas/news.sd">
+<pre data-test="file" data-path="news/my-app/schemas/news.sd">{% highlight vespa-schema-language %}
 schema news {
     document news {
         field news_id type string {
@@ -72,7 +72,7 @@ schema news {
         field impressions type int {
             indexing: summary | attribute
         }
-        field embedding type tensor&lt;float&gt;(d0[50]) {
+        field embedding type tensor<float>(d0[50]) {
             indexing: attribute 
             attribute {
                 distance-metric: dotproduct
@@ -86,7 +86,7 @@ schema news {
 
     rank-profile popularity inherits default {
         function popularity() {
-            expression: if (attribute(impressions) &gt; 0, attribute(clicks) / attribute(impressions), 0)
+            expression: if (attribute(impressions) > 0, attribute(clicks) / attribute(impressions), 0)
         }
         first-phase {
             expression: nativeRank(title, abstract) + 10 * popularity
@@ -99,7 +99,7 @@ schema news {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 The `embedding` field is a tensor field.
@@ -148,19 +148,19 @@ Add this schema in `schemas/user.sd`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="news/my-app/schemas/user.sd">
+<pre data-test="file" data-path="news/my-app/schemas/user.sd">{% highlight vespa-schema-language %}
 schema user {
     document user {
         field user_id type string {
             indexing: summary | attribute
             attribute: fast-search
         }
-        field embedding type tensor&lt;float&gt;(d0[50]) {
+        field embedding type tensor<float>(d0[50]) {
             indexing: summary | attribute
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 This schema is set up so that we can search for a `user_id` and retrieve the user's embedding vector.
@@ -170,27 +170,27 @@ so we modify `services.xml` and add it under `documents` in the `content` sectio
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="news/my-app/services.xml">
-&lt;?xml version="1.0" encoding="UTF-8"?&gt;
-&lt;services version="1.0"&gt;
+<pre data-test="file" data-path="news/my-app/services.xml">{% highlight xml %}
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
 
-    &lt;container id="default" version="1.0"&gt;
-        &lt;search /&gt;
-        &lt;document-api /&gt;
-        &lt;nodes count="1" /&gt;
-    &lt;/container&gt;
+    <container id="default" version="1.0">
+        <search />
+        <document-api />
+        <nodes count="1" />
+    </container>
 
-    &lt;content id="mind" version="1.0"&gt;
-        &lt;redundancy&gt;1&lt;/redundancy&gt;
-        &lt;documents&gt;
-            &lt;document type="news" mode="index" /&gt;
-            &lt;document type="user" mode="index" /&gt;
-        &lt;/documents&gt;
-        &lt;nodes count="1" /&gt;
-    &lt;/content&gt;
+    <content id="mind" version="1.0">
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="news" mode="index" />
+            <document type="user" mode="index" />
+        </documents>
+        <nodes count="1" />
+    </content>
 
-&lt;/services&gt;
-</pre>
+</services>
+{% endhighlight %}</pre>
 </div>
 
 <div class="pre-parent">
@@ -259,9 +259,9 @@ So, write the following to `news/my-app/search/query-profiles/default.xml`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="news/my-app/search/query-profiles/default.xml">
-&lt;query-profile id="default" type="root" /&gt;
-</pre>
+<pre data-test="file" data-path="news/my-app/search/query-profiles/default.xml">{% highlight xml %}
+<query-profile id="default" type="root" />
+{% endhighlight %}</pre>
 </div>
 
 To set up the query profile types, write them to the file
@@ -269,11 +269,11 @@ To set up the query profile types, write them to the file
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="news/my-app/search/query-profiles/types/root.xml">
-&lt;query-profile-type id="root" inherits="native"&gt;
-    &lt;field name="ranking.features.query(user_embedding)" type="tensor&amp;lt;float&amp;gt;(d0[50])" /&gt;
-&lt;/query-profile-type&gt;
-</pre>
+<pre data-test="file" data-path="news/my-app/search/query-profiles/types/root.xml">{% highlight xml %}
+<query-profile-type id="root" inherits="native">
+    <field name="ranking.features.query(user_embedding)" type="tensor&lt;float&gt;(d0[50])" />
+</query-profile-type>
+{% endhighlight %}</pre>
 </div>
 
 This configures Vespa to expect a float tensor with dimension `d0[50]` when the
@@ -450,7 +450,7 @@ Let's switch to using approximate nearest-neighbors by adding `index` to the emb
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="news/my-app/schemas/news.sd">
+<pre data-test="file" data-path="news/my-app/schemas/news.sd">{% highlight vespa-schema-language %}
 schema news {
     document news {
         field news_id type string {
@@ -488,7 +488,7 @@ schema news {
         field impressions type int {
             indexing: summary | attribute
         }
-        field embedding type tensor&lt;float&gt;(d0[50]) {
+        field embedding type tensor<float>(d0[50]) {
             indexing: attribute | index
             attribute {
                 distance-metric: dotproduct
@@ -502,7 +502,7 @@ schema news {
 
     rank-profile popularity inherits default {
         function popularity() {
-            expression: if (attribute(impressions) &gt; 0, attribute(clicks) / attribute(impressions), 0)
+            expression: if (attribute(impressions) > 0, attribute(clicks) / attribute(impressions), 0)
         }
         first-phase {
             expression: nativeRank(title, abstract) + 10 * popularity
@@ -515,7 +515,7 @@ schema news {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 If you make this change and deploy it, you will get prompted by Vespa that a

@@ -109,7 +109,7 @@ Write the following to `app/schemas/doc.sd`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="app/schemas/doc.sd">
+<pre data-test="file" data-path="app/schemas/doc.sd">{% highlight vespa-schema-language %}
 schema doc {
     document doc {
         field language type string {
@@ -134,7 +134,7 @@ schema doc {
         fields: title, text
     }
     
-    field embedding type tensor&lt;bfloat16&gt;(v[384]) {
+    field embedding type tensor<bfloat16>(v[384]) {
         indexing: input title." ".input text | embed | attribute
         attribute {
             distance-metric: angular
@@ -149,14 +149,14 @@ schema doc {
 
     rank-profile semantic {
         inputs {
-            query(e) tensor&lt;bfloat16&gt;(v[384])
+            query(e) tensor<bfloat16>(v[384])
         }
         first-phase {
             expression: closeness(field, embedding)
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 </div>
 A lot is happening here; let us go through it in detail. 
 
@@ -726,7 +726,7 @@ as the BM25 scores would be 0. We also add `match-features` to be able to debug 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="app/schemas/doc.sd">
+<pre data-test="file" data-path="app/schemas/doc.sd">{% highlight vespa-schema-language %}
 schema doc {
     document doc {
         field language type string {
@@ -751,7 +751,7 @@ schema doc {
         fields: title, text
     }
     
-    field embedding type tensor&lt;bfloat16&gt;(v[384]) {
+    field embedding type tensor<bfloat16>(v[384]) {
       indexing: input title." ".input text | embed | attribute
       attribute {
         distance-metric: angular
@@ -760,7 +760,7 @@ schema doc {
   
     rank-profile hybrid {
         inputs {
-          query(e) tensor&lt;bfloat16&gt;(v[384])
+          query(e) tensor<bfloat16>(v[384])
         }
         first-phase {
             expression: closeness(field, embedding) * (1 + (bm25(title) + bm25(text)))
@@ -768,7 +768,7 @@ schema doc {
         match-features: bm25(title) bm25(text) closeness(field, embedding)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 Now, re-deploy the Vespa application from the `app` directory:
@@ -936,7 +936,7 @@ We add a few more rank profiles to the schema that combine the two retrieval str
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="app/schemas/doc.sd">
+<pre data-test="file" data-path="app/schemas/doc.sd">{% highlight vespa-schema-language %}
 schema doc {
     document doc {
         field language type string {
@@ -961,7 +961,7 @@ schema doc {
         fields: title, text
     }
     
-    field embedding type tensor&lt;bfloat16&gt;(v[384]) {
+    field embedding type tensor<bfloat16>(v[384]) {
       indexing: input title." ".input text | embed | attribute
       attribute {
         distance-metric: angular
@@ -970,7 +970,7 @@ schema doc {
   
     rank-profile hybrid {
         inputs {
-          query(e) tensor&lt;bfloat16&gt;(v[384])
+          query(e) tensor<bfloat16>(v[384])
         }
         first-phase {
             expression: closeness(field, embedding) * (1 + (bm25(title) + bm25(text)))
@@ -1030,7 +1030,7 @@ schema doc {
         match-features: bm25(title) bm25(text) bm25_score cosine
     }
 }  
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 Now, re-deploy the Vespa application from the `app` directory:

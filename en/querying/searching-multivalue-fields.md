@@ -47,7 +47,7 @@ In the following sections we explore matching and ranking over multivalued strin
 Assuming we have the following sample data document where we have a structured
 tag-like field where there is a weight associated with each element. 
 
-<pre data-test="file" data-path="doc.json">
+<pre data-test="file" data-path="doc.json">{% highlight json %}
 {
     "put": "id:photos:photo::0",
     "fields": {
@@ -62,7 +62,7 @@ tag-like field where there is a weight associated with each element.
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Structured data like the <code>tags</code>, where we both want to match and rank is best represented using 
 the [weightedset](../reference/schemas/schemas.html#weightedset) [field type](../reference/schemas/schemas.html#field).
@@ -79,7 +79,7 @@ and how should we match and search this data model for end-user free text querie
 - We also want to match the free form tags field as these tags might increase recall
   and the weight of the matched element(s) could influence ranking of documents matched - schema:
 
-<pre data-test="file" data-path="my-app/schemas/photo.sd">
+<pre data-test="file" data-path="my-app/schemas/photo.sd">{% highlight vespa-schema-language %}
 schema photo {
 
     stemming: none
@@ -102,7 +102,7 @@ schema photo {
             indexing: summary | attribute
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | index
             match:text
             index: enable-bm25
@@ -120,7 +120,7 @@ schema photo {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 In the schema we disable [stemming](../reference/schemas/schemas.html#stemming) and
 also enable [bm25](../ranking/bm25.html) text ranking feature for all string fields.
@@ -135,30 +135,30 @@ using the Vespa [nativeRank](../ranking/nativerank.html) text matching rank feat
 Along with the schema, we also need a [services.xml](../reference/applications/services/services.html) file
 to make up a Vespa [application package](../reference/applications/application-packages.html):
 
-<pre data-test="file" data-path="my-app/services.xml">
-&lt;?xml version="1.0" encoding="UTF-8"?&gt;
-&lt;services version="1.0"&gt;
+<pre data-test="file" data-path="my-app/services.xml">{% highlight xml %}
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
 
-    &lt;container id="default" version="1.0"&gt;
-        &lt;search /&gt;
-        &lt;document-api /&gt;
-        &lt;nodes&gt;
-            &lt;node hostalias="node1"&gt;&lt;/node&gt;
-        &lt;/nodes&gt;
-    &lt;/container&gt;
+    <container id="default" version="1.0">
+        <search />
+        <document-api />
+        <nodes>
+            <node hostalias="node1"></node>
+        </nodes>
+    </container>
 
-    &lt;content id="photos" version="1.0"&gt;
-        &lt;redundancy&gt;1&lt;/redundancy&gt;
-        &lt;documents&gt;
-            &lt;document type="photo" mode="index"/&gt;
-        &lt;/documents&gt;
-        &lt;nodes&gt;
-            &lt;node hostalias="node1" distribution-key="0" /&gt;
-        &lt;/nodes&gt;
-    &lt;/content&gt;
+    <content id="photos" version="1.0">
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="photo" mode="index"/>
+        </documents>
+        <nodes>
+            <node hostalias="node1" distribution-key="0" />
+        </nodes>
+    </content>
 
-&lt;/services&gt;
-</pre>
+</services>
+{% endhighlight %}</pre>
 
 
 ## Starting Vespa
@@ -312,7 +312,7 @@ to return rank features with the retrieved documents.
 We explicitly mention which ranking features we want to have calculated and returned.
 Notice that we don't change the actual scoring, we still use `nativeRank` as the scoring function:
 
-<pre data-test="file" data-path="my-app/schemas/photo.sd">
+<pre data-test="file" data-path="my-app/schemas/photo.sd">{% highlight vespa-schema-language %}
 schema photo {
 
     stemming: none
@@ -335,7 +335,7 @@ schema photo {
             indexing: summary | attribute
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | index
             match:text
             index: enable-bm25
@@ -369,7 +369,7 @@ schema photo {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Re-deploy with the changed rank profile:
 
@@ -406,7 +406,7 @@ In this example we defined two new ranking features:
 - `elementSimilarity(tags).sumWeight` which uses the sum of matching elements using field completeness x weight.
 - `elementSimilarity(tags).maxWeight` which uses the max over the matching elements using field completeness x weight.
 
-<pre data-test="file" data-path="my-app/schemas/photo.sd">
+<pre data-test="file" data-path="my-app/schemas/photo.sd">{% highlight vespa-schema-language %}
 schema photo {
 
     stemming: none
@@ -429,7 +429,7 @@ schema photo {
             indexing: summary | attribute
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | index
             match:text
             index: enable-bm25
@@ -471,7 +471,7 @@ schema photo {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Re-deploy with the changed rank profile:
 
@@ -512,7 +512,7 @@ first-phase {
 
 See [using query variables](../ranking/ranking-expressions-features.html#using-query-variables). 
 
-<pre data-test="file" data-path="my-app/schemas/photo.sd">
+<pre data-test="file" data-path="my-app/schemas/photo.sd">{% highlight vespa-schema-language %}
 schema photo {
 
     stemming: none
@@ -535,7 +535,7 @@ schema photo {
             indexing: summary | attribute
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | index
             match:text
             index: enable-bm25
@@ -574,7 +574,7 @@ schema photo {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Re-deploy:
 

@@ -70,7 +70,7 @@ the dataset files and create a JSONL formatted feed file with Vespa put operatio
 The [schema)(schemas.html) is covered in the next section. 
 The number of unique `tags` is used as a proxy for the popularity of the track. 
 
-<pre style="display:none" data-test="file" data-path="create-vespa-feed.py">
+<pre style="display:none" data-test="file" data-path="create-vespa-feed.py">{% highlight python %}
 import os
 import sys
 import json
@@ -122,7 +122,7 @@ for root, dirs, files in os.walk(directory):
 sorted_files.sort()
 for filename in sorted_files:
     process_file(filename)
-</pre>
+{% endhighlight %}</pre>
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>{% highlight python%}
@@ -214,7 +214,7 @@ For this application, we define a `track` document type.
 
 Write the following to `app/schemas/track.sd`:
 
-<pre style="display:none" data-test="file" data-path="app/schemas/track.sd">
+<pre style="display:none" data-test="file" data-path="app/schemas/track.sd">{% highlight vespa-schema-language %}
 schema track {
 
     document track {
@@ -233,7 +233,7 @@ schema track {
             indexing: summary | index
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | attribute
             attribute: fast-search
         }
@@ -245,7 +245,7 @@ schema track {
         }
     }
 
-    field embedding type tensor&lt;float&gt;(x[384]) {
+    field embedding type tensor<float>(x[384]) {
             indexing: input title | embed e5 |attribute | index
             attribute {
                 distance-metric: angular
@@ -284,8 +284,8 @@ schema track {
         match-features: distance(field, embedding)
 
         inputs {
-            query(q)  tensor&lt;float&gt;(x[384])
-            query(q1) tensor&lt;float&gt;(x[384])
+            query(q)  tensor<float>(x[384])
+            query(q1) tensor<float>(x[384])
         } 
 
         first-phase {
@@ -325,7 +325,7 @@ schema track {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
 <pre>{% highlight vespa-schema-language %}
@@ -472,41 +472,41 @@ The [services.xml](../reference/applications/services/services.html) defines the
 the Vespa application — which services to run and how many nodes per service.
 Write the following to `app/services.xml`:
 
-<pre data-test="file" data-path="app/services.xml">
-&lt;?xml version="1.0" encoding="UTF-8"?&gt;
-&lt;services version="1.0"&gt;
+<pre data-test="file" data-path="app/services.xml">{% highlight xml %}
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
 
-    &lt;container id="default" version="1.0"&gt;
-        &lt;search/&gt;
-        &lt;document-api/&gt;
-        &lt;component id="e5" type="hugging-face-embedder"&gt;
-            &lt;transformer-model path="model/e5-small-v2-int8.onnx"/&gt;
-            &lt;tokenizer-model path="model/tokenizer.json"/&gt;
-        &lt;/component&gt;
-    &lt;/container&gt;
+    <container id="default" version="1.0">
+        <search/>
+        <document-api/>
+        <component id="e5" type="hugging-face-embedder">
+            <transformer-model path="model/e5-small-v2-int8.onnx"/>
+            <tokenizer-model path="model/tokenizer.json"/>
+        </component>
+    </container>
 
-    &lt;content id="tracks" version="1.0"&gt;
-        &lt;engine&gt;
-            &lt;proton&gt;
-                &lt;tuning&gt;
-                    &lt;searchnode&gt;
-                        &lt;requestthreads&gt;
-                            &lt;persearch&gt;4&lt;/persearch&gt;
-                        &lt;/requestthreads&gt;
-                    &lt;/searchnode&gt;
-                &lt;/tuning&gt;
-            &lt;/proton&gt;
-        &lt;/engine&gt;
-        &lt;redundancy&gt;1&lt;/redundancy&gt;
-        &lt;documents&gt;
-            &lt;document type="track" mode="index"&gt;&lt;/document&gt;
-        &lt;/documents&gt;
-        &lt;nodes&gt;
-            &lt;node distribution-key="0" hostalias="node1"&gt;&lt;/node&gt;
-        &lt;/nodes&gt;
-    &lt;/content&gt;
-&lt;/services&gt;
-</pre>
+    <content id="tracks" version="1.0">
+        <engine>
+            <proton>
+                <tuning>
+                    <searchnode>
+                        <requestthreads>
+                            <persearch>4</persearch>
+                        </requestthreads>
+                    </searchnode>
+                </tuning>
+            </proton>
+        </engine>
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="track" mode="index"></document>
+        </documents>
+        <nodes>
+            <node distribution-key="0" hostalias="node1"></node>
+        </nodes>
+    </content>
+</services>
+{% endhighlight %}</pre>
 
 The default [query profile](query-profiles.html) can be used to override
 default query api settings for all queries.
@@ -514,12 +514,12 @@ default query api settings for all queries.
 The following enables [presentation.timing](../reference/api/query.html#presentation.timing) and
 renders `weightedset` fields as a JSON maps. 
 
-<pre data-test="file" data-path="app/search/query-profiles/default.xml">
-&lt;query-profile id=&quot;default&quot;&gt;
-    &lt;field name=&quot;presentation.timing&quot;&gt;true&lt;/field&gt;
-    &lt;field name=&quot;renderer.json.jsonWsets&quot;&gt;true&lt;/field&gt;
-&lt;/query-profile&gt;
-</pre>
+<pre data-test="file" data-path="app/search/query-profiles/default.xml">{% highlight xml %}
+<query-profile id="default">
+    <field name="presentation.timing">true</field>
+    <field name="renderer.json.jsonWsets">true</field>
+</query-profile>
+{% endhighlight %}</pre>
 
 The final step is to download embedding model files
 
