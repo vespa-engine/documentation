@@ -1,6 +1,7 @@
 # Checks the Rouge lexers that _plugins/rouge_textmate.rb builds from the grammars in _grammars/,
 # the C++ lexer extension in _plugins/rouge_cpp_types.rb, the console lexer adaptation in
-# _plugins/rouge_console.rb, and the markup kept in highlighted code by _plugins/highlight_marks.rb.
+# _plugins/rouge_console.rb, the XML placeholders in _plugins/rouge_xml_placeholders.rb, and the
+# markup kept in highlighted code by _plugins/highlight_marks.rb.
 #
 # Run from the repository root:
 #   bundle exec ruby test/test_rouge_lexers.rb
@@ -10,6 +11,7 @@ require 'rouge'
 require_relative '../_plugins/rouge_textmate'
 require_relative '../_plugins/rouge_cpp_types'
 require_relative '../_plugins/rouge_console'
+require_relative '../_plugins/rouge_xml_placeholders'
 require_relative '../_plugins/highlight_marks'
 
 SCHEMA_SAMPLE = <<~'SD'
@@ -133,6 +135,20 @@ CONSOLE_EXPECTATIONS = [
   ['> a; b',         1, 'Generic.Output'],             # not a prompt
 ].freeze
 
+XML_SAMPLE = <<~'XML'
+  <query-profile id="[id]" [optional attributes]>
+      <field name="[name]">[value]</field>
+  </query-profile>
+XML
+
+XML_EXPECTATIONS = [
+  ['query-profile',         1, 'Name.Tag'],
+  ['[id]',                  1, 'Literal.String'],      # inside an attribute value, a string as before
+  ['[optional attributes]', 1, 'Generic.Emph'],        # where the attributes go
+  ['>',                     1, 'Name.Tag'],
+  ['[value]',               1, 'Text'],                # element content, text as before
+].freeze
+
 def check_lexer(tag, sample, expectations, failures)
   lexer = Rouge::Lexer.find(tag)
   return failures << "#{tag}: no lexer registered" unless lexer
@@ -207,6 +223,7 @@ check_lexer('vespa-schema-language', SCHEMA_SAMPLE, SCHEMA_EXPECTATIONS, failure
 check_lexer('vespa-yql', YQL_SAMPLE, YQL_EXPECTATIONS, failures)
 check_lexer('cpp', CPP_SAMPLE, CPP_EXPECTATIONS, failures)
 check_lexer('console', CONSOLE_SAMPLE, CONSOLE_EXPECTATIONS, failures)
+check_lexer('xml', XML_SAMPLE, XML_EXPECTATIONS, failures)
 MARK_CASES.each { |lang, code, marks| check_marks(lang, code, marks, failures) }
 
 if failures.empty?
