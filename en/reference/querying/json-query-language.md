@@ -137,7 +137,7 @@ Examples:
 
 Grouping statement:
 
-```
+```vespa-yql
 | all(group(time.year(a)) each(output(count())
     all(group(time.monthofyear(a)) each(output(count())))
 ```
@@ -160,7 +160,7 @@ equivalent JSON `grouping`-argument:
 
 Grouping statement:
 
-```
+```vespa-yql
 all(
   group(year)
   each(output(count())) as(by_year)
@@ -185,7 +185,7 @@ equivalent JSON `grouping`-argument:
 
 Grouping statement:
 
-```
+```vespa-yql
 all(
   group(author)
   output(count() as(authors_cardinality))
@@ -207,7 +207,7 @@ equivalent JSON `grouping`-argument:
 
 Grouping statement:
 
-```
+```vespa-yql
 all(group(predefined(foo, bucket[1, 2>, bucket[3, 4>)))
 ```
 equivalent JSON `grouping`-argument:
