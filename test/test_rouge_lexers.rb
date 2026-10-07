@@ -1,7 +1,8 @@
 # Checks the Rouge lexers that _plugins/rouge_textmate.rb builds from the grammars in _grammars/,
 # the C++ lexer extension in _plugins/rouge_cpp_types.rb, the console lexer adaptation in
-# _plugins/rouge_console.rb, the XML placeholders in _plugins/rouge_xml_placeholders.rb, and the
-# markup kept in highlighted code by _plugins/highlight_marks.rb.
+# _plugins/rouge_console.rb, the XML placeholders in _plugins/rouge_xml_placeholders.rb, the JSON
+# excerpts in _plugins/rouge_json_excerpts.rb, and the markup kept in highlighted code by
+# _plugins/highlight_marks.rb.
 #
 # Run from the repository root:
 #   bundle exec ruby test/test_rouge_lexers.rb
@@ -12,6 +13,7 @@ require_relative '../_plugins/rouge_textmate'
 require_relative '../_plugins/rouge_cpp_types'
 require_relative '../_plugins/rouge_console'
 require_relative '../_plugins/rouge_xml_placeholders'
+require_relative '../_plugins/rouge_json_excerpts'
 require_relative '../_plugins/highlight_marks'
 
 SCHEMA_SAMPLE = <<~'SD'
@@ -149,6 +151,21 @@ XML_EXPECTATIONS = [
   ['[value]',               1, 'Text'],                # element content, text as before
 ].freeze
 
+JSON_SAMPLE = <<~'JSON'
+  { "message": "Invoke searcher" },
+  { "message": "Return searcher" },
+  { "fields": { "embedding": [0.16, 0.37, ..], ... }, "dots": "..." }
+JSON
+
+JSON_EXPECTATIONS = [
+  ['"message"', 1, 'Name.Label'],
+  ['},',        1, 'Punctuation'],
+  [',',         1, 'Punctuation'],                     # between objects, outside an array
+  ['..]',       1, 'Punctuation'],                     # left-out array elements
+  ['... }',     1, 'Punctuation'],                     # left-out members
+  ['"..."',     1, 'Literal.String.Double'],           # in a string, a string as before
+].freeze
+
 def check_lexer(tag, sample, expectations, failures)
   lexer = Rouge::Lexer.find(tag)
   return failures << "#{tag}: no lexer registered" unless lexer
@@ -224,6 +241,7 @@ check_lexer('vespa-yql', YQL_SAMPLE, YQL_EXPECTATIONS, failures)
 check_lexer('cpp', CPP_SAMPLE, CPP_EXPECTATIONS, failures)
 check_lexer('console', CONSOLE_SAMPLE, CONSOLE_EXPECTATIONS, failures)
 check_lexer('xml', XML_SAMPLE, XML_EXPECTATIONS, failures)
+check_lexer('json', JSON_SAMPLE, JSON_EXPECTATIONS, failures)
 MARK_CASES.each { |lang, code, marks| check_marks(lang, code, marks, failures) }
 
 if failures.empty?

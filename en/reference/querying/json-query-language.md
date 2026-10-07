@@ -567,7 +567,7 @@ Format of this in JSON:
 "where" : {
   "rank" : [
     { "contains" : [ "a", "A" ] },
-    { "contains" : [ "b", "B" ] }
+    { "contains" : [ "b", "B" ] }
   ]
 }
 ```
