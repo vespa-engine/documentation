@@ -1041,9 +1041,9 @@ userProfile={"hard rock":1, "rock":1,"metal":1, "finnish metal":1}
 
 This userProfile is referenced as a parameter 
 
-<pre>
+<pre>{% highlight vespa-yql %}
 where dotProduct(tags, @userProfile)
-</pre>
+{% endhighlight %}</pre>
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
@@ -1405,9 +1405,9 @@ $ vespa query \
 This query also retrieved some of the previous *liked* tracks. These can be removed
 from the result set using the `not` query operator, in YQL represented as `!`.
 
-<pre>
+<pre>{% highlight vespa-yql %}
 where !(track_id in (@userLiked))
-</pre>
+{% endhighlight %}</pre>
 
 The [in query operator](../reference/querying/yql.html#in)
 is the most efficient multi-value *filtering* query operator, either

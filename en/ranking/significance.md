@@ -55,12 +55,12 @@ In a *global significance model*, significance values are shared across nodes an
 ### Significance values in a query
 
 Document frequency and document count can be specified in YQL, e.g.:
-```sql
+```vespa-yql
 select * from example where content contains ({documentFrequency: {frequency: 13, count: 101}}"colors")
 ```
 
 Alternatively, significance values can be specified in YQL directly and used instead of computed IDF values, e.g.:
-```sql
+```vespa-yql
 select * from example where content contains ({significance:0.9}"neurotransmitter")
 ```
 
