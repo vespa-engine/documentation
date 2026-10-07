@@ -453,13 +453,14 @@ When specifying `distance-metric: dotproduct`, Vespa uses the technique discusse
 Spaces](https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/XboxInnerProduct.pdf)
 to solve the MIPS case. See [blog post announcing MIPS support in Vespa](https://blog.vespa.ai/announcing-maximum-inner-product-search/).
 
-<pre>
-field embedding type tensor&lt;float&gt;(d0[50]) {
+<pre>{% highlight vespa-schema-language %}
+field embedding type tensor<float>(d0[50]) {
             indexing: attribute | index
             attribute {
                 distance-metric: dotproduct
             }
-}</pre>
+}
+{% endhighlight %}</pre>
 
 See [Nearest Neighbor Search](../../querying/nearest-neighbor-search) for more
 information on nearest neighbor search and supported distance metrics in Vespa.

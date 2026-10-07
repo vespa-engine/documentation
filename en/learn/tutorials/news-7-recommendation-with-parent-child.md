@@ -69,16 +69,16 @@ which we add in `schemas/category_ctr.sd`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema category_ctr {
     document category_ctr {
-        field ctrs type tensor&lt;float&gt;(category{}) {
+        field ctrs type tensor<float>(category{}) {
             indexing: attribute
             attribute: fast-search
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 This document holds a single field: a [tensor](../../ranking/tensor-user-guide.html) of type `tensor<float>(category{})`.
@@ -141,18 +141,18 @@ Modify `schemas/news.sd`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre>{% highlight vespa-schema-language %}
 schema news {
     document news {
         ...
-        field category_ctr_ref type reference&lt;category_ctr&gt; {
+        field category_ctr_ref type reference<category_ctr> {
             indexing: attribute
         }
         ...
     }
     import field category_ctr_ref.ctrs as global_category_ctrs {}
 }
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 The field `category_ctr_ref` is a field of type `reference` of a `category_ctr` document type.
@@ -188,11 +188,11 @@ Unfortunately, tensor expressions only work on tensors, so we need to add a new 
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
-    field category_tensor type tensor&lt;float&gt;(category{}) {
+<pre>{% highlight vespa-schema-language %}
+    field category_tensor type tensor<float>(category{}) {
         indexing: attribute
     }
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 Using a tensor in this way also enables a document to have multiple categories, 
@@ -233,7 +233,7 @@ Let's add a new rank profile to do this calculation:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile recommendation_with_global_category_ctr inherits recommendation {
     function category_ctr() {
         expression: sum(attribute(category_tensor) * attribute(global_category_ctrs))
@@ -251,7 +251,7 @@ rank-profile recommendation_with_global_category_ctr inherits recommendation {
         nearest_neighbor
     }
 }
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 Here, we've added a first phase ranking expression

@@ -185,7 +185,7 @@ the query processing that searches a field or fieldset uses *one* type of transf
 #### Embedding inference
 Our `embedding` vector field is of [tensor](../../ranking/tensor-user-guide.html) type with a single named dimension (`v`) of 384 values. 
 
-```
+```vespa-schema-language
 field embedding type tensor<bfloat16>(v[384]) {
     indexing: input title." ".input text | embed arctic | attribute
     attribute {
@@ -442,13 +442,13 @@ $ vespa query \
 
 The bm25 rank profile calculates the relevance score (~25.521), which is configured in the schema as:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile bm25 {
     first-phase {
         expression: bm25(title) + bm25(text)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 So, in this case, `relevance` is the sum of the two BM25 scores. The retrieved document looks relevant; we can look at the graded judgment for this query `PLAIN-2`. The following exports the query relevance judgments (we grep for the query id that we are interested in):
 
@@ -545,7 +545,7 @@ This query returns the following [JSON result response](../../reference/querying
 The result of this vector-based search differed from the previous sparse keyword search, with a different relevant document at position 1. In this case, 
 the relevance score is 0.606 and calculated by the `closeness` function in the `semantic` rank-profile. Note that more documents were retrieved than the `targetHits`.
 
-```
+```vespa-schema-language
 rank-profile semantic {
         inputs {
           query(e) tensor<bfloat16>(v[384])

@@ -88,7 +88,7 @@ If these queries are representative of the use case, we will show that they can 
 
 Here is the schema that we will use for our sample application.
 
-```txt
+```vespa-schema-language
 # Copyright Vespa.ai. Licensed under the terms of the Apache 2.0 license. See LICENSE in the project root.
 schema doc {
 
@@ -224,7 +224,7 @@ in the [indexing language](../../writing/indexing.html).
 Here are the parts of the schema, which defines the searchable unit as a document with a text field, 
 and automatically chunks it into smaller parts of 1024 characters, which each are embedded and indexed separately:
 
-```txt
+```vespa-schema-language
 field chunks type array<string> {
     indexing: input text | chunk fixed-length 1024 | summary | index
     index: enable-bm25
@@ -246,7 +246,7 @@ summary feature defined in your rank-profile.
 
 Here is how the summary feature is calculated in the rank-profile:
 
-```txt
+```vespa-schema-language
 # This function unpacks the bits of each dimension of the mapped chunk_embeddings attribute tensor
 function chunk_emb_vecs() {
     expression: unpack_bits(attribute(chunk_embeddings))
@@ -296,7 +296,7 @@ Now, we can use this summary feature in our document summary to return the top 3
 which will be used as context for the LLM. Note that we can also define a document summary that returns all chunks, 
 which might be useful for another use case, such as deep research.
 
-```txt
+```vespa-schema-language
 document-summary top_3_chunks {
       from-disk
       summary chunks_top3 {
@@ -313,7 +313,7 @@ These can be searched together, using [field-sets](../../reference/schemas/schem
 
 In our schema, this is exemplified by the sections below, which define the `title` and `chunks` fields as separate indexed text fields.
 
-```txt
+```vespa-schema-language
 ...
 field title type title {
     indexing: index | summary
@@ -331,7 +331,7 @@ quality improvement you could get from the additional embedding field.
 We choose to index both a `title_embedding` and a `chunk_embeddings` field for this blueprint, as we aim to minimize 
 cost by embedding the binary vectors.
 
-```txt
+```vespa-schema-language
 field title_embedding type tensor<int8>(title{}, x[96]) {
     indexing: input text | embed | pack_bits | attribute | index
     attribute {
@@ -659,7 +659,7 @@ Consider these factors to determine whether this holds true for your application
 * Reduces query and indexing cost by 30 ×
 * Often reduces quality by only a few percentage points
 
-```txt
+```vespa-schema-language
 field binary_chunk_embeddings type tensor<int8>(chunk{}, x) {
   indexing: input text | chunk fixed-length 1024 | embed | pack_bits | attribute | index 
   attribute { distance-metric: hamming }
@@ -670,7 +670,7 @@ If you need higher precision vector similarity, you should use bfloat16 precisio
 disk to avoid large memory cost. Note that this means that when accessing this field in ranking, they will also need 
 to be read from disk, so you need to restrict the number of hits that accesses this field to avoid performance issues.
 
-```txt
+```vespa-schema-language
 field chunk_embeddings type tensor<bfloat16>(chunk{}, x) {
   indexing: input text | chunk fixed-length 1024 | embed | attribute 
   attribute: paged
@@ -695,7 +695,7 @@ instead of hamming distance (`binary-binary`)
 
 Below, you can see how we can do this:
 
-```txt
+```vespa-schema-language
 rank-profile base-features {
  
         inputs {
@@ -978,7 +978,7 @@ Conversely, if you want to reduce the latency of one of your retrieval 'arms' at
 
 Below are some empirically found default parameters that work well for most use cases:
 
-```txt
+```vespa-schema-language
 rank-profile optimized inherits baseline {
     filter-threshold: 0.05
     weakand {
@@ -1029,7 +1029,7 @@ We do this using the [VespaFeatureCollector](https://vespa-engine.github.io/pyve
 These are the features we will include:
 (Below, )
 
-```txt
+```vespa-schema-language
 rank-profile base-features {
         inputs {
             query(embedding) tensor<int8>(x[96])
@@ -1285,7 +1285,7 @@ Which seems quite good. With such a small dataset however, it is easy to overfit
 
 First, we need to add the learned coefficients as inputs to a new rank profile in our schema, so that we can use them in Vespa.
 
-```txt
+```vespa-schema-language
 rank-profile learned-linear inherits collect-training-data {
         match-features: 
         inputs {
@@ -1480,7 +1480,7 @@ app/
 
 Create a new rank profile that uses this model:
 
-```txt
+```vespa-schema-language
 rank-profile second-with-gbdt inherits collect-training-data {
     ...
 

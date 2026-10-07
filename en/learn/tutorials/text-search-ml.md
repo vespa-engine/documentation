@@ -386,13 +386,13 @@ If the dataset is well-built and contains useful information about the task you 
 you should be able to get results at least as good as the one obtained by your baseline on a separate test set.
 
 In our case, the baseline is the ranking function used in [our previous tutorial](text-search.html):
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile bm25 inherits default {
     first-phase {
         expression: bm25(title) + bm25(body)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 Therefore, our sanity-check model will be a linear model containing only the two features above,
 i.e. `a + b * bm25(title) + c * bm25(body)`, where `a`, `b`and `c` should be learned by using our collected dataset.
 
@@ -442,7 +442,7 @@ among other things.
 
 The two _rank-profile_'s below are obtained by training the linear model with a pointwise (sigmoid cross-entropy)
 and listwise (softmax cross-entropy) loss functions, respectively:
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile pointwise_linear_bm25 inherits default {
     first-phase {
         expression: 0.22499913 * bm25(title) + 0.07596389 * bm25(body) 
@@ -454,7 +454,7 @@ rank-profile listwise_linear_bm25 inherits default {
         expression: 0.13446581 * bm25(title) + 0.5716889 * bm25(body)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 It is interesting to see that a pointwise loss function set more weight into the title in relation to the body
 while the opposite happens when using the listwise loss function.
 
