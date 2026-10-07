@@ -138,8 +138,8 @@ Examples:
 Grouping statement:
 
 ```vespa-yql
-| all(group(time.year(a)) each(output(count())
-    all(group(time.monthofyear(a)) each(output(count())))
+| all(group(time.year(a)) each(output(count()))
+    all(group(time.monthofyear(a)) each(output(count()))))
 ```
 equivalent JSON `grouping`-argument:
 
