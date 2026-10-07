@@ -11,6 +11,7 @@ import yaml
 import urllib.request
 import tempfile
 import re
+from html import escape
 
 from bs4 import BeautifulSoup
 
@@ -21,6 +22,9 @@ from pseudo_terminal import PseudoTerminal
 def remove_liquid_highlight(text):
   """Removes Liquid highlighting tags from a string.
 
+  The line break after an opening tag is removed with it, so that a file starts with the first line
+  of the code, as an XML declaration must.
+
   Args:
     text: The string to remove highlighting from.
 
@@ -28,9 +32,27 @@ def remove_liquid_highlight(text):
     The string with highlighting tags removed.
   """
 
-  text = re.sub(r'\{%\s*highlight\s*(python|xml|.*?)\s*%\}', '', text)
+  text = re.sub(r'\{%\s*highlight\s*(python|xml|.*?)\s*%\}\n?', '', text)
   text = re.sub(r'\{%\s*endhighlight\s*%\}', '', text)
   return text
+
+
+def escape_liquid_highlight(html):
+  """Escapes the code in Liquid highlight blocks.
+
+  The code in a highlight block is literal text, so a "<" in it starts no tag. Escaping it makes the
+  HTML parser read it as text, and return it unchanged.
+
+  Args:
+    html: The page.
+
+  Returns:
+    The page with the code in highlight blocks escaped.
+  """
+
+  return re.sub(r'(\{%\s*highlight\b.*?%\})(.*?)(\{%\s*endhighlight\s*%\})',
+                lambda m: m.group(1) + escape(m.group(2), quote=False) + m.group(3),
+                html, flags=re.DOTALL)
 
 
 ################################################################################
@@ -243,7 +265,9 @@ def parse_page(html):
         "after": []
     }
 
-    soup = BeautifulSoup(html, "html.parser")
+    if isinstance(html, bytes):
+        html = html.decode("utf-8")
+    soup = BeautifulSoup(escape_liquid_highlight(html), "html.parser")
 
     for pre in soup.find_all(lambda tag: (tag.name == "pre" or tag.name == "div") and tag.has_attr("data-test")):
         if pre.attrs["data-test"] == "before":
