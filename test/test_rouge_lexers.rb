@@ -72,6 +72,23 @@ SCHEMA_EXPECTATIONS = [
   ['match-features', 1, 'Keyword'],
 ].freeze
 
+YQL_SAMPLE = <<~'YQL'
+  select id from music where ({targetHits: 10}nearestNeighbor(embedding, q)) and year >= 2000
+  | all(group(time.year(ts)) each(output(count()))) # count per year
+YQL
+
+YQL_EXPECTATIONS = [
+  ['select',          1, 'Keyword'],
+  ['music',           1, 'Name'],
+  ['10',              1, 'Literal.Number'],
+  ['nearestNeighbor', 1, 'Name.Function'],
+  ['>=',              1, 'Operator'],
+  ['all',             1, 'Keyword'],
+  ['time',            1, 'Name.Class'],
+  ['count',           1, 'Name.Function'],
+  ['# count',         1, 'Comment.Single'],
+].freeze
+
 CPP_SAMPLE = <<~'CPP'
   ConfigSubscriber subscriber;
   ConfigHandle<FooConfig>::UP fooHandle = subscriber.subscribe<FooConfig>(configId);
@@ -181,6 +198,7 @@ end
 
 failures = VespaTextMate.unmapped_scopes.map { |tag, scopes| "#{tag}: no token for scopes #{scopes.join(', ')}" }
 check_lexer('vespa-schema-language', SCHEMA_SAMPLE, SCHEMA_EXPECTATIONS, failures)
+check_lexer('vespa-yql', YQL_SAMPLE, YQL_EXPECTATIONS, failures)
 check_lexer('cpp', CPP_SAMPLE, CPP_EXPECTATIONS, failures)
 check_lexer('console', CONSOLE_SAMPLE, CONSOLE_EXPECTATIONS, failures)
 MARK_CASES.each { |lang, code, marks| check_marks(lang, code, marks, failures) }

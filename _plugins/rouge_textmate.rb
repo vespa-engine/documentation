@@ -1,8 +1,8 @@
 # _plugins/rouge_textmate.rb
 #
 # Rouge lexers built from TextMate grammars, so that code blocks tagged with a Vespa language
-# (```vespa-schema-language, {% highlight vespa-schema-language %}) are highlighted from the same
-# grammar as the editors use.
+# (```vespa-schema-language, {% highlight vespa-yql %}) are highlighted from the same grammar as
+# the editors use.
 # The grammars live in _grammars/ as unmodified copies of the ones in vespa-engine/vespa.
 #
 # A TextMate pattern list maps onto a Rouge state: at each position the patterns are tried in
@@ -37,11 +37,13 @@ module VespaTextMate
     ['storage.modifier',                   Rouge::Token::Tokens::Keyword],
     ['support.type',                       Rouge::Token::Tokens::Keyword::Type],
     ['support.variable',                   Rouge::Token::Tokens::Name],
+    ['support.class',                      Rouge::Token::Tokens::Name::Class],
     ['entity.name.type',                   Rouge::Token::Tokens::Name::Class],
     ['entity.other.inherited-class',       Rouge::Token::Tokens::Name::Class],
     ['entity.name.function.rank-feature',  Rouge::Token::Tokens::Name::Builtin],
     ['entity.name.function',               Rouge::Token::Tokens::Name::Function],
     ['variable.other.enummember',          Rouge::Token::Tokens::Name::Constant],
+    ['variable.other',                     Rouge::Token::Tokens::Name],
     ['variable.language',                  Rouge::Token::Tokens::Name::Variable],
     ['variable.parameter',                 Rouge::Token::Tokens::Name::Variable],
     ['punctuation',                        Rouge::Token::Tokens::Punctuation],
@@ -225,6 +227,15 @@ module Rouge
       filenames '*.sd'
 
       VespaTextMate.define(self, File.expand_path('../_grammars/vespa-schema.tmLanguage.json', __dir__))
+    end
+
+    class VespaYql < RegexLexer
+      title 'Vespa YQL'
+      desc 'Vespa YQL, including grouping, from the TextMate grammar in vespa-engine/vespa'
+      tag 'vespa-yql'
+      filenames '*.yql'
+
+      VespaTextMate.define(self, File.expand_path('../_grammars/vespa-yql.tmLanguage.json', __dir__))
     end
   end
 end
