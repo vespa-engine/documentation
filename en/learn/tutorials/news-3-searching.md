@@ -57,10 +57,12 @@ We'll start by looking at attribute-based sorting and grouping before moving on 
 
 We saw multiple examples of attributes in the `news.sd` schema, for instance:
 
-    field date type int {
-        indexing: summary | attribute
-        attribute: fast-search
-    }
+```vespa-schema-language
+field date type int {
+    indexing: summary | attribute
+    attribute: fast-search
+}
+```
 
 Note that this `date` field has been defined as an `int` here, and when
 feeding document, we convert the date to the format `YYYYMMDD`.
@@ -377,9 +379,11 @@ Finally, all numeric and [tensors](../../ranking/tensor-user-guide.html) fields 
 
 #### Combining index and attribute
 
-    field category type string {
-        indexing: summary | attribute | index
-    }
+```vespa-schema-language
+field category type string {
+    indexing: summary | attribute | index
+}
+```
 
 Combining both index and attribute for the same field is supported.
 In this case, we can sort and group on the category,

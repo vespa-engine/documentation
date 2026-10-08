@@ -44,7 +44,7 @@ see [document features](../reference/ranking/rank-features.html#document-feature
 ### How to set a dynamic (query time) ranking drop threshold?
 Pass a ranking feature like `query(threshold)` and use an `if` statement in the ranking expression -
 see [retrieval and ranking](../ranking/ranking-intro#retrieval-and-ranking). Example:
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile drop-low-score {
    function my_score() {
      expression: ..... #custom first phase score
@@ -54,14 +54,14 @@ rank-profile drop-low-score {
      if(my_score() < query(threshold), -1, my_score())
    }
 }
-</pre>
+{% endhighlight %}</pre>
 
 ### Are ranking expressions or functions evaluated lazily?
 <p>Rank expressions are not evaluated lazily.  No, this would require lambda arguments.
   Only doubles and tensors are passed between functions.
 
    Example:</p>
-<pre>
+<pre>{% highlight vespa-schema-language %}
 function inline foo(tensor, defaultVal) {
     expression: if (count(tensor) == 0, defaultValue, sum(tensor))
 }
@@ -69,7 +69,7 @@ function inline foo(tensor, defaultVal) {
 function bar() {
     expression: foo(tensor, sum(tensor1 * tensor2))
 }
-</pre>
+{% endhighlight %}</pre>
 
 ### Does Vespa support early termination of matching and ranking?
 Yes, this can be accomplished by configuring [match-phase](../reference/schemas/schemas.html#match-phase) 
@@ -106,7 +106,7 @@ Resolve this by one or more of:
   `if (isNan(attribute(last_update)), 0, attribute(last_update))`
 - Add a final guard in the ranking expressions coercing to some small number,
   making non-finite scores sink to the bottom while remaining a valid number:
-    ```
+    ```vespa-schema-language
 function finite_or_sentinel(x) {
       expression: if (isNan(x - x), -1e9, x)
 }
@@ -420,7 +420,7 @@ To do the opposite - match the documents that _do_ have a value set - use a quer
 
 ### How to retrieve random documents using YQL? Functionality similar to MySQL "ORDER BY rand()"
 See the [random.match](../reference/ranking/rank-features.html#random.match) rank feature - example:
-```
+```vespa-schema-language
 rank-profile random {
     first-phase {
         expression: random.match
@@ -453,7 +453,7 @@ Also see a [pyvespa example](https://vespa-engine.github.io/pyvespa/examples/pyv
 The best option is to use `--verbose` option, like `vespa feed --verbose myfile.jsonl` -
 see [documentation](../clients/vespa-cli.html#documents).
 A common problem is a mismatch in schema names and [document IDs](../schemas/documents.html#document-ids) - a schema like:
-```
+```vespa-schema-language
 schema article {
     document article {
         ...

@@ -357,23 +357,23 @@ A few important observations:
 
 - We did not specify which fields to search in the query. Vespa will, by default, use a field set or field named `default` when the query terms do not specify a field. In our case:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 fieldset default {
   fields: title, body, url
 }
-</pre>
+{% endhighlight %}</pre>
 - Our query for `what is dad bod` searches across all those three fields. 
 - If we did not specify a `default` fieldset in the schema, the above query would return zero hits as the query did not specify a field.  
 - The hit `relevance` holds the score computed by the rank profile. Vespa uses `default` by default. 
 In our case:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
 rank-profile default {
     first-phase {
         expression: nativeRank(title, body, url)
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 We can use query operator annotations for the [text](../../reference/querying/yql.html#text) operator to control various
 matching aspects, for example to set the number of hits to produce in the text operator:
