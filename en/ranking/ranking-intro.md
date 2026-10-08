@@ -242,9 +242,9 @@ Change values in the query tensor to see difference in rank score, setting diffe
 
 Summary: The problem of comparing two lists of links is transformed into a numerical problem
 of multiplying two occurrence vectors, summing co-occurrences and ranking by this sum:
-<pre>
+<pre>{% highlight vespa-ranking-expression %}
 sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
-</pre>
+{% endhighlight %}</pre>
 
 Notes:
 * Query tensors can grow large.
