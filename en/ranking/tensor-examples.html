@@ -65,9 +65,9 @@ startTime and endTime are epoch timestamps.
 "price":     { "cells": { "promo1": 16, "promo2": 18, "promo3": 10 }
 </pre>
 <p>And we can retrieve the currently valid price by the expression</p>
-<pre>
-reduce((attribute(startTime) &lt; now) * (attribute(endTime) &gt; now) * attribute(price), max)
-</pre>
+<pre>{% highlight vespa-ranking-expression %}
+reduce((attribute(startTime) < now) * (attribute(endTime) > now) * attribute(price), max)
+{% endhighlight %}</pre>
 <p>This will return 0 if there is no matching interval, so a full expression will probably
 wrap this in a function and check if it returns 0 (using an if expression) and return the
 default price of that product otherwise.</p>
@@ -75,7 +75,9 @@ default price of that product otherwise.</p>
 <p>To see why this retrieves the right price, notice that <code>(attribute(startTime) &lt; now)</code>
 <a href="../reference/ranking/ranking-expressions.html#non-primitive-functions">is a shorthand for</a></p>
 
-<pre>join(attribute(startTime), now, f(x,y)(x &lt; y))</pre>
+<pre>{% highlight vespa-ranking-expression %}
+join(attribute(startTime), now, f(x,y)(x < y))
+{% endhighlight %}</pre>
 
 <p>That is joining all the cells of the <code>startTime</code> tensor by the zero-dimensional <code>now</code>
 tensor (i.e a number), and setting the cell value in the joined tensor to 1 if now is larger than the cell
@@ -94,9 +96,9 @@ max value to retrieve the non-zero value.</p>
 (or function return values) as input to a machine-learned model. This can be done by the following expression
 (assuming the dense vector dimension is named "x":</p>
 
-<pre>
+<pre>{% highlight vespa-ranking-expression %}
 concat(concat(query(embedding),attribute(embedding),x), tensor(x[2]):[bm25(title),attribute(popularity)], x)
-</pre>
+{% endhighlight %}</pre>
 
 <p>This creates a tensor from a set of scalar expressions, and concatenates it to the query and document embedding vectors.</p>
 
@@ -183,18 +185,18 @@ attribute(topics): tensor(topic{})   - A sparse, weighted set of the topics of a
 <p>From these we have generated all 3d combinations of these features and trained a logistic regression model,
 leading to a weight for each possible combination:</p>
 
-<pre>
+<pre>{% highlight vespa-ranking-expression %}
 tensor(interest{}, location{}, topic{})
-</pre>
+{% endhighlight %}</pre>
 
 <p>This weight tensor can be added as a
 <a href="../reference/schemas/schemas.html#constant">constant tensor</a>
 to the application package, say <code>constant(model)</code>. With that we can compute the model
 in a rank profile by the expression</p>
 
-<pre>
+<pre>{% highlight vespa-ranking-expression %}
 sum(query(interests) * query(location) * attribute(topics) * constant(model))
-</pre>
+{% endhighlight %}</pre>
 
 <p>Where the first three factors generates the 3d cross feature tensor and the last combines
 them with the learned weights.</p>
@@ -224,9 +226,9 @@ as specified in <a href="ranking-expressions-features.html#using-query-variables
 <p>To calculate the matrix product between the 1x3 vector and 3x2 matrix (to get a 1x2 vector)
 use the following ranking expression:</p>
 
-<pre>
+<pre>{% highlight vespa-ranking-expression %}
 sum(query(query_vector) * attribute(document_matrix),x)
-</pre>
+{% endhighlight %}</pre>
 
 <p>This is a sparse tensor product over the shared dimension <code>x</code>,
 followed by a sum over the same dimension.</p>
@@ -246,32 +248,32 @@ followed by a sum over the same dimension.</p>
 <p>
   Assume a tensor attribute <code>my_map</code> and this is the value for a specific document:
 </p>
-<pre>
-tensor&lt;float&gt;(x{},y[3]):{a:[1,2,3],b:[4,5,6],c:[7,8,9]}
-</pre>
+<pre>{% highlight vespa-ranking-expression %}
+tensor<float>(x{},y[3]):{a:[1,2,3],b:[4,5,6],c:[7,8,9]}
+{% endhighlight %}</pre>
 <p>
   To create a query to select which of the 3 named vectors (a,b,c) to use for some other calculation,
   wrap the wanted label to look up inside a tensor.
   Assume a query tensor <code>my_key</code> with type/value:
 </p>
-<pre>
-tensor&lt;float&gt;(x{}):{b:1.0}
-</pre>
+<pre>{% highlight vespa-ranking-expression %}
+tensor<float>(x{}):{b:1.0}
+{% endhighlight %}</pre>
 <p>Do the lookup, returning a tensor of type <code>tensor&lt;float&gt;(y[3])</code>:</p>
-<pre>
+<pre>{% highlight vespa-ranking-expression %}
 sum(query(my_key)*attribute(my_map),x)
-</pre>
+{% endhighlight %}</pre>
 <!-- same as reduce(query(my_key)*attribute(my_map),sum,x) -->
 <p>
   If the key does not match anything, the result will be empty: <code>tensor&lt;float&gt;(y[3]):[0,0,0]</code>.
   For something else, add a check up-front to check if the lookup will be successful
   and run a fallback expression if it is not, like:
 </p>
-<pre>
+<pre>{% highlight vespa-ranking-expression %}
 if(reduce(query(my_key)*attribute(my_map),count) == 3,
   reduce(query(my_key)*attribute(my_map),sum,x),
-  tensor&lt;float&gt;(y[3]):[0.5,0.5,0.5])
-</pre>
+  tensor<float>(y[3]):[0.5,0.5,0.5])
+{% endhighlight %}</pre>
 {% include note.html content='The above can be considered the same as creating a
 <a href="../reference/ranking/ranking-expressions.html#slice">slice</a>, like <code>(y*x){x:b}</code>.
 The above syntax allows an optimized execution, find an example in the
@@ -288,9 +290,9 @@ The above syntax allows an optimized execution, find an example in the
 </p>
 <blockquote>Matryoshka Representation Learning (MRL) which encodes information at different granularities and allows a single embedding to adapt to the computational constraints of downstream tasks.</blockquote>
 <p>The following slices the first 256 dimensions of a tensor <code>t</code>:</p>
-<pre>
-  tensor&lt;float&gt;(x[256])(t{x:(x)})
-</pre>
+<pre>{% highlight vespa-ranking-expression %}
+  tensor<float>(x[256])(t{x:(x)})
+{% endhighlight %}</pre>
 <p>Importantly, this does only reference into the original tensor, avoiding copying the tensor to a smaller tensor.</p>
 <p>
 The following is a complete example where we have stored an original vector representation with 3072 dimensions, And
@@ -298,19 +300,20 @@ The following is a complete example where we have stored an original vector repr
  followed by a full computation over all dimensions in the second-phase expression. See <a href="phased-ranking.html">phased ranking</a>
  for context on using Vespa phased computations and <a href="https://blog.vespa.ai/tailoring-frozen-embeddings-with-vespa/">customizing reusable frozen embeddings with Vespa</a>.
 </p>
-<pre>{% raw %}
+<pre>{% highlight vespa-schema-language %}
+{% raw %}
 schema example {
   document example {
-    field document_vector type tensor&lt;float&gt;(x[3072]) {
+    field document_vector type tensor<float>(x[3072]) {
       indexing: attribute | summary
     }
   }
   rank-profile small-256-first-phase {
     inputs {
-      query(query_vector) tensor&lt;float&gt;(x[3072])
+      query(query_vector) tensor<float>(x[3072])
     }
     function slice_first_dims(t) {
-      expression: l2_normalize(tensor&lt;float&gt;(x[256])(t{x:(x)}), x)
+      expression: l2_normalize(tensor<float>(x[256])(t{x:(x)}), x)
     }
     first-phase {
       expression: sum( slice_first_dims(query(query_vector)) * slice_first_dims(attribute(document_vector)) )
@@ -320,7 +323,8 @@ schema example {
     }
   }
 }    
-{% endraw %}</pre>
+{% endraw %}
+{% endhighlight %}</pre>
 <p>
   See also a runnable example in this
   <a href="https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gFsBPAfQAsBLAc3dYBNOjVgDcCAYwAuWAE4kyNSEQSRJBWgGdZAHmgAbLAENJAPgAUAD0QBGAEwBdAJRwbxW8QDMxACzEArMQAbMQA7MQAHMQAnMTWAAyx1rEOkAoQAL4K6aQY1OS4DEQ5ipRoaXQM0JwyGpKsgQJCGqxY0KwsHDx8gsJiUrLyNJjKUGqaspaIgU5mHVy8jb0S0jLAFnCWjumOqUOZGNkKeZgFKkXlFPjH5PQqtLKMhnqcAF7nQxBKDHq2rPcyj2ebzMVRqdQaPWarXabHm3SEomWsmIYAsO3K+1QmPsIHSQA">

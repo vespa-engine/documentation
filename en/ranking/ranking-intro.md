@@ -242,9 +242,9 @@ Change values in the query tensor to see difference in rank score, setting diffe
 
 Summary: The problem of comparing two lists of links is transformed into a numerical problem
 of multiplying two occurrence vectors, summing co-occurrences and ranking by this sum:
-<pre>
+<pre>{% highlight vespa-ranking-expression %}
 sum(tensorFromWeightedSet(attribute(inlinks), links) * query(links))
-</pre>
+{% endhighlight %}</pre>
 
 Notes:
 * Query tensors can grow large.
@@ -308,11 +308,11 @@ then use in multiple rank-profiles.
 Read more about [schema inheritance](../schemas/inheritance-in-schemas.html).
 Here, `num_inlinks` and `rank_score` are defined in a rank profile we used earlier:
 
-<pre>
+<pre>{% highlight vespa-schema-language %}
     function num_inlinks() {
         expression: attribute(inlinks).count
     }
-</pre>
+{% endhighlight %}</pre>
 
 In the results, observe that no document has a _rankingExpression(num_inlinks)_ less than or equal to 10.0,
 meaning all such documents were purged in the first ranking phase due to the `rank-score-drop-limit`.
