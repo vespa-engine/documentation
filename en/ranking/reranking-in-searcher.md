@@ -136,59 +136,59 @@ public class ReRankingSearcher extends Searcher {
 to make up a Vespa [application package](../reference/applications/application-packages.html). 
 Here we include the custom searcher in the `default` [search chain](../applications/chaining.html):
 
-<pre data-test="file" data-path="my-app/src/main/application/services.xml">
-&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot; ?&gt;
-&lt;services version=&quot;1.0&quot; xmlns:deploy=&quot;vespa&quot; xmlns:preprocess=&quot;properties&quot;&gt;
-    &lt;container id=&quot;default&quot; version=&quot;1.0&quot;&gt;
-        &lt;document-api/&gt;
-        &lt;search&gt;
-            &lt;chain id=&quot;default&quot; inherits=&quot;vespa&quot;&gt;
-                &lt;searcher id=&quot;ai.vespa.example.searcher.ReRankingSearcher&quot; bundle=&quot;ranking&quot;/&gt;
-            &lt;/chain&gt;
-        &lt;/search&gt;
-        &lt;nodes&gt;
-            &lt;node hostalias=&quot;node1&quot; /&gt;
-        &lt;/nodes&gt;
-    &lt;/container&gt;
+<pre data-test="file" data-path="my-app/src/main/application/services.xml">{% highlight xml %}
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0" xmlns:deploy="vespa" xmlns:preprocess="properties">
+    <container id="default" version="1.0">
+        <document-api/>
+        <search>
+            <chain id="default" inherits="vespa">
+                <searcher id="ai.vespa.example.searcher.ReRankingSearcher" bundle="ranking"/>
+            </chain>
+        </search>
+        <nodes>
+            <node hostalias="node1" />
+        </nodes>
+    </container>
 
-    &lt;content id=&quot;docs&quot; version=&quot;1.0&quot;&gt;
-        &lt;redundancy&gt;2&lt;/redundancy&gt;
-        &lt;documents&gt;
-            &lt;document type=&quot;doc&quot; mode=&quot;index&quot; /&gt;
-        &lt;/documents&gt;
-        &lt;nodes&gt;
-            &lt;node hostalias=&quot;node1&quot; distribution-key=&quot;0&quot; /&gt;
-        &lt;/nodes&gt;
-    &lt;/content&gt;
-&lt;/services&gt;
-</pre>
+    <content id="docs" version="1.0">
+        <redundancy>2</redundancy>
+        <documents>
+            <document type="doc" mode="index" />
+        </documents>
+        <nodes>
+            <node hostalias="node1" distribution-key="0" />
+        </nodes>
+    </content>
+</services>
+{% endhighlight %}</pre>
 
 Notice the `bundle` name of the searcher, this needs to be in synch with the `artifactId` defined in `pom.xml`: 
 
-<pre data-test="file" data-path="my-app/pom.xml">
-&lt;?xml version=&quot;1.0&quot;?&gt;
-&lt;project xmlns=&quot;http://maven.apache.org/POM/4.0.0&quot;
-         xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;
-         xsi:schemaLocation=&quot;http://maven.apache.org/POM/4.0.0
-                             http://maven.apache.org/xsd/maven-4.0.0.xsd&quot;&gt;
-    &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
-    &lt;groupId&gt;ai.vespa.example&lt;/groupId&gt;
-    &lt;artifactId&gt;ranking&lt;/artifactId&gt;  &lt;!-- Note: When changing this, also change bundle names in services.xml --&gt;
-    &lt;version&gt;1.0.0&lt;/version&gt;
-    &lt;packaging&gt;container-plugin&lt;/packaging&gt;
-    &lt;parent&gt;
-        &lt;groupId&gt;com.yahoo.vespa&lt;/groupId&gt;
-        &lt;artifactId&gt;cloud-tenant-base&lt;/artifactId&gt;
-        &lt;version&gt;[7,999)&lt;/version&gt;  &lt;!-- Use the latest Vespa release on each build --&gt;
-        &lt;relativePath/&gt;
-    &lt;/parent&gt;
-    &lt;properties&gt;
-        &lt;bundle-plugin.failOnWarnings&gt;true&lt;/bundle-plugin.failOnWarnings&gt;
-        &lt;project.build.sourceEncoding&gt;UTF-8&lt;/project.build.sourceEncoding&gt;
-        &lt;test.hide&gt;true&lt;/test.hide&gt;
-    &lt;/properties&gt;
-&lt;/project&gt;
-</pre>
+<pre data-test="file" data-path="my-app/pom.xml">{% highlight xml %}
+<?xml version="1.0"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>ai.vespa.example</groupId>
+    <artifactId>ranking</artifactId>  <!-- Note: When changing this, also change bundle names in services.xml -->
+    <version>1.0.0</version>
+    <packaging>container-plugin</packaging>
+    <parent>
+        <groupId>com.yahoo.vespa</groupId>
+        <artifactId>cloud-tenant-base</artifactId>
+        <version>[7,999)</version>  <!-- Use the latest Vespa release on each build -->
+        <relativePath/>
+    </parent>
+    <properties>
+        <bundle-plugin.failOnWarnings>true</bundle-plugin.failOnWarnings>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <test.hide>true</test.hide>
+    </properties>
+</project>
+{% endhighlight %}</pre>
 
 
 ### Starting Vespa
@@ -236,7 +236,7 @@ $ vespa deploy --wait 300 my-app
 
 Create a few sample docs:
 
-<pre data-test="file" data-path="doc-1.json">
+<pre data-test="file" data-path="doc-1.json">{% highlight json %}
 {
     "put": "id:docs:doc::0",
     "fields": {
@@ -244,9 +244,9 @@ Create a few sample docs:
         "downloads": 100
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
-<pre data-test="file" data-path="doc-2.json">
+<pre data-test="file" data-path="doc-2.json">{% highlight json %}
 {
     "put": "id:docs:doc::1",
     "fields": {
@@ -254,7 +254,7 @@ Create a few sample docs:
         "downloads": 10
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Feed them using the CLI:
 

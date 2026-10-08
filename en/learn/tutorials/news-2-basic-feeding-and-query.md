@@ -148,26 +148,26 @@ service. Write the following to `news/my-app/services.xml`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="news/my-app/services.xml">
-&lt;?xml version="1.0" encoding="UTF-8"?&gt;
-&lt;services version="1.0"&gt;
+<pre data-test="file" data-path="news/my-app/services.xml">{% highlight xml %}
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
 
-    &lt;container id="default" version="1.0"&gt;
-        &lt;search /&gt;
-        &lt;document-api /&gt;
-        &lt;nodes count="1" /&gt;
-    &lt;/container&gt;
+    <container id="default" version="1.0">
+        <search />
+        <document-api />
+        <nodes count="1" />
+    </container>
 
-    &lt;content id="mind" version="1.0"&gt;
-        &lt;redundancy&gt;1&lt;/redundancy&gt;
-        &lt;documents&gt;
-            &lt;document type="news" mode="index" /&gt;
-        &lt;/documents&gt;
-        &lt;nodes count="1" /&gt;
-    &lt;/content&gt;
+    <content id="mind" version="1.0">
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="news" mode="index" />
+        </documents>
+        <nodes count="1" />
+    </content>
 
-&lt;/services&gt;
-</pre>
+</services>
+{% endhighlight %}</pre>
 </div>
 
 Quite a lot is set up here:
@@ -211,7 +211,7 @@ Write the following to `news/my-app/schemas/news.sd`:
 
 <div class="pre-parent">
   <button class="d-icon d-duplicate pre-copy-button" onclick="copyPreContent(this)"></button>
-<pre data-test="file" data-path="news/my-app/schemas/news.sd">
+<pre data-test="file" data-path="news/my-app/schemas/news.sd">{% highlight vespa-schema-language %}
 schema news {
     document news {
         field news_id type string {
@@ -256,7 +256,7 @@ schema news {
     }
 
 }
-</pre>
+{% endhighlight %}</pre>
 </div>
 
 The `document` is wrapped inside another element called `schema`.

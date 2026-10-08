@@ -107,7 +107,7 @@ as Vespa needs to calculate all these features.
 Using many features is usually only advisable using second phase ranking,
 see [phased ranking with Vespa](../../ranking/phased-ranking.html).
 
-<pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
+<pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">{% highlight vespa-schema-language %}
 schema msmarco {
     document msmarco {
         field id type string {
@@ -164,7 +164,7 @@ schema msmarco {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 The [random](../../reference/ranking/rank-features.html#random) global feature
 will be useful in the next section when we describe our data collection process.

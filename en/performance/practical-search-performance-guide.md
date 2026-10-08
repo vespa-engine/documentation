@@ -64,7 +64,7 @@ This [python](https://www.python.org/) script is used to traverse the dataset
 files and create a JSONL formatted feed file with Vespa feed operations.
 The schema for this feed is introduced in the next sections. 
 
-<pre style="display:none" data-test="file" data-path="create-vespa-feed.py">
+<pre style="display:none" data-test="file" data-path="create-vespa-feed.py">{% highlight python %}
 import os
 import sys
 import json
@@ -133,7 +133,7 @@ for root, dirs, files in os.walk(directory):
 sorted_files.sort()
 for filename in sorted_files:
     process_file(filename)
-</pre>
+{% endhighlight %}</pre>
 
 <pre>{% highlight python%}
 import os
@@ -237,7 +237,7 @@ $ mkdir -p app/schemas; mkdir -p app/search/query-profiles/
 A Vespa [schema](../basics/schemas.html) is a configuration of a document type and ranking and
 compute specifications. This app use a `track` schema defined as:
 
-<pre data-test="file" data-path="app/schemas/track.sd">
+<pre data-test="file" data-path="app/schemas/track.sd">{% highlight vespa-schema-language %}
 schema track {
 
     document track {
@@ -257,11 +257,11 @@ schema track {
             indexing: summary | index
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | attribute
         }
 
-        field similar type tensor&lt;float&gt;(trackid{}) {
+        field similar type tensor<float>(trackid{}) {
             indexing: summary | attribute
         }
     }
@@ -270,7 +270,7 @@ schema track {
         fields: title, artist
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Notice that the `track_id` field has :
 
@@ -284,26 +284,26 @@ This is a database-style matching mode, preserving punctuation characters.
 The [services.xml](../reference/applications/services/services.html) defines the services that make up
 the Vespa application — which services to run and how many nodes per service.
 
-<pre data-test="file" data-path="app/services.xml">
-&lt;?xml version="1.0" encoding="UTF-8"?&gt;
-&lt;services version="1.0"&gt;
+<pre data-test="file" data-path="app/services.xml">{% highlight xml %}
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
 
-    &lt;container id="default" version="1.0"&gt;
-        &lt;search/&gt;
-        &lt;document-api/&gt;
-    &lt;/container&gt;
+    <container id="default" version="1.0">
+        <search/>
+        <document-api/>
+    </container>
 
-    &lt;content id="tracks" version="1.0"&gt;
-        &lt;redundancy&gt;1&lt;/redundancy&gt;
-        &lt;documents&gt;
-            &lt;document type="track" mode="index"&gt;&lt;/document&gt;
-        &lt;/documents&gt;
-        &lt;nodes&gt;
-            &lt;node distribution-key="0" hostalias="node1"&gt;&lt;/node&gt;
-        &lt;/nodes&gt;
-    &lt;/content&gt;
-&lt;/services&gt;
-</pre>
+    <content id="tracks" version="1.0">
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="track" mode="index"></document>
+        </documents>
+        <nodes>
+            <node distribution-key="0" hostalias="node1"></node>
+        </nodes>
+    </content>
+</services>
+{% endhighlight %}</pre>
 
 The default [query profile](../querying/query-profiles.html) can be used to override
 default query api settings for all queries.
@@ -311,12 +311,12 @@ default query api settings for all queries.
 The following enables [presentation.timing](../reference/api/query.html#presentation.timing) and
 renders `weightedset` fields as JSON maps.
 
-<pre data-test="file" data-path="app/search/query-profiles/default.xml">
-&lt;query-profile id=&quot;default&quot;&gt;
-    &lt;field name=&quot;presentation.timing&quot;&gt;true&lt;/field&gt;
-    &lt;field name=&quot;renderer.json.jsonWsets&quot;&gt;true&lt;/field&gt;
-&lt;/query-profile&gt;
-</pre>
+<pre data-test="file" data-path="app/search/query-profiles/default.xml">{% highlight xml %}
+<query-profile id="default">
+    <field name="presentation.timing">true</field>
+    <field name="renderer.json.jsonWsets">true</field>
+</query-profile>
+{% endhighlight %}</pre>
 
 ## Deploy the application package
 
@@ -619,7 +619,7 @@ document-summary track_id {
 
 The new schema then becomes:
 
-<pre data-test="file" data-path="app/schemas/track.sd">
+<pre data-test="file" data-path="app/schemas/track.sd">{% highlight vespa-schema-language %}
 schema track {
 
     document track {
@@ -639,11 +639,11 @@ schema track {
             indexing: summary | index
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | attribute
         }
 
-        field similar type tensor&lt;float&gt;(trackid{}) {
+        field similar type tensor<float>(trackid{}) {
             indexing: summary | attribute
         }
     }
@@ -656,7 +656,7 @@ schema track {
         summary track_id { }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Re-deploy the application: 
 
@@ -812,7 +812,7 @@ by the Vespa query planner.
 This section adds `fast-search` to the `tags` field to speed up searches where there are no 
 other query filters which restricts the search. The schema with `fast-search`:
 
-<pre data-test="file" data-path="app/schemas/track.sd">
+<pre data-test="file" data-path="app/schemas/track.sd">{% highlight vespa-schema-language %}
 schema track {
 
     document track {
@@ -832,12 +832,12 @@ schema track {
             indexing: summary | index
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | attribute
             attribute: fast-search
         }
 
-        field similar type tensor&lt;float&gt;(trackid{}) {
+        field similar type tensor<float>(trackid{}) {
             indexing: summary | attribute
         }
     }
@@ -850,7 +850,7 @@ schema track {
         summary track_id { }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Re-deploy the application: 
 
@@ -970,7 +970,7 @@ In the following examples, the [dotProduct()](../reference/querying/yql.html#dot
 
 To configure [ranking](../basics/ranking.html), add a `rank-profile` to the schema:
 
-<pre data-test="file" data-path="app/schemas/track.sd">
+<pre data-test="file" data-path="app/schemas/track.sd">{% highlight vespa-schema-language %}
 schema track {
 
     document track {
@@ -990,12 +990,12 @@ schema track {
             indexing: summary | index
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | attribute
             attribute: fast-search
         }
 
-        field similar type tensor&lt;float&gt;(trackid{}) {
+        field similar type tensor<float>(trackid{}) {
             indexing: summary | attribute
         }
     }
@@ -1014,7 +1014,7 @@ schema track {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 The `dotProduct`and `wand` query operators produce a `rank feature` called
 [rawScore(name)](../reference/ranking/rank-features.html#rawScore(field)). This feature calculates
@@ -1313,7 +1313,7 @@ rank-profile similar {
 See [tensor user guide](../ranking/tensor-user-guide.html) for more on tensor fields and tensor computations
 with Vespa. Adding this `rank-profile` to the document schema:
 
-<pre data-test="file" data-path="app/schemas/track.sd">
+<pre data-test="file" data-path="app/schemas/track.sd">{% highlight vespa-schema-language %}
 schema track {
 
     document track {
@@ -1333,12 +1333,12 @@ schema track {
             indexing: summary | index
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | attribute
             attribute: fast-search
         }
 
-        field similar type tensor&lt;float&gt;(trackid{}) {
+        field similar type tensor<float>(trackid{}) {
             indexing: summary | attribute
         }
     }
@@ -1359,14 +1359,14 @@ schema track {
 
     rank-profile similar {
         inputs {
-            query(user_liked) tensor&lt;float&gt;(trackid{})
+            query(user_liked) tensor<float>(trackid{})
         }
         first-phase {
             expression: sum(attribute(similar) * query(user_liked))
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Deploy the application again :
 
@@ -1538,7 +1538,7 @@ The sparse tensor product can be optimized by adding `attribute: fast-search` to
 both mapped and dense dimensions. The cost of doing this is increased memory usage. The schema
 with `attribute: fast-search` added to the `similar` tensor field:
 
-<pre data-test="file" data-path="app/schemas/track.sd">
+<pre data-test="file" data-path="app/schemas/track.sd">{% highlight vespa-schema-language %}
 schema track {
     document track {
 
@@ -1557,12 +1557,12 @@ schema track {
             indexing: summary | index
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | attribute
             attribute: fast-search
         }
 
-        field similar type tensor&lt;float&gt;(trackid{}) {
+        field similar type tensor<float>(trackid{}) {
             indexing: summary | attribute
             attribute: fast-search 
         }
@@ -1584,14 +1584,14 @@ schema track {
 
     rank-profile similar {
         inputs {
-            query(user_liked) tensor&lt;float&gt;(trackid{})
+            query(user_liked) tensor<float>(trackid{})
         }
         first-phase {
             expression: sum(attribute(similar) * query(user_liked))
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Deploy the application again :
 
@@ -1655,37 +1655,37 @@ The following adds a `tuning` element to `services.xml` overriding
 [requestthreads:persearch](../reference/applications/services/content.html#requestthreads-persearch).
 The default number of threads used `persearch` is one. 
 
-<pre data-test="file" data-path="app/services.xml">
-&lt;?xml version="1.0" encoding="UTF-8"?&gt;
-&lt;services version="1.0"&gt;
+<pre data-test="file" data-path="app/services.xml">{% highlight xml %}
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
 
-    &lt;container id="default" version="1.0"&gt;
-        &lt;search/&gt;
-        &lt;document-api/&gt;
-    &lt;/container&gt;
+    <container id="default" version="1.0">
+        <search/>
+        <document-api/>
+    </container>
 
-    &lt;content id="tracks" version="1.0"&gt;
-        &lt;engine&gt;
-            &lt;proton&gt;
-                &lt;tuning&gt;
-                    &lt;searchnode&gt;
-                        &lt;requestthreads&gt;
-                            &lt;persearch&gt;4&lt;/persearch&gt;
-                        &lt;/requestthreads&gt;
-                    &lt;/searchnode&gt;
-                &lt;/tuning&gt;
-            &lt;/proton&gt;
-        &lt;/engine&gt;
-        &lt;redundancy&gt;1&lt;/redundancy&gt;
-        &lt;documents&gt;
-            &lt;document type="track" mode="index"&gt;&lt;/document&gt;
-        &lt;/documents&gt;
-        &lt;nodes&gt;
-            &lt;node distribution-key="0" hostalias="node1"&gt;&lt;/node&gt;
-        &lt;/nodes&gt;
-    &lt;/content&gt;
-&lt;/services&gt;
-</pre>
+    <content id="tracks" version="1.0">
+        <engine>
+            <proton>
+                <tuning>
+                    <searchnode>
+                        <requestthreads>
+                            <persearch>4</persearch>
+                        </requestthreads>
+                    </searchnode>
+                </tuning>
+            </proton>
+        </engine>
+        <redundancy>1</redundancy>
+        <documents>
+            <document type="track" mode="index"></document>
+        </documents>
+        <nodes>
+            <node distribution-key="0" hostalias="node1"></node>
+        </nodes>
+    </content>
+</services>
+{% endhighlight %}</pre>
 
 Deploy the application again :
 
@@ -1749,7 +1749,7 @@ This adds a new `rank-profile` `similar-t2` using `num-threads-per-search: 2` i
 of the global 4 setting. It's also possible to set the number of threads in the query request
 using [ranking.matching.numThreadsPerSearch](../reference/api/query.html#ranking.matching).
 
-<pre data-test="file" data-path="app/schemas/track.sd">
+<pre data-test="file" data-path="app/schemas/track.sd">{% highlight vespa-schema-language %}
 schema track {
 
     document track {
@@ -1769,12 +1769,12 @@ schema track {
             indexing: summary | index
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | attribute
             attribute: fast-search
         }
 
-        field similar type tensor&lt;float&gt;(trackid{}) {
+        field similar type tensor<float>(trackid{}) {
             indexing: summary | attribute
             attribute: fast-search 
         }
@@ -1796,7 +1796,7 @@ schema track {
 
     rank-profile similar {
         inputs {
-            query(user_liked) tensor&lt;float&gt;(trackid{})
+            query(user_liked) tensor<float>(trackid{})
         }
         first-phase {
             expression: sum(attribute(similar) * query(user_liked))
@@ -1807,7 +1807,7 @@ schema track {
         num-threads-per-search: 2
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Deploy the application again :
 
@@ -1852,7 +1852,7 @@ The following script runs through the dataset and
 counts the number of tags and creates a Vespa
 [partial update](../writing/partial-updates.html) feed operation per track. 
 
-<pre style="display:none" data-test="file" data-path="create-popularity-updates.py">
+<pre style="display:none" data-test="file" data-path="create-popularity-updates.py">{% highlight python %}
 import os
 import sys
 import json
@@ -1898,7 +1898,7 @@ for root, dirs, files in os.walk(directory):
 sorted_files.sort()
 for filename in sorted_files:
     process_file(filename)
-</pre>
+{% endhighlight %}</pre>
 
 ```python
 import os
@@ -1960,7 +1960,7 @@ $ python3 create-popularity-updates.py lastfm_test > updates.jsonl
 Add the `popularity` field defined with `fast-search` to the `track` schema.
 Also, a `popularity` rank profile is added, which uses one thread per search:
 
-<pre data-test="file" data-path="app/schemas/track.sd">
+<pre data-test="file" data-path="app/schemas/track.sd">{% highlight vespa-schema-language %}
 schema track {
 
     document track {
@@ -1980,12 +1980,12 @@ schema track {
             indexing: summary | index
         }
 
-        field tags type weightedset&lt;string&gt; {
+        field tags type weightedset<string> {
             indexing: summary | attribute
             attribute: fast-search
         }
 
-        field similar type tensor&lt;float&gt;(trackid{}) {
+        field similar type tensor<float>(trackid{}) {
             indexing: summary | attribute
             attribute: fast-search 
         }
@@ -2012,7 +2012,7 @@ schema track {
 
     rank-profile similar {
         inputs {
-            query(user_liked) tensor&lt;float&gt;(trackid{})
+            query(user_liked) tensor<float>(trackid{})
         }
         first-phase {
             expression: sum(attribute(similar) * query(user_liked))
@@ -2030,7 +2030,7 @@ schema track {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Deploy the application again :
 

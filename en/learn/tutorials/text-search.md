@@ -106,7 +106,7 @@ A [schema](../../basics/schemas.html) is a document-type configuration; a single
 For this application, we define a schema `msmarco` which must be saved in a file named `schemas/msmarco.sd`.
 Write the following to `text-search/app/schemas/msmarco.sd`:
 
-<pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
+<pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">{% highlight vespa-schema-language %}
 schema msmarco {
     document msmarco {
         field language type string {
@@ -156,7 +156,7 @@ schema msmarco {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 A lot is going on here; let us go through it in detail. 
 
 #### Document type and fields
@@ -204,28 +204,28 @@ The [services.xml](../../reference/applications/services/services.html) defines 
 the Vespa application — which services to run and how many nodes per service.
 Write the following to `text-search/app/services.xml`:
 
-<pre data-test="file" data-path="text-search/app/services.xml">
-&lt;?xml version="1.0" encoding="UTF-8"?&gt;
-&lt;services version="1.0"&gt;
+<pre data-test="file" data-path="text-search/app/services.xml">{% highlight xml %}
+<?xml version="1.0" encoding="UTF-8"?>
+<services version="1.0">
 
-    &lt;container id="text_search" version="1.0"&gt;
-        &lt;search /&gt;
-        &lt;document-processing /&gt;
-        &lt;document-api /&gt;
-    &lt;/container&gt;
+    <container id="text_search" version="1.0">
+        <search />
+        <document-processing />
+        <document-api />
+    </container>
 
-    &lt;content id="msmarco" version="1.0"&gt;
-        &lt;min-redundancy&gt;1&lt;/min-redundancy&gt;
-        &lt;documents&gt;
-            &lt;document type="msmarco" mode="index" /&gt;
-            &lt;document-processing cluster="text_search" /&gt;
-        &lt;/documents&gt;
-        &lt;nodes&gt;
-            &lt;node distribution-key="0" hostalias="node1" /&gt;
-        &lt;/nodes&gt;
-    &lt;/content&gt;
-&lt;/services&gt;
-</pre>
+    <content id="msmarco" version="1.0">
+        <min-redundancy>1</min-redundancy>
+        <documents>
+            <document type="msmarco" mode="index" />
+            <document-processing cluster="text_search" />
+        </documents>
+        <nodes>
+            <node distribution-key="0" hostalias="node1" />
+        </nodes>
+    </content>
+</services>
+{% endhighlight %}</pre>
 
 Some notes about the elements above:
 
@@ -643,7 +643,7 @@ querying (matching), we can ask Vespa to compute both features in the same query
 
 Modify the schema and add a new rank-profile `combined`:
 
-<pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">
+<pre data-test="file" data-path="text-search/app/schemas/msmarco.sd">{% highlight vespa-schema-language %}
 schema msmarco {
     document msmarco {
         field language type string {
@@ -707,7 +707,7 @@ schema msmarco {
         }
     }
 }
-</pre>
+{% endhighlight %}</pre>
 
 Then, re-deploy the Vespa application from the `app` directory:
 
