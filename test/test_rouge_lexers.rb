@@ -1,7 +1,8 @@
 # Checks the Rouge lexers that _plugins/rouge_textmate.rb builds from the grammars in _grammars/,
-# the C++ lexer extension in _plugins/rouge_cpp_types.rb, the console lexer adaptation in
-# _plugins/rouge_console.rb, the XML placeholders in _plugins/rouge_xml_placeholders.rb, the JSON
-# excerpts in _plugins/rouge_json_excerpts.rb, and the markup kept in highlighted code by
+# the schema placeholders in _plugins/rouge_schema_placeholders.rb, the C++ lexer extension in
+# _plugins/rouge_cpp_types.rb, the console lexer adaptation in _plugins/rouge_console.rb, the XML
+# placeholders in _plugins/rouge_xml_placeholders.rb, the JSON excerpts in
+# _plugins/rouge_json_excerpts.rb, and the markup kept in highlighted code by
 # _plugins/highlight_marks.rb.
 #
 # Run from the repository root:
@@ -10,6 +11,7 @@
 require 'cgi'
 require 'rouge'
 require_relative '../_plugins/rouge_textmate'
+require_relative '../_plugins/rouge_schema_placeholders'
 require_relative '../_plugins/rouge_cpp_types'
 require_relative '../_plugins/rouge_console'
 require_relative '../_plugins/rouge_xml_placeholders'
@@ -74,6 +76,30 @@ SCHEMA_EXPECTATIONS = [
   ['0.5',            1, 'Literal.Number.Float'],
   ['closeness',      1, 'Name.Builtin'],
   ['match-features', 1, 'Keyword'],
+].freeze
+
+SCHEMA_PLACEHOLDER_SAMPLE = <<~'SD'
+  field [name] type [type-name] {
+      attribute: [attribute name]
+  }
+  constants {
+      constant(myArray) tensor(x[3]):[1, 2, 3]
+  }
+  rank-profile values {
+      first-phase {
+          expression: tensor(x[2]):[attribute(price), attribute(popularity)]
+      }
+  }
+SD
+
+SCHEMA_PLACEHOLDER_EXPECTATIONS = [
+  ['[name]',            1, 'Generic.Emph'],
+  ['type',              1, 'Keyword'],
+  ['[type-name]',       1, 'Generic.Emph'],            # not "type" as a keyword
+  ['[attribute name]',  1, 'Generic.Emph'],
+  ['3]',                1, 'Literal.Number.Integer'],  # a tensor dimension, as before
+  ['[1, 2',             1, 'Text'],                    # a tensor value, as before
+  ['[attribute(price)', 1, 'Text'],
 ].freeze
 
 EXPRESSION_SAMPLE = <<~'EXPR'
@@ -249,6 +275,7 @@ end
 
 failures = VespaTextMate.unmapped_scopes.map { |tag, scopes| "#{tag}: no token for scopes #{scopes.join(', ')}" }
 check_lexer('vespa-schema-language', SCHEMA_SAMPLE, SCHEMA_EXPECTATIONS, failures)
+check_lexer('vespa-schema-language', SCHEMA_PLACEHOLDER_SAMPLE, SCHEMA_PLACEHOLDER_EXPECTATIONS, failures)
 check_lexer('vespa-ranking-expression', EXPRESSION_SAMPLE, EXPRESSION_EXPECTATIONS, failures)
 check_lexer('vespa-yql', YQL_SAMPLE, YQL_EXPECTATIONS, failures)
 check_lexer('cpp', CPP_SAMPLE, CPP_EXPECTATIONS, failures)
