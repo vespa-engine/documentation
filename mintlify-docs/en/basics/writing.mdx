@@ -1,0 +1,70 @@
+---
+title: Writing
+description: "This is an introduction to writing data into Vespa."
+---
+
+## Documents
+
+Once you have added one or more schemas to an application, and have added `<document-api>` in `services.xml` to the container cluster you want to handle writes, you can send writes following those schemas. A document is written as a JSON map containing a value for each field:
+
+```json
+{
+    "put": "id:my-namespace:my-documenttype::my-id-string",
+    "fields": {
+        "myTextField": "Hello world!",
+        "myNumericAttribute": 13.8,
+        "myEmbedding": [0.3, 1.45, 1.03]
+    }
+}
+```
+
+Each document has an id, which has two parts which can be decided freely:
+
+    - The **namespace**, which is just a string used to avoid name collisions if you have multiple kinds of clients deciding ids and not used for any other purpose
+    - The **id string**, which can be any string you want, for example a product id or a url
+
+Fields can remain empty; you do not need to set a value for every field defined in the document type.
+
+You can find complete information on the document format in the [document JSON format reference](/en/reference/schemas/document-json-format).
+
+## Writing documents
+
+Documents are written to your application instance's *write endpoint*, using the [document/v1](/en/writing/document-v1-api-guide) HTTP API. You can use the API directly, or use one of the clients provided by Vespa:
+
+- **Command line, with [Vespa CLI](/en/clients/vespa-cli)**: [`vespa feed`](/en/clients/vespa-cli#documents) to feed one or many documents to Vespa.
+- **Python, with [PyVespa](https://vespa-engine.github.io/pyvespa/)**: [`application.feed_iterable(...)`](https://vespa-engine.github.io/pyvespa/reads-writes.html#feeding-operations-from-a-file)
+- **Java, with the [Java Feed Client](/en/clients/vespa-feed-client)**: [`myFeedClient.put(id, json, params)`](/en/clients/vespa-feed-client#example-java)
+
+Documents can also be removed, retrieved, and updated using the same API and clients.
+
+## Updating documents
+
+Documents can be fully replaced by a new version by writing them again, but you can also update any individual fields of existing documents. This is especially useful for updating attribute fields such as e.g. behavior signals or prices at high throughput, without impacting other fields and indexes.
+
+Updates are sent in the same ways as document puts; it's just the format that's different:
+
+```json
+{
+    "update": "id:my-namespace:my-documenttype::my-id-string",
+    "fields": {
+        "myTextField": {
+            "assign": "Some new value"
+        }
+    }
+}
+```
+
+Updates can also increment numerical values, add to arrays and tensor etc. Read more in the [partial update guide](/en/writing/partial-updates).
+
+## Writes are streamed and realtime
+
+Write operations to Vespa are streamed (using HTTP/2), and processed asynchronously. There is no need for a separate batch API to feed with the maximal throughput a system can handle; servers will push back by responding more slowly when they are close to saturation, and clients use this signal to back off, allowing them to dynamically converge at the maximal throughput a system can handle.
+
+The write operations to Vespa are always applied in real time: when a write operation is asynchronously acknowledged, the write operation is persisted, fully processed and the result is visible in all subsequent queries. Vespa achieves this by a unique index design, combining in-memory mutable structures with (for full-text) disk-backed posting lists.
+
+Read more in the [feed sizing doc](/en/performance/sizing-feeding).
+
+## The document API can also return documents
+
+In addition to supporting writes, the document/v1 HTTP API can also return single documents by id (get), and stream any selection of a document corpus (visit). Visiting is used for background and one-time jobs such as backup and scraping content for offline machine learning. It is designed to have minimal impact on the running system rather than returning with low latency. Read more in [the document/v1 guide](/en/writing/document-v1-api-guide#data-dump).
+

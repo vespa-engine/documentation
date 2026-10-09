@@ -1,0 +1,91 @@
+---
+title: Querying
+description: "An introduction to querying with Vespa."
+---
+
+## Queries
+
+Queries in Vespa are expressed as a YQL string: a query language identical to SQL for structured data, with additions for vector and full-text search, for example:
+
+```sql
+select * from mySchema where myTextField contains 'someWord' and myNumber > 10.0
+```
+
+You can also search multiple fields with one query item (like "contains"), by defining [fieldset](/en/reference/schemas/schemas#fieldset) in the schema.
+
+Any nested combination of and/or and so on is supported; see the full syntax in the [query language reference](/en/reference/querying/yql).
+
+## Query requests
+
+Queries are sent as HTTP requests, to the endpoint of a container cluster having `<search>` in `services.xml`. The YQL query is sent as the `yql` parameter (HTTP encoded):
+
+```text
+endpoint-url/search/?yql=select+%2A+from+sources+%2A+where+true
+```
+
+The Vespa CLI can do this for you:
+
+```bash
+vespa query "select * from sources * where true"
+```
+
+You can add the `-v` option to see the HTTP request that this becomes.
+
+On Vespa Cloud your application will by default get an mTLS certificate that you use to make requests. If you want to use an access token, you can [add one in the console](/en/security/guide#configuring-tokens).
+
+## Query request parameters
+
+In addition to the YQL parameter, you can send other query request parameters to supply data such as user/llm query text, vectors, and parameters controlling the query execution. These are added to HTTP requests in the obvious way, and passed to Vespa CLI by adding multiple arguments:
+
+```bash
+vespa query -v "select * from sources * where true" "timeout=100ms"
+```
+
+You can also send the query parameters [as a JSON payload](/en/querying/query-api#http) instead of as request parameters:
+
+```bash
+curl -H "Content-Type: application/json" \
+  --data '{"yql" : "select * from sources * where true"}' \
+  endpoint-url/search/
+```
+
+To see all the parameters accepted, see the [query API reference](/en/reference/api/query).
+
+You may end up wanting to set many query parameters in your queries. Instead of passing them in the request, you can create a query profile in the application package containing all the parameters and just specify the profile in the request — see [query profiles](/en/querying/query-profiles).
+
+## Querying with text
+
+You can use the `text` YQL operator to retrieve or rank using raw text. This will process the text and (by default) search it with the [WeakAnd](/en/ranking/wand#weakand) text search operator.
+
+You can pass the text directly, or refer to a separate request parameter (using `@parameter`):
+
+```bash
+vespa query "select * from sources * where title contains text(@query)" \
+  "query=Any text, from a human/llm"
+```
+
+You can set options controlling how the text is to be parsed and matched; see the [text() reference documentation](/en/reference/querying/yql#text).
+
+## Querying with vectors
+
+Querying by vectors is done using the `nearestNeighbor` YQL operator, which takes a document and query vector:
+
+```bash
+vespa query 'select * from sources * where {targetHits: 100}nearestNeighbor(my_vector_field, my_query_vector)' \
+  ranking=my_rank_profile \
+  'input.query(my_query_vector)'='[1,2,3]'
+```
+
+Read more in [nearest neighbor search](/en/querying/nearest-neighbor-search).
+
+You can combine multiple `nearestNeighbor`, `text` and other operators in any way:
+
+```bash
+vespa query "select * from sources * where (({targetHits: 300}nearestNeighbor(my_title_embedding, my_query_vector)) \
+                                              or ({targetHits: 150}nearestNeighbor(my_body_embeddings, my_query_vector)) \
+                                              or title contains text(@query) or body contains text(@query)) \
+                                             and range(title, 0.0, 500.0) and category in ('c1', 'c2') \
+                                             and !(blacklisted=true)" \
+  "input.query(my_query_vector)=embed(@query)" \
+  "query=Hello, world! "
+```

@@ -1,0 +1,154 @@
+---
+title: "Container Tuning"
+---
+
+A collection of configuration parameters to tune the Container as used in Vespa. Some configuration parameters have native [services.xml](/en/basics/applications) support while others are configured through [generic config overrides](/en/reference/applications/config-files#generic-configuration-in-services-xml).
+
+## Container worker threads
+
+The container uses multiple thread pools for its operations. Most components including request handlers use the container's [default thread pool](/en/reference/applications/services/container#threadpool), which is controlled by a shared executor instance. Any component can utilize the default pool by injecting an `java.util.concurrent.Executor` instance. Some built-in components have dedicated thread pools - such as the Jetty server, the [search handler](/en/reference/applications/services/search#threadpool) and [document-processing](/en/reference/applications/services/docproc#threadpool) chains. These thread pools are injected through special wiring in the config model and are not easily accessible from other components.
+
+The thread pools are by default scaled on the system resources as reported by the JVM (`Runtime.getRuntime().availableProcessors()`). It's paramount that the `-XX:ActiveProcessorCount`/`jvm_availableProcessors` configuration is correct for the container to work optimally. The [default thread pool](/en/reference/applications/services/container#threadpool) configuration can be overridden through services.xml. We recommend you keep the default configuration as it's tuned to work across a variety of workloads. Note that the default configuration and pool usage may change between minor versions.
+
+The container will pre-start the minimum number of worker threads, so even an idle container may report running several hundred threads. The [search handler](/en/reference/applications/services/search#threadpool) and [document processing handler](/en/reference/applications/services/docproc#threadpool) thread pools each pre-start the number of workers set in their configurations. Note that tuning the capacity upwards increases the risk of high GC pressure as concurrency becomes higher with more in-flight requests. The GC pressure is a function of number of in-flight requests, the time it takes to complete the request and the amount of garbage produced per request. Increasing the queue size will allow the application to handle shorter traffic bursts without rejecting requests, although increasing the average latency for those requests that are queued up. Large queues will also increase heap consumption in overload situations. For some thread pools, extra threads will be created once the queue is full (when [`max`](/en/reference/applications/services/search#threads.max) is specified), and are destroyed after an idle timeout. If all threads are occupied, requests are rejected with a 503 response.
+
+The effective thread pool configuration and utilization statistics can be observed through the [Container Metrics](/en/operations/metrics#container-metrics). See [Thread Pool Metrics](/en/operations/metrics#thread-pool-metrics) for a list of metrics exported.
+
+<Note>
+**Note:** 
+
+If the queue size is set to 0 the metric measuring the queue size - `jdisc.thread_pool.work_queue.size` - will instead switch to measure how many threads are active.
+</Note>
+
+### Recommendation
+
+A fixed size pool is preferable for stable latency during peak load, at a cost of a higher static memory load and increased context-switching overhead if excessive number of threads are configured. Variable size pool is mostly beneficial to minimize memory consumption during low-traffic periods, and in general if the size of peak load is somewhat unknown. The downside is that once all core threads are active, latency will increase as additional tasks are queued and launching extra threads is relatively expensive as it involves system calls to the OS.
+
+### Example
+
+Consider a container host with 8 vCPU. Setting `<threads>4</threads>` on the [search handler threadpool](/en/reference/applications/services/search#threadpool) yields `4 * 8 = 32` worker threads, and adding `<queue>25</queue>` gives the pool a total queue capacity of `32 * 25 = 800` requests. The same thread calculation applies to the [document processing handler threadpool](/en/reference/applications/services/docproc#threadpool), which does not support queue configuration. The example below shows a consistent configuration where the default thread pool, the search handler threadpool, and the document processing handler threadpool are all kept fixed.
+
+```xml expandable
+<container id="container" version="1.0">
+
+    <!-- The containers default thread pool -->
+    <threadpool>
+        <!-- Note: relative values -->
+
+        <!-- 5 threads per vcpu => 40 threads on 8 vcpu -->
+        <threads max="5">5</threads>
+
+        <!-- 25 queue slots per thread => 1000 entries on 8 vcpu -->
+        <queue>25</queue>
+    </threadpool>
+
+    <search>
+        <!-- Search handler thread pool -->
+        <threadpool>
+            <!-- Don't set the 'max' attribute or at least keep it equal to 'threads' for a fixed pool size (recommended) -->
+
+            <!-- 4 threads per vcpu => 32 threads on 8 vcpu -->
+            <threads>4</threads>
+
+            <!-- 25 queue slots per thread => 800 entries on 8 vcpu -->
+            <queue>25</queue>
+        </threadpool>
+    </search>
+
+    <document-processing>
+        <!-- Docproc worker thread pool -->
+        <threadpool>
+            <!-- 2 threads per vcpu => 16 threads on 8 vcpu -->
+            <threads>2</threads>
+        </threadpool>
+    </document-processing>
+
+</container>
+```
+
+## Container memory usage
+
+> *Help, my container nodes are using more than 70% memory!*
+
+It's common to observe the container process utilizing its maximum configured heap size. This, by itself, is not necessarily an indication of a problem. The Java Virtual Machine (JVM) manages memory within the allocated heap, and it's designed to use as much of it as possible to reduce the frequency of garbage collection.
+
+To understand whether enough memory is allocated, look at the garbage collection activity. If GC is running frequently and using significant CPU or causing long pauses, it might indicate that the heap size is too small for the workload. In such cases, consider increasing the maximum heap size. However, if the garbage collector is running infrequently and efficiently, it's perfectly normal for the container to utilize most or all of its allocated heap, and even more (as some memory will also be allocated outside the heap; e.g. direct buffers for efficient data transfer).
+
+Vespa exports several metrics to allow you to monitor JVM GC performance, such as [jvm.gc.overhead](/en/reference/operations/metrics/container#jvm_gc_overhead) - if this exceeds 8-10% you should consider increasing heap memory and/or tuning GC settings.
+
+## JVM heap size
+
+Change the default JVM heap size settings used by Vespa to better suit the specific hardware settings or application requirements.
+
+By setting the relative size of the total JVM heap in [percentage of available memory](/en/reference/applications/services/container#nodes), one does not know exactly what the heap size will be, but the configuration will be adaptable and ensure that the container can start even in environments with less available memory. The example below allocates 50% of available memory on the machine to the JVM heap:
+
+```xml
+<container id="container" version="1.0">
+    <nodes>
+        <jvm allocated-memory="50%" />
+        <node hostalias="node0" />
+    </nodes>
+</container>
+```
+
+## JVM Tuning
+
+Use *gc-options* for controlling GC related parameters and *options* for tuning other parameters. See [reference documentation](/en/reference/applications/services/container#nodes). Example: Running with 4 GB heap using G1 garbage collector and using NewRatio = 1 (equal size of old and new generation) and enabling verbose GC logging (logged to stdout to vespa.log file).
+
+```xml
+<container id="default" version="1.0">
+    <nodes>
+        <jvm options="-Xms4g -Xmx4g -XX:+PrintCommandLineFlags -XX:+PrintGC"
+             gc-options="-XX:+UseG1GC -XX:MaxTenuringThreshold=15" />
+        <node hostalias="node0" />
+    </nodes>
+</container>
+```
+
+The default heap size with docker image is 1.5g which can for high throughput applications be on the low side, causing frequent garbage collection. By default, the G1GC collector is used.
+
+### Config Server and Config Proxy
+
+The config server and proxy are not executed based on the model in *services.xml*. On the contrary, they are used to bootstrap the services in that model. Consequently, one must use configuration variables to set the JVM parameters for the config server and config proxy. They also need to be restarted (*services* in the config proxy's case) after a change, but one does *not* need to *vespa prepare* or *vespa activate* first. Example:
+
+```bash
+VESPA_CONFIGSERVER_JVMARGS      -Xlog:gc
+VESPA_CONFIGPROXY_JVMARGS       -Xlog:gc -Xmx256m
+```
+
+Refer to [Setting Vespa variables](/en/operations/self-managed/files-processes-and-ports#environment-variables).
+
+## Container warmup
+
+Some applications observe that the first queries made to a freshly started container take a long time to complete. This is typically due to some components performing lazy setup of data structures or connections. Lazy initialization should be avoided in favor of eager initialization in component constructor, but this is not always possible.
+
+A way to avoid problems with the first queries in such cases is to perform warmup queries at startup. This is done by issuing queries from the constructor of the Handler of regular queries. If using the default handler, [com.yahoo.search.handler.SearchHandler](https://github.com/vespa-engine/vespa/blob/master/container-search/src/main/java/com/yahoo/search/handler/SearchHandler.java), subclass this and configure your subclass as the handler of query requests in *services.xml*.
+
+Add a call to a warmupQueries() method as the last line of your handler constructor. The method can look something like this:
+
+```java
+private void warmupQueries() {
+    String[] requestUris = new String[] {"warmupRequestUri1", "warmupRequestUri2"};
+    int warmupIterations = 50;
+
+    for (int i = 0; i < warmupIterations; i++) {
+        for (String requestUri : requestUris) {
+            handle(HttpRequest.createTestRequest(requestUri, com.yahoo.jdisc.http.HttpRequest.Method.GET));
+        }
+    }
+}
+```
+
+Since these queries will be executed before the container starts accepting external queries, they will cause the first external queries to observe a warmed up container instance.
+
+Use [metrics.ignore](/en/reference/api/query#metrics.ignore) in the warmup queries to eliminate them from being reported in metrics.
+
+### Disabling warmups
+
+Warmups can be disabled by adding the following container http config to the container section in services.xml:
+
+```xml
+<config name="container.core.container-http">
+  <warmup>false</warmup>
+</config>
+```
