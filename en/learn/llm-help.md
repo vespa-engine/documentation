@@ -9,6 +9,48 @@ This page describes some of the ways that you can get help from large language m
 
 From our experience, providing the right context to the LLM is essential to get good results when asking questions about Vespa.
 
+## Vespa skills for AI coding assistants
+
+We provide a set of [agent skills](https://github.com/vespa-engine/skills) that teach AI coding assistants
+how to work with Vespa. An installed skill is loaded by the assistant when relevant to the task,
+giving it Vespa-specific instructions and reference material.
+
+| Skill                     | Description                                                                                           |
+|---------------------------|-------------------------------------------------------------------------------------------------------|
+| `app-package`             | Scaffold and configure application packages: services.xml, schemas, deployment.xml, query profiles and embedders |
+| `schema-authoring`        | Write, validate and evolve schema files: field types, indexing, match modes, tensors, rank profiles, structs and fieldsets |
+| `query-builder`           | Build YQL queries and design rank profiles: operators, grouping, rank phases, ML models and query tensors |
+| `feed-operations`         | Document put/update/remove, document ID format, partial and conditional updates, bulk feeding and visiting |
+| `vespa-cli`               | Use the Vespa CLI to deploy, manage and debug applications, including production pipelines, testing and CI/CD |
+| `pyvespa`                 | Define, deploy, feed and query Vespa applications from Python using pyvespa |
+| `elasticsearch-migration` | Migrate from Elasticsearch: map indices and mappings to schemas, translate Query DSL to YQL, and plan reindexing |
+{:.table}
+
+### Installing skills with the Vespa CLI
+
+Agent skills for your harness can be installed with either npx or vespa cli
+
+The [Vespa CLI](../clients/vespa-cli.html) can install the skills
+for Claude Code, Codex, Cursor and Antigravity CLI.
+The first time you run a `vespa` command in an interactive terminal, you are asked whether to install them.
+You can also manage skills explicitly:
+
+```bash
+# List available skills
+vespa skills list
+
+# Install all skills - prompts for harness(es) and scope
+vespa skills install
+
+# Install selected skills for Claude Code and Codex, in the current project only
+vespa skills install schema-authoring app-package --harness claude,codex --local
+
+# Update installed skills to the latest version
+vespa skills update
+```
+
+The skills can alternatively be installed by using the command: `npx skills add vespa-engine/skills`.
+
 ## Markdown version of documentation pages
 
 Every page of the documentation is available in Markdown format, by changing the URL from `.html` to `.html.md`.
