@@ -332,42 +332,46 @@ A higher number costs more bandwidth, but leads to higher accuracy in some cases
 <h2 id="parameter-substitution">Parameter substitution</h2>
 <p>Available since {% include version.html version="8.774.9" %}.</p>
 <p>
-  Use parameter substitution to keep user input out of the grouping expression, as in
-  <a href="yql.html#parameter-substitution">YQL</a>:
-  a reference <code>@name</code> is replaced by the value of the query parameter <code>name</code>.
-  The value is substituted verbatim and is never parsed as grouping syntax,
-  so it needs no escaping and cannot change the structure of the expression:
+  As in <a href="yql.html#parameter-substitution">YQL</a>, a grouping expression can refer to a query parameter
+  with <code>@name</code>. The reference is replaced by the value of the query parameter <code>name</code>.
+  The value is used as-is and is never parsed as grouping syntax,
+  so it needs no escaping and cannot change the structure of the expression.
+  This makes it safe to pass user input to a grouping expression:
 </p>
 <pre>
-select=all( group(my_field) filter(regex(@pattern, my_field)) each(output(count())) )&amp;pattern=foo.*
+select=all( group(category) filter(in(category, @categories)) each(output(count())) )&amp;categories=books,music
 </pre>
 <p>
-  References work in the <a href="../api/query.html#select">select</a> parameter,
-  in the grouping expression after <code>|</code> in <a href="yql.html#grouping">YQL</a>
-  and in <a href="../api/query.html#select.grouping">select.grouping</a>,
-  where the <a href="json-query-language#grouping">JSON label field</a> may also be a reference:
-  <code>"label": "@name"</code>.
-  Parameter names follow the same rules as in YQL:
-  a letter or underscore, followed by letters, digits, underscores or hyphens.
-  The position of the reference decides how the value is interpreted:
+  References can be used in the <a href="../api/query.html#select">select</a> parameter,
+  in the grouping expression after <code>|</code> in <a href="yql.html#grouping">YQL</a>,
+  and in <a href="../api/query.html#select.grouping">select.grouping</a>.
+  In <code>select.grouping</code>, the <a href="json-query-language.html#grouping">JSON label field</a>
+  can also be a reference: <code>"label": "@name"</code>.
 </p>
+<p>
+  Parameter names follow the same rules as in YQL: they start with a letter or underscore,
+  followed by letters, digits, underscores or hyphens.
+</p>
+<p>How the value is interpreted depends on where the reference is used:</p>
 <ul>
-  <li>Where a string is expected, the value is the string:
-    the pattern of <code>regex</code>, a value of <code>in</code>, the label in <code>as</code>,
-    and a constant in an expression. <code>group(@label)</code> is the same as
-    <code>group("<em>value</em>")</code>, also when the value looks like a number.</li>
-  <li>Where a number is expected, the value must be an integer or a decimal number, optionally negative:
-    the bounds of <code>range</code>, and the arguments of <code>accuracy</code>,
-    <code>fixedwidth</code> and other functions taking a numeric constant.</li>
-  <li>Where an integer is expected, the value must be an integer within the range accepted by the clause:
-    <code>max</code> and <code>precision</code>, and the number of bits of <code>md5</code> (1 to 128)
-    and <code>xorbit</code> (1 to 64). A decimal number such as <code>2.5</code> is rejected.</li>
-  <li>In <code>in(<em>expression</em>, @my_list)</code> the value is a list on the same format as
-    <code>in (@my_list)</code> in YQL: <code>value, value, ...</code> with each value optionally quoted,
-    or a JSON array. One reference can hence give any number of values.</li>
+  <li><strong>Strings</strong>: the pattern in <code>regex</code>, the label in <code>as</code>,
+    and constants in expressions. The value is always a string, even when it looks like a number:
+    with <code>label=42</code>, <code>group(@label)</code> is the same as <code>group("42")</code>,
+    not <code>group(42)</code>.</li>
+  <li><strong>Numbers</strong>: the bounds of <code>range</code>, and the arguments of <code>accuracy</code>,
+    <code>fixedwidth</code> and other functions that take a numeric constant.
+    The value must be an integer or a decimal number, and may be negative.</li>
+  <li><strong>Integers</strong>: <code>max</code>, <code>precision</code>,
+    and the number of bits in <code>md5</code> (1 to 128) and <code>xorbit</code> (1 to 64).
+    The value must be an integer within the range the clause accepts.
+    A decimal number such as <code>2.5</code> is rejected.</li>
+  <li><strong>Lists</strong>: a reference in <code>in(<em>expression</em>, @my_list)</code>.
+    The value uses the same format as <code>in (@my_list)</code> in YQL:
+    either <code>value, value, ...</code> with each value optionally quoted, or a JSON array.
+    A single reference can therefore supply any number of values.</li>
 </ul>
 <p>
-  A reference to a parameter that is not set fails the query with <code>Input 'name' is not set</code>.
+  If a referenced parameter is not set, the query fails with the error <code>Input 'name' is not set</code>.
   References cannot be used for field names, function names or the bounds of <code>bucket</code>.
 </p>
 
