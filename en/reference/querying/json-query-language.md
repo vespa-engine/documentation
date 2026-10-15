@@ -130,6 +130,9 @@ Each array item is a grouping statement represented as JSON where
 - A direct `label` field on an `all` operation with a direct `each` labels the
   group list produced by that `each`, equivalent to `each(...) as(label)` in the
   [grouping language](grouping-language.html#labels).
+  The label may be a query parameter reference, `"label": "@name"`,
+  as may values inside the grouping language strings,
+  see [parameter substitution](grouping-language.html#parameter-substitution).
 - Output expression labels use grouping language syntax inside `output`, for
   example `"output": "count() as(total)"`.
 
