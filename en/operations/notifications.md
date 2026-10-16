@@ -18,14 +18,12 @@ by email if this has been configured in the Console.
    application notifications.
 
 ## Configuring Notifications
-Notifications are configured in the Console under [**Account \> Notifications**](https://console.vespa-cloud.com/link/tenant/account/notifications).  You can add
+Notifications are configured in the Console. In the sidebar, expand **Settings** and select
+[**Notifications**](https://console.vespa-cloud.com/link/tenant/settings/notifications).  You can add
 contacts here that will start receiving emails for the categories enabled for that contact.
 
-<!--
-![Console Notifications](/assets/console-notifications.png)
--->
-<img src="/assets/img/console-notifications.png" alt="Console Notifications"
-  width="932px" height="auto">
+<img src="/assets/img/console-notifications.png" alt="Settings > Notifications in the Console sidebar"
+  width="254px" height="auto">
 
 To add a new address to get notifications:
 1. Click **+Add new contact**.

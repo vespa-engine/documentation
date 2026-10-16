@@ -174,7 +174,7 @@ Please note that a first-time deployment normally takes a few minutes,
 as resources are provisioned.
 
 At this point, we recommend opening the console to observe the deployed application.
-The link will be `https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default`
+The link will be `https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/dev`
 (replace with your own names) - this is also easily found in the console main page:
 
 ![dev view](/assets/img/free-trial.png)
