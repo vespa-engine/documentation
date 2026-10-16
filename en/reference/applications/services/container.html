@@ -45,16 +45,17 @@ container [version, id]
         <a href="processing.html#renderer">renderer</a>
     <a href="#document-api">document-api</a>
         <a href="#abortondocumenterror">abortondocumenterror</a>
-        <a href="#retryenabled">retryenabled</a>
-        <a href="#route">route</a>
+        <a href="#ignore-undefined-fields">ignore-undefined-fields</a>
+        <a href="#legacy-feed-api">legacy-feed-api</a>
         <a href="#maxpendingdocs">maxpendingdocs</a>
         <a href="#maxpendingbytes">maxpendingbytes</a>
+        <a href="#mbusport">mbusport</a>
+        <a href="#max-document-size">max-document-size</a>
         <a href="#retrydelay">retrydelay</a>
+        <a href="#retryenabled">retryenabled</a>
+        <a href="#route">route</a>
         <a href="#timeout">timeout</a>
         <a href="#tracelevel">tracelevel</a>
-        <a href="#mbusport">mbusport</a>
-        <a href="#ignore-undefined-fields">ignore-undefined-fields</a>
-        <a href="#max-document-size">max-document-size</a>
     <a href="../../../ranking/stateless-model-evaluation.html">model-evaluation</a>
         <a href="../../../ranking/stateless-model-evaluation.html#onnx-inference-options">onnx</a>
     <a href="#inference">inference</a>
@@ -395,6 +396,19 @@ Children elements:
   <thead>
     <tr><th>Name</th><th>Required</th><th>Value</th><th>Default</th><th>Description</th></tr>
   </thead><tbody>
+    <tr><th>abortondocumenterror</th>
+      <td>optional</td>
+      <td>true/false</td>
+      <td>true</td>
+      <td>
+        <p id="abortondocumenterror">
+        Controls whether to abort the entire feed or not if a document-related error occurs,
+        i.e. if a document contains an unknown field.
+        Setting this field to <code>true</code> will abort the feed on such errors,
+        while setting it to <code>false</code> will cause Vespa to simply skip to the next document in the feed.
+        Note that malformed XML in the input will abort the feed regardless of this setting.
+        </p>
+      </td></tr>
     <tr><th>binding</th>
       <td>optional</td>
       <td>string</td>
@@ -415,19 +429,59 @@ Children elements:
         <code>http://*/document-api/feed/</code> and <code>https://*/document-api/feed/</code>.
         For other handlers, just replace 'feed/' with the appropriate suffix, e.g. 'get/', 'remove/' etc.
       </td></tr>
-    <tr><th>abortondocumenterror</th>
+    <tr><th>ignore-undefined-fields</th>
       <td>optional</td>
       <td>true/false</td>
-      <td>true</td>
+      <td>false</td>
       <td>
-        <p id="abortondocumenterror">
-        Controls whether to abort the entire feed or not if a document-related error occurs,
-        i.e. if a document contains an unknown field.
-        Setting this field to <code>true</code> will abort the feed on such errors,
-        while setting it to <code>false</code> will cause Vespa to simply skip to the next document in the feed.
-        Note that malformed XML in the input will abort the feed regardless of this setting.
+        <p id="ignore-undefined-fields">
+        Set to true to ignore undefined fields in document API operations and
+        let such operations complete successfully, rather than fail.
+        A <a href="../../api/document-v1.html#x-vespa-ignored-fields">response header is returned</a>
+        when field operations are ignored.
         </p>
-      </td></tr>
+      </td>
+    </tr>
+    <tr><th>legacy-feed-api</th>
+      <td>optional</td>
+      <td>disabled/enabled</td>
+      <td>enabled</td>
+      <td>
+        <p id="legacy-feed-api">
+          Set to disabled to not set up legaacy feed API (which is only used by the legcacy
+	  <a href="https://docs.vespa.ai/en/reference/release-notes/vespa8.html#vespa-http-client">vespa-http-client</a>.
+        </p>
+      </td>
+    </tr>
+    <tr><th>max-document-size</th>
+      <td>optional</td>
+      <td>string</td>
+      <td>100MiB</td>
+      <td>
+        <p id="max-document-size">
+        Specifies the maximum size of a document operation request accepted by the container,
+        measured as the uncompressed size of the request body. The limit applies to all document types
+        in the container cluster. A request larger than this limit will be rejected by the container
+        before the operation is forwarded to the content cluster.
+        </p>
+        <p>
+        Valid values are numbers including a unit (e.g. <em>10MiB</em>) and the value must be
+        between 1MiB and 2048MiB (inclusive). Values will be rounded to the nearest MiB,
+        so using MiB as a unit is preferable.
+        </p>
+        <p>
+        The value should normally not exceed the smallest
+        <a href="content.html#max-document-size">max-document-size</a> configured in any
+        content cluster that this container feeds to; a deployment warning is emitted otherwise.
+        </p>
+        <p>Example:</p>
+<pre>{% highlight xml %}
+<document-api>
+    <max-document-size>10MiB</max-document-size>
+</document-api>
+{% endhighlight %}</pre>
+      </td>
+    </tr>
     <tr><th>maxpendingbytes</th>
       <td>optional</td>
       <td>number</td>
@@ -491,48 +545,6 @@ Children elements:
         Configure the level of which to trace messages sent.
         The higher the level, the more detailed descriptions.
         </p>
-      </td>
-    </tr>
-    <tr><th>ignore-undefined-fields</th>
-      <td>optional</td>
-      <td>true/false</td>
-      <td>false</td>
-      <td>
-        <p id="ignore-undefined-fields">
-        Set to true to ignore undefined fields in document API operations and
-        let such operations complete successfully, rather than fail.
-        A <a href="../../api/document-v1.html#x-vespa-ignored-fields">response header is returned</a>
-        when field operations are ignored.
-        </p>
-      </td>
-    </tr>
-    <tr><th>max-document-size</th>
-      <td>optional</td>
-      <td>string</td>
-      <td>100MiB</td>
-      <td>
-        <p id="max-document-size">
-        Specifies the maximum size of a document operation request accepted by the container,
-        measured as the uncompressed size of the request body. The limit applies to all document types
-        in the container cluster. A request larger than this limit will be rejected by the container
-        before the operation is forwarded to the content cluster.
-        </p>
-        <p>
-        Valid values are numbers including a unit (e.g. <em>10MiB</em>) and the value must be
-        between 1MiB and 2048MiB (inclusive). Values will be rounded to the nearest MiB,
-        so using MiB as a unit is preferable.
-        </p>
-        <p>
-        The value should normally not exceed the smallest
-        <a href="content.html#max-document-size">max-document-size</a> configured in any
-        content cluster that this container feeds to; a deployment warning is emitted otherwise.
-        </p>
-        <p>Example:</p>
-<pre>{% highlight xml %}
-<document-api>
-    <max-document-size>10MiB</max-document-size>
-</document-api>
-{% endhighlight %}</pre>
       </td>
     </tr>
   </tbody>
