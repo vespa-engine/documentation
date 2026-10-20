@@ -175,17 +175,22 @@ The application package can also be downloaded from the Vespa Cloud Console:
 <ul>
   <li>
     <p>
-      dev: Navigate to <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/dev</em>,
-      click <em>Application</em> to download:
+      From a deployment, in dev or prod: in the sidebar, expand the deployment under the application
+      (for example <em>default.aws-us-east-1c</em>) and select <em>Deployed Package</em>.
+      This opens the package page, for example
+      <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/dev/instance/default/region/aws-us-east-1c/package</em>,
+      where you can browse the files and click <em>Application</em> to download the package:
     </p>
-    <img src="/assets/img/app-download-dev.png" alt="Application package download from dev environment" />
+    <img src="/assets/img/console/deployed-package-sidebar.png" alt="Deployed Package in the Console sidebar"
+         width="249px" height="auto" />
   </li>
   <li>
     <p>
-      prod: Navigate to <em>https://console.vespa-cloud.com/tenant/mytenant1/application/myapp/environment/prod/deployment</em>
-      and select the version of the application to download:
+      From the build history, in prod: navigate to
+      <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/prod/deployment?tab=builds</em>
+      and click <em>download</em> under <em>Application package</em> for the build to download:
     </p>
-    <img src="/assets/img/app-download-prod.png" alt="Application package download from prod environment" />
+    <img src="/assets/img/app-download-prod.png" alt="Build history with application package downloads" />
   </li>
 </ul>
 
