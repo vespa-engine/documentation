@@ -2298,12 +2298,27 @@ select * from order where true limit 0 |
   since the filter sees the price of the same element as the product.
 </p>
 <p>
-  To get the count per <em>document</em> instead of per product, use two levels:
-  group on the document id first, and then on a key that is still evaluated per element
-  but is the same for every element. An arithmetic expression on a struct field is evaluated
-  per element, so <code>mul(lines.quantity, 0)</code> is <code>0</code> for every line.
-  All matching lines of a document then end up in one group,
-  and <code>count()</code> is the number of matching lines in that document:
+  To count the matching lines over all documents instead of per product, group on a key that is
+  still evaluated per element but is the same for every element.
+  An arithmetic expression on a struct field is evaluated per element,
+  so <code>mul(lines.quantity, 0)</code> is <code>0</code> for every line.
+  All matching lines then end up in one group,
+  and <code>count()</code> is the total number of matching lines:
+</p>
+<pre class="no-transform">{% highlight vespa-yql %}
+select * from order where true limit 0 |
+    all(
+      group(mul(lines.quantity, 0)) filter(range(20, 100, lines.price))
+      each(output(count()))
+    )
+{% endhighlight %}</pre>
+<p>
+  This gives a single group with count <code>3</code>.
+  Other aggregators work the same way on this level, so <code>sum(lines.price)</code>
+  gives the summed price of the matching lines.
+</p>
+<p>
+  The same level nested under a group per document gives the count per document:
 </p>
 <pre class="no-transform">{% highlight vespa-yql %}
 select * from order where true limit 0 |
@@ -2320,7 +2335,6 @@ select * from order where true limit 0 |
 <p>
   This gives <code>2</code> for <code>o1</code> and <code>1</code> for <code>o2</code>.
   A document with no matching lines has no inner group.
-  Drop the outer level to get the total over all hits instead.
   Note that a level returns at most 10 groups unless <code>max</code> is set
   (see <a href="#ordering-and-limiting-groups">ordering and limiting groups</a>),
   so set <code>max</code> on the <code>id</code> level to the number of documents to count for.
