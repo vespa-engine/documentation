@@ -1502,6 +1502,8 @@ so only matching elements are considered.  An example could be:
 <pre>
   select (&hellip;) | all(group(attributes.value) filter(regex("delivery_method",attributes.key)) each(output(sum(price)) each(output(summary()))))
 </pre>
+See <a href="#filtering-array-elements">filtering elements in an array of struct</a>
+for how to count the matching elements per document.
 </p>
 
 <h2 id="range-grouping">Range grouping</h2>
@@ -2233,6 +2235,97 @@ field attributes type map<string, string> {
       group(attributes.key)
       each( group(attributes.value) each(output(sum(price))))
     )</pre>
+</p>
+
+
+<h2 id="filtering-array-elements">Filtering elements in an array of struct</h2>
+<p>
+  When the <code>group</code> expression refers to a field in an array of struct,
+  each array element is grouped as if it were a separate sub-document,
+  and a <code>filter</code> on that level is evaluated once per element.
+  Other fields of the same struct referenced in the filter are read from the same element,
+  so the filter can combine several struct fields.
+  Use this to count, per document, how many elements satisfy a condition.
+</p>
+<p>Take a <code>movie</code> document with an array of <code>frame</code> structs:</p>
+<pre>{% highlight vespa-schema-language %}
+schema movie {
+    document movie {
+        field id type string {
+            indexing: attribute | summary
+        }
+        struct frame {
+            field ts type long {}
+            field label type string {}
+            field score type double {}
+        }
+        field frames type array&lt;frame&gt; {
+            indexing: summary
+            struct-field ts    { indexing: attribute }
+            struct-field label { indexing: attribute }
+            struct-field score { indexing: attribute }
+        }
+    }
+}
+{% endhighlight %}</pre>
+<p>
+  Every struct field used in <code>group</code> or <code>filter</code> must be an attribute.
+  Two example documents:
+</p>
+<pre>{% highlight json %}
+{"put": "id:movie:movie::m1", "fields": {"id": "m1", "frames": [
+    {"ts": 0, "label": "car",   "score": 0.9},
+    {"ts": 1, "label": "car",   "score": 0.5},
+    {"ts": 2, "label": "truck", "score": 0.85}]}}
+{"put": "id:movie:movie::m2", "fields": {"id": "m2", "frames": [
+    {"ts": 0, "label": "car",   "score": 0.2},
+    {"ts": 1, "label": "dog",   "score": 0.95}]}}
+{% endhighlight %}</pre>
+<p>
+  Grouping on <code>frames.label</code> with a filter on <code>frames.score</code>
+  counts, per label, the frames scoring at least 0.8:
+</p>
+<pre>select * from movie where true limit 0 |
+    all(
+      group(frames.label) filter(range(0.8, 1.0, frames.score, true, true))
+      each(output(count()))
+    )</pre>
+<p>
+  This gives <code>car: 1</code>, <code>truck: 1</code> and <code>dog: 1</code>.
+  The <code>car</code> frames with scores 0.5 and 0.2 are not counted,
+  since the filter sees the score of the same element as the label.
+</p>
+<p>
+  To get the count per <em>document</em> instead of per label, use two levels:
+  group on the document id first, and then on a key that is still evaluated per element
+  but is the same for every element. An arithmetic expression on a struct field is evaluated
+  per element, so <code>mul(frames.ts, 0)</code> is <code>0</code> for every frame.
+  All matching frames of a document then end up in one group,
+  and <code>count()</code> is the number of matching frames in that document:
+</p>
+<pre>select * from movie where true limit 0 |
+    all(
+      group(id) max(100)
+      each(
+        all(
+          group(mul(frames.ts, 0)) filter(range(0.8, 1.0, frames.score, true, true))
+          each(output(count()))
+        )
+      )
+    )</pre>
+<p>
+  This gives <code>2</code> for <code>m1</code> and <code>1</code> for <code>m2</code>.
+  A document with no matching frames has no inner group.
+  Drop the outer level to get the total over all hits instead.
+</p>
+<p>
+  Note that the query selects documents and the grouping filter selects elements,
+  independently of each other.
+  A document matched through <code>sameElement</code> still contributes all its elements
+  to the grouping, not only the element that matched.
+  Also, every field referenced in the filter must belong to the same struct as the
+  <code>group</code> expression; a field from another struct or a single-valued field
+  is evaluated once for the whole document.
 </p>
 
 
