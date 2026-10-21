@@ -2247,23 +2247,23 @@ field attributes type map<string, string> {
   so the filter can combine several struct fields.
   Use this to count, per document, how many elements satisfy a condition.
 </p>
-<p>Take a <code>movie</code> document with an array of <code>frame</code> structs:</p>
+<p>Take an <code>order</code> document with an array of <code>line</code> structs:</p>
 <pre class="no-transform">{% highlight vespa-schema-language %}
-schema movie {
-    document movie {
+schema order {
+    document order {
         field id type string {
             indexing: attribute | summary
         }
-        struct frame {
-            field ts type long {}
-            field label type string {}
-            field score type double {}
+        struct line {
+            field product type string {}
+            field quantity type int {}
+            field price type double {}
         }
-        field frames type array<frame> {
+        field lines type array<line> {
             indexing: summary
-            struct-field ts    { indexing: attribute }
-            struct-field label { indexing: attribute }
-            struct-field score { indexing: attribute }
+            struct-field product  { indexing: attribute }
+            struct-field quantity { indexing: attribute }
+            struct-field price    { indexing: attribute }
         }
     }
 }
@@ -2273,53 +2273,53 @@ schema movie {
   Two example documents:
 </p>
 <pre class="no-transform">{% highlight json %}
-{"put": "id:movie:movie::m1", "fields": {"id": "m1", "frames": [
-    {"ts": 0, "label": "car",   "score": 0.9},
-    {"ts": 1, "label": "car",   "score": 0.5},
-    {"ts": 2, "label": "truck", "score": 0.85}]}}
-{"put": "id:movie:movie::m2", "fields": {"id": "m2", "frames": [
-    {"ts": 0, "label": "car",   "score": 0.2},
-    {"ts": 1, "label": "dog",   "score": 0.95}]}}
+{"put": "id:order:order::o1", "fields": {"id": "o1", "lines": [
+    {"product": "bolt",   "quantity": 10, "price": 0.5},
+    {"product": "wrench", "quantity": 1,  "price": 25.0},
+    {"product": "drill",  "quantity": 1,  "price": 90.0}]}}
+{"put": "id:order:order::o2", "fields": {"id": "o2", "lines": [
+    {"product": "hammer", "quantity": 2,  "price": 15.0},
+    {"product": "saw",    "quantity": 1,  "price": 80.0}]}}
 {% endhighlight %}</pre>
 <p>
-  Grouping on <code>frames.label</code> with a filter on <code>frames.score</code>
-  counts, per label, the frames scoring at least 0.8:
+  Grouping on <code>lines.product</code> with a filter on <code>lines.price</code>
+  counts, per product, the lines priced from 20 up to 100:
 </p>
 <pre class="no-transform">{% highlight vespa-yql %}
-select * from movie where true limit 0 |
+select * from order where true limit 0 |
     all(
-      group(frames.label) filter(range(0.8, 1.0, frames.score, true, true))
+      group(lines.product) filter(range(20, 100, lines.price))
       each(output(count()))
     )
 {% endhighlight %}</pre>
 <p>
-  This gives <code>car: 1</code>, <code>truck: 1</code> and <code>dog: 1</code>.
-  The <code>car</code> frames with scores 0.5 and 0.2 are not counted,
-  since the filter sees the score of the same element as the label.
+  This gives <code>wrench: 1</code>, <code>drill: 1</code> and <code>saw: 1</code>.
+  The <code>bolt</code> and <code>hammer</code> lines are not counted,
+  since the filter sees the price of the same element as the product.
 </p>
 <p>
-  To get the count per <em>document</em> instead of per label, use two levels:
+  To get the count per <em>document</em> instead of per product, use two levels:
   group on the document id first, and then on a key that is still evaluated per element
   but is the same for every element. An arithmetic expression on a struct field is evaluated
-  per element, so <code>mul(frames.ts, 0)</code> is <code>0</code> for every frame.
-  All matching frames of a document then end up in one group,
-  and <code>count()</code> is the number of matching frames in that document:
+  per element, so <code>mul(lines.quantity, 0)</code> is <code>0</code> for every line.
+  All matching lines of a document then end up in one group,
+  and <code>count()</code> is the number of matching lines in that document:
 </p>
 <pre class="no-transform">{% highlight vespa-yql %}
-select * from movie where true limit 0 |
+select * from order where true limit 0 |
     all(
       group(id) max(100)
       each(
         all(
-          group(mul(frames.ts, 0)) filter(range(0.8, 1.0, frames.score, true, true))
+          group(mul(lines.quantity, 0)) filter(range(20, 100, lines.price))
           each(output(count()))
         )
       )
     )
 {% endhighlight %}</pre>
 <p>
-  This gives <code>2</code> for <code>m1</code> and <code>1</code> for <code>m2</code>.
-  A document with no matching frames has no inner group.
+  This gives <code>2</code> for <code>o1</code> and <code>1</code> for <code>o2</code>.
+  A document with no matching lines has no inner group.
   Drop the outer level to get the total over all hits instead.
 </p>
 <p>
