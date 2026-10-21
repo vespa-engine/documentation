@@ -165,12 +165,18 @@ $ docker exec vespa1 cat /opt/vespa/logs/vespa/access/JsonAccessLog.default
 Vespa Cloud keeps two kinds of application packages:
 
 * The **submitted** package: what was uploaded with `vespa prod deploy`, or from a CI job,
-  stored per build number in the build history. A build is not necessarily deployed anywhere:
-  a rollout takes time, zones can run different builds,
-  and a build can be held back by a [block-window](automated-deployments.html#block-windows),
-  a pinned version, or failing tests.
+  stored per build number in the build history, together with its test package.
 * The **deployed** package: what is running in one zone, for one instance.
+  Tests are not part of it, as they run separately.
   In `dev`, this is the package from the latest `vespa deploy`.
+
+A production zone often runs an older build than the latest submitted one, and zones can run different builds.
+A new build reaches a zone only when the [deployment pipeline](automated-deployments.html) gets there, for example:
+* The build must pass its system and staging tests, and any production tests or delays before the zone.
+* A [block-window](automated-deployments.html#block-windows) holds back new builds.
+* The zone is deferred, or the application is pinned to a version or rolled back.
+* The build was skipped, or settings like `revision-target` and `revision-change` in
+  [deployment.xml](../reference/applications/deployment.html) make it wait for, or skip past, other builds.
 
 To clone what is actually running, use the deployed package.
 To recreate a specific build, use the submitted package.
