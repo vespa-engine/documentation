@@ -191,7 +191,11 @@ The application package can also be downloaded from the Vespa Cloud Console:
   </li>
   <li>
     <p>
-      prod: open the overview of the deployment to clone, and click its <em>Build #</em> badge.
+      prod: open the overview of the deployment to clone, and click the build under <em>Build</em>:
+    </p>
+    <img src="/assets/img/console/deployment-build-badge.png"
+         alt="Deployment overview showing the build the zone runs" />
+    <p>
       This opens the build history at
       <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/prod/deployment?tab=builds</em>,
       with the running build expanded.
