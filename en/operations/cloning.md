@@ -162,25 +162,6 @@ $ docker exec vespa1 cat /opt/vespa/logs/vespa/access/JsonAccessLog.default
 ## Cloning - Vespa Cloud to self-hosted
 **Download application from Vespa Cloud**
 
-Vespa Cloud keeps two kinds of application packages:
-
-* The **submitted** package: what was uploaded with `vespa prod deploy`, or from a CI job,
-  stored per build number in the build history, together with its test package.
-* The **deployed** package: what is running in one zone, for one instance.
-  Tests are not part of it, as they run separately.
-  In `dev`, this is the package from the latest `vespa deploy`.
-
-A production zone often runs an older build than the latest submitted one, and zones can run different builds.
-A new build reaches a zone only when the [deployment pipeline](automated-deployments.html) gets there, for example:
-* The build must pass its system and staging tests, and any production tests or delays before the zone.
-* A [block-window](automated-deployments.html#block-windows) holds back new builds.
-* The zone is deferred, or the application is pinned to a version or rolled back.
-* The build was skipped, or settings like `revision-target` and `revision-change` in
-  [deployment.xml](../reference/applications/deployment.html) make it wait for, or skip past, other builds.
-
-To clone what is actually running, use the deployed package.
-To recreate a specific build, use the submitted package.
-
 Validate the endpoint, and fetch the application package:
 ```
 $ vespa config get application
@@ -190,30 +171,33 @@ $ vespa fetch
 Downloading application package... done
 Success: Application package written to application.zip
 ```
-{% include note.html content='In `dev`, `vespa fetch` downloads the package from the latest deployment to the zone.
-In `prod`, it downloads the latest **submitted** build, which might not be deployed to all zones yet.
-To get what is running in a production zone, download the deployed package from the console.' %}
+{% include note.html content='In `prod`, `vespa fetch` downloads the latest submitted build.
+This is not always the build running in a zone, see
+[submitted and deployed packages](automated-deployments.html#submitted-and-deployed-packages).
+To get the build a zone runs, download it from the console.' %}
 
 The application package can also be downloaded from the Vespa Cloud Console:
 <ul>
   <li>
     <p>
-      Deployed package, in dev or prod: in the sidebar, expand the deployment under the application
+      dev: in the sidebar, expand the deployment under the application
       (for example <em>default.aws-us-east-1c</em>) and select <em>Deployed Package</em>.
       This opens the package page, for example
-      <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/dev/instance/default/region/aws-us-east-1c/package</em>,
-      which shows the files deployed in that zone.
-      Click <em>Application</em> to download the package from the latest deployment job to the zone:
+      <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/dev/instance/default/region/aws-us-east-1c/package</em>.
+      Click <em>Application</em> to download the package:
     </p>
     <img src="/assets/img/console/deployed-package-sidebar.png" alt="Deployed Package in the Console sidebar"
          width="249px" height="auto" />
   </li>
   <li>
     <p>
-      Submitted package, in prod: navigate to the build history at
-      <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/prod/deployment?tab=builds</em>.
-      For the build to download, click <em>download</em> under <em>Application package</em>.
-      The test package is a separate download, under <em>Tests</em>:
+      prod: open the overview of the deployment to clone, and click its <em>Build #</em> badge.
+      This opens the build history at
+      <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/prod/deployment?tab=builds</em>,
+      with the running build expanded.
+      Click <em>download</em> under <em>Application package</em>.
+      To run the same tests when deploying the clone to <code>prod</code>,
+      also click <em>download</em> under <em>Tests</em>:
     </p>
     <img src="/assets/img/app-download-prod.png" alt="Build history with application package and test downloads" />
   </li>
