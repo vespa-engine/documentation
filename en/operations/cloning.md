@@ -162,6 +162,19 @@ $ docker exec vespa1 cat /opt/vespa/logs/vespa/access/JsonAccessLog.default
 ## Cloning - Vespa Cloud to self-hosted
 **Download application from Vespa Cloud**
 
+Vespa Cloud keeps two kinds of application packages:
+
+* The **submitted** package: what was uploaded with `vespa prod deploy`, or from a CI job,
+  stored per build number in the build history. A build is not necessarily deployed anywhere:
+  a rollout takes time, zones can run different builds,
+  and a build can be held back by a [block-window](automated-deployments.html#block-windows),
+  a pinned version, or failing tests.
+* The **deployed** package: what is running in one zone, for one instance.
+  In `dev`, this is the package from the latest `vespa deploy`.
+
+To clone what is actually running, use the deployed package.
+To recreate a specific build, use the submitted package.
+
 Validate the endpoint, and fetch the application package:
 ```
 $ vespa config get application
@@ -171,22 +184,32 @@ $ vespa fetch
 Downloading application package... done
 Success: Application package written to application.zip
 ```
+{% include note.html content='In `dev`, `vespa fetch` downloads the package from the latest deployment to the zone.
+In `prod`, it downloads the latest **submitted** build, which might not be deployed to all zones yet.
+To get what is running in a production zone, download the deployed package from the console.' %}
 
 The application package can also be downloaded from the Vespa Cloud Console:
 <ul>
   <li>
     <p>
-      dev: Navigate to <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default</em>,
-      click <em>Application</em> to download:
+      Deployed package, in dev or prod: in the sidebar, expand the deployment under the application
+      (for example <em>default.aws-us-east-1c</em>) and select <em>Deployed Package</em>.
+      This opens the package page, for example
+      <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/dev/instance/default/region/aws-us-east-1c/package</em>,
+      which shows the files deployed in that zone.
+      Click <em>Application</em> to download the package from the latest deployment job to the zone:
     </p>
-    <img src="/assets/img/app-download-dev.png" alt="Application package download from dev environment" />
+    <img src="/assets/img/console/deployed-package-sidebar.png" alt="Deployed Package in the Console sidebar"
+         width="249px" height="auto" />
   </li>
   <li>
     <p>
-      prod: Navigate to <em>https://console.vespa-cloud.com/tenant/mytenant1/application/myapp/prod/deployment?tab=builds</em>
-      and select the version of the application to download:
+      Submitted package, in prod: navigate to the build history at
+      <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/prod/deployment?tab=builds</em>.
+      For the build to download, click <em>download</em> under <em>Application package</em>.
+      The test package is a separate download, under <em>Tests</em>:
     </p>
-    <img src="/assets/img/app-download-prod.png" alt="Application package download from prod environment" />
+    <img src="/assets/img/app-download-prod.png" alt="Build history with application package and test downloads" />
   </li>
 </ul>
 
