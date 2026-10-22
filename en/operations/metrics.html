@@ -271,20 +271,78 @@ node8.vespanet	music	0
 
 
 
-<h2 id="tracking-vespa-version">Tracking Vespa version per node</h2>
+<span id="tracking-vespa-version"></span>
+<h2 id="alive-metric-and-node-dimensions">Alive metric and node dimensions</h2>
 <p>
-  Every Vespa node emits a constant <code>1</code> heartbeat metric named
-  <code>host_life.alive</code>. Its presence and freshness indicate that the
-  node is up; the value itself carries no significance.
+  Every Vespa node emits an <code>alive</code> metric with a constant value of <code>1</code>
+  under the <code>host_life</code> service. In the Prometheus API, this is
+  <code>alive{vespa_service="host_life", ...}</code>.
+  Use the presence and freshness of this metric as a heartbeat; its value does not describe the node's maintenance state.
 </p>
 <p>
-  <code>host_life.alive</code> is the only metric that carries the
-  <code>vespaVersion</code> dimension, identifying the Vespa version running
-  on each node. The dimension is not added to every metric because doing so
-  would significantly increase time series cardinality. Use this metric to
-  build dashboards that track version upgrade progress across a cluster, or
-  to correlate Vespa upgrades with changes in latency, resource usage and
-  other operational metrics.
+  The following dimensions identify the node, its current software versions, and retirement status.
+  <code>vespaVersion</code> is available on self-managed Vespa and Vespa Cloud;
+  the other dimensions in this table are supplied by Vespa Cloud.
+</p>
+<table class="table">
+  <thead>
+    <tr><th>Dimension</th><th>Meaning</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>host</code></td>
+      <td>The hostname of the Vespa node emitting the metric.</td>
+    </tr>
+    <tr>
+      <td><code>parentHostname</code></td>
+      <td>The hostname of the host running the node's container. Present when the node has a parent host.</td>
+    </tr>
+    <tr>
+      <td><code>osVersion</code></td>
+      <td>The current operating system variant and version of the host, for example <code>rhel-8.4.0</code>.</td>
+    </tr>
+    <tr>
+      <td><code>vespaVersion</code></td>
+      <td>The Vespa version currently running on the node. Use it to track version upgrade progress.</td>
+    </tr>
+    <tr>
+      <td><code>retiring</code></td>
+      <td><code>"true"</code> when retirement has been requested or the node has been marked retired in its cluster allocation;
+        otherwise <code>"false"</code>. This includes maintenance-related retirement and retirement during scale-down.
+        A retiring node can still serve traffic. This label does not identify the reason for retirement.</td>
+    </tr>
+  </tbody>
+</table>
+<p>
+  <code>osVersion</code>, <code>vespaVersion</code>, and <code>retiring</code> are attached to <code>alive</code>
+  instead of every service metric to limit the number of time series.
+  These are current values, not target versions or a history of maintenance operations.
+  If retirement is canceled, or the allocation's retired flag is cleared during deactivation without an outstanding
+  retirement request, <code>retiring</code> can return to <code>"false"</code>.
+</p>
+<!-- Confirm the minimum Vespa version containing vespa-engine/vespa#38234 before publishing. -->
+{% include warning.html content='The <code>retiring</code> label requires a Vespa version that supports it
+and the corresponding Vespa Cloud platform rollout. A missing label means that retirement status is unavailable;
+it must not be interpreted as <code>retiring="false"</code>.' %}
+
+<h3 id="count-nodes-by-retirement-status">Count nodes by retirement status</h3>
+<p>
+  This PromQL query counts nodes for an application instance, grouped by the <code>retiring</code> label:
+</p>
+<pre>{% highlight promql %}
+count by (retiring) (
+  alive{
+    applicationId="mytenant.myapp.default",
+    vespa_service="host_life",
+    retiring=~"true|false"
+  }
+)
+{% endhighlight %}</pre>
+<p>
+  Replace <code>mytenant.myapp.default</code> with the tenant, application, and instance separated by dots.
+  The result contains a count for each retirement status present in the selected series.
+  The <code>retiring</code> matcher excludes nodes that do not report the label.
+  Add a <code>zone</code> matcher to restrict the count to one deployment zone.
 </p>
 
 

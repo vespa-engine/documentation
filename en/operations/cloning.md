@@ -170,24 +170,11 @@ $ vespa fetch
 Downloading application package... done
 Success: Application package written to application.zip
 ```
-
-The application package can also be downloaded from the Vespa Cloud Console:
-<ul>
-  <li>
-    <p>
-      dev: Navigate to <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default</em>,
-      click <em>Application</em> to download:
-    </p>
-    <img src="/assets/img/app-download-dev.png" alt="Application package download from dev environment" />
-  </li>
-  <li>
-    <p>
-      prod: Navigate to <em>https://console.vespa-cloud.com/tenant/mytenant1/application/myapp/prod/deployment?tab=builds</em>
-      and select the version of the application to download:
-    </p>
-    <img src="/assets/img/app-download-prod.png" alt="Application package download from prod environment" />
-  </li>
-</ul>
+{% include note.html content='In `prod`, `vespa fetch` downloads the latest submitted build,
+which is not always the build running in a zone.
+For cloning, you usually want the submitted package of the build a zone runs, together with its test package.
+See [submitted and deployed packages](automated-deployments.html#submitted-and-deployed-packages)
+for where to find it in the console.' %}
 
 **Target setup:**
 
