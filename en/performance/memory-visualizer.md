@@ -41,13 +41,15 @@ but often one does not know factors like number of unique values in the data.
 It might as well be easier to feed the data to Vespa Cloud and do schema changes online and observe the effect.
 Vespa Cloud has two features that accelerates this process - the Memory Visualizer and Automated Reindexing:
 
-![Memory Visualizer](/assets/img/memory-visualizer-1.png)
+![Memory Visualizer showing memory per document type and attribute field](/assets/img/memory-visualizer-1.png)
 
 The Memory Visualizer lets you browse the attribute fields and observe absolute and relative size.
 This can help find the cost drivers for memory-bound applications, and identify bottlenecks for optimizations.
 
-The Memory Visualizer is found in the "services" view in the console for an application.
-Click a node of type "documentation (type: search)" and use the _Memory visualizer_ link.
+The Memory Visualizer is found in the **Memory** tab of a deployment in the console.
+Select a content cluster and a node to see its allocated memory,
+broken down by document type and then by attribute field.
+Select an attribute's bar to see its definition in the schema.
 
 
 

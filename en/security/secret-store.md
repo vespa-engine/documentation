@@ -23,8 +23,9 @@ This example uses the Secret Store to store an OpenAI API key.
 
 
 ## Secret management
-In the Vespa Cloud console, the "Account" section of your tenant contains a
-"Secret store" tab. This is where you configure all secrets for your tenant. 
+In the Vespa Cloud console, expand **Security** in the sidebar and select
+[**Secrets Store**](https://console.vespa-cloud.com/link/tenant/security/secrets).
+This is where you configure all secrets for your tenant.
 
 
 ### Vaults
@@ -74,7 +75,8 @@ to the cloud account.
 
 
 ### Secrets
-To add a new secret, click the "+ New secret" button. The same naming rules
+To add a new secret, click the "+ New secret" button, and enter a name, a value
+and an optional description. The same naming rules
 apply for secrets. You can give any value to the secret. Note that once this is
 saved the secret will never be visible again. You can update the secret to new
 values, but never retrieve the actual value. Maximum length for a secret is 64K
