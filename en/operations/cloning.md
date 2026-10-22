@@ -171,42 +171,11 @@ $ vespa fetch
 Downloading application package... done
 Success: Application package written to application.zip
 ```
-{% include note.html content='In `prod`, `vespa fetch` downloads the latest submitted build.
-This is not always the build running in a zone, see
-[submitted and deployed packages](automated-deployments.html#submitted-and-deployed-packages).
-To get the build a zone runs, download it from the console.' %}
-
-The application package can also be downloaded from the Vespa Cloud Console:
-<ul>
-  <li>
-    <p>
-      Deployed package, in dev and prod: in the sidebar, expand the deployment under the application
-      (for example <em>default.aws-us-east-1c</em>) and select <em>Deployed Package</em>.
-      This opens the package page, for example
-      <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/dev/instance/default/region/aws-us-east-1c/package</em>.
-      Click <em>Application</em> to download the package:
-    </p>
-    <img src="/assets/img/console/deployed-package-sidebar.png" alt="Deployed Package in the Console sidebar"
-         width="249px" height="auto" />
-  </li>
-  <li>
-    <p>
-      Submitted package, in prod: to also get the test package,
-      open the overview of the deployment to clone, and click the build under <em>Build</em>:
-    </p>
-    <img src="/assets/img/console/deployment-build-badge.png"
-         alt="Deployment overview showing the build the zone runs" />
-    <p>
-      This opens the build history at
-      <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/prod/deployment?tab=builds</em>,
-      with the running build expanded.
-      Click <em>download</em> under <em>Application package</em>.
-      To run the same tests when deploying the clone to <code>prod</code>,
-      also click <em>download</em> under <em>Tests</em>:
-    </p>
-    <img src="/assets/img/app-download-prod.png" alt="Build history with application package and test downloads" />
-  </li>
-</ul>
+{% include note.html content='In `prod`, `vespa fetch` downloads the latest submitted build,
+which is not always the build running in a zone.
+For cloning, you usually want the submitted package of the build a zone runs, together with its test package.
+See [submitted and deployed packages](automated-deployments.html#submitted-and-deployed-packages)
+for where to find it in the console.' %}
 
 **Target setup:**
 
