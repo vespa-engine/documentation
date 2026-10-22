@@ -180,7 +180,7 @@ The application package can also be downloaded from the Vespa Cloud Console:
 <ul>
   <li>
     <p>
-      dev: in the sidebar, expand the deployment under the application
+      Deployed package, in dev and prod: in the sidebar, expand the deployment under the application
       (for example <em>default.aws-us-east-1c</em>) and select <em>Deployed Package</em>.
       This opens the package page, for example
       <em>https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/dev/instance/default/region/aws-us-east-1c/package</em>.
@@ -191,7 +191,8 @@ The application package can also be downloaded from the Vespa Cloud Console:
   </li>
   <li>
     <p>
-      prod: open the overview of the deployment to clone, and click the build under <em>Build</em>:
+      Submitted package, in prod: to also get the test package,
+      open the overview of the deployment to clone, and click the build under <em>Build</em>:
     </p>
     <img src="/assets/img/console/deployment-build-badge.png"
          alt="Deployment overview showing the build the zone runs" />
