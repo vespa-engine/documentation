@@ -174,10 +174,11 @@ Please note that a first-time deployment normally takes a few minutes,
 as resources are provisioned.
 
 At this point, we recommend opening the console to observe the deployed application.
-The link will be `https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default`
-(replace with your own names) - this is also easily found in the console main page:
+The link will be `https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/dev/instance/default/region/aws-us-east-1c`
+(replace with your own names) - you can also find it in the console sidebar,
+by expanding the application and selecting the deployment:
 
-![dev view](/assets/img/free-trial.png)
+![Overview of a dev deployment in the console](/assets/img/free-trial.png)
 
 Refer to [vespa8 release notes](../reference/release-notes/vespa8.html) for troubleshooting
 in case the deployments fails, based on a Vespa 7 (or earlier) version.

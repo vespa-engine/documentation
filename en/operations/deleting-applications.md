@@ -12,18 +12,21 @@ Data will be unrecoverable.' %}
 
 
 ## Deleting an application
-To delete an application, use the console:
-* navigate to the *application* view at
-https://console.vespa-cloud.com/tenant/tenant-name/application where you can find the trash 
-can icon to the far right, as an `ACTION`.
-* navigate to the *deploy* view at
-*https://console.vespa-cloud.com/tenant/tenant-name/application/app-name/prod/deploy*.
+To delete an application, use the [console](https://console.vespa-cloud.com):
+1. Under **Applications**, select the application and open **Application Overview**.
+1. Expand the **Danger Zone** section at the bottom of the page.
+1. Click **Delete application**.
 
-![delete production deployment](/assets/img/console/delete-production-deployment.png)
+![Danger Zone with deactivate and delete actions](/assets/img/console/danger-zone.png)
 
-When the application deployments are deleted,
-delete the application in the [console](https://console.vespa-cloud.com).
-Remove the CI job that builds and deploys application packages, if any.
+This removes all production deployments and test resources, and with them the application itself:
+its instances, stored application packages and deploy keys.
+Remove the CI job that builds and deploys application packages, if any,
+so it does not deploy the application again.
+
+To take a single production deployment offline instead, click **Deactivate** next to it in the
+**Danger Zone**. A deactivated deployment that is still listed in `deployment.xml` reappears on the
+next deployment. To remove it permanently, follow the steps in the next section.
 
 
 
