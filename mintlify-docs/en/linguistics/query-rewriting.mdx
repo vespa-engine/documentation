@@ -1,0 +1,204 @@
+---
+title: "Query Rewriting"
+---
+
+
+A search application can improve the quality by interpreting the intended meaning of the user queries. Once the meaning is guessed, the query can be rewritten to one that will satisfy the user better than the raw query. Vespa includes a query rewriting language which makes it easy to use query rewriting to understand and act upon the query semantics.
+
+These query rewriting techniques can be combined to improve the search experience:
+
+- Query focusing: Decide a field to search for a term
+- Query enhancing: Add additional terms which improves the query
+- Stopwords: Remove terms which hurts recall or precision - [example](https://github.com/vespa-cloud/cord-19-search/blob/main/src/main/java/ai/vespa/example/cord19/searcher/BoldingSearcher.java)
+- Synonyms: Replace terms or phrases by others
+
+Query rewriting done by _semantic rules_ or _searchers_. Semantic rules is a simple production rule language that operates on queries. For more complex query rewriting logic which could not be handled by simple rules, one could create a rewriting searcher making use of the query rewriting framework.
+
+## EQUIV
+
+EQUIV is a query operator that can be used to add synonyms for words where the various synonyms should be equivalent - example:
+
+- The user query is `(used AND automobile)`
+- _automobile_ is a synonym for _car_ (from a dictionary)
+- Rewrite the query to `(used AND (automobile EQUIV car))`
+- _automobile_ or _car_ are here equivalent - the query shall behave as if all occurrences of _car_ in the document corpus had been replaced by _automobile_
+
+See the [reference](/en/reference/querying/yql#equiv) for differences between OR and EQUIV. In many cases it might be better to use OR instead of EQUIV. Example _Snoop_ Dogg:
+
+```sql
+"Snoop" EQUIV "Snoop Doggy Dogg" EQUIV "Snoop Lion" EQUIV "Calvin Broadus" EQUIV "Calvin Cordozar Broadus Junior"
+```
+
+However, _Snoop_ is used by other people - so matching that alone is not a sure hit for the correct entity, and finding more than one of the synonyms in the same text gives better confidence. This is exactly what OR does:
+
+```sql
+"Snoop"!20 OR "Snoop Doggy Dogg"!90 OR "Snoop Lion"!75 OR "Calvin Broadus"!60 OR "Calvin Cordozar Broadus Junior"!100
+```
+
+Use lower weights on the alternatives with less confidence. If it looks like the many words and phrases inside the OR overwhelms other words in the query, giving even lower weights may be useful, for example making the sum of weights 100 - the default weight for just one alternative.
+
+The decision to use EQUIV must be taken by application-specific dictionary or linguistics use. This can be done using [YQL](/en/reference/querying/yql#equiv) or from a container plugin (example [EquivSearcher.java](https://github.com/vespa-engine/sample-apps/blob/master/album-recommendation-java/app/src/main/java/ai/vespa/example/album/EquivSearcher.java)) where the query object is manipulated as follows:
+
+1. Find a word item in the query
+2. Check that an EQUIV can be used in that place (see [limitations](/en/reference/querying/yql#equiv))
+3. Find the synonyms in the dictionary
+4. Make an `EquivItem` with the synonyms (and the original word) as children
+5. Replace the original `WordItem` with the new `EquivItem`
+
+## Rules
+
+A simple semantic rule looks like:
+
+```sql
+lotr -> lord of the rings;
+```
+
+This means that whenever the term _lotr_ is encountered in a query, replace it by the terms _lord of the rings_. Rules can also refer to conditions, and the produced terms can be a modified version of whatever is matched instead of a concrete term:
+
+```sql
+[brand] -> company:[brand];
+[brand] :- sony, dell, ibm, hp;
+```
+
+This rule says that, whenever the condition named _brand_ is matched, replace the matched term(s) by _the same term(s)_ searching the _company_ field. In addition, the _brand_ condition is defined to match any of a list of brands. Note how `->` means a replacing production rule, `:-` means a condition and `,` separates alternatives.
+
+It is also possible to do grouping using parentheses, list multiple terms which must be matched in sequence, and to write _adding_ production rules using `+>` instead of `->`. Terms are by default added using the query default (as if they were written in the search box), but it is also possible to force them to be AND, OR, NOT or RANK using respectively `+`, `?`, `-` and `$`. Here is a more complex rule illustrating this:
+
+```sql
+[destination] (in, by, at, on) [place] +> $name:[destination]
+```
+
+This rule boosts matches which has a destination which matches the _name_ field followed by a preposition and a place (the definition of the _destination_ and _place_ conditions are not shown). This is achieved by adding a RANK term - a term which do not impact whether a document is matched or not, but which adds a relevancy boost if it is.
+
+The complete syntax of this language is found in the [semantic rules reference](/en/reference/querying/semantic-rules).
+
+## Rule bases
+
+A collection of rules used together are collected in a _rule base_ - a text file containing rules and conditions, with file suffix `.sr` (for semantic rules). Example:
+
+```sql
+# Replacements
+lotr -> lord of the rings;
+colour -> color;
+audi -> skoda;
+
+# Stopwords
+[stopword] -> ; # (Replace them by nothing)
+[stopword] :- and, or, the, be;
+
+# Focus brands to the brand field. If we think the_brand_# field has high quality data, we can replace. We use the same name
+# for the condition and the field, but this is not necessary.
+[brand] :- brand:[brand];
+[brand] :- sony, dell, ibm, hp;
+
+# Boost recognized categories
+[category] +> $category:[category];
+[category] :- laptop, digital camera, camera;
+```
+
+The rules in a rule base is evaluated in order from the top down. A rule will be matched as many times as is possible before evaluation moves on to the next query. So the query _colour colour_ will be rewritten to _color color_ before moving on to the next rule.
+
+## Configuration
+
+A rule base file is placed in the `rules/` directory under the [application package](/en/reference/applications/application-packages), and will be named as the file, excluding the `.sr` suffix. E.g. if the rules above are saved to `[my-application]/rules/example.sr`, the rules base available is named `example`.
+
+To make a rule base be used by default in queries, add `@default` on a separate line to the rule base. To deactivate the default rules, add [rules.off](/en/reference/api/query#rules.off) to the query.
+
+The rules can safely be updated at any time by running `vespa prepare` again. If there are errors in the rule bases, they will not be updated, and the errors will be reported on the command line.
+
+To trace what the rules are doing, add [tracelevel.rules=[number]](/en/reference/api/query#tracelevel.rules) to the query.
+
+## Using multiple rule bases
+
+It is possible to place multiple rule bases in the `[my-application]/rules/` and choose between them in the query. Rules may also include each other. This is useful to organize larger sets of rules, to experiment with variants of the rule set in new bases which includes the standard base, or to use different sets of rules for different use cases.
+
+To include one rule base in another, add `@include(rulebasename)` on a separate line, where _rulebasename_ is the file name (with or without the _.sr_). The result will be the same as if the included rule base were copied in to the location of the `include` line. If a condition is defined in both bases, the one from the _including_ base will be used. It is also possible to refer to the same-named condition in an included rule base using the `@super` directive as a condition. For example, this rule base adds some more categories to the _category_ definition in the `example.sr` above:
+
+```sql
+@include(example)
+
+# Category becomes laptop, digital camera, camera, palmtop, phone
+[category] :- @super, palmtop, phone;
+```
+
+Multiple rule bases can be included, and included rule bases can themselves have included rule bases. All the rule bases included in the application package will be available when making queries. One of the rule bases can be made the default by adding `@default` on a separate line in the rule base. To use another rule base, add [rules.rulebase=[rulebasename]](/en/reference/api/query#rules.rulebase) to the query.
+
+## Using a finite state automaton
+
+_Finite state automata_ (FSA) are efficient in storing and making lookups in large string lists. A rule base can be compiled into an FSA to increase performance. An automaton is created from a text file which lists the condition terms to match and the condition names separated by a tab (by default). The name of the condition can be followed by a semicolon and additional data which will be ignored.
+
+This automaton source file defines the same as the _stopword_ and _brand_ conditions in the example rule base:
+
+```txt
+and stopword
+or stopword
+be stopword
+the stopword
+sony brand
+dell brand
+ibm brand; This text is ignored
+hp brand
+```
+
+Use [vespa-makefsa](/en/reference/operations/tools#vespa-makefsa) to compile the automaton file:
+
+```bash
+$ vespa-makefsa -t sourcefile.txt targetfile.fsa
+```
+
+The target file is used from a rule base by adding _@automata(automatonfile)_ on a separate line in the rule base file (the file path is relative to _$VESPA\_HOME_). Automata-files must be stored on all container nodes.
+
+Note that automata are not included in others, so a rule base including another which uses an automaton must also declare to use the same automaton (or an automaton containing any changes from the automaton of the included base).
+
+## Query phrasing
+
+Users search for phrases like _New York_, _Rolling Stones_, _The Who_, or _daily horoscopes_. Considering the latter, most of the time the query string will look like this:
+
+```bash
+/search/?query=daily horoscopes&â€¦
+```
+
+This is actually a search for documents where both _daily_ and _horoscopes_ match, but not necessarily documents with the exact phrase _"daily horoscopes"_. PhrasingSearcher is a Searcher that compares queries with a list of common phrases, and replaces two search terms with a phrase. If _"daily horoscopes"_ is a common phrase, the above query becomes:
+
+```bash
+/search/?query="daily horoscopes"&â€¦
+```
+
+The PhrasingSearcher must be configured with a list of common phrases, compiled into a _finite state automation_ (FSA). The phrase list must be:
+
+- all lowercase
+- sorted alphabetically
+
+Example:
+
+```bash
+$ perl -ne 'print lc' listofphrasestextfile.unsorted.mixedcase | sort > listofphrasestextfile
+```
+
+Note that the Perl command to convert the text file to lowercase does not handle non-ASCII characters well (this is just an example). If the list of phrases is e.g. UTF-8 encoded and/or contains non-English characters, double-check that the resulting file is correct.
+
+Use [vespa-makefsa](/en/reference/operations/tools#vespa-makefsa) to compile the list into an FSA file:
+
+```bash
+$ vespa-makefsa listofphrasestextfile phrasefsa
+```
+
+Put the file on all container nodes, configure the location and [deploy](/en/basics/applications):
+
+```xml
+<container id="default" version="1.0">
+    <config name="container.qr-searchers">
+        <com>
+            <yahoo>
+                <prelude>
+                    <querytransform>
+                        <PhrasingSearcher>
+                            <automatonfile>/path/phrasefsa</automatonfile>
+                        </PhrasingSearcher>
+                    </querytransform>
+                </prelude>
+            </yahoo>
+        </com>
+    </config>
+```
+
