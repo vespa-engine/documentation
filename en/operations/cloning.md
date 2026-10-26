@@ -31,8 +31,7 @@ Examples are based on the
 [album-recommendation](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation) sample application.
 
 {% include note.html content='When done, it is easy to tear down resources in Vespa Cloud.
-E.g., _https://console.vespa-cloud.com/tenant/mytenant/application/myapp/prod/deploy_ or
-_https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default_ to find a delete-link.
+E.g., delete an application from the _Danger Zone_ on its _Application Overview_ page in the console.
 Instances in `dev` environments are auto-expired ([details](environments.html)),
 so application cloning is a safe way to work with Vespa.
 Find more information in [deleting applications](deleting-applications).
@@ -102,7 +101,7 @@ Uploading application package ... done
 Success: Triggered deployment of . with run ID 1
 
 Use vespa status for deployment status, or follow this deployment at
-https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default/job/dev-aws-us-east-1c/run/1
+https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/dev/instance/default/job/dev-aws-us-east-1c/run/1
 </pre>
   </li>
   <li>
@@ -136,7 +135,7 @@ $ vespa prod deploy
 <pre>
 Hint: See <a href="production-deployment.html">production deployment</a>
 Success: Deployed .
-See https://console.vespa-cloud.com/tenant/mytenant/application/myapp/prod/deployment for deployment progress
+See https://console.vespa-cloud.com/tenant/mytenant/application/myapp/environment/prod/deployment for deployment progress
 </pre>
     A proper deployment to a <code>prod</code> zone should have automated tests,
     read more in <a href="automated-deployments.html">automated deployments</a>

@@ -255,7 +255,7 @@ Token authentication must be explicitly enabled when used in combination with
 Tokens are identified by a name, and can contain multiple versions to easily support token rotation. 
 
 To create a new token:
-1. In the [console](https://console.vespa.ai) tenant view, open [**Account > Tokens**](https://console.vespa-cloud.com/link/tenant/account/tokens)
+1. In the [console](https://console.vespa.ai) tenant view, open [**Security > Tokens**](https://console.vespa-cloud.com/link/tenant/security/tokens)
 1. Click **Add token**
 1. Enter a name you'll reference in the application later and click **Add**. Remember to copy the token value and store it securely.
 
@@ -456,14 +456,15 @@ typically by a continuous build tool. See more about these two methods below.
 
 ### Managing users
 
-Tenant administrators manage user access through the Vespa Console.
+Tenant administrators manage user access in the Vespa Console under
+[**Settings > Users**](https://console.vespa-cloud.com/link/tenant/settings/users).
 
 <img src="/assets/img/manage-users.png" alt="Vespa Console user management"
   width="800px" height="auto" />
 
 Users have two different privilege levels
 
-- **Admin:** Can administrate the tenants metadata and the users of the tenant.
+- **Admin:** Can manage tenant settings, such as users, security, notifications, and billing.
 - **Developer:** Can administrate the applications deployed in the tenant.
 
 ### User access to Control Plane
@@ -497,13 +498,16 @@ see example [deploy-vector-search.yaml](https://github.com/vespa-cloud/vector-se
 
 #### Configuration
 
-The Application Key can be generated in the Console from the Deployment Screen.
+The Application Key can be generated in the Console, in the **Application Keys** section
+of the application's **Application Overview** page.
+Click **Generate random key** to create a key pair, or **Add custom key** to upload your own public key.
 The key is generated in the browser but the private key appears as a download in
-the browser. The public key can be downloaded separately from Deployment Screen.
+the browser. The public key can be downloaded separately from the same section.
 The private key is never persisted in Vespa Cloud, so it is important that the
 private key is kept securely. If lost, the private key is unrecoverable.
 
-<img src="/assets/img/application-key.png" alt="Vespa Console application key management">
+<img src="/assets/img/application-key.png" alt="Application Keys section of the Application Overview page"
+  width="800px" height="auto" />
 
 The Application Key can also be generated using the Vespa CLI.
 

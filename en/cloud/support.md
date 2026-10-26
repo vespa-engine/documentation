@@ -22,7 +22,7 @@ Use the support portal to track your ongoing cases.
 
 In case of any problems with the support portal itself, mail [support@vespa.ai](mailto:support@vespa.ai).
 
-You must be a [registered user](https://console.vespa-cloud.com/link/tenant/account/users) in your
+You must be a [registered user](https://console.vespa-cloud.com/link/tenant/settings/users) in your
 organization's [tenant](https://docs.vespa.ai/en/learn/tenant-apps-instances.html) in the Vespa Console
 to create a support case.
 
