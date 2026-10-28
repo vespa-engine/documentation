@@ -15,8 +15,8 @@ By default, this command prints the effective configuration for the current
 application, i.e. it takes into account any local configuration located in
 [working-directory]/.vespa.
 
-When default_config_scope is set to "local", this command shows only local
-configuration by default, if any local configuration is present.
+When showing local configuration, options not set locally are listed after the
+local ones, with their inherited values.
 
 
 ```
@@ -37,7 +37,7 @@ $ vespa config get --global
 ```
   -g, --global   Show global configuration, overriding default_config_scope
   -h, --help     help for get
-  -l, --local    Show only local configuration, if any
+  -l, --local    Show local configuration, if any, followed by options inherited from global configuration
 ```
 
 ### Options inherited from parent commands
