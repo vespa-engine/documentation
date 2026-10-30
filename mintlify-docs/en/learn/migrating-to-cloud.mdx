@@ -1,0 +1,261 @@
+---
+title: Migrating to Vespa Cloud
+description: "Migrating a Vespa application to Vespa Cloud is straightforward, as applications on Vespa Cloud supports all the same features as your self-hosted Vespa instances, you're just gaining some new capabilities and avoid the operational work."
+---
+
+The high-level process is as follows:
+
+<Steps>
+  <Step>
+  Functional validation using the [dev](/en/operations/environments#dev) environment (this guide).
+  </Step>
+  <Step>
+  Deployment to a [prod](/en/operations/environments#prod) zone.
+  </Step>
+</Steps>
+
+The rest of this guide assumes you have a [tenant](/en/learn/tenant-apps-instances) ready for deployment:
+
+```bash
+$ export VESPA_TENANT_NAME=mytenant
+```
+
+<Warning>
+**Prerequisites:**
+
+- Linux, macOS or Windows 10 Pro on x86\_64 or arm64, with [Podman Desktop](https://podman.io/) or [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed, with an engine running.
+- Alternatively, start the Podman daemon:
+  ```bash
+    $ podman machine init --memory 6000
+    $ podman machine start
+    ```
+- See [Docker Containers](/en/operations/self-managed/docker-containers) for system limits and other settings.
+- For CPUs older than Haswell (2013), see [CPU Support](/en/operations/self-managed/cpu-support).
+- Memory: Minimum RAM dedicated to Docker/Podman. [Memory recommendations](/en/operations/self-managed/node-setup#memory-settings).
+- Disk: Avoid `NO_SPACE` - the vespaengine/vespa container image + headroom for data requires disk space. [Read more](/en/writing/feed-block).
+- [Homebrew](https://brew.sh/) to install the [Vespa CLI](/en/clients/vespa-cli), or download the Vespa CLI from [Github releases](https://github.com/vespa-engine/vespa/releases).
+</Warning>
+
+<Note>
+**Note:**
+
+[Vespa Cloud Enclave](/en/operations/enclave/enclave) users: Run the enclave setup steps first.
+</Note>
+
+<Steps>
+  <Step title="Verify source application package">
+    An [application package](/en/basics/applications) from a self-hosted system can be deployed with minor modifications to the Vespa Cloud `dev` environment.
+
+    The root of an application package might look at this:
+
+        ```txt
+        ├── schemas
+        │   └── doc.sd
+        └── services.xml
+        ```
+
+    There are often more files, the above is a minimum. This is the root of the application package - make this the current working directory:
+
+    ```bash
+    $ cd /location/of/app/package
+    ```
+  </Step>
+
+  <Step title="Validate the Vespa CLI">
+    Make sure the [Vespa CLI](/en/clients/vespa-cli) is installed:
+
+    ```bash
+    $ vespa
+    Usage:
+      vespa [flags]
+      vespa [command]
+    ```
+  </Step>
+
+  <Step title="Vespa Cloud login">
+    Configure the local environment and log in to Vespa Cloud:
+
+    ```bash
+    $ vespa config set target cloud && \
+      vespa config set application $VESPA_TENANT_NAME.myapp && \
+      vespa auth login
+    ```
+  </Step>
+
+  <Step title="Add Credentials to the Application package">
+    Create and get security credentials:
+
+    ```bash
+    $ vespa auth cert
+    ```
+
+    This will add the `security` directory to the application package, and add a public certificate to it:
+
+        ```txt
+        ├── schemas
+        │   └── doc.sd
+        ├── security
+        │   └── clients.pem
+        └── services.xml
+        ```
+
+    The command also installs a key/certificate pair in the Vespa CLI home directory, see [vespa auth cert](/en/reference/clients/vespa-cli/vespa_auth_cert). This pair is used in subsequent accesses to the data plane for document and query operations.
+  </Step>
+
+  <Step title="Vespa Cloud Enclave Only: Add Account">
+    <Note>
+    **Note:**
+
+    Skip this step unless you are using [Vespa Cloud Enclave](/en/operations/enclave/enclave).
+    </Note>
+
+    Add [deployment.xml](/en/reference/applications/deployment#deployment) with your cloud provider account - This ensures the deployment uses resources from the correct account - examples:
+
+    ```xml
+    <deployment version="1.0" cloud-account="gcp:project-name">
+       <dev />
+    </deployment>
+    ```
+
+    ```xml
+    <deployment version="1.0" cloud-account="aws:123456789012">
+        <dev />
+    </deployment>
+    ```
+
+    The application package should look like:
+
+    ```txt
+    ├── deployment.xml
+    ├── schemas
+    │   └── doc.sd
+    ├── security
+    │   └── clients.pem
+    └── services.xml
+    ```
+  </Step>
+
+  <Step title="Remove hosts.xml">
+    `hosts.xml` is not used in Vespa Cloud, remove it.
+  </Step>
+
+  <Step title="Modify services.xml">
+    Edit the `<nodes>` configuration in `services.xml` - from:
+
+    ```xml
+    <container id="default" version="1.0">
+        <document-api/>
+        <document-processing/>
+        <search/>
+        <nodes>
+            <node hostalias="node4" />
+            <node hostalias="node5" />
+        </nodes>
+    </container>
+    ```
+
+    to:
+
+    ```xml
+    <container id="default" version="1.0">
+        <document-api/>
+        <document-processing/>
+        <search/>
+        <nodes count="2">
+             <resources vcpu="2" memory="8Gb" disk="50Gb"/>
+        </nodes>
+    </container>
+    ```
+
+    In short, this is the Vespa Cloud syntax for resource specifications.
+
+    Example, migrating from a cluster using `c7i.2xlarge` instance type, with a 200G disk - from the AWS specifications:
+
+    ```txt
+    c7i.2xlarge  8  16  EBS-Only
+    ```
+
+    Equivalent Vespa Cloud configuration:
+
+    ```xml
+    <resources vcpu="8" memory="16Gb" disk="200Gb"/>
+    ```
+
+    Repeat this for all clusters in `services.xml`. Notes:
+
+    1. As you are now migrating to the `dev` environment, what is _actually_ deployed is a minimized version. The configuration changes above are easily tested in this environment.
+    2. Using `count=2` is best practise at this point.
+    3. Resources must match a node instance type at the cloud providers(s) deploying to, see [AWS flavors](/en/performance/instance-types/aws-instance-types), [GCP flavors](/en/performance/instance-types/gcp-instance-types), and [Azure flavors](/en/performance/instance-types/azure-instance-types).
+  </Step>
+
+  <Step title="Deploy to Vespa Cloud Dev Environment">
+    At this point, the local environment and the application package is ready for deployment:
+
+    ```bash
+    $ vespa deploy --wait 600
+    ```
+
+    Please note that a first-time deployment normally takes a few minutes, as resources are provisioned.
+
+    At this point, we recommend opening the console to observe the deployed application. The link will be `https://console.vespa-cloud.com/tenant/mytenant/application/myapp/dev/instance/default` (replace with your own names) - this is also easily found in the console main page:
+
+    <Frame>
+    ![dev view](/assets/img/free-trial.png)
+    </Frame>
+
+    Refer to [vespa8 release notes](/en/reference/release-notes/vespa8) for troubleshooting in case the deployments fails, based on a Vespa 7 (or earlier) version.
+  </Step>
+
+  <Step title="Use the Endpoints">
+    The endpoints are shown in the console, one can also list them like:
+
+    ```bash
+    $ vespa status query
+    Container default at https://aa1c1234.b225678e.z.vespa-app.cloud/ is ready
+    ```
+
+    Test the query endpoint, expect `totalCount: 0`:
+
+    ```bash
+    $ vespa query 'select * from sources * where true'
+    ```
+
+    ```json
+    {
+        "root": {
+            "id": "toplevel",
+            "relevance": 1.0,
+            "fields": {
+                "totalCount": 0
+            },
+    ```
+
+    In the `services.xml` examples at the start of this guide, both `<search>` and `<document>` and configured in the same cluster, named `default`. In case of multiple container clusters, select the one configured with `<search>`:
+
+    ```bash
+    vespa query 'select * from sources * where true' --cluster myquerycluster
+    ```
+
+    Finally, feed a document to the cluster (this is the cluster configured with `<document>`)
+
+    ```bash
+    vespa feed mydoc.jsonl --cluster myfeedcluster
+    ```
+
+    Redo the query and observe nonzero `totalCount`.
+  </Step>
+</Steps>
+
+## Next steps
+
+This is the final step in the functional validation. Please note:
+
+<Note>
+**Note:**
+
+Deployments to `dev` expire after 7 days of inactivity, i.e., 7 days after the last deployment. **This applies to all plans**. Use the Vespa Console to extend the expiry period, or redeploy the application to add 7 more days.
+</Note>
+
+- Read more about the [dev](/en/operations/environments#dev) environment
+- Feed (a subset) of the data and validate that queries and other API accesses work as expected.
+- At the end of the validation process, continue to [production deployment](/en/operations/production-deployment) to set up in production zones.

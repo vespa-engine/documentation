@@ -1,0 +1,38 @@
+---
+title: "/cluster/v2 API reference"
+description: "/cluster/v2 API reference in Vespa applications."
+---
+| HTTP request | cluster/v2 operation | Description |
+| :--- | :--- | :--- |
+| GET | List cluster and nodes. Get cluster, node or disk states. |  |
+|  | List content clusters | `/cluster/v2/` |
+|  | Get cluster state and list service types within cluster | `/cluster/v2/<cluster>` |
+|  | List nodes per service type for cluster | `/cluster/v2/<cluster>/<service-type>` |
+|  | Get node state | `/cluster/v2/<cluster>/<service-type>/<node>` |
+| PUT | Set node state |  |
+|  | Set node user state | `/cluster/v2/<cluster>/<service-type>/<node>` |
+
+| State | Description |
+| :--- | :--- |
+| `Up` | The node is up and available to keep buckets and serve requests. |
+| `Down` | The node is not available, and can not be used. |
+| `Stopping` | This node is stopping and is expected to be down soon. This state is typically only exposed to the cluster controller to tell why the node stopped. The cluster controller will expose the node as down or in maintenance mode for the rest of the cluster. This state is thus not seen by the distribution algorithm. |
+| `Maintenance` | This node is temporarily unavailable. The node is available for bucket placement, so redundancy is lower. Using this mode, new replicas of the documents stored on this node will not be created, allowing the node to be down with less of a performance impact on the rest of the cluster. This mode is typically used to mask a down state during controlled node restarts, or by an administrator that need to do some short maintenance work, like upgrading software or restart the node. |
+| `Retired` | A retired node is available and serves requests. This state is used to remove nodes while keeping redundancy. Buckets are moved to other nodes (with low priority), until empty. Special considerations apply when using [grouped distribution](/en/content/elasticity#grouped-distribution) as buckets are not necessarily removed. |
+
+| Type | Spec | Description |
+| :--- | :--- | :--- |
+| cluster | *`<identifier>`* | The name given to a content cluster in a Vespa application. |
+| description | *.** | Description can contain anything that is valid JSON. However, as the information is presented in various interfaces, some which may present reasons for all the states in a cluster or similar, keeping it short and to the point makes it easier to fit the information neatly into a table and get a better cluster overview. |
+| group-spec | *`<identifier>`* (\. *`<identifier>`* )* | The hierarchical group assignment of a given content node. This is a dot separated list of identifiers given in the application services.xml configuration. |
+| node | [0-9]+ | The index or distribution key identifying a given node within the context of a content cluster and a service type. |
+| service-type | (distributor\|storage) | The type of the service to look at state for, within the context of a given content cluster. |
+| state-disk | (up\|down) | One of the valid disk states. |
+| state-unit | [up](#up) \| [stopping](#stopping) \| [down](#down) | The cluster controller fetches states from all nodes, called *unit states*. States reported from the nodes are either `up` or `stopping`. If the node can not be reached, a `down` state is assumed. This means, the cluster controller detects failed nodes. The subsequent *generated states* will have nodes in `down`, and the [ideal state algorithm](/en/content/idealstate) will redistribute [buckets](/en/content/buckets) of documents. |
+| state-user | [up](#up) \| [down](#down) \| [maintenance](#maintenance) \| [retired](#retired) | Use tools for [user state management](/en/operations/self-managed/admin-procedures#cluster-state). Retire a node from a cluster - use `retired` to move buckets to other nodes Short-lived maintenance work - use `maintenance` to avoid merging buckets to other nodes Fail a bad node. The cluster controller or an operator can set a node `down` |
+| state-generated | [up](#up) \| [down](#down) \| [maintenance](#maintenance) \| [retired](#retired) | The cluster controller generates the cluster state from the `unit` and `user` states, over time. The generated state is called the *cluster state*. |
+
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| recursive | number | Number of levels, or `true` for all levels. Examples: Use `recursive=1` for a node request to also see all datause `recursive=2` to see all the node data within each service type In recursive mode, you will see the same output as found in the spec below. However, where there is a `{ "link" : "<url-path>" }` element, this element will be replaced by the content of that request, given a recursive value of one less than the request above. |
+
