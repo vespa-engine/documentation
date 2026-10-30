@@ -187,6 +187,7 @@ these models can then be downloaded and used in Vespa.
 
 Vespa defaults to `mean` pooling-strategy.
 Consult the model card for the pooling method used.
+Encoder models typically use `mean` or `cls`, while decoder-based embedding models typically use `last`.
 Note the url pattern above.
 The url must point to the actual file, not the model card.
 
