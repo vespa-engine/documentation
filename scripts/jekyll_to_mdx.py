@@ -437,6 +437,44 @@ def is_schema(code: str) -> bool:
     return bool(re.match(r"\s*[\w().\[\]-]*\s*(inherits\s+[\w\[\], .-]+)?\s*[{:]", rest)) or "{" in code
 
 
+# Jekyll code languages -> Mintlify code languages; the Vespa languages are in languages/
+LANGUAGES = {"vespa-schema-language": SCHEMA_LANG, "sd": SCHEMA_LANG}
+
+# Markup kept in {% highlight %} blocks by the Jekyll site's _plugins/highlight_marks.rb
+MARK_RE = re.compile(r'(?P<open><span class="pre-hilite">|<a\s[^>]*>|<(?:em|b|strong|i)>)|</(?P<close>span|a|em|b|strong|i)>')
+
+
+def code_language(lang: str, code: str) -> str:
+    lang = (lang or "").strip()
+    return LANGUAGES.get(lang, lang) or guess_lang(code)
+
+
+def unmark(code: str) -> tuple[str, list[int]]:
+    """Code of a {% highlight %} block without its markup, and the 1-based lines marked with pre-hilite.
+
+    Like highlight_marks.rb: a closing tag without an opening tag is code, and code with a tag
+    that is not closed is left as it is.
+    """
+    plain, open_tags, hilites, pos = "", [], [], 0
+    for m in MARK_RE.finditer(code):
+        plain += code[pos : m.start()]
+        pos = m.end()
+        if m.group("open"):
+            open_tags.append((re.match(r"<(\w+)", m.group("open")).group(1), m.group("open"), len(plain)))
+        elif open_tags and open_tags[-1][0] == m.group("close"):
+            _, opening, start = open_tags.pop()
+            if "pre-hilite" in opening:
+                hilites.append((start, len(plain)))
+        else:
+            plain += m.group(0)
+    if open_tags:
+        return code, []
+    plain += code[pos:]
+    lines = sorted({n for start, end in hilites
+                    for n in range(plain.count("\n", 0, start) + 1, plain.count("\n", 0, max(start, end - 1)) + 2)})
+    return plain, lines
+
+
 def guess_lang(code: str) -> str:
     s = code.lstrip()
     first = s.split("\n", 1)[0]
@@ -451,7 +489,7 @@ def guess_lang(code: str) -> str:
     if is_schema(code):
         return SCHEMA_LANG
     if re.match(r"select\s", s, re.I):
-        return "sql"
+        return "vespa-yql"
     return "txt"
 
 
@@ -571,28 +609,38 @@ def highlight_meta(lines: list[int]) -> str:
     return "highlight={" + ",".join(ranges) + "}"
 
 
+def pre_label(attrs: str) -> tuple[bool, str]:
+    """Whether a <pre> is hidden, and the label js/process_pre.js shows for a file used by the documentation tests."""
+    path = re.search(r'data-path="([^"]*)"', attrs) if 'data-test="file"' in attrs else None
+    label = f"<p><code>Paste the above into file {html.escape(path.group(1))}</code></p>" if path else ""
+    return bool(re.search(r"display:\s*none", attrs)), label
+
+
 def extract_code(body: str, page: Page) -> str:
     def add(lang: str, meta: str, code: str) -> str:
         page.codes.append((lang, meta, code))
         return f'<x-pre n="{len(page.codes) - 1}"></x-pre>'
 
     def highlight_repl(m: re.Match) -> str:
-        lang, code = m.group(1), m.group(2)
-        return add(lang or guess_lang(code), "", code)
+        code, hl = unmark(m.group(2))
+        return add(code_language(m.group(1), code), highlight_meta(hl), code)
 
     hl_re = re.compile(f"{HL_START}(.*?){HL_SEP}(.*?){HL_END}", re.DOTALL)
-    # <pre>{% highlight %}...{% endhighlight %}</pre>: the pre is only a wrapper
-    body = re.sub(r"<pre\b[^>]*>\s*(" + hl_re.pattern + r")\s*</pre>", lambda m: m.group(1), body, flags=re.DOTALL)
+    # <pre ...>{% highlight %}...{% endhighlight %}</pre>: the pre wraps the code, and its attributes still
+    # apply, e.g. a hidden file used by the documentation tests
+    def wrapped_highlight(m: re.Match) -> str:
+        hidden, label = pre_label(m.group(1))
+        return label if hidden else hl_re.sub(highlight_repl, m.group(2)) + label
+
+    body = re.sub(r"<pre\b([^>]*)>\s*(" + hl_re.pattern + r")\s*</pre>", wrapped_highlight, body, flags=re.DOTALL)
     body = hl_re.sub(highlight_repl, body)
     # Scripts may contain "<pre>" in strings; drop them before looking for <pre> elements.
     body = strip_dropped(body)
 
     def pre_repl(m: re.Match) -> str:
         attrs, inner = m.group(1), m.group(2)
-        # js/process_pre.js labels file examples used by the documentation tests
-        path = re.search(r'data-path="([^"]*)"', attrs) if 'data-test="file"' in attrs else None
-        label = f"<p><code>Paste the above into file {html.escape(path.group(1))}</code></p>" if path else ""
-        if re.search(r"display:\s*none", attrs):
+        hidden, label = pre_label(attrs)
+        if hidden:
             return label
         code, hl = code_from_pre(inner)
         return add(guess_lang(code), highlight_meta(hl), code) + label
@@ -1146,8 +1194,8 @@ def markdown_to_mdx(body: str, page: Page) -> str:
     in_list = False
     while i < len(lines):
         line = lines[i]
-        # highlight blocks rendered by Liquid
-        if HL_START in line:
+        # highlight blocks rendered by Liquid; one in a <pre> is part of that HTML block
+        if HL_START in line and not re.match(r"\s*<pre\b", line):
             j = i
             chunk = line
             while HL_END not in chunk and j + 1 < len(lines):
@@ -1159,8 +1207,8 @@ def markdown_to_mdx(body: str, page: Page) -> str:
                 before, after = chunk[: m.start()].strip(), chunk[m.end() :].strip()
                 if before:
                     out.append(indent + md_inline(before, page))
-                code = m.group(2)
-                out.append(indent_block(fence(code, m.group(1) or guess_lang(code)), indent))
+                code, hl = unmark(m.group(2))
+                out.append(indent_block(fence(code, code_language(m.group(1), code), highlight_meta(hl)), indent))
                 if after:
                     out.append(indent + md_inline(after, page))
             i = j + 1
@@ -1171,7 +1219,8 @@ def markdown_to_mdx(body: str, page: Page) -> str:
             j = i + 1
             while j < len(lines) and not re.match(rf"^\s*{re.escape(ticks[0])}{{{len(ticks)},}}\s*$", lines[j]):
                 j += 1
-            info = info.strip() or guess_lang("\n".join(l[len(indent):] for l in lines[i + 1 : j]))
+            lang, _, meta = info.strip().partition(" ")
+            info = " ".join(x for x in (code_language(lang, "\n".join(l[len(indent):] for l in lines[i + 1 : j])), meta) if x)
             out.append(f"{indent}{ticks}{info}")
             # kramdown keeps less-indented code lines in a list item's fence; CommonMark would end the item
             code = lines[i + 1 : j]
@@ -1254,8 +1303,21 @@ def markdown_to_mdx(body: str, page: Page) -> str:
             out.append(converted)
             prose.add(len(out) - 1) if converted and not BLOCK_LINE_RE.match(stripped) else None
         i += 1
-    text = "\n".join(out)
+    text = relink("\n".join(out), page.source)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+HTML_LINK_RE = re.compile(r"(\]\()((?!\w+://)[^)\s]+\.html(?:#[^)\s]*)?)(\))")
+
+
+def relink(text: str, source: str) -> str:
+    """Convert links to .html pages outside code; md_prose converts links line by line, so this
+    catches links whose text spans lines."""
+    lines = text.split("\n")
+    for i, line, in_fence in outside_fences(text):
+        if not in_fence and ".html" in line:
+            lines[i] = HTML_LINK_RE.sub(lambda m: m.group(1) + md_link_target(convert_href(m.group(2), source)) + m.group(3), line)
+    return "\n".join(lines)
 
 
 TABLE_SEP_RE = re.compile(r"^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?$")
@@ -1503,6 +1565,27 @@ def convert(source_text: str, path: Path | str) -> str:
     return "---\n" + "\n".join(fm) + "\n---\n\n" + mdx.strip() + "\n"
 
 
+def plain_words(text: str) -> list[str]:
+    text = re.sub(r"\]\([^)]*\)", "]", text)  # link targets
+    return re.findall(r"[a-z0-9]+", html.unescape(re.sub(r"<[^>]+>", " ", text)).lower())
+
+
+def first_paragraph(body: str) -> str:
+    for block in re.split(r"\n\s*\n", body.strip()):
+        b = block.strip()
+        if b and not b.startswith(("#", "<", "{/*", "```", "-", "|", "!", ">")) and not re.match(r"\d+\.", b):
+            return b
+    return ""
+
+
+def repeats_first_paragraph(description_line: str, body: str) -> bool:
+    """Whether a description: line has the same text as the start of the body's first paragraph."""
+    desc = plain_words(description_line.partition(":")[2].strip().strip("\"'"))
+    first = plain_words(first_paragraph(body))
+    n = min(len(desc), 12)
+    return n > 0 and first[:n] == desc[:n]
+
+
 def keep_frontmatter(mdx: str, existing: str, keys: list[str]) -> str:
     """Copy frontmatter lines for `keys` from an existing page into converted MDX that lacks them."""
     old = re.match(r"---\n(.*?)\n---\n", existing, re.DOTALL)
@@ -1511,6 +1594,8 @@ def keep_frontmatter(mdx: str, existing: str, keys: list[str]) -> str:
         return mdx
     have = {line.partition(":")[0] for line in new.group(1).splitlines()}
     extra = [line for line in old.group(1).splitlines() if line.partition(":")[0] in keys and line.partition(":")[0] not in have]
+    # Mintlify shows the description under the title, so drop one that repeats the first paragraph
+    extra = [line for line in extra if not (line.startswith("description:") and repeats_first_paragraph(line, mdx[new.end():]))]
     if not extra:
         return mdx
     return "---\n" + new.group(1) + "\n" + "\n".join(extra) + "\n---\n" + mdx[new.end():]
