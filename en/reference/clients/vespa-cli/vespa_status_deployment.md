@@ -45,6 +45,7 @@ $ vespa status deployment -t local [session-id] --wait 600
   -c, --color string         Whether to use colors in output. Must be "auto", "never", or "always" (default "auto")
       --format string        Output format. Must be 'human' (human-readable), 'plain' (cluster URL only), or 'json' (default "human")
   -i, --instance string      The instance of the application to use
+      --progress             Show live deployment progress in interactive terminals (default true)
   -q, --quiet                Print only errors
   -t, --target string        The target platform to use. Must be "local", "cloud", "hosted" or an URL (default "local")
   -z, --zone string          The zone to use. This defaults to a dev zone (cloud only)
