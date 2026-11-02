@@ -93,8 +93,30 @@ The root element.
       <td>No</td>
       <td>Account to deploy to with [Vespa Cloud Enclave](/en/operations/enclave/enclave).</td>
     </tr>
+    <tr>
+      <td>empty-host-ttl</td>
+      <td>No</td>
+      <td>How long to keep hosts after they become empty, with [Vespa Cloud Enclave](/en/operations/enclave/enclave), e.g., `30m`, `6h` or `2d`. See [empty host TTL](#empty-host-ttl).</td>
+    </tr>
   </tbody>
 </table>
+
+<a id="empty-host-ttl" />
+
+**Empty host TTL.** With a `cloud-account`, hosts are provisioned for each deployment, and removed shortly after they become empty. Deployments to the `test` and `staging` environments are removed after each run, so every system and staging test run waits for new hosts. Set `empty-host-ttl` to keep empty hosts for that long instead; a later deployment of the same instance in the same zone, including its tester, then reuses them, as long as the node resources are unchanged. The value is an integer followed by `m`, `h` or `d`, and `0m` turns it off. It is inherited from the closest enclosing element, and has no effect without a cloud account. Manual deployments to `dev` use the value on `<dev>`, or else the one on `<deployment>`.
+
+To keep hosts only for system and staging tests, set it on `<deployment>` or `<instance>`, and turn it off for production, and for `dev` when set on `<deployment>`. Don't add `<test>` or `<staging>` elements only to set it there, as tests are then required in the test package, and runs without them fail:
+
+```xml
+<deployment version="1.0" cloud-account="aws:123456789012" empty-host-ttl="6h">
+    <dev empty-host-ttl="0m" />
+    <prod empty-host-ttl="0m">
+        <region>aws-us-east-1c</region>
+    </prod>
+</deployment>
+```
+
+In production, the TTL keeps hosts emptied by scaling down, which makes a later scale-up with the same resources faster, at the cost of the idle hosts.
 
 ## instance
 
@@ -123,6 +145,11 @@ In `<deployment>` or `<parallel>` (which must be a direct descendant of the root
       <td>cloud-account</td>
       <td>No</td>
       <td>Account to deploy to with [Vespa Cloud Enclave](/en/operations/enclave/enclave). Overrides parent's use of cloud-account.</td>
+    </tr>
+    <tr>
+      <td>empty-host-ttl</td>
+      <td>No</td>
+      <td>How long to keep hosts after they become empty. Overrides parent's use of empty-host-ttl. See [empty host TTL](#empty-host-ttl).</td>
     </tr>
   </tbody>
 </table>
@@ -536,6 +563,11 @@ Meaning depends on where it is located:
       <td>No</td>
       <td>For [system tests](/en/operations/automated-deployments#system-tests) only: account to deploy to with [Vespa Cloud Enclave](/en/operations/enclave/enclave). Overrides parent's use of cloud-account. Cloud account _must not_ be specified for [production tests](/en/operations/automated-deployments#production-tests), which always run in the account of the corresponding deployment.</td>
     </tr>
+    <tr>
+      <td>empty-host-ttl</td>
+      <td>No</td>
+      <td>How long to keep hosts after they become empty. Overrides parent's use of empty-host-ttl. See [empty host TTL](#empty-host-ttl).</td>
+    </tr>
   </tbody>
 </table>
 
@@ -557,6 +589,11 @@ In `<deployment>`, or `<instance>`. If present, the application is deployed to t
       <td>No</td>
       <td>Account to deploy to with [Vespa Cloud Enclave](/en/operations/enclave/enclave). Overrides parent's use of cloud-account.</td>
     </tr>
+    <tr>
+      <td>empty-host-ttl</td>
+      <td>No</td>
+      <td>How long to keep hosts after they become empty. Overrides parent's use of empty-host-ttl. See [empty host TTL](#empty-host-ttl).</td>
+    </tr>
   </tbody>
 </table>
 
@@ -577,6 +614,11 @@ In `<deployment>`, **or** in `<instance>`. If present, the application is deploy
       <td>cloud-account</td>
       <td>No</td>
       <td>Account to deploy to with [Vespa Cloud Enclave](/en/operations/enclave/enclave). Overrides parent's use of cloud-account.</td>
+    </tr>
+    <tr>
+      <td>empty-host-ttl</td>
+      <td>No</td>
+      <td>How long to keep hosts after they become empty. Overrides parent's use of empty-host-ttl. See [empty host TTL](#empty-host-ttl).</td>
     </tr>
   </tbody>
 </table>
@@ -609,12 +651,17 @@ In `<prod>`, `<parallel>`, `<steps>`, or `<group>`. The application is deployed 
       <td>No</td>
       <td>Account to deploy to with [Enclave](/en/operations/enclave/enclave). Overrides parent's use of cloud-account.</td>
     </tr>
+    <tr>
+      <td>empty-host-ttl</td>
+      <td>No</td>
+      <td>How long to keep hosts after they become empty. Overrides parent's use of empty-host-ttl. See [empty host TTL](#empty-host-ttl).</td>
+    </tr>
   </tbody>
 </table>
 
 ### availability-zone
 
-In `<region>`. The element body must be one of the availability zone identifiers listed in [zones](/en/operations/zones). At least one availability zone _must_ be specified when deploying to a production region that supports more than one availability zone. The application instance will be spread out evenly across these availability zones for resiliency. See [availability zones](/en/operations/az) for more.
+In [`<region>`](#region) or [`<region>` (dev)](#region-dev). The element body must be one of the availability zone identifiers listed in [zones](/en/operations/zones). At least one availability zone _must_ be specified when deploying to a region that supports more than one availability zone. The application instance will be spread out evenly across these availability zones for resiliency. See [availability zones](/en/operations/az) for more.
 
 Example:
 
@@ -627,7 +674,7 @@ Example:
 
 ## dev
 
-In `<deployment>`. Optionally used to control deployment settings for the [dev environment](/en/operations/environments). This can be used specify a different cloud account, tags, and private endpoints.
+In `<deployment>`. Optionally used to control deployment settings for the [dev environment](/en/operations/environments). This can be used specify a different cloud account, tags, private endpoints, and availability zones per region.
 
 <table className="vespa-table">
   <thead>
@@ -647,6 +694,11 @@ In `<deployment>`. Optionally used to control deployment settings for the [dev e
       <td>cloud-account</td>
       <td>No</td>
       <td>Account to deploy to with [Vespa Cloud Enclave](/en/operations/enclave/enclave). Overrides parent's use of cloud-account.</td>
+    </tr>
+    <tr>
+      <td>empty-host-ttl</td>
+      <td>No</td>
+      <td>How long to keep hosts after they become empty. Overrides parent's use of empty-host-ttl. See [empty host TTL](#empty-host-ttl).</td>
     </tr>
   </tbody>
 </table>
@@ -756,6 +808,37 @@ The tester always runs on a single node, so `count` must be `1`.
 ## endpoints (global)
 
 In `<deployment>`, without any `<instance>` declared **or** in `<instance>`: This allows _global_ endpoints, via one or more [`<endpoint>`](#endpoint-global) elements; and [zone endpoint](#endpoint-zone) and [private endpoint](#endpoint-private) elements for cloud-native private network configuration.
+
+## region (dev)
+
+In `<dev>`. Declares the [availability zones](#availability-zone) to use when deploying to this region in the [dev](/en/operations/environments#dev) environment. Unlike [`<region>`](#region) in `<prod>`, this does not cause a deployment to the zone; it only applies when deploying to that dev zone. Only specify this for regions that support more than one availability zone. At least one `<availability-zone>` child must be specified, and each region can be declared only once.
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Attribute</th>
+      <th>Mandatory</th>
+      <th>Values</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>name</td>
+      <td>Yes</td>
+      <td>The region identifier, e.g. `gcp-us-central1`.</td>
+    </tr>
+  </tbody>
+</table>
+
+Example:
+
+```xml
+<dev>
+    <region name="gcp-us-central1">
+        <availability-zone>us-central1-a</availability-zone>
+    </region>
+</dev>
+```
 
 ## endpoints (dev)
 

@@ -2,11 +2,18 @@
 title: "Query Profiles"
 ---
 
-A Query Profile is a named collection of search request parameters given in the configuration. The search request can specify a query profile whose parameters will be used as parameters of that request. This frees the client from having to manage and send a large number of parameters, and enables the request parameters to use for a use case to be changed without having to change the client. Query profiles enables [bucket tests](../applications/testing#feature-switches-and-bucket-tests), where a part of the query stream is given some experimental treatment, as well as differentiating behavior based on (OEM) customer, user type, region, frontend type etc. This document explains how to create and use query profiles. See also the [query profile reference](../reference/querying/query-profiles) for the full syntax.
+A query profile is a named set of query parameters, defined in the application package. When a query request names a profile, the parameters in that profile are applied to the request. This has two main benefits:
+
+- Clients send only the profile name, instead of having to manage and send every parameter a use case needs.
+- The parameters for a use case can be changed by redeploying the application, without changing any clients.
+
+Query profiles also make it easy to treat different groups of queries differently. For example, use them to run [bucket tests](/en/applications/testing#feature-switches-and-bucket-tests), where a part of the traffic gets experimental settings, or to vary behavior by customer, user type, region, or frontend.
+
+This guide explains how to create and use query profiles. For the full syntax, see the [query profile reference](/en/reference/querying/query-profiles).
 
 ## Using a Query Profile
 
-A Query Profile is an XML file containing the request parameter names and their values, e.g.:
+A query profile is an XML file that lists parameter names and their values:
 
 ```xml
 <query-profile id="MyProfile">
@@ -16,39 +23,29 @@ A Query Profile is an XML file containing the request parameter names and their 
 </query-profile>
 ```
 
-See the [query profile reference](../reference/querying/query-profiles) for the full syntax. 
+See the [Query API reference](/en/reference/api/query) for a list of the built-in query properties.
 
 <Warning>
 **Important:**
 
-Note that full property names must be used, aliases like `input.query(...)` are only supported in requests and programmatic lookup.
-</Warning> 
-
-See the [Query API reference](../reference/api/query) for a list of the built-in query properties.
+Use full property names in query profiles. Aliases such as [`input.query(...)`](/en/reference/api/query#ranking.features) are only supported in requests and in programmatic lookup.
+</Warning>
 
 To deploy a query profile:
 
-<Steps>
-<Step>
-Create a file for the profile, using the format above, having the name *[my-profile-name].xml*, e.g. *MyProfile.xml* (replace any `/` in the name by `_`)
-</Step>
-<Step>
-Put this in the directory *search/query-profiles* in the [application package](../basics/applications) root
-</Step>
-<Step>
-[Redeploy](../basics/applications#deploying-applications) the application package
-</Step>
-</Steps>
+1. Create a file for the profile in the format above, named `[my-profile-name].xml`, e.g. `MyProfile.xml` (replace any `/` in the name with `_`).
+2. Put the file in the `search/query-profiles` directory in the [application package](/en/basics/applications) root.
+3. [Redeploy](/en/basics/applications#deploying-applications) the application package.
 
-Any number of query profile files may be added to this directory. If the query profiles contains errors, like incorrect syntax and/or infinite reference loops, deployment will fail.
+You can add any number of query profile files to this directory. If a query profile contains errors, such as invalid syntax or infinite reference loops, deployment fails.
 
-To use a query profile in a query request, send the name of the profile as the parameter `queryProfile`:
+To use a query profile in a query request, pass its name in the [`queryProfile`](/en/reference/api/query#queryprofile) parameter:
 
 ```js
 queryProfile=MyProfile
 ```
 
-If the request does not specify a query profile, the profile named `default` will be used. If no `default` profile is configured, no profile will be used. If the queryProfile parameter is set but does not resolve to an existing profile, an error message is returned. Example, set default query timeout to 200ms for all queries not using a query profile:
+If the request does not specify a query profile, the profile named `default` is used. If there is no `default` profile, no profile is used. If `queryProfile` is set but does not match an existing profile, an error is returned. For example, this sets a [`timeout`](/en/reference/api/query#timeout) of 200 ms for all queries that don't specify a query profile:
 
 ```bash
 $ cat search/query-profiles/default.xml
@@ -58,26 +55,26 @@ $ cat search/query-profiles/default.xml
 </query-profile>
 ```
 
-The query profile values (whether set from a configured query profile or by the request) is available as *query properties*. To look up a value from a [Searcher component](../applications/searchers), use:
+Parameter values, whether they come from a query profile or from the request, are available as _query properties_. To look up a value in a [Searcher component](/en/applications/searchers), use:
 
 ```js
 query.properties().get("myVariable")
 ```
 
-Note that property names are case-sensitive.
+Property names are case-sensitive.
 
 ### Example
 
-Use a query profile to modify the YQL query string using an [IN](../reference/querying/yql#in) operator and [local substitution](#local-substitution) of *cities*:
+This query profile defines a [YQL](/en/querying/query-language) query that filters on city using the [`IN`](/en/reference/querying/yql#in) operator, with the list of cities inserted by [substitution](#value-substitution) of the `cities` parameter:
 
-```js
+```xml
 <query-profile id="city-filter">
     <field name="yql">select * from restaurant where userQuery() and city in (%{cities})</field>
     <field name="cities">""</field>
 </query-profile>
 ```
 
-Use [match: word](../reference/schemas/schemas#match) for the IN operator:
+The `IN` operator requires the field to use [`match: word`](/en/reference/schemas/schemas#match):
 
 ```vespa-schema
 field city type string {
@@ -86,7 +83,7 @@ field city type string {
 }
 ```
 
-An example query passing the values for the IN operator to be substituted into the YQL string:
+A query that passes the cities to substitute into the YQL string:
 
 ```bash
 $ vespa query \
@@ -95,16 +92,16 @@ $ vespa query \
   query='what the user typed'
 ```
 
-With this, the application can use the *city-filter* query profile if there are cities in the filter, if empty, use a *no-filter* query profile:
+The application can then use the `city-filter` profile when the user has selected cities, and a `no-filter` profile otherwise:
 
-```js
+```xml
 <query-profile id="no-filter">
     <field name="yql">select * from restaurant where userQuery()</field>
 </query-profile>
 
 ```
 
-```js
+```bash
 $ vespa query \
   queryProfile=no-filter \
   query='what the user typed'
@@ -112,7 +109,7 @@ $ vespa query \
 
 ### Overrides
 
-The parameter values set in *MyProfile.xml* will be used as if they were present directly in the request. If a parameter is present both directly in the request and in a profile, the request value takes precedence by default. Individual query profile field can be made to take priority by setting the [overridable](../reference/querying/query-profiles#overridable) attribute to `false`. Example:
+The values in a query profile are used as if they were set directly in the request. If a parameter is set both in the request and in the profile, the request value takes precedence by default. To make a profile value take precedence instead, set the [`overridable`](/en/reference/querying/query-profiles#overridable) attribute of the field to `false`:
 
 ```xml
 <query-profile id="default">
@@ -122,7 +119,7 @@ The parameter values set in *MyProfile.xml* will be used as if they were present
 
 ## Nested Structure
 
-To support structure in the set of request variables, a query profile value may not be a string but a reference to another query profile. In this case, the referenced query profile functions as a map (or struct, if types are used, see below) in the referencing query profile. The parameter names of the nested profile gets preceded by the name of the reference variable and a dot. For example:
+To give structure to the parameters, a query profile value can be a reference to another query profile instead of a string. The referenced profile then acts as a map (or a struct, if [types](#query-profile-types) are used) within the referencing profile. The parameter names in the nested profile are prefixed by the name of the referencing field and a dot. For example:
 
 ```xml
 <query-profile id="MyProfile">
@@ -141,7 +138,7 @@ Where the referenced profile might look like:
 </query-profile>
 ```
 
-If `MyProfile` is referenced in a query now, it will contain the variables
+A query that uses `MyProfile` now gets these parameters:
 
 ```js
 hits=10
@@ -150,19 +147,19 @@ user.age=20
 user.profession=student
 ```
 
-References can be nested to provide a deeper structure, producing variables having multiple dots. The dotted variables can be overridden directly in the search request (using the dotted name) just as other parameters.
+References can be nested to any depth, producing parameter names with multiple dots. Like any other parameter, a dotted parameter can be overridden in the request by using its full dotted name.
 
-Note that the id value of a profile reference can also be set in the request, making it possible to choose not just the top level profile but also any number of specific subprofiles in the request. For example, the request can contain
+The request can also set which profile a reference points to. This lets the request choose not only the top-level profile, but also any of the nested profiles. For example, this request replaces the `user` reference in the example above with another profile:
 
-```text
-queryProfile=MyUserProfile&user=ref:MyOtherUserprofile
+```txt
+queryProfile=MyProfile&user=ref:MyOtherUserProfile
 ```
 
-to change the reference in the above example to some other subprofile. Note the `ref:` prefix which is required to identify this as setting user to a query profile referenced by id rather than setting it to a string.
+The `ref:` prefix is required. It tells Vespa to set `user` to the query profile with the given id, rather than to the string `MyOtherUserProfile`.
 
 ## Inheritance
 
-A query profile may inherit one or more other query profiles. This is useful when there is some common set of parameters applicable to multiple use cases, and a smaller set of parameters which varies between them. To inherit another query profile, reference it as follows:
+A query profile can inherit one or more other query profiles. This is useful when several use cases share a common set of parameters, and only a smaller set varies between them. To inherit another query profile, reference it in the [`inherits`](/en/reference/querying/query-profiles#optional-query-profile-attributes) attribute:
 
 ```xml
 <query-profile id="MyProfile" inherits="MyBaseProfile">
@@ -170,15 +167,15 @@ A query profile may inherit one or more other query profiles. This is useful whe
 </query-profile>
 ```
 
-The parameters of `MyBaseProfile` will be present when this profile is used exactly as if they were explicitly written in this profile.
+When this profile is used, the parameters of `MyBaseProfile` are included exactly as if they were written in this profile.
 
-Multiple inheritance is supported by specifying multiple space-separated profile ids in the inheritance attribute. Order matters in this list - if a parameter is set in more than one of the inherited profiles, the first one encountered in the depth first, left to right search order is used.
+To inherit multiple profiles, list their ids separated by spaces. The order matters: if a parameter is set in more than one inherited profile, the first value found in a depth-first, left-to-right search is used.
 
-Parameters specified in the child query profile will always override the same parameters in an inherited one.
+A parameter set in the inheriting profile always overrides the same parameter in an inherited one.
 
 ## Value Substitution
 
-Query profile values may contain substitution strings on the form `%{property-name}`. Example:
+Query profile values can contain substitution strings of the form `%{property-name}`. For example:
 
 ```xml
 <query-profile id="MyProfile">
@@ -187,20 +184,20 @@ Query profile values may contain substitution strings on the form `%{property-na
 </query-profile>
 ```
 
-The value returned by looking up `message` will be *Hello Earth!*.
+Looking up `message` returns `Hello Earth!`.
 
 ### Global resolution
 
-Values are normally replaced by the value returned from `query.properties().get("property-name")` *at the time of the lookup*. Therefore, substituted values may be looked up in variants, in inherited profiles, in values set at run time and by following query profile references. Details:
+A substitution string is replaced by the value of `query.properties().get("property-name")` _at the time of the lookup_. This means the substituted value can come from a [variant](#query-profile-variants), an [inherited profile](#inheritance), a value set at run time, or a [referenced query profile](#nested-structure). Details:
 
--   No substitution will be performed *in* values set at run time
--   If the value referenced in a substitution returns null, the reference is substituted by the empty string
--   Unclosed substitutions cause an error at deploy time, but unknown values do not (they may exist at run time and will be replaced by an empty string if not)
--   Recursive substitution works as expected. However, there is no loop detection
+- No substitution is performed _in_ values set at run time.
+- If the referenced value is null, it is replaced by the empty string.
+- Unclosed substitutions cause an error at deploy time, but unknown properties do not, since they may be set at run time. If they are not, they are replaced by the empty string.
+- Recursive substitution works as expected, but there is no loop detection.
 
 ### Local substitution
 
-To substitute by a value in the same query profile (or variant), prefix the property by a dot, as in
+To substitute a value from the same query profile (or [variant](#query-profile-variants)), prefix the property name with a dot:
 
 ```xml
 <query-profile id="MyProfile">
@@ -209,40 +206,40 @@ To substitute by a value in the same query profile (or variant), prefix the prop
 </query-profile>
 ```
 
-Local substitutions can be verified at deploy time and will cause an error if not found.
+Local substitutions are verified at deploy time, and deployment fails if the referenced property is not found.
 
 ## Query Profile Variants
 
-In some cases, it is convenient to allow the values returned from a query profile to vary depending on the values of some properties input in the request. For example, a query profile may contain values which depend on both the market in which the request originated (`market`), the kind of device (`model`) *and* the bucket in question (`bucket`).
+Sometimes the values in a query profile should depend on the values of some parameters in the request. For example, the values may depend on the region the request comes from (`region`), the kind of device (`model`), _and_ the [bucket](/en/applications/testing#feature-switches-and-bucket-tests) the request belongs to (`bucket`).
 
-Such variants over a set of request parameters may be represented in a single query profile, by defining nested variants of the query profile for the relevant combinations of request values. A complete example:
+All of this can be expressed in a single query profile, by defining nested variants of the profile for the relevant combinations of request values. The [`dimensions`](/en/reference/querying/query-profiles#dimensions) element names the request parameters to vary over, and the [`for`](/en/reference/querying/query-profiles#query-profile-nested-for-attribute) attribute of each nested profile gives the values it applies to. A complete example:
 
 ```xml expandable
 <query-profile id="multiprofile1"> <!-- A regular profile may define "virtual" children within itself -->
 
-    {/* Names of the request parameters defining the variant profiles of this. Order matters as described below.
+    <!-- Names of the request parameters defining the variant profiles of this. Order matters as described below.
          Each individual value looked up in this profile is resolved from the most specific matching virtual
-         variant profile */}
+         variant profile -->
     <dimensions>region,model,bucket</dimensions>
 
-    {/* Values may be set in the profile itself as usual, this becomes the default values given no matching
-         virtual variant provides a value for the property */}
+    <!-- Values may be set in the profile itself as usual, this becomes the default values given no matching
+         virtual variant provides a value for the property -->
     <field name="a">My general a value</field>
 
-    {/* The "for" attribute in a child profile supplies values in order for each of the dimensions */}
+    <!-- The "for" attribute in a child profile supplies values in order for each of the dimensions -->
     <query-profile for="us,nokia,test1">
         <field name="a">My value of the combination us-nokia-test1-a</field>
     </query-profile>
 
-    {/* Same as [us,*,*]  - trailing "*"'s may be omitted */}
+    <!-- Same as [us,*,*]  - trailing "*"'s may be omitted -->
     <query-profile for="us">
         <field name="a">My value of the combination us-a</field>
         <field name="b">My value of the combination us-b</field>
     </query-profile>
 
-    {/* Given a request which matches both the below, the one which specifies concrete values to the left
+    <!-- Given a request which matches both the below, the one which specifies concrete values to the left
          gets precedence over those specifying concrete values to the right
-         (i.e the first one gets precedence here) */}
+         (i.e the first one gets precedence here) -->
     <query-profile for="us,nokia,*">
         <field name="a">My value of the combination us-nokia-a</field>
         <field name="b">My value of the combination us-nokia-b</field>
@@ -257,11 +254,11 @@ Such variants over a set of request parameters may be represented in a single qu
 
 ### Variants and Inheritance
 
-It is possible to define variants across several levels in an inheritance hierarchy. The variant dimensions are inherited from parent to child, with the usual precedence rules (depth first left to right), so a parent profile may define the dimensions and the child the values over which it should vary.
+Variants can be defined at several levels in an inheritance hierarchy. The variant dimensions are inherited from parent to child with the usual [precedence rules](#inheritance) (depth-first, left-to-right), so a parent profile can define the dimensions, and a child the values that vary over them.
 
-Variant resolution within a profile has precedence over resolution in parents. This means e.g. that a default value for a given property in a sub-profile will be chosen over a perfect variant match in an inherited profile.
+Variant resolution within a profile takes precedence over resolution in its parents. For example, a default value for a property in a child profile is chosen over a perfect variant match in an inherited profile.
 
-Variants may specify their own inherited profiles, as in:
+Variants can specify their own inherited profiles:
 
 ```xml
 <query-profile id="multiprofile1">
@@ -272,23 +269,23 @@ Variants may specify their own inherited profiles, as in:
 </query-profile>
 ```
 
-Values are resolved in this profile and inherited profiles "interleaved" by the variant resolution order (which is specificity by default). E.g. by decreasing priority:
+Values are then resolved from this profile and its inherited profiles, interleaved in the variant resolution order (by default, most specific first). In decreasing priority:
 
-```text
-1.   Highest prioritized variant value
-2.   Value in inherited from highest prioritized variant
-3.   Next highest prioritized variant value
-4.   Value in inherited from next highest prioritized variant
+```txt
+1.   Value in the highest-priority variant
+2.   Value inherited by the highest-priority variant
+3.   Value in the next highest-priority variant
+4.   Value inherited by the next highest-priority variant
 …
-n.   Value defined at top level in profile
-n+1. Value in inherited from query profile
+n.   Value defined at the top level of the profile
+n+1. Value inherited by the profile
 ```
 
 ## Query Profile Types
 
-The query profiles may optionally be *type checked*. Type checking is turned on by referencing a *Query Profile Type* from the query profile. The type lists the legal set of parameters of the query profile, whether additional parameters are allowed, and so on.
+Query profiles can optionally be _type checked_. To turn on type checking, reference a _query profile type_ from the query profile. The type lists which parameters the profile can contain, whether other parameters are allowed, and so on.
 
-A query profile type is referenced by:
+Reference a query profile type with the [`type`](/en/reference/querying/query-profiles#optional-query-profile-attributes) attribute:
 
 ```xml
 <query-profile id="MyProfile" type="MyProfileType">
@@ -296,27 +293,28 @@ A query profile type is referenced by:
 </query-profile>
 ```
 
-And the type is defined as:
+The type itself is defined like this:
 
 ```xml
 <query-profile-type id="MyProfileType">
     <field name="age" type="integer"/>
     <field name="profession" type="string"/>
-    <field name="user" type="query-profile:MyUserProfile">
+    <field name="user" type="query-profile:MyUserProfileType"/>
 </query-profile-type>
 ```
 
-This specifies that these three parameters may be present in profiles using this type, as well as the query profile type of the `user` parameter.
+This type allows profiles to contain these three parameters, and specifies that `user` must reference a query profile of type `MyUserProfileType`.
 
-It is also possible to specify that parameters are mandatory, that no additional parameters are allowed (strict), to inherit other types and so on, refer to the full syntax in [the query profile reference](../reference/querying/query-profiles#query-profile-types). If the base profile type is strict, it *must* extend a built-in query profile type, see the [strict reference documentation](../reference/querying/query-profiles#strict).
+A type can also make parameters [mandatory](/en/reference/querying/query-profiles#optional-field-definition-attributes), disallow parameters that are not listed ([`strict`](/en/reference/querying/query-profiles#strict)), inherit other types, and so on. See [the query profile reference](/en/reference/querying/query-profiles#query-profile-types) for the full syntax. If the base profile type is `strict`, it _must_ inherit a built-in query profile type, see the [`strict` reference documentation](/en/reference/querying/query-profiles#strict).
 
-A query profile type is deployed by adding a file named *[query-profile-type-name].xml* in the *search/query-profiles/types* directory in the application package.
+To deploy a query profile type, add a file named `[query-profile-type-name].xml` to the `search/query-profiles/types` directory in the application package.
 
-Query profile types may be useful even if query profiles are not used to set values. As they define the names, types and structure of the parameters which can be accepted in the search request, they can also be used to define, restrict and check the content of search requests. For example, as the built-in search api parameters are also type checked if a typed query profile is used, types can be used to restrict the parameters that can be set in a request, or to mandate that some are always set. The built-in parameters are defined in a set of query profile types which are always present and which can be inherited and referenced in application-defined types. These built-in types are defined in the [Query API](../reference/api/query).
+Query profile types are useful even if query profiles are not used to set any values. Since a type defines the names, types, and structure of the parameters a request can contain, it can be used to define, restrict, and validate query requests. When a typed query profile is used, the built-in [Query API](/en/reference/api/query) parameters are also type checked, so types can restrict which parameters a request can set, or require that some are always set. The built-in parameters are defined in a set of query profile types that are always present, and that application-defined types can inherit and reference. These built-in types are described in the [Query API reference](/en/reference/api/query).
 
+<a id="path-patching" />
 ## Path Matching
 
-By adding `<match path="true">` to a profile type, *path* name matching is used rather than the default exact matching when a profile is looked up from a name. Path matching interprets the profile name as a slash separated path and matches references which are subpaths (more specific paths) to super-paths. The most specific match becomes the target of the reference. For example:
+By adding [`<match path="true">`](/en/reference/querying/query-profiles#match) to a profile type, profiles of that type are looked up by _path_ matching instead of the default exact name matching. Path matching treats a profile name as a slash-separated path, so a reference to a more specific path matches a profile with a less specific path. The most specific match is used. For example:
 
 ```text
 Given the query profile names:
@@ -329,13 +327,13 @@ Then:
   a            does not resolve
 ```
 
-This is useful to assign specific query profile id's to every client or bucket without having to create a different configuration item for each of these cases. If there is a need to provide a differentiated configuration for any such client or bucket in the future, this can be done without having the client change its request parameter because a specific id is already used.
+This lets you give every client or bucket its own query profile id without creating a separate profile for each one. If a client or bucket later needs its own configuration, you can add a profile for it without changing the client, since it already sends a specific id.
 
 ## Versioning
 
-Query profiles (and types) may exist in multiple versions at the same time. Wherever a name of a query profile (or type) is referenced, the name may also append a version string, separated by a colon, e.g `MyProfile:1.2.3`. The version number is *resolved* - if no version is given the highest version known is used. If the version number is only partially specified, as in `my-version:1`, the highest version starting by 1 is used.
+Query profiles (and types) can exist in multiple versions at the same time. Wherever a query profile (or type) is referenced by name, a version can be appended after a colon, e.g. `MyProfile:1.2.3`. The version is _resolved_: if no version is given, the highest known version is used. If the version is only partially specified, as in `MyProfile:1`, the highest version starting with 1 is used.
 
-Where a query profile (or type) is defined, the id may specify the version, followed by a colon:
+Where a query profile (or type) is defined, the id can include a version after a colon:
 
 ```xml
 <query-profile id="MyProfile:1.2.3">
@@ -343,15 +341,15 @@ Where a query profile (or type) is defined, the id may specify the version, foll
 </query-profile>
 ```
 
-Any sub-number omitted is taken to mean 0 where a version is defined, so `id="MyProfile:1"` is the same as `"id=MyProfile:1.0.0"`.
+In a definition, omitted parts of the version are taken to be 0, so `id="MyProfile:1"` is the same as `id="MyProfile:1.0.0"`.
 
-Query profiles (and types) which specifies a version in their id must use a file name which includes the same version string after the name, separated by a dash, e.g. *MyProfile-1.2.3.xml*.
+A query profile (or type) that specifies a version in its id must have a file name that includes the same version after the name, separated by a dash, e.g. `MyProfile-1.2.3.xml`.
 
 For more information on versions, see [component versioning](../reference/applications/components#component-versioning).
 
 ## Dump Tool
 
-It can sometimes be handy to be able to dump resolved query profiles offline. Run without arguments to get usage:
+To inspect how query profiles resolve, dump them offline with [`vespa-query-profile-dump-tool`](/en/reference/operations/tools#vespa-query-profile-dump-tool). Run it without arguments to see usage:
 
 ```bash
 $ vespa-query-profile-dump-tool

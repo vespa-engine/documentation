@@ -85,6 +85,14 @@ The _deployment orchestration_ is flexible. One can configure dependencies betwe
 ![Picture of a complex automated deployment](/assets/img/automated-deployments-complex.png)
 </Frame>
 
+On a higher level, instances can also depend on each other in the same way. This makes it easy to configure a deployment process which gradually rolls out changes to increasingly larger subsets of production nodes, as confidence grows with successful production verification tests. Refer to [deployment.xml](/en/reference/applications/deployment) for details.
+
+Deployments run sequentially by default, but can be configured to [run in parallel](/en/reference/applications/deployment). Inside each zone, Vespa Cloud orchestrates the deployment, such that the change is applied without disruption to read or write traffic against the application. A production deployment in a zone is complete when the new configuration is active on all nodes.
+
+Most changes are instant, making this a quick process. If node restarts are needed, e.g., during platform upgrades, these will happen automatically and safely as part of the deployment. When this is necessary, deployments will take longer to complete.
+
+System and staging tests, if present, must always be successfully run before the application package is deployed to production zones.
+
 ### Pipeline graph
 
 The deployment pipeline is visualized as a graph in the [Vespa Cloud Console](https://console.vespa-cloud.com/). Each node represents a step in the pipeline, and edges show dependencies between steps. Hover over any node to see details and available actions.
@@ -179,18 +187,66 @@ The deployment pipeline is visualized as a graph in the [Vespa Cloud Console](ht
       <td>Maintenance frozen</td>
       <td>Maintenance is held in this zone by a [maintenance freeze](#maintenance-freeze). On an instance, at least one of its zones is frozen. Shown as a corner snowflake.</td>
     </tr>
+    <tr>
+      <td></td>
+      <td>Pinned</td>
+      <td>The version on this node is [pinned](#pinning-versions). Shown as a thumbtack.</td>
+    </tr>
   </tbody>
 </table>
 
-Each version deployed through the pipeline is assigned a distinct color. This makes it easy to see at a glance which zones are on the same version and where a rollout is in progress. A thumbtack icon on a node indicates that the version is [pinned](#pinning-versions).
+#### Version colors
 
-On a higher level, instances can also depend on each other in the same way. This makes it easy to configure a deployment process which gradually rolls out changes to increasingly larger subsets of production nodes, as confidence grows with successful production verification tests. Refer to [deployment.xml](/en/reference/applications/deployment) for details.
+Each version in the pipeline is assigned a color, so you can see at a glance which zones are on the same version and where a rollout is in progress. A version is a Vespa platform version and an application build together, like `8.512.11 #165`. Colors are assigned by age, from the newest version in the pipeline to the oldest:
 
-Deployments run sequentially by default, but can be configured to [run in parallel](/en/reference/applications/deployment). Inside each zone, Vespa Cloud orchestrates the deployment, such that the change is applied without disruption to read or write traffic against the application. A production deployment in a zone is complete when the new configuration is active on all nodes.
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Color</th>
+      <th>Name</th>
+      <th>Version</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td></td>
+      <td>Blue</td>
+      <td>The newest version in the pipeline</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>Green</td>
+      <td>The 2nd newest version</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>Amber</td>
+      <td>The 3rd newest version</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>Pink</td>
+      <td>The 4th newest version</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>Teal</td>
+      <td>The 5th newest version</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>Orange</td>
+      <td>The 6th newest version</td>
+    </tr>
+    <tr>
+      <td></td>
+      <td>Indigo</td>
+      <td>The 7th newest version and older</td>
+    </tr>
+  </tbody>
+</table>
 
-Most changes are instant, making this a quick process. If node restarts are needed, e.g., during platform upgrades, these will happen automatically and safely as part of the deployment. When this is necessary, deployments will take longer to complete.
-
-System and staging tests, if present, must always be successfully run before the application package is deployed to production zones.
+Colors are relative to the versions currently in the pipeline, not fixed for a version. When a new build is submitted, it becomes blue and the older versions each move one color down the list.
 
 ### Version progression
 
@@ -213,13 +269,17 @@ To cancel the currently deploying revision without selecting a new one, click **
 
 Pinning locks the pipeline to a specific platform version or application revision, preventing automatic upgrades. This is useful for forcing a downgrade, holding a known-good revision during an incident, or preventing the system from picking up a new platform version.
 
-To pin a version, hover over the instance node in the pipeline graph. Under _TARGET VERSIONS_, select the desired version from the dropdown and click **pin**. A reason is required — enter a description and click **submit pin**. Platform and revision can be pinned independently.
+To pin a version, select the instance node in the pipeline graph. Under _TARGET VERSIONS_, select the desired version from the dropdown and click **pin**. A reason is required — enter a description and click **submit pin**. Platform and revision can be pinned independently.
 
 <Frame>
-![Picture of instance hover card showing pin dialog](/assets/img/automated-deployment-pin.png)
+![Instance details with the target version selectors and pin buttons](/assets/img/automated-deployment-pin.png)
 </Frame>
 
-While pinned, no newer platform versions or revisions will be deployed for the pinned dimension. The dropdown and deploy button are disabled to prevent accidental changes. To unpin, hover over the instance node and click **unpin**, which allows newer versions to move through the pipeline again.
+While pinned, no newer platform versions or revisions will be deployed for the pinned dimension. The pipeline graph shows a pin on the instance node, and the instance details show who pinned it, when, and why. The dropdown and deploy button are disabled to prevent accidental changes. To unpin, select the instance node and click **unpin**, which allows newer versions to move through the pipeline again.
+
+<Frame>
+![Pinned instance with the unpin button and pin details](/assets/img/automated-deployment-pinned.png)
+</Frame>
 
 For example, to roll back to a previous revision:
 
@@ -262,7 +322,7 @@ $ vespa prod deploy \
 
 ### Block-windows
 
-Use block-windows to block deployments during certain windows throughout the week, e.g., avoid rolling out changes during peak hours / during vacations. Hover over the instance (here "default") to find block status - see [block-change](/en/reference/applications/deployment#block-change):
+Use block-windows to block deployments during certain windows throughout the week, e.g., avoid rolling out changes during peak hours / during vacations. Select the instance (here "default") in the deployment pipeline to see its block status under **Change & maintenance windows** - see [block-change](/en/reference/applications/deployment#block-change):
 
 <Frame>
 ![Application block window](/assets/img/block-window.png)
@@ -290,6 +350,30 @@ Some configuration changes are potentially destructive / change the application 
            comment="Use fewer dimensions">tensor-type-change</allow>
 </validation-overrides>
 ```
+
+### Submitted and deployed packages
+
+Each package you submit becomes a build in the build history, shown below. A zone does not always run the latest build. A new build reaches the zones in the order of the steps in [deployment.xml](/en/reference/applications/deployment). It can be held back by failing [tests](#cd-tests), [production tests](#production-tests), delays, [block-windows](#block-windows), [deferred zones](#pausing-deployments), or [pinned versions](#pinning-versions), for example after a rollback. The [`revision-target` and `revision-change`](/en/reference/applications/deployment#upgrade) settings in deployment.xml also decide which build a zone gets next.
+
+To find the package a zone runs, for example when [cloning an application](/en/operations/cloning):
+
+- **Deployed package**, in dev and prod: in the console sidebar, expand the deployment and select _Deployed Package_. Here you can browse the files running in the zone, and click _Application_ to download them. In dev, packages are deployed directly and never submitted, so this is the only place to find them.
+
+  <Frame>
+  ![Deployed Package in the console sidebar](/assets/img/console/deployed-package-sidebar.png)
+  </Frame>
+
+- **Submitted package**, in prod: open the deployment overview and click the build number under _Build_:
+
+  <Frame>
+  ![Deployment overview showing the build the zone runs](/assets/img/console/deployment-build-badge.png)
+  </Frame>
+
+  This opens that build in the build history. Click _download_ under _Application package_ and _Tests_ to download its application package and its test package:
+
+  <Frame>
+  ![Build history with application package and test downloads](/assets/img/app-download-prod.png)
+  </Frame>
 
 ### Production tests
 
@@ -335,7 +419,7 @@ Its fingerprint is:
 12:34:56:78:65:30:77:90:30:ab:83:ee:a9:67:68:2c
 
 To use this key in Vespa Cloud click 'Add custom key' at
-https://console.vespa-cloud.com/tenant/mytenant/account/keys
+https://console.vespa-cloud.com/tenant/mytenant/security/keys
 and paste the entire public key including the BEGIN and END lines.
 ```
 

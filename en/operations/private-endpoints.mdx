@@ -75,7 +75,7 @@ Procedure:
 
 2. **Find the service ID of your endpoint services**
 
-   Navigate to the endpoints tab for your application in the Console, and find the service ID for the deployment to which you wish to connect. While there, verify that access to connect to the endpoint was granted to the correct ARNs.
+   In the Console, open the _Application Overview_ page for your application, and expand the endpoint of the deployment to which you wish to connect in the _Endpoints_ section to find its service ID. While there, verify that access to connect to the endpoint was granted to the correct ARNs.
 
    <Frame>
    ![Service ID for VPC endpoint](/assets/img/vpc-1.png)
@@ -130,6 +130,28 @@ Procedure:
 
 Enclave users may set up high-availability PrivateLink endpoints connected across multiple AZs. Contact [Vespa support](https://vespa.ai/support/) for guidance.
 </Note>
+
+<a id="aws-availability-zones" />
+### Availability zones
+
+In a [multi-AZ zone](/en/operations/az), the load balancer of a container cluster serves the availability zones (AZs) the cluster is deployed to, and its endpoint service offers those same AZs to VPC endpoints.
+
+<a id="aws-removing-availability-zones" />
+#### Removing an AZ from a cluster with a private endpoint
+
+When a deployment removes an AZ from a cluster with a private endpoint, the subnet you picked for the VPC endpoint in that AZ, and its endpoint network interface (ENI), are unaffected. Traffic can still be sent to the ENI, and is routed to the AZs with backends through cross-zone load balancing, at the cost of higher latency and cross-AZ data transfer.
+
+When creating a new VPC endpoint, the old AZ is still offered.
+
+The load balancer keeps the old AZ because AWS does not allow removing subnets from a load balancer associated with an endpoint service.
+
+To remove the superfluous AZ, recreate the endpoint service as follows. Note that this causes downtime for the private endpoint:
+
+1. Remove the `<allow with="aws-private-link" />` elements from the private endpoint in `deployment.xml`, keeping the `<endpoint type="private">` element itself, and deploy with the `zone-endpoint-change` [validation override](/en/reference/applications/validation-overrides). This deletes the endpoint service, which disconnects the VPC endpoints, and then removes the AZs from the load balancer.
+2. Restore the `<allow>` elements and deploy again. This creates a new endpoint service, with a new service ID, offering only the AZs the cluster is deployed to.
+3. Delete the old VPC endpoints, and create new ones using the new service ID, following the procedure above.
+
+The private endpoint is unavailable from the first deployment until the new VPC endpoints are connected. The public endpoint, if enabled, and the endpoint name of the cluster are unaffected.
 
 ## GCP Private Service Connect
 
@@ -195,7 +217,7 @@ Procedure:
 
 2. **Find the service ID of your endpoint services**
 
-   Navigate to the endpoints tab for your application in the Console, and find the service ID for the deployment to which you wish to connect. While there, verify that access to connect to the endpoint was granted to the correct projects.
+   In the Console, open the _Application Overview_ page for your application, and expand the endpoint of the deployment to which you wish to connect in the _Endpoints_ section to find its service ID. While there, verify that access to connect to the endpoint was granted to the correct projects.
 
    <Frame>
    ![Service ID for VPC endpoint](/assets/img/vpc-2.png)

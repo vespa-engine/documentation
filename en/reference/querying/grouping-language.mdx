@@ -37,31 +37,31 @@ Most grouping functions will just handle the elements of multivalued attributes 
 
 Group on map keys:
 
-```txt
+```vespa-yql
 all( group(mymap.key) each(output(count())) )
 ```
 
 Group on map keys then on map values:
 
-```txt
+```vespa-yql
 all( group(mymap.key) each( group(mymap.value) each(output(count())) ))
 ```
 
 Group on values for key _my_key_:
 
-```txt
+```vespa-yql
 all( group(my_map{"my_key"}) each(output(count())) )
 ```
 
 Group on struct field _my_field_ referenced in map element _my_key_:
 
-```txt
+```vespa-yql
 all( group(my_map{"my_key"}.my_field) each(output(count())) )
 ```
 
 The key can either be specified directly (above) or indirectly via a key source attribute. The key is retrieved from the key source attribute for each document. Note that the key source attribute must be single-valued and have the same data type as the key type of the map:
 
-```txt
+```vespa-yql
 all( group(my_map{attribute(my_key_source)}) each(output(count())) )
 ```
 
@@ -69,13 +69,13 @@ all( group(my_map{attribute(my_key_source)}) each(output(count())) )
 
 Group on array of integers field:
 
-```txt
+```vespa-yql
 all( group(my_array) each(output(count())) )
 ```
 
 Group on struct field _my_field_ in the _my_array_ array of structs:
 
-```txt
+```vespa-yql
 all( group(my_array.my_field) each(output(count())) )
 ```
 
@@ -94,11 +94,13 @@ When grouping on multivalue attributes, it may be useful to filter the groups so
 - [_predicate_ and _predicate_](#logical-predicates-filter)
 - [_predicate_ or _predicate_](#logical-predicates-filter)
 
+When the `group` expression refers to a multivalue attribute, such as a field in an array of struct, the filter is evaluated once per element, and attributes from the same struct referenced in the filter are read from the same element. See the [array of struct example](/en/querying/grouping#filtering-array-elements). For a single-valued `group` expression, the filter is evaluated once per hit, and a multivalue attribute in the filter matches if any of its values does.
+
 ### Regex filter
 
 Use a regular expression to match the input, and include only documents that match in the grouping. The input will usually be the same -expression as in the "group" clause. Example:
 
-```txt
+```vespa-yql
 all( group(my_array) filter(regex("foo.*", my_array)) ...)
 ```
 
@@ -106,17 +108,19 @@ Here only the values that start with a "foo" prefix in _my_array_ are collected 
 
 Regex filtering works on the string representation of any field type. For example, you can also filter on boolean values using regex(true) and regex(false).
 
+The pattern can be passed as a query parameter instead of being written into the expression, see [parameter substitution](#parameter-substitution).
+
 ### Range filter
 
 Use a `range` filter to match documents where a field value is between a lower and an upper bound. Example:
 
-```txt
+```vespa-yql
 all( group(some_field) filter(range(1990, 2012, year)) ...)
 ```
 
 Here, the lower bound is _inclusive_ (year ≥ 1990) and the upper bound is _exclusive_ (year &lt; 2012). Use optional bools at the end to control if the lower and upper bounds are inclusive, respectively. The first bool sets the lower bound inclusive, and the second sets the upper bound inclusive.
 
-```txt
+```vespa-yql
 all( group(some_field) filter(range(1990, 2012, year, true, true)) ...)
 ```
 
@@ -126,7 +130,7 @@ Here, both lower and upper bounds are inclusive.
 
 Use `istrue` to filter using a boolean expression. The expression must evaluate to a boolean value, e.g. a boolean attribute. Example:
 
-```txt
+```vespa-yql
 all( group(some_field) filter(istrue(my_bool_attribute)) ...)
 ```
 
@@ -138,7 +142,7 @@ Available since `Vespa 8.757.45+`.
 
 Use `in` to allow only the hits where the input is equal to one of the given strings. The input expression is followed by one or more string constants. Example:
 
-```txt
+```vespa-yql
 all( group(some_field) filter(in(category, "foo", "bar")) ...)
 ```
 
@@ -149,25 +153,25 @@ Here, only hits where _category_ is "foo" or "bar" are included in the grouping.
 
 Use `not` to negate another filter expression. It takes a single sub-filter and matches when the sub-filter does not. Example:
 
-```txt
+```vespa-yql
 all( group(my_field) filter( not regex("bar.*", my_other_field)) ...)
 ```
 
 Use `or` to perform a logical disjunction across two sub-filters. The combined filter matches if any of the sub-filters evaluate to true. Example:
 
-```txt
+```vespa-yql
 all( group(my_field) filter( regex("bar.*", my_field) or regex("baz.*", my_third_field) ) ...)
 ```
 
 Use `and` to perform a logical conjunction across two sub-filters. The combined filter matches only if all of the sub-filters evaluate to true. Example:
 
-```txt
+```vespa-yql
 all( group(my_field) filter( regex("bar.*", my_other_field) and regex("baz.*", my_third_field) ) ...)
 ```
 
 These logical predicates can be nested to create complex filter conditions. Filter expressions follow _conventional precedence_ rules: `not` is evaluated before `and`, and `and` is evaluated before `or`. Operators of the same precedence are evaluated left-to-right. Use parentheses `(...)` to force a different grouping when needed. Example:
 
-```txt
+```vespa-yql
 all(
     group(my_field)
     filter( (regex("bar.*", some_field) or regex("baz.*", other_field)) and not regex(".*foo", some_field))
@@ -215,13 +219,13 @@ Refer to the [grouping guide](/en/querying/grouping#pagination) for an example.
 
 Lists created using the `each` keyword can be assigned a label using the construct `each(...) as(mylabel)`. The outputs created by each clause will be identified by this label.
 
-```txt
+```vespa-yql
 all(group(year) each(output(count())) as(by_year))
 ```
 
 Individual output aggregators can also be assigned a label by adding `as(mylabel)` to the aggregator inside `output(...)`. This labels the aggregation result, not the group list.
 
-```txt
+```vespa-yql
 all(group(author) output(count() as(authors_cardinality)))
 ```
 
@@ -229,25 +233,25 @@ all(group(author) output(count() as(authors_cardinality)))
 
 Grouping expressions can be tagged with an _alias_. An alias allows the expression to be reused without having to repeat the expression verbatim.
 
-```txt
+```vespa-yql
 all(group(a) alias(myalias, count()) each(output($myalias)))
 ```
 
 is equivalent to
 
-```txt
+```vespa-yql
 all(group(a) each(output(count())))
 ```
 
 .
 
-```txt
+```vespa-yql
 all(group(a) order($myalias=count()) each(output($myalias)))
 ```
 
 is equivalent to
 
-```txt
+```vespa-yql
 all(group(a) order(count()) each(output(count())))
 ```
 
@@ -256,6 +260,29 @@ all(group(a) order(count()) each(output(count())))
 ## Precision
 
 The number of intermediate groups returned from each content node during expression evaluation to give the container node more data to consider when selecting the groups that are to be evaluated further: `each(...) precision(1000)` A higher number costs more bandwidth, but leads to higher accuracy in some cases.
+
+## Parameter substitution
+
+Available since `Vespa 8.774.9+`.
+
+As in [YQL](/en/reference/querying/yql#parameter-substitution), a grouping expression can refer to a query parameter with `@name`. The reference is replaced by the value of the query parameter `name`. The value is used as-is and is never parsed as grouping syntax, so it needs no escaping and cannot change the structure of the expression. This makes it safe to pass user input to a grouping expression:
+
+```txt
+select=all( group(category) filter(in(category, @categories)) each(output(count())) )&categories=books,music
+```
+
+References can be used in the [select](/en/reference/api/query#select) parameter, in the grouping expression after `|` in [YQL](/en/reference/querying/yql#grouping), and in [select.grouping](/en/reference/api/query#select.grouping). In `select.grouping`, the [JSON label field](/en/reference/querying/json-query-language#grouping) can also be a reference: `"label": "@name"`.
+
+Parameter names follow the same rules as in YQL: they start with a letter or underscore, followed by letters, digits, underscores or hyphens.
+
+How the value is interpreted depends on where the reference is used:
+
+- **Strings**: the pattern in `regex`, the label in `as`, and constants in expressions. The value is always a string, even when it looks like a number: with `label=42`, `group(@label)` is the same as `group("42")`, not `group(42)`.
+- **Numbers**: the bounds of `range`, and the arguments of `accuracy`, `fixedwidth` and other functions that take a numeric constant. The value must be an integer or a decimal number, and may be negative.
+- **Integers**: `max`, `precision`, and the number of bits in `md5` (1 to 128) and `xorbit` (1 to 64). The value must be an integer within the range the clause accepts. A decimal number such as `2.5` is rejected.
+- **Lists**: a reference in <code>in(_expression_, @my_list)</code>. The value uses the same format as `in (@my_list)` in YQL: either `value, value, ...` with each value optionally quoted, or a JSON array. A single reference can therefore supply any number of values.
+
+If a referenced parameter is not set, the query fails with the error `Input 'name' is not set`. References cannot be used for field names, function names or the bounds of `bucket`.
 
 ## Query parameters
 
@@ -298,13 +325,13 @@ Using sum, max on a multivalued attribute: Doing an operation such as `output(su
 
 Compute quantiles by listing the desired quantile values (comma-separated) in brackets, followed by a comma and the expression (e.g., a field):
 
-```txt
+```vespa-yql
 all( group(city) each(output(quantiles([0.5], delivery_days) as(median_delivery_days) ) ) )
 ```
 
 to compute the median, or
 
-```txt
+```vespa-yql
 all( group(city) each(output(quantiles([0.5, 0.9], delivery_days))) )
 ```
 
@@ -312,7 +339,7 @@ This computes the median (p50) and 90th percentile (p90) time to delivery in day
 
 Use `argmin(key, value)` and `argmax(key, value)` to get the value of one expression for the document that has the smallest or largest value of another expression:
 
-```txt
+```vespa-yql
 all( group(artist) each(output(argmin(price, title))) )
 ```
 
@@ -320,13 +347,13 @@ This outputs the title of the cheapest track per artist, where `min(price)` woul
 
 Multivalue fields, such as maps and arrays, can be used for grouping. However, using aggregation functions such as sum() on such fields can give misleading results. Assume a map from strings to integers (`map<string, int>`), where the strings are some sort of key to use for grouping. The following expression will provide the sum of the values for all keys:
 
-```txt
+```vespa-yql
 all( group(mymap.key) each(output(sum(mymap.value))) )
 ```
 
 and not the sum of the values within each key, as one would expect. It is still, however, possible to run the following expression to get the sum of values within a specific key:
 
-```txt
+```vespa-yql
 all( group("my_group") each(output(sum(mymap{"foo"}))) )
 ```
 
@@ -751,6 +778,7 @@ Maps the value of the first argument into the given buckets.
 - Standard mathematical start and end specifiers may be used to define the width of a `bucket`. The `(` and `)` evaluates to `[` and `>` by default.
 - The buckets assume the type of the start/end specifiers (`string`, `long`, `double` or `raw`). Values are converted to this type before being compared with these specifiers. (e.g., `double` values are rounded to the nearest integer for buckets of type `long`).
 - The end specifier can be skipped. The buckets `bucket(3)`/`bucket[3]` are the same as `bucket[3,4>`. This is allowed for string expressions as well; `bucket("c")` is identical to `bucket["c", "c ">`.
+- The buckets split the value range into separate groups, so each value lands in at most one bucket. To find the bucket for each document quickly, Vespa expects the buckets in increasing order and without overlaps, and rejects a request where they are not. Neighboring buckets may share a boundary, as in `bucket(0,1000), bucket(1000,2000)`.
 
 </td>
       <td>Any, Bucket+</td>
@@ -894,7 +922,7 @@ The field must be a [long](/en/reference/schemas/schemas#long), with second reso
 
 Computes the great-circle distance from a [position](/en/reference/schemas/schemas#position) field to a given point. The unit suffix `.km` or `.miles` selects the output unit. Works on both `position` and `array<position>` fields. For arrays, the minimum distance across all positions in the document is returned.
 
-```txt
+```vespa-yql
 all( group(fixedwidth(geo_distance(attribute(location), 63.4, 10.4).km, 10)) each(output(count())) )
 ```
 
@@ -912,11 +940,11 @@ Available since `Vespa 8.664.22+`.
 
 Converts the attribute string using [unicode collation algorithm](https://www.unicode.org/reports/tr10/). Groups are sorted using locale-aware sorting, with the default and primary strength values, respectively:
 
-```txt
+```vespa-yql
 all( group(s) order(max(uca(s, "sv"))) each(output(count())) )
 ```
 
-```txt
+```vespa-yql
 all( group(s) order(max(uca(s, "sv", "PRIMARY"))) each(output(count())) )
 ```
 
