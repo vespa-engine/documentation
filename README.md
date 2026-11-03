@@ -56,7 +56,9 @@ manual fixing a converter's output would need:
 converts a page from `origin/master` into the working tree.
 
 [scripts/port_redirects.py](scripts/port_redirects.py) adds the redirects from master's `redirects.yml` and
-`redirect_from` frontmatter to `docs.json`; running it again only adds new ones.
+`redirect_from` frontmatter to `docs.json`, and a redirect from each URL the Jekyll site served
+(`/en/foo.html`, `/en/dir/index.html`) to the page without the extension, since Mintlify does not do that;
+running it again only adds new ones.
 
 [scripts/label_schema_code.py](scripts/label_schema_code.py) labels schema code blocks `vespa-schema`
 (the converter does this for the pages it writes).
@@ -123,10 +125,11 @@ Prioritize maintainability higher than usability:
 
 * Be wary of adding code in the documentation. The code will become incorrect over time and should in most cases be placed in git as continuously built code and referenced from the doc.
 
-* Label schema snippets (`.sd` code, including parts such as a field or rank profile) `vespa-schema`, so they are
-  syntax highlighted: ```` ```vespa-schema ````. The grammar is [languages/vespa-schema.json](languages/vespa-schema.json),
-  a copy of the one generated in the [vespa repository](https://github.com/vespa-engine/vespa/tree/master/integration/tmgrammar);
-  update it with [scripts/update_schema_grammar.py](scripts/update_schema_grammar.py).
+* Label code in Vespa's languages so it is syntax highlighted: ```` ```vespa-schema ```` for schema (`.sd`) code,
+  including parts such as a field or rank profile, ```` ```vespa-yql ```` for YQL, and
+  ```` ```vespa-ranking-expression ```` for a ranking expression on its own. The grammars in [languages/](languages/)
+  are copies of the ones generated in the [vespa repository](https://github.com/vespa-engine/vespa/tree/master/integration/tmgrammar);
+  update them with [scripts/update_grammars.py](scripts/update_grammars.py).
 
 ### Style
 

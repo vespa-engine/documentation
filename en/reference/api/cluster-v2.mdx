@@ -1,7 +1,28 @@
 ---
 title: "/cluster/v2 API reference"
+sidebarTitle: "/cluster/v2 API"
 description: "/cluster/v2 API reference in Vespa applications."
 ---
+
+The cluster controller has a /cluster/v2 API for viewing and modifying a content cluster state. To find the URL to access this API, identify the [cluster controller services](/en/content/content-nodes#cluster-controller) in the application. Only the master cluster controller will be able to respond. The master cluster controller is the cluster controller alive that has the lowest index. Thus, one will typically use cluster controller 0, but if contacting it fails, try number 1 and so on. Using [vespa-model-inspect](/en/reference/operations/self-managed/tools#vespa-model-inspect):
+
+```bash
+$ vespa-model-inspect service -u container-clustercontroller
+
+container-clustercontroller @ hostname.domain.com : admin
+admin/cluster-controllers/0
+    http://hostname.domain.com:19050/ (STATE EXTERNAL QUERY HTTP)
+    http://hostname.domain.com:19117/ (EXTERNAL HTTP)
+    tcp/hostname.domain.com:19118 (MESSAGING RPC)
+    tcp/hostname.domain.com:19119 (ADMIN RPC)
+```
+
+In this example, there is only one clustercontroller, and the State Rest API is available on the port marked STATE and HTTP, 19050 in this example. This information can also be retrieved through the model config in the config server.
+
+Find examples of API usage in [content nodes](/en/content/content-nodes#cluster-v2-API-examples).
+
+## HTTP requests
+
 <table className="vespa-table">
   <thead>
     <tr>
@@ -12,42 +33,74 @@ description: "/cluster/v2 API reference in Vespa applications."
   </thead>
   <tbody>
     <tr>
-      <td>GET</td>
-      <td>List cluster and nodes. Get cluster, node or disk states.</td>
-      <td></td>
+      <th>GET</th>
+      <td colSpan="2"><a id="get" /> List cluster and nodes. Get cluster, node or disk states.</td>
     </tr>
     <tr>
       <td></td>
-      <td>List content clusters</td>
-      <td><code>{`/cluster/v2/`}</code></td>
+      <th id="list-content-clusters">List content clusters</th>
+      <td>
+
+```txt
+/cluster/v2/
+```
+
+</td>
     </tr>
     <tr>
       <td></td>
-      <td>Get cluster state and list service types within cluster</td>
-      <td><code>{`/cluster/v2/<cluster>`}</code></td>
+      <th id="get-cluster-state-and-list-service-types-within-cluster">Get cluster state and list service types within cluster</th>
+      <td>
+
+```txt
+/cluster/v2/<cluster>
+```
+
+</td>
     </tr>
     <tr>
       <td></td>
-      <td>List nodes per service type for cluster</td>
-      <td><code>{`/cluster/v2/<cluster>/<service-type>`}</code></td>
+      <th id="list-nodes-per-service-type-for-cluster">List nodes per service type for cluster</th>
+      <td>
+
+```txt
+/cluster/v2/<cluster>/<service-type>
+```
+
+</td>
     </tr>
     <tr>
       <td></td>
-      <td>Get node state</td>
-      <td><code>{`/cluster/v2/<cluster>/<service-type>/<node>`}</code></td>
+      <th id="get-node-state">Get node state</th>
+      <td>
+
+```txt
+/cluster/v2/<cluster>/<service-type>/<node>
+```
+
+</td>
     </tr>
     <tr>
-      <td>PUT</td>
-      <td>Set node state</td>
-      <td></td>
+      <th>PUT</th>
+      <td colSpan="2"><a id="put" /> Set node state</td>
     </tr>
     <tr>
       <td></td>
-      <td>Set node user state</td>
-      <td><code>{`/cluster/v2/<cluster>/<service-type>/<node>`}</code></td>
+      <th id="set-node-user-state">Set node user state</th>
+      <td>
+
+```txt
+/cluster/v2/<cluster>/<service-type>/<node>
+```
+
+</td>
     </tr>
   </tbody>
 </table>
+
+## Node state
+
+Content and distributor nodes have state:
 
 <table className="vespa-table">
   <thead>
@@ -58,27 +111,35 @@ description: "/cluster/v2 API reference in Vespa applications."
   </thead>
   <tbody>
     <tr>
-      <td><code>{`Up`}</code></td>
+      <td><a id="up" />`Up`</td>
       <td>The node is up and available to keep buckets and serve requests.</td>
     </tr>
     <tr>
-      <td><code>{`Down`}</code></td>
+      <td><a id="down" />`Down`</td>
       <td>The node is not available, and can not be used.</td>
     </tr>
     <tr>
-      <td><code>{`Stopping`}</code></td>
+      <td><a id="stopping" />`Stopping`</td>
       <td>This node is stopping and is expected to be down soon. This state is typically only exposed to the cluster controller to tell why the node stopped. The cluster controller will expose the node as down or in maintenance mode for the rest of the cluster. This state is thus not seen by the distribution algorithm.</td>
     </tr>
     <tr>
-      <td><code>{`Maintenance`}</code></td>
+      <td><a id="maintenance" />`Maintenance`</td>
       <td>This node is temporarily unavailable. The node is available for bucket placement, so redundancy is lower. Using this mode, new replicas of the documents stored on this node will not be created, allowing the node to be down with less of a performance impact on the rest of the cluster. This mode is typically used to mask a down state during controlled node restarts, or by an administrator that need to do some short maintenance work, like upgrading software or restart the node.</td>
     </tr>
     <tr>
-      <td><code>{`Retired`}</code></td>
-      <td>A retired node is available and serves requests. This state is used to remove nodes while keeping redundancy. Buckets are moved to other nodes (with low priority), until empty. Special considerations apply when using <a href="/en/content/elasticity#grouped-distribution" aria-label="grouped distribution">grouped distribution</a> as buckets are not necessarily removed.</td>
+      <td><a id="retired" />`Retired`</td>
+      <td>A retired node is available and serves requests. This state is used to remove nodes while keeping redundancy. Buckets are moved to other nodes (with low priority), until empty. Special considerations apply when using [grouped distribution](/en/content/elasticity#grouped-distribution) as buckets are not necessarily removed.</td>
     </tr>
   </tbody>
 </table>
+
+Distributor nodes start / transfer buckets quickly and are hence not in `maintenance` or `retired`.
+
+{/* ToDo: it should not be possible to set a distributor in this mode, check */}
+
+Refer to [examples](/en/content/content-nodes#cluster-v2-API-examples) of manipulating states.
+
+## Types
 
 <table className="vespa-table">
   <thead>
@@ -90,52 +151,68 @@ description: "/cluster/v2 API reference in Vespa applications."
   </thead>
   <tbody>
     <tr>
-      <td>cluster</td>
-      <td><em><code>{`<identifier>`}</code></em></td>
+      <td><a id="cluster" />cluster</td>
+      <td>_&lt;identifier&gt;_</td>
       <td>The name given to a content cluster in a Vespa application.</td>
     </tr>
     <tr>
-      <td>description</td>
-      <td><em>.&#42;</em></td>
+      <td><a id="description" />description</td>
+      <td>_.\*_</td>
       <td>Description can contain anything that is valid JSON. However, as the information is presented in various interfaces, some which may present reasons for all the states in a cluster or similar, keeping it short and to the point makes it easier to fit the information neatly into a table and get a better cluster overview.</td>
     </tr>
     <tr>
-      <td>group-spec</td>
-      <td><em><code>{`<identifier>`}</code>&#42; (. <em><code>{`<identifier>`}</code></em> )</em></td>
+      <td><a id="group-spec" />group-spec</td>
+      <td>_&lt;identifier&gt;_(\\._&lt;identifier&gt;_)\*</td>
       <td>The hierarchical group assignment of a given content node. This is a dot separated list of identifiers given in the application services.xml configuration.</td>
     </tr>
     <tr>
-      <td>node</td>
-      <td>[0-9]+</td>
+      <td><a id="node" />node</td>
+      <td>\[0-9\]+</td>
       <td>The index or distribution key identifying a given node within the context of a content cluster and a service type.</td>
     </tr>
     <tr>
-      <td>service-type</td>
+      <td><a id="service-type" />service-type</td>
       <td>(distributor|storage)</td>
       <td>The type of the service to look at state for, within the context of a given content cluster.</td>
     </tr>
     <tr>
-      <td>state-disk</td>
+      <td><a id="state-disk" />state-disk</td>
       <td>(up|down)</td>
       <td>One of the valid disk states.</td>
     </tr>
     <tr>
-      <td>state-unit</td>
-      <td><a href="#up" aria-label="up">up</a> | <a href="#stopping" aria-label="stopping">stopping</a> | <a href="#down" aria-label="down">down</a></td>
-      <td>The cluster controller fetches states from all nodes, called <em>unit states</em>. States reported from the nodes are either <code>{`up`}</code> or <code>{`stopping`}</code>. If the node can not be reached, a <code>{`down`}</code> state is assumed. This means, the cluster controller detects failed nodes. The subsequent <em>generated states</em> will have nodes in <code>{`down`}</code>, and the <a href="/en/content/idealstate" aria-label="ideal state algorithm">ideal state algorithm</a> will redistribute <a href="/en/content/buckets" aria-label="buckets">buckets</a> of documents.</td>
+      <td><a id="state-unit" />state-unit</td>
+      <td>[up](#up) | [stopping](#stopping) | [down](#down)</td>
+      <td>
+
+The cluster controller fetches states from all nodes, called _unit states_. States reported from the nodes are either `up` or `stopping`. If the node can not be reached, a `down` state is assumed.
+
+This means, the cluster controller detects failed nodes. The subsequent _generated states_ will have nodes in `down`, and the [ideal state algorithm](/en/content/idealstate) will redistribute [buckets](/en/content/buckets) of documents.
+
+</td>
     </tr>
     <tr>
-      <td>state-user</td>
-      <td><a href="#up" aria-label="up">up</a> | <a href="#down" aria-label="down">down</a> | <a href="#maintenance" aria-label="maintenance">maintenance</a> | <a href="#retired" aria-label="retired">retired</a></td>
-      <td>Use tools for <a href="/en/operations/self-managed/admin-procedures#cluster-state" aria-label="user state management">user state management</a>. Retire a node from a cluster - use <code>{`retired`}</code> to move buckets to other nodes Short-lived maintenance work - use <code>{`maintenance`}</code> to avoid merging buckets to other nodes Fail a bad node. The cluster controller or an operator can set a node <code>{`down`}</code></td>
+      <td><a id="state-user" />state-user</td>
+      <td>[up](#up) | [down](#down) | [maintenance](#maintenance) | [retired](#retired)</td>
+      <td>
+
+Use tools for [user state management](/en/operations/self-managed/admin-procedures#cluster-state).
+
+- Retire a node from a cluster - use `retired` to move buckets to other nodes
+- Short-lived maintenance work - use `maintenance` to avoid merging buckets to other nodes
+- Fail a bad node. The cluster controller or an operator can set a node `down`
+
+</td>
     </tr>
     <tr>
-      <td>state-generated</td>
-      <td><a href="#up" aria-label="up">up</a> | <a href="#down" aria-label="down">down</a> | <a href="#maintenance" aria-label="maintenance">maintenance</a> | <a href="#retired" aria-label="retired">retired</a></td>
-      <td>The cluster controller generates the cluster state from the <code>{`unit`}</code> and <code>{`user`}</code> states, over time. The generated state is called the <em>cluster state</em>.</td>
+      <td><a id="state-generated" />state-generated</td>
+      <td>[up](#up) | [down](#down) | [maintenance](#maintenance) | [retired](#retired)</td>
+      <td>The cluster controller generates the cluster state from the `unit` and `user` states, over time. The generated state is called the _cluster state_.</td>
     </tr>
   </tbody>
 </table>
+
+## Request parameters
 
 <table className="vespa-table">
   <thead>
@@ -149,8 +226,101 @@ description: "/cluster/v2 API reference in Vespa applications."
     <tr>
       <td>recursive</td>
       <td>number</td>
-      <td>Number of levels, or <code>{`true`}</code> for all levels. Examples: Use <code>{`recursive=1`}</code> for a node request to also see all datause <code>{`recursive=2`}</code> to see all the node data within each service type In recursive mode, you will see the same output as found in the spec below. However, where there is a <code>{`{ "link" : "<url-path>" }`}</code> element, this element will be replaced by the content of that request, given a recursive value of one less than the request above.</td>
+      <td>
+
+<a id="recursive" />
+
+Number of levels, or `true` for all levels. Examples:
+
+- Use `recursive=1` for a node request to also see all data
+- use `recursive=2` to see all the node data within each service type
+
+In recursive mode, you will see the same output as found in the spec below. However, where there is a `{ "link" : "<url-path>" }` element, this element will be replaced by the content of that request, given a recursive value of one less than the request above.
+
+</td>
     </tr>
   </tbody>
 </table>
 
+## HTTP status codes
+
+Non-exhaustive list of status codes:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Code</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>200</td>
+      <td>OK.</td>
+    </tr>
+    <tr>
+      <td>303</td>
+      <td>
+
+Cluster controller not master - master known.
+
+This error means communicating with the wrong cluster controller. This returns a standard HTTP redirect, so the HTTP client can automatically redo the request on the correct cluster controller.
+
+As the cluster controller available with the lowest index will be the master, the cluster controllers are normally queried in index order. Hence, it is unlikely to ever get this error, but rather fail to connect to the cluster controller if it is not the current master.
+
+```txt highlight={2,6}
+HTTP/1.1 303 See Other
+Location: http://<master>/<current-request>
+Content-Type: application/json
+
+{
+    "message" : "Cluster controller index not master. Use master at index index.
+}
+```
+
+</td>
+    </tr>
+    <tr>
+      <td>503</td>
+      <td>
+
+Cluster controller not master - unknown or no master.
+
+This error is used if the cluster controller asked is not master, and it doesn't know who the master is. This can happen, e.g. in a network split, where cluster controller 0 no longer can reach cluster controller 1 and 2, in which case cluster controller 0 knows it is not master, as it can't see the majority, and cluster controller 1 and 2 will vote 1 to master.
+
+```txt
+HTTP/1.1 503 Service Unavailable
+Content-Type: application/json
+
+{
+    "message" : "No known master cluster controller currently exist."
+}
+```
+
+</td>
+    </tr>
+  </tbody>
+</table>
+
+## Response format
+
+Responses are in JSON format, with the following fields:
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>message</th>
+      <td>An error message — included for failed requests.</td>
+    </tr>
+    <tr>
+      <th>ToDo</th>
+      <td>Add more fields here.</td>
+    </tr>
+  </tbody>
+</table>

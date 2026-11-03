@@ -57,6 +57,7 @@ schema
                 distance-metric
             bolding
             dictionary
+            fast-search-map-field
             id
             index
                 hnsw
@@ -238,7 +239,7 @@ The body is mandatory and may contain:
 
 Contained in [schema](#schema) and describes a document type. This can also be the root of the schema, if the document is not to be queried directly.
 
-```txt
+```vespa-schema
 document [name] inherits [name-list] {
     [body]
 }
@@ -310,7 +311,7 @@ The body of a struct is optional and may contain:
 
 Contained in [schema](#schema), [document](#document), or [struct](#struct). Defines a named value with a type and (optionally) how this field should be stored, indexed, searched, presented, and how it should influence ranking.
 
-```txt
+```vespa-schema
 field [name] type [type-name] {
     [body]
 }
@@ -682,13 +683,13 @@ This example illustrates that the struct elements are configured individually - 
 
 Here, _key_, _value.first_name_ and _value.last_name_ are defined as attributes. This makes them available for searching and [grouping](/en/querying/grouping#grouping-over-a-map-field). A common use case is requiring matches in the same map entry (e.g., match both first and last name for the same person), see the [sameElement](/en/reference/querying/yql#sameelement) operator for how to implement this. Use [matched-elements-only](#matched-elements-only) to reduce the amount of data in the document summary.
 
-[fast-search](/en/performance/feature-tuning#when-to-use-fast-search-for-attribute-fields) is used to make query access faster by creating an index structure for lookups.
+The [fast-search](/en/performance/feature-tuning#when-to-use-fast-search-for-attribute-fields) setting is used to make query access faster by creating an index structure for lookups. However, using the [sameElement](/en/reference/querying/yql#sameelement) operator to require matches in the same map entry can still be slow since this boils down to to searching two arrays and taking the intersection of the matching indices. A [fast-search map field](#fast-search-map-field) can offer faster map lookup if needed.
 
 As an alternative to a map, an [array&lt;struct&gt;](#array) can contain the same element multiple times and maintains order.
 
 Restrictions:
 
-- Map of struct or primitive types do not support [ranking features](/en/basics/ranking) and can only be used for matching and filtering.
+- Maps of struct or primitive types do not support most [ranking features](/en/basics/ranking). When using a [fast-search map field](#fast-search-map-field), make sure to use ranking features for the fast-search map field and not the containing map field.
 - All map types can be fed, retrieved, and used in document summaries.
 - Some map types can be searched in [indexed search mode](/en/reference/applications/services/content#document), while all map types can be searched in [streaming search](/en/performance/streaming-search). See below for supported cases:
 
@@ -1052,7 +1053,7 @@ It is not possible to index uri-typed fields into a common index, i.e., it has t
 
 **Aliasing** also works differently for URL fields - you are allowed to create aliases both to the index (as usual) and to the components of it. Use
 
-```txt
+```vespa-schema
 alias [component]: [alias]
 ```
 
@@ -1188,6 +1189,11 @@ document ppl {
       <td><a id="field-bolding" />Specifies whether the content of this field should be bolded. Only supported for [index](#indexing-index) fields of type string or array&lt;string&gt;.</td>
     </tr>
     <tr>
+      <td>[fast-search-map-field](#fast-search-map-field)</td>
+      <td>Zero to many</td>
+      <td><a id="field-fast-search-map-field" />Define a synthetic, map-like attribute from this field that allows for faster lookups. Only supported for certain fields of type array&lt;struct&gt; and map.</td>
+    </tr>
+    <tr>
       <td>[id](#id)</td>
       <td>Zero to one</td>
       <td><a id="field-id" />Explicitly decide the numerical id of this field. Is normally not necessary, but can be used to save some disk space.</td>
@@ -1289,7 +1295,7 @@ This is useful e.g., to index a field in multiple ways, or to change the field v
 
 Contained in [field](#field) or [struct-field](#struct-field). Defines how this struct field (a subfield of a struct) should be stored, indexed, searched, presented, and how it should influence ranking. The field in which this struct field is contained must be of type struct or a collection of type struct:
 
-```txt
+```vespa-schema
 struct-field [name] {
     [body]
 }
@@ -1393,7 +1399,7 @@ see [deprecations](/en/reference/release-notes/vespa8#compression).
 
 Contained in [document](#document). If a compression level is set within this element, **lz4** compression is enabled for whole documents.
 
-```txt
+```vespa-schema
 compression {
     [body]
 }
@@ -1784,7 +1790,7 @@ Specify the name of an attribute that will be used to provide diversity. Result 
 - The query has not yet reached the _max-hits_ number produced from this phase.
 - The query has not yet reached the max number of candidates in one group. This is computed by the _max-hits_ of the phase divided by [min-groups](#diversity-min-groups)
 
-```txt
+```vespa-schema
 diversity {
     attribute: [attribute name]
     min-groups: [integer]
@@ -1854,13 +1860,13 @@ The body of a first-phase ranking statement consists of:
 
 Contained in [first-phase](#firstphase-rank) or [second-phase](#secondphase-rank) or [global-phase](#globalphase-rank). Specify a [ranking expression](/en/reference/ranking/ranking-expressions). The expression can either be written directly or loaded from a file. When writing it directly, the syntax is:
 
-```txt
+```vespa-schema
 expression: [ranking expression]
 ```
 
 or
 
-```txt
+```vespa-schema
 expression {
     [ranking expression]
     [ranking expression]
@@ -1872,7 +1878,7 @@ The second format is primarily a convenience feature when using long expressions
 
 Expressions can also be loaded from a separate file. This is useful when dealing with the long expressions generated by e.g. MLR. The syntax is:
 
-```txt
+```vespa-schema
 expression: file:[path-to-expressionfile]
 ```
 
@@ -1888,13 +1894,13 @@ Directories are not allowed in the path.
 
 Contained in [rank-profile](#rank-profile). List of extra [rank features](/en/reference/ranking/rank-features) to be dumped when using the query-argument [rankfeatures](/en/reference/api/query#ranking.listfeatures).
 
-```txt
+```vespa-schema
 rank-features: [feature] [feature]
 ```
 
 or
 
-```txt
+```vespa-schema
 rank-features {
     [feature]
     [feature]
@@ -1995,7 +2001,7 @@ constants {
     myDouble: 0.5
     constant(myOtherDouble) double: 0.6
     constant(myArray) tensor(x[3]):[1, 2, 3]
-    constant(myMap) tensor(key{}]):{key1: 1.0, key2: 2.0}
+    constant(myMap) tensor(key{}):{key1: 1.0, key2: 2.0}
     constant(myLargeTensor) tensor(x[10000]): file:constants/myTensor.json.lz4
 }
 ```
@@ -2203,7 +2209,7 @@ summary-features: [feature] [feature]…
 
 or
 
-```txt
+```vespa-schema
 summary-features [inherits parent-profile (, other-parent-profile)* ]? {
     [feature]
     [feature]
@@ -2234,7 +2240,7 @@ match-features: [feature] [feature]…
 
 or
 
-```txt
+```vespa-schema
 match-features [inherits parent-profile (, other-parent-profile)* ]? {
     [feature]
     [feature]
@@ -2253,7 +2259,7 @@ Note that compound expressions must be wrapped in a [function](https://docs.vesp
 
 Contained in [rank-profile](#rank-profile). Specifies mutating operations you can do to each of the documents that make it through the 4 query phases, _on-match_, _on-first-phase_, _on-second-phase_ and _on-summary_.
 
-```txt
+```vespa-schema
 mutate {
     [phase name] { [attribute name] [operation] [numeric_value] }
 }
@@ -2522,7 +2528,7 @@ Contained in [schema](#schema). Sets whether document IDs are stored on disk onl
 
 Making the document IDs an attribute allows to return [Document IDs in search results](/en/schemas/documents#docid-in-results) and to visit Document IDs without disk access, cf. [Export documents](/en/operations/data-management#export-documents).
 
-```txt
+```vespa-schema
 documentid: [setting]
 ```
 
@@ -2651,10 +2657,10 @@ This setting is automatically checked against the field's [match:casing](#match)
 - You **must** set `match: cased` on the field
 - You **must** include `cased` in the dictionary block
 
-```txt
+```vespa-schema
 dictionary {
-  hash    <!-- Specifies hash dictionary type -->
-  cased   <!-- Required with hash for string fields -->
+  hash    # Specifies hash dictionary type
+  cased   # Required with hash for string fields
 }
 ```
 
@@ -2663,12 +2669,12 @@ dictionary {
 ```vespa-schema
 field id_str type string {
       indexing:   summary | attribute
-      attribute:  fast-search  <!-- Enables dictionary functionality -->
-      match:      cased        <!-- Required for hash dictionaries with strings -->
+      attribute:  fast-search  # Enables dictionary functionality
+      match:      cased        # Required for hash dictionaries with strings
       rank:       filter
       dictionary {
-        hash                   <!-- Use hash dictionary type -->
-        cased                  <!-- Required for hash dictionaries with strings -->
+        hash                   # Use hash dictionary type
+        cased                  # Required for hash dictionaries with strings
       }
 }
 ```
@@ -2677,13 +2683,13 @@ field id_str type string {
 
 Contained in [field](#field) or [struct-field](#struct-field). Specifies a property of an index structure attribute:
 
-```txt
+```vespa-schema
 attribute [attribute-name]: [property]
 ```
 
 or
 
-```txt
+```vespa-schema
 attribute [attribute-name] {
     [property]
     [property]
@@ -2750,13 +2756,13 @@ Queries in attribute fields are not normalized, nor stemmed. Use [index](#index)
 
 Contained in [attribute](#attribute) or [field](#field). Specifies how sorting should be done.
 
-```txt
+```vespa-schema
 sorting : [property]
 ```
 
 or
 
-```txt
+```vespa-schema
 sorting {
     [property]
     …
@@ -2804,7 +2810,7 @@ When changing the `distance-metric` or `max-links-per-node`, the content nodes m
 
 The calculated distance will be used to select the closest hits for _nearestNeighbor_ query operator, but also to build the [HNSW](/en/querying/approximate-nn-hnsw) index (if specified) and to produce the [distance](/en/reference/ranking/rank-features#distance(dimension,name)) and [closeness](/en/reference/ranking/rank-features#closeness(dimension,name)) ranking features.
 
-```txt
+```vespa-schema
 distance-metric: [metric]
 ```
 
@@ -2865,7 +2871,7 @@ The default metric is [Euclidean distance](https://en.wikipedia.org/wiki/Euclide
 
 ```vespa-schema
     function mydistance() {
-        expression: euclidean_distance(attribute(myembedding), query(myqueryvector), mydim))
+        expression: euclidean_distance(attribute(myembedding), query(myqueryvector), mydim)
     }
 ```
 
@@ -2924,7 +2930,7 @@ To compute the cosine similarity directly in a ranking expression instead of fet
 
 ```vespa-schema
     function mysimilarity() {
-        expression: cosine_similarity(attribute(myembedding), query(myqueryvector), mydim))
+        expression: cosine_similarity(attribute(myembedding), query(myqueryvector), mydim)
     }
 ```
 
@@ -2977,13 +2983,95 @@ The default XML element used to highlight the search terms is &lt;hi&gt; - to ov
 
 Maximum field byte length for bolding is 64Mb - field values larger than this will be represented as a snippet as in `summary: dynamic`.
 
+## fast-search-map-field
+
+Available since `Vespa 8.773.18+`.
+
+Contained in [field](#field) of type [map](#map) or [array&lt;struct&gt;](#array). Creates a synthetic, map-like fast-search attribute from the field that allows for faster lookups than the containing field does via [sameElement](/en/reference/querying/yql#sameelement).
+
+If the containing field is of type [map](#map), only the name of the synthetic field to be created has to be specified:
+
+```vespa-schema
+fast-search-map-field [synthetic-field-name]
+```
+
+If the containing field is of type [array&lt;struct&gt;](#array), one additionally has to specify which fields of the struct to use as key and value:
+
+```vespa-schema
+fast-search-map-field [synthetic-field-name] {
+    key: [struct-field-name-to-use-as-key]
+    value: [struct-field-name-to-use-as-value]
+}
+```
+
+In both cases, the full name for the synthetic field is `[containing-field-name].[synthetic-field-name]`.
+
+Example:
+
+```vespa-schema
+field my_map type map<string,string> {
+    indexing: summary
+    fast-search-map-field my_lookup
+}
+
+struct string_pair {
+    field my_key type string { }
+    field my_value type string { }
+}
+field my_array type array<string_pair> {
+    indexing: summary
+    fast-search-map-field my_lookup {
+        key: my_key
+        value: my_value
+    }
+}
+```
+
+The names of the synthetic fields are `my_array.my_lookup` and `my_map.my_lookup`.
+
+<Warning>
+**Important:**
+
+The only way to search these fields is via the [mapMatch](/en/reference/querying/yql#mapmatch) operator.
+</Warning>
+
+The types that are supported for the key are int, long, and string. The types that are supported for the value are int, long, float, double, and string.
+
+Adding a fast-search map field to a field disables some types of [partial updates](/en/writing/partial-updates) for that field:
+
+- For a [map](#map): assigning or removing a single key using a [fieldpath](/en/reference/schemas/document-json-format#fieldpath), like `my_map{my_key}`.
+- For an [array&lt;struct&gt;](#array): updating or removing a single element. Adding elements is supported.
+
+To change existing entries, assign the whole field.
+
+Adding a map-like field this way requires re-indexing before the field can be searched, see [add a fast-search map field](#add-a-fast-search-map-field).
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Property</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>key</td>
+      <td>Which field of the struct to use as the keys of the map. Defaults to `key` if the containing field is of type map.</td>
+    </tr>
+    <tr>
+      <td>value</td>
+      <td>Which fields of the struct to use as the values of the map. Defaults to `value` if the containing field is of type map.</td>
+    </tr>
+  </tbody>
+</table>
+
 ## id
 
 Contained in [field](#field). Sets the numerical ID of this field. All fields have a document-internal ID internally for transfer and storage. IDs are usually determined programmatically as a 31-bit number. Some storage and transfer space can be saved by instead explicitly setting IDs to a 7-bit number.
 
 {/* ToDo: check if this applies to proton */}
 
-```txt
+```vespa-schema
 id: [positive integer]
 ```
 
@@ -3003,13 +3091,13 @@ For [tensor](#tensor)-typed fields, _index_ creates an [HNSW](#index-hnsw) index
 
 Examples:
 
-```txt
+```vespa-schema
 index [index-name]: [property]
 ```
 
 or
 
-```txt
+```vespa-schema
 index [index-name] {
     [property]
     [property]
@@ -3101,7 +3189,7 @@ Only supported for the following tensor attribute field types:
 
 HNSW indexes are not supported in [streaming search](/en/performance/streaming-search#differences-in-streaming-search).
 
-```txt
+```vespa-schema
 hnsw {
     [parameter]: [value]
     [parameter]: [value]
@@ -3206,7 +3294,7 @@ Find examples and more details in the [Text Matching](/en/querying/text-matching
 
 Contained in [field](#field). Sets how the content of this field, and searches against it, should be linguistically processed. Read more in [linguistics profiles](/en/linguistics/linguistics#linguistics-profiles).
 
-```txt
+```vespa-schema
 linguistics {
     [setting]
     [setting]
@@ -3216,7 +3304,7 @@ linguistics {
 
 A setting given directly in the block applies both when indexing and when searching. To make a setting differ between the two, give it in an `index` and/or a `search` block, which takes precedence over the same setting given directly in the block for that side:
 
-```txt
+```vespa-schema
 linguistics {
     index {
         [setting]
@@ -3524,13 +3612,13 @@ match {
 
 Contained in [field](#field), [struct-field](#struct-field) or [rank-profile](#rank-profile). Set the kind of ranking calculations that will be done for the field. Even though the actual ranking expressions decide the ranking, this setting tells Vespa which preparatory calculations and which data structures are needed for the field.
 
-```txt
+```vespa-schema
 rank [field-name]: [ranking settings]
 ```
 
 or
 
-```txt
+```vespa-schema
 rank {
     [ranking setting]
 }
@@ -3575,7 +3663,7 @@ Related: See the [filter](/en/reference/querying/yql#filter) query annotation fo
 
 Contained in a [rank-profile](#rank-profile). Used to optimize query performance when searching large text [index](/en/basics/schemas#document-fields) fields, by allowing a per query combination of [rank: filter](#filter) and [rank: normal](#normal) behavior. See [profile-level filter-threshold](#filter-threshold) for how to use the same value for all _index_ fields.
 
-```txt
+```vespa-schema
 rank [field-name] {
     filter-threshold: 0.05
 }
@@ -3615,7 +3703,7 @@ Consider an `array<string>` field with three elements `["a c", "x b x a x x x x 
 
 The `element-gap` setting affects the [nativeProximity](/en/reference/ranking/rank-features#nativeProximity) rank feature, the [near](/en/reference/querying/yql#near) query operator and the [onear](/en/reference/querying/yql#onear) query operator.
 
-```txt
+```vespa-schema
 rank [field-name] {
     element-gap: 0
 }
@@ -3627,7 +3715,7 @@ No restart or reindexing is required when changing this setting, it is immediate
 
 Contained in [fieldset](#fieldset), [field](#field) or [struct-field](#struct-field). Specifies a function to be performed on query terms to the indexes of this field when searching. The Search Container server has support for writing Vespa Searcher plugins that process these commands.
 
-```txt
+```vespa-schema
 query-command: [an identifier or quoted string]
 ```
 
@@ -3639,7 +3727,7 @@ There is one built-in query-command available: `phrase-segmenting`. If this is s
 
 Contained in [field](#field) or [rank-profile](#rank-profile). Selects the low-level rank settings to be used for this field when using `nativeRank`.
 
-```txt
+```vespa-schema
 rank-type [field-name]: [rank-type-name]
 ```
 
@@ -3680,7 +3768,7 @@ Contained in [rank-profile](#rank-profile).
 
 Tunes the [weakAnd](/en/ranking/wand#weakand) algorithm to automatically exclude terms and documents with expected low query significance based on document frequency statistics present in the document corpus. This makes matching faster at the cost of potentially reduced recall.
 
-```txt
+```vespa-schema
 weakand {
     [body]
 }
@@ -3789,7 +3877,7 @@ Use [document-summary](#document-summary) instead.
 
 Contained in [field](#field) or [struct-field](#struct-field). Specifies the name of the document summaries that should contain this field.
 
-```txt
+```vespa-schema
 summary-to: [summary-name], [summary-name], …
 ```
 
@@ -3805,7 +3893,7 @@ summary: [property]
 
 or
 
-```txt
+```vespa-schema
 summary [name] {
     [body]
 }
@@ -3846,7 +3934,7 @@ The summary _name_ can be skipped if this is set inside a field. The name will t
 
 Specifies the name of the field or fields from which the value of this summary field should be fetched. If multiple fields are specified, the value will be taken from the first field if that has a value, from the second if the first one is empty, and so on.
 
-```txt
+```vespa-schema
 source: [field-name], [field-name], …
 ```
 
@@ -3863,7 +3951,7 @@ Refer to [attribute](#add-or-remove-an-existing-document-field-from-document-sum
 
 Specifies the name of the document summaries that this should be included in.
 
-```txt
+```vespa-schema
 to: [document-summary-name], [document-summary-name], …
 ```
 
@@ -3896,7 +3984,7 @@ See [example use](#map) and example schemas:
 
 Use a summary feature to control which elements in an [array of primitive](#array) or [array of struct](#array) field are returned as part of document summary.
 
-```txt
+```vespa-yql
 select-elements-by: <summary-feature-name>
 ```
 
@@ -3955,7 +4043,7 @@ Read more about [document summaries](/en/querying/document-summaries).
 
 Contained in [field](#field). The weight of a field - the default is 100. The field weight is used when calculating the [rank scores](/en/basics/ranking).
 
-```txt
+```vespa-schema
 weight: [positive integer]
 ```
 
@@ -3964,13 +4052,13 @@ weight: [positive integer]
 
 Contained in [field](#field) of type weightedset. Properties of a weighted set.
 
-```txt
+```vespa-schema
 weightedset: [property]
 ```
 
 or
 
-```txt
+```vespa-schema
 weightedset {
     [property]
     [property]
@@ -4348,6 +4436,23 @@ A change adding an [index or summary](/en/basics/schemas#document-fields) field 
 ```
 
 Also see [attribute](#add-or-remove-an-existing-document-field-from-document-summary) fields.
+
+</td>
+    </tr>
+    <tr>
+      <th>Add a fast-search map field</th>
+      <td>
+
+<a id="add-a-fast-search-map-field" />
+
+Adding a [fast-search map field](#fast-search-map-field) to a [map](#map) or [array](#array) field is equivalent to adding a synthetic field outside the document and, thus, requires re-indexing to fill the new field:
+
+```vespa-schema highlight={3}
+field my_map type map<string,int> {
+    indexing: summary
+    fast-search-map-field my_lookup
+}
+```
 
 </td>
     </tr>

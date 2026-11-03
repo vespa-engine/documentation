@@ -49,13 +49,13 @@ The decision to use EQUIV must be taken by application-specific dictionary or li
 
 A simple semantic rule looks like:
 
-```sql
+```txt
 lotr -> lord of the rings;
 ```
 
 This means that whenever the term _lotr_ is encountered in a query, replace it by the terms _lord of the rings_. Rules can also refer to conditions, and the produced terms can be a modified version of whatever is matched instead of a concrete term:
 
-```sql
+```txt
 [brand] -> company:[brand];
 [brand] :- sony, dell, ibm, hp;
 ```
@@ -64,13 +64,55 @@ This rule says that, whenever the condition named _brand_ is matched, replace th
 
 It is also possible to do grouping using parentheses, list multiple terms which must be matched in sequence, and to write _adding_ production rules using `+>` instead of `->`. Terms are by default added using the query default (as if they were written in the search box), but it is also possible to force them to be AND, OR, NOT or RANK using respectively `+`, `?`, `-` and `$`. Here is a more complex rule illustrating this:
 
-```sql
+```txt
 [destination] (in, by, at, on) [place] +> $name:[destination]
 ```
 
 This rule boosts matches which has a destination which matches the _name_ field followed by a preposition and a place (the definition of the _destination_ and _place_ conditions are not shown). This is achieved by adding a RANK term - a term which do not impact whether a document is matched or not, but which adds a relevancy boost if it is.
 
 The complete syntax of this language is found in the [semantic rules reference](/en/reference/querying/semantic-rules).
+
+### Rules and fields
+
+By default, rules that do not specify a field only apply to terms searching the default index: terms with no field, as with `userQuery()`, and terms searching a field or fieldset named `default`. In `where title contains "lotr"`, the term _lotr_ searches the field `title`, so the rule `lotr -> lord of the rings` does not apply. To apply a rule to a specific field or fieldset, write its name before the term, e.g. `title:lotr`. These names are called [labels](/en/reference/querying/semantic-rules#condition-label) in the reference. The following rules rewrite _lotr_ both in the default index and in `title`:
+
+```txt
+lotr -> lord of the rings;
+title:lotr -> title:"lord of the rings";  # Quote to put the whole phrase in title
+```
+
+<table className="vespa-table">
+  <thead>
+    <tr>
+      <th>Query</th>
+      <th>Rewritten query</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>`where default contains "lotr"`, or `userQuery()` with `query=lotr`</td>
+      <td>`lord of the rings`</td>
+    </tr>
+    <tr>
+      <td>`where title contains "lotr"`</td>
+      <td>`title:"lord of the rings"`</td>
+    </tr>
+    <tr>
+      <td>`where description contains "lotr"`</td>
+      <td>not rewritten - add a rule for `description:lotr`</td>
+    </tr>
+  </tbody>
+</table>
+
+Produced terms also search the default index unless they specify a field. Without `title:` in front, the second rule would produce _lord of the rings_ searching the default index, not `title`.
+
+To apply a rule to several fields, list them in parentheses, and use `*` as the field of the produced terms to have them search the field that was matched:
+
+```txt
+(title, description):lotr -> *:"lord of the rings";
+```
+
+This rewrites `title:lotr` to `title:"lord of the rings"` and `description:lotr` to `description:"lord of the rings"`.
 
 ## Rule bases
 
@@ -106,7 +148,7 @@ To make a rule base be used by default in queries, add `@default` on a separate 
 
 The rules can safely be updated at any time by running `vespa prepare` again. If there are errors in the rule bases, they will not be updated, and the errors will be reported on the command line.
 
-To trace what the rules are doing, add [tracelevel.rules=[number]](/en/reference/api/query#tracelevel.rules) to the query.
+To trace what the rules are doing, add [trace.level=1](/en/reference/api/query#trace.level) and [tracelevel.rules=\[number\]](/en/reference/api/query#tracelevel.rules) to the query.
 
 ## Using multiple rule bases
 

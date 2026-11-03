@@ -271,7 +271,7 @@ Result:
 
 Example: _Sum price of purchases [per date](#time-and-date):_
 
-```sql
+```vespa-yql
 select (…) | all(group(time.date(date)) each(output(sum(price))))
 ```
 
@@ -302,7 +302,7 @@ However, there is one exception. Without an `order` constraint, `precision` is n
 
 Example: _The two customers with most purchases, returning the sum for each:_
 
-```sql
+```vespa-yql
 select (…) | all(group(customer) max(2) precision(12) order(-count())
     each(output(sum(price))))
 ```
@@ -396,13 +396,13 @@ Use the [grouping.globalMaxGroups](/en/reference/api/query#grouping.globalmaxgro
 
 The following query may return 5 groups and 0 hits. It will be rejected when `grouping.globalMaxGroups < 5`
 
-```sql
+```vespa-yql
   select (…) | all(group(item) max(5) each(output(count())))
 ```
 
 The following query may return 5 groups and 35 hits. It will be rejected when `grouping.globalMaxGroups < 5+5*7`.
 
-```sql
+```vespa-yql
   select (…) | all(
     group(customer) max(5)
       each(
@@ -414,7 +414,7 @@ The following query may return 5 groups and 35 hits. It will be rejected when `g
 
 The following query may return 6 groups and 30 hits. It will be rejected when `grouping.globalMaxGroups < 2*(3+3*5)`.
 
-```sql
+```vespa-yql
 select (…) |
 all(
     all(group(item) max(3)
@@ -430,7 +430,7 @@ all(
 
 The `grouping.globalMaxGroups` restriction will utilize the [grouping.defaultMaxGroups](/en/reference/api/query#grouping.defaultmaxgroups)/ [grouping.defaultMaxHits](/en/reference/api/query#grouping.defaultmaxhits) values for grouping statements without a `max`. The two queries below are identical, assuming `defaultMaxGroups=5` and `defaultMaxHits=7`, and both will be rejected when `globalMaxGroups < 5+5*7`.
 
-```sql
+```vespa-yql
 select (…) |
 all(
   group(customer) max(5)
@@ -441,7 +441,7 @@ all(
 )
 ```
 
-```sql
+```vespa-yql
 select (…) |
 all(
   group(customer)
@@ -479,7 +479,7 @@ Consider increasing the [precision](#ordering-and-limiting-groups) value when us
 
 Grouping is evaluated on every content node, over every document matching the query. A query like
 
-```sql
+```vespa-yql
 select * from product where true | all(group(category) each(output(count())))
 ```
 
@@ -512,7 +512,7 @@ schema product {
 
 `random 100` draws a uniformly distributed integer in the range \[0, 100) when the document is put, independent of the document content. A partial update of other fields keeps the value; a new put of the document draws a new value. Add the bucket as a filter to the query:
 
-```sql
+```vespa-yql
 select * from product where sample_bucket = 0 limit 0 | all(group(category) each(output(count())))
 ```
 
@@ -530,7 +530,7 @@ If the same aggregation is requested frequently and the result does not depend o
 
 Groups can be nested. This offers great drilling capabilities, as there are no limits to nesting depth or presented information on any level. Example: How much each customer has spent per day by grouping on customer, then date:
 
-```sql
+```vespa-yql
 select (…) | all(group(customer) each(group(time.date(date)) each(output(sum(price)))))
 ```
 
@@ -1087,33 +1087,35 @@ Use this to query for all items on a per-customer basis, displaying the most exp
 
 Structured grouping is nested grouping over an array of structs or maps. In this case, each array element is treated as a sub-document and may be grouped separately. See the reference for grouping on [multivalue attributes](/en/reference/querying/grouping-language#multivalue-attributes) for details. It is also possible to [filter the groups](/en/reference/querying/grouping-language#filtering-groups) so only matching elements are considered. An example could be:
 
-```sql
+```vespa-yql
   select (…) | all(group(attributes.value) filter(regex("delivery_method",attributes.key)) each(output(sum(price)) each(output(summary()))))
 ```
+
+See [filtering elements in an array of struct](#filtering-array-elements) for how to count the matching elements per document.
 
 ## Range grouping
 
 In the examples above, results are grouped on distinct values, like customer or date. To group on price:
 
-```sql
+```vespa-yql
 select (…) | all(group(price) each(each(output(summary()))))
 ```
 
 This gives one group per price. To group on price _ranges_, one could compress the price range. This gives prices in &#36;0 - &#36;999 in bucket 0, &#36;1 000 - &#36;2 000 in bucket 1 and so on:
 
-```sql
+```vespa-yql
 select (…) | all(group(price/1000) each(each(output(summary()))))
 ```
 
 An alternative is using [bucket expressions](/en/reference/querying/grouping-language#bucket-expressions) - think of a bucket as the range per group. Group on price, make groups have a width of 1000:
 
-```sql
+```vespa-yql
 select (…) | all(group(fixedwidth(price,1000)) each(each(output(summary()))))
 ```
 
 Use `predefined` to configure group sizes individually (the two below are equivalent):
 
-```sql
+```vespa-yql
 select (…) |
 all(
   group(predefined(price,
@@ -1127,19 +1129,19 @@ all(
 
 This works with strings as well - put Jones and Smith in the second group:
 
-```sql
+```vespa-yql
 select (…) | all(group(predefined(customer, bucket(-inf,"Jones"), bucket("Jones", inf))) each(each(output(summary()))))
 ```
 
 ... or have Jones in his own group:
 
-```sql
+```vespa-yql
 select (…) | all(group(predefined(customer, bucket<-inf,"Jones">, bucket["Jones"], bucket<"Jones", inf>)) each(each(output(summary()))))
 ```
 
 Use decimal numbers in bucket definitions if the expression evaluates to a double or float:
 
-```sql
+```vespa-yql
 select (…) 
 | all(
   group(predefined(tax,
@@ -1200,19 +1202,19 @@ Grouping supports [continuation](/en/reference/querying/grouping-language#contin
 
 reproduce the same result by passing the _this_-continuation along the original select:
 
-```sql
+```vespa-yql
 select (…) | { 'continuations':['BGAAABEBCA'] }all(…)
 ```
 
 To display the next page of customers, pass the _this_-continuation of the root group, and the _next_ continuation of the customer list:
 
-```sql
+```vespa-yql
 select (…) | { 'continuations':['BGAAABEBCA', 'BGAAABEBEBC'] }all(…)
 ```
 
 To display the previous page of customers, pass the _this_-continuation of the root group, and the _prev_ continuation of the customer list:
 
-```sql
+```vespa-yql
 select (…) | { 'continuations':['BGAAABEBCA', 'BGAAABEABC'] }all(…)
 ```
 
@@ -1236,13 +1238,13 @@ Instead of just grouping on some attribute value, the `group` clause may contain
 
 Sum the prices of purchases on a per-hour-of-day basis:
 
-```sql
+```vespa-yql
 select (…) | all(group(mod(div(date,mul(60,60)),24)) each(output(sum(price))))
 ```
 
 These types of expressions may also be used inside `output` operations, so instead of simply calculating the sum price of the grouped purchases, calculate the sum income after taxes per customer:
 
-```sql
+```vespa-yql
 select (…) | all(group(customer) each(output(sum(mul(price,sub(1,tax))))))
 ```
 
@@ -1286,13 +1288,13 @@ Refer to the [API documentation](https://javadoc.io/doc/com.yahoo.vespa/containe
 
 Simple grouping: count the number of documents in each group:
 
-```sql
+```vespa-yql
 select * from purchase where true | all( group(customer) each(output(count())) )
 ```
 
 Two parallel groupings:
 
-```sql
+```vespa-yql
 select * from purchase where true | all(
   all(
       group(customer) each(output(count()))
@@ -1305,7 +1307,7 @@ select * from purchase where true | all(
 
 Only the 1000 best hits will be grouped at each content node. Lower accuracy, but higher speed:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 |
   all(
     max(1000)
@@ -1320,7 +1322,7 @@ select * from purchase where true limit 0 |
 
 Do a modulo 3 operation before selecting the group:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 |
   all(
     group(price % 3)
@@ -1330,7 +1332,7 @@ select * from purchase where true limit 0 |
 
 Do `price + tax * price` before selecting the group:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(
   group(price + tax * price)
   each(output(count()))
@@ -1341,7 +1343,7 @@ select * from purchase where true limit 0 | all(
 
 Do a modulo 5 operation before selecting the group - the groups are then ordered by their aggregated sum of attribute "tax":
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(
   group(price % 5)
   order(sum(tax))
@@ -1351,7 +1353,7 @@ select * from purchase where true limit 0 | all(
 
 Do `price + tax * price` before selecting the group. Ordering is given by the maximum value of attribute "price" in each group:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 |
   all(
     group(price + tax * price)
@@ -1362,7 +1364,7 @@ select * from purchase where true limit 0 |
 
 Take the average relevance of the groups and multiply it with the number of groups to get a cumulative count:
 
-```sql
+```vespa-yql
  select * from purchase where true limit 0 |
   all(
   group(customer)
@@ -1373,7 +1375,7 @@ Take the average relevance of the groups and multiply it with the number of grou
 
 One can not directly reference an attribute in the order clause, as this:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 |
   all(
   group(customer)
@@ -1384,7 +1386,7 @@ select * from purchase where true limit 0 |
 
 However, one can do this:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(
   group(customer)
   order(max(price) * count())
@@ -1394,7 +1396,7 @@ select * from purchase where true limit 0 | all(
 
 Ordering alphabetically works in a similar way:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(
   group(customer)
   order(max(customer))
@@ -1412,7 +1414,7 @@ You can control non-ASCII character folding behavior with [unicode collation](/e
 
 Simple grouping to count the number of documents in each group and return the best hit in each group:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | 
   all(
   group(customer)
@@ -1425,28 +1427,28 @@ select * from purchase where true limit 0 |
 
 Also return the sum of attribute "price":
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | 
   all( group(customer) each(max(1) output(count(), sum(price)) each(output(summary()))) )
 ```
 
 Also, return an XOR of the 64 most significant bits of an MD5 over the concatenation of attributes "customer", "price" and "tax":
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | 
   all(group(customer) each(max(1) output(count(), sum(price), xor(md5(cat(customer, price, tax), 64))) each(output(summary()))))
 ```
 
 It is also possible to return quantiles, for instance, the p50 and p90 of the price.
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 |
   all(group(customer) each(output(quantiles([0.5,0.9], price))))
 ```
 
 Use `argmin` or `argmax` to return the value of one field for the document with the smallest or largest value of another, for instance the item of the most expensive purchase per customer:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 |
   all(group(customer) each(output(argmax(price, item))))
 ```
@@ -1455,31 +1457,31 @@ select * from purchase where true limit 0 |
 
 Single-level grouping on "customer" attribute, returning at most 5 groups with full hit count as well as the 69 best hits.
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(group(customer) max(5) each(max(69) output(count()) each(output(summary()))))
 ```
 
 Two level grouping on "customer" and "item" attribute:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(group(customer) max(5) each(output(count()) all(group(item) max(5) each(max(69) output(count()) each(output(summary()))))))
 ```
 
 Three-level grouping on "customer", "item" and "attributes.key(coupon)" attribute:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(group(customer) max(1) each(output(count()) all(group(item) max(1) each(output(count()) max(1) all(group(attributes.key) max(1) each(output(count()) each(output(summary()))))))))
 ```
 
 As above, but also collect best hit in level 2:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(group(customer) max(5) each(output(count()) all(group(item) max(5) each(output(count()) all(max(1) each(output(summary()))) all(group(attributes.key) max(5) each(max(69) output(count()) each(output(summary()))))))))
 ```
 
 As above, but also collect best hit in level 1:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(group(customer) max(5) each(output(count()) all(max(1) each(output(summary()))) all(group(item) max(5) each(output(count()) all(max(1) each(output(summary()))) all(group(attributes.key) max(5) each(max(69) output(count()) each(output(summary()))))))))
 ```
 
@@ -1487,7 +1489,7 @@ As above, but using different document summaries on each level:
 
 {/* VOID OUTPUT */}
 
-```sql
+```vespa-yql
  select * from purchase where true limit 0 |
   all( group(customer) max(5) each(output(count())
      all(max(1) each(output(summary(complexsummary))))
@@ -1499,7 +1501,7 @@ As above, but using different document summaries on each level:
 
 Deep grouping with counting and hit collection on all levels:
 
-```sql
+```vespa-yql
  select * from purchase where true limit 0 |
   all( group(customer) max(5) each(output(count())
      all(max(1) each(output(summary())))
@@ -1515,25 +1517,25 @@ The field (`time` below, but can have any name) must be a [long](/en/reference/s
 
 Group by year:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(group(time.year(date)) each(output(count())))
 ```
 
 Group by year, then by month:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 |
   all( group(time.year(date)) each(output(count())
      all(group(time.monthofyear(date)) each(output(count())))) )
 ```
 
 {/* DOESN'T WORK  <p>Group by year, then by month, then day, then by hour:</p>
- <x-pre n="69"></x-pre>
+ <x-pre n="76"></x-pre>
 <p> */}
 
 Groups _today_, _yesterday_, _lastweek_, and _lastmonth_ using `predefined` aggregator, and groups each day within each of these separately:
 
-```sql
+```vespa-yql
  select * from purchase where true limit 0 |
   all( 
     group(
@@ -1573,14 +1575,14 @@ Use `geo_distance` to compute the great-circle distance from a [position](/en/re
 
 Group into 100 km distance buckets from a point:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 |
   all( group(fixedwidth(geo_distance(attribute(location), 63.4, 10.4).km, 100.0)) each(output(count())) )
 ```
 
 Output the minimum and maximum distance per customer:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 |
   all( group(customer) each(output(min(geo_distance(attribute(location), 63.4, 10.4).km),
                                     max(geo_distance(attribute(location), 63.4, 10.4).km))) )
@@ -1594,31 +1596,31 @@ Another use case for this aggregator is counting the number of unique instances 
 
 Output an estimate of the number of groups, which is equivalent to the number of unique values for attribute "customer":
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all( group(customer) each(output(count())) )
 ```
 
 Output an estimate of the number of unique string lengths for the attribute "item":
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(group(strlen(item)) each(output(count())))
 ```
 
 Output the sum of the "price" attribute for each group in addition to the accurate count of the overall number of unique groups as the inner each causes all groups to be returned.
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(group(customer) output(count()) each(output(sum(price))))
 ```
 
 The `max` clause is used to restrict the number of groups returned. The query outputs the sum for the 3 best groups. The `count` clause outputs the estimated number of groups (potentially &gt;3). The `count` becomes an estimate here as the number of groups is limited by max, while in the above example, it's not limited by max:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(group(customer) max(3) output(count()) each(output(sum(price))))
 ```
 
 Output the number of top-level groups, and for the 10 best groups, output the number of unique values for attribute "item":
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(group(customer) max(10) output(count()) each(group(item) output(count())))
 ```
 
@@ -1629,7 +1631,7 @@ A [multivalue](/en/querying/searching-multivalue-fields) attribute is a [weighte
 
 This could be solved by adding an additional level of grouping, where you group on a field that is unique for each document (grouping on document ID is not supported). You may then count the unique groups to determine the unique document count:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 | all(group(customer) each(group(item) output(count())))
 ```
 
@@ -1664,7 +1666,7 @@ In this context, a count of 5.5 isn't meaningful for the past of a single user, 
 
 Grouping is useful for analyzing data. To aggregate over the full document set, create _one_ group (which will have _all_ documents) by using a constant (here 1) - example:
 
-```sql
+```vespa-yql
 select rating from restaurant where true | all(group(1) each(output(avg(price))))
 ```
 
@@ -1685,7 +1687,7 @@ Make sure all documents have a value for the given field, if not, NaN is used, a
 
 Count number of documents missing a value for an [attribute](/en/content/attributes) field (actually, in this example, unset or less than 0, see the bucket expression below). Set a higher query timeout, just in case. Example, analyzing a field called _price_:
 
-```sql
+```vespa-yql
 select rating from restaurant where true | all( group(predefined(price, bucket[-inf, 0>, bucket[0, inf>)) each(output(count())) )
 ```
 
@@ -1724,7 +1726,7 @@ See [analyzing field values](/en/writing/visiting#analyzing-field-values) for ho
 
 This is similar to the counting of NaN above, but instead of aggregating the count, for each hit, print a [document summary](/en/reference/schemas/schemas#document-summary):
 
-```sql
+```vespa-yql
 select rating from restaurant where true |
     all( group(predefined(price, bucket[-inf, 0>, bucket[0, inf>))
     order(max(price))
@@ -1771,7 +1773,7 @@ field attributes type map<string, string> {
 
 With this, one can group on both key (`delivery_method`, `sales_rep`, and `coupon`) and values (here counting each value). Try the link to see the output:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 |
     all(
       group(attributes.key)
@@ -1781,10 +1783,93 @@ select * from purchase where true limit 0 |
 
 A more interesting example is to see the sum per sales rep:
 
-```sql
+```vespa-yql
 select * from purchase where true limit 0 |
     all(
       group(attributes.key)
       each( group(attributes.value) each(output(sum(price))))
     )
 ```
+
+<a id="filtering-array-elements" />
+## Filtering elements in an array of struct
+
+When the `group` expression refers to a field in an array of struct, each array element is grouped as if it were a separate sub-document, and a `filter` on that level is evaluated once per element. Other fields of the same struct referenced in the filter are read from the same element, so the filter can combine several struct fields. Use this to count, per document, how many elements satisfy a condition.
+
+Take an `order` document with an array of `line` structs:
+
+```vespa-schema
+schema order {
+    document order {
+        field id type string {
+            indexing: attribute | summary
+        }
+        struct line {
+            field product type string {}
+            field quantity type int {}
+            field price type double {}
+        }
+        field lines type array<line> {
+            indexing: summary
+            struct-field product  { indexing: attribute }
+            struct-field quantity { indexing: attribute }
+            struct-field price    { indexing: attribute }
+        }
+    }
+}
+```
+
+Every struct field used in `group` or `filter` must be an attribute. Two example documents:
+
+```json
+{"put": "id:order:order::o1", "fields": {"id": "o1", "lines": [
+    {"product": "bolt",   "quantity": 10, "price": 0.5},
+    {"product": "wrench", "quantity": 1,  "price": 25.0},
+    {"product": "drill",  "quantity": 1,  "price": 90.0}]}}
+{"put": "id:order:order::o2", "fields": {"id": "o2", "lines": [
+    {"product": "hammer", "quantity": 2,  "price": 15.0},
+    {"product": "saw",    "quantity": 1,  "price": 80.0}]}}
+```
+
+Grouping on `lines.product` with a filter on `lines.price` counts, per product, the lines priced from 20 up to 100:
+
+```vespa-yql
+select * from order where true limit 0 |
+    all(
+      group(lines.product) filter(range(20, 100, lines.price))
+      each(output(count()))
+    )
+```
+
+This gives `wrench: 1`, `drill: 1` and `saw: 1`. The `bolt` and `hammer` lines are not counted, since the filter sees the price of the same element as the product.
+
+To count the matching lines over all documents instead of per product, group on a key that is still evaluated per element but is the same for every element. An arithmetic expression on a struct field is evaluated per element, so `mul(lines.quantity, 0)` is `0` for every line. All matching lines then end up in one group, and `count()` is the total number of matching lines:
+
+```vespa-yql
+select * from order where true limit 0 |
+    all(
+      group(mul(lines.quantity, 0)) filter(range(20, 100, lines.price))
+      each(output(count()))
+    )
+```
+
+This gives a single group with count `3`. Other aggregators work the same way on this level, so `sum(lines.price)` gives the summed price of the matching lines.
+
+The same level nested under a group per document gives the count per document:
+
+```vespa-yql
+select * from order where true limit 0 |
+    all(
+      group(id)
+      each(
+        all(
+          group(mul(lines.quantity, 0)) filter(range(20, 100, lines.price))
+          each(output(count()))
+        )
+      )
+    )
+```
+
+This gives `2` for `o1` and `1` for `o2`. A document with no matching lines has no inner group.
+
+Note that the query selects documents and the grouping filter selects elements, independently of each other. A document matched through `sameElement` still contributes all its elements to the grouping, not only the element that matched. Also, every field referenced in the filter must belong to the same struct as the `group` expression; a field from another struct or a single-valued field is evaluated once for the whole document.

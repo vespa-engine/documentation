@@ -121,13 +121,13 @@ The value is a per-content-node statistic computed locally; it is _not_ cluster-
 
 <a id="queryTermDocumentFrequency(name)" />
 
-A `tensor<double>(term{})` holding the document frequency that [BM25](/en/ranking/bm25) would use for each query term that searches the [index](/en/reference/schemas/schemas#indexing-index) field _name_. The document frequency is the number of documents that contain the term; it is the input to the inverse document frequency (IDF) component of BM25. This feature is exposed for debugging and for use in custom text ranking formulas such as [BM25F](https://github.com/vespa-engine/sample-apps/tree/master/examples/bm25f) or [Bayesian BM25](https://github.com/vespa-engine/sample-apps/tree/master/examples/bayesian_bm25).
+A `tensor<float>(term{})` holding the document frequency that [BM25](/en/ranking/bm25) would use for each query term that searches the [index](/en/reference/schemas/schemas#indexing-index) field _name_. The document frequency is the number of documents that contain the term; it is the input to the inverse document frequency (IDF) component of BM25. This feature is exposed for debugging and for use in custom text ranking formulas such as [BM25F](https://github.com/vespa-engine/sample-apps/tree/master/examples/bm25f) or [Bayesian BM25](https://github.com/vespa-engine/sample-apps/tree/master/examples/bayesian_bm25).
 
 The tensor has one cell per query term that searches _name_; terms that do not search the field are not included. Each cell is labeled with the index of the term in the query (as a string, starting at 0), and the labels keep their original query-term index rather than being renumbered. For a term that searches several fields, the cell holds the frequency for the specific field (here, `name`).
 
 Example: for a query where term 0 and term 2 search the `content` field (term 1 searches a different field), `queryTermDocumentFrequency(content)` is:
 
-```txt
+```vespa-ranking-expression
 tensor<double>(term{}):{ {term:0}:1200.0, {term:2}:57.0 }
 ```
 
@@ -185,7 +185,7 @@ Example: Given the weighted set:
 
 _tensorFromWeightedSet(attribute(myField), dim)_ produces:
 
-```txt
+```vespa-ranking-expression
 tensor<double>(dim{}):{ {dim:key1}:0.0, {dim:key2}:1.0, {dim:key3}:2.5} }
 ```
 
@@ -214,7 +214,7 @@ Example: Given an attribute field `myField` containing the array value:
 
 _tensorFromLabels(attribute(myField), dim)_ produces:
 
-```txt
+```vespa-ranking-expression
 tensor<double>(dim{}):{ {dim:v1}:1.0, {dim:v2}:1.0, {dim:v3}:1.0 }
 ```
 
@@ -233,27 +233,27 @@ Creates a `tensor<type>` with one mapped dimension from the given `array<struct>
 
 Example: Given an `array<struct>` attribute `items` with fields `name` (string) and `price` (float):
 
-```txt
+```vespa-ranking-expression
 tensorFromStructs(attribute(items), name, price, float)
 ```
 
-```txt
+```vespa-ranking-expression
 tensor<float>(name{}):{ {name:apple}:1.5, {name:banana}:0.75, {name:cherry}:2.25 }
 ```
 
 Example: Integer keys and float values:
 
-```txt
+```vespa-ranking-expression
 tensorFromStructs(attribute(ids), id, score, double)
 ```
 
-```txt
+```vespa-ranking-expression
 tensor(id{}):{ {id:100}:10.5, {id:200}:20.75, {id:300}:30.25 }
 ```
 
 The function takes at least four arguments; it's possible to use several _key_ arguments to get multiple mapped dimensions. If the `struct` above also contained a `region` field one could use
 
-```txt
+```vespa-ranking-expression
 tensorFromStructs(attribute(items), name, region, price, float)
 ```
 
@@ -282,7 +282,7 @@ Example: Given an attribute field `myField` containing the array value:
 
 _tensorFromLabelsWithOffset(attribute(myField), dim, off)_ produces:
 
-```txt
+```vespa-ranking-expression
 tensor<float>(dim{},off{}):{ {dim:v1,off:0}:1.0, {dim:v2,off:1}:1.0, {dim:v3,off:2}:1.0 }
 ```
 
@@ -720,7 +720,7 @@ See the [term(n).significance](#term(n).significance) feature for how the signif
 
 A `tensor<float>(label{})` holding one cell with the value 1.0 for each [query item label](/en/ranking/multivalue-query-operators#raw-scores-and-query-item-labeling) which matched the index/attribute field _name_. A label gets a cell only if at least one query item carrying it searches _name_ and matches the document; labels which did **not** match have no cell. This makes it possible to see which labeled parts of the query matched and compute more complex expressions:
 
-```txt
+```vespa-ranking-expression
 reduce(matches_for_labels(myfield), sum, label)             # number of labels matching myfield
 sum(matches_for_labels(myfield) * query(label_weights))     # weight the matching labels from the query
 ```
@@ -728,7 +728,7 @@ sum(matches_for_labels(myfield) * query(label_weights))     # weight the matchin
 <Note>
 **Note:**
 
-A single label can be extracted with `matches_for_labels(myfield){label:mylabel}`, which is 1.0 if that label matched _myfield_ and 0 if it did not.
+A single label can be extracted with `matches_for_labels(myfield){label:mylabel}`, which is 1.0 if that label matched _myfield_ and 0 if it did not. But if you have a single label for that field, using the [labeled](/en/reference/querying/yql#labeled) query operator is faster, because it doesn't build a tensor.
 </Note>
 
 </td>
@@ -1037,7 +1037,7 @@ Used with the [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) quer
 
 Given a tensor field with type `tensor<float>(m{},x[3])` used with the _nearestNeighbor_ operator, an example output of this feature is:
 
-```txt
+```vespa-ranking-expression
     tensor<float>(m{}):{ 3: 1.0 }
 ```
 
@@ -1147,7 +1147,7 @@ As [bm25(_name_)](#bm25), but only over the query terms carrying the given [quer
 
 A label which is not an identifier or an integer must be quoted:
 
-```txt
+```vespa-ranking-expression
 bm25(field: myfield, label: "title-terms")
 ```
 
@@ -1157,14 +1157,14 @@ Only terms which both carry the label and search _name_ contribute; the feature 
     </tr>
     <tr>
       <td>bm25_for_labels(_name_)</td>
-      <td>`tensor<double>(label{}):{}`</td>
+      <td>`tensor<float>(label{}):{}`</td>
       <td>
 
 <a id="bm25_for_labels" />
 
 A `tensor<float>(label{})` holding one [bm25](#bm25) score per [query item label](/en/ranking/multivalue-query-operators#raw-scores-and-query-item-labeling) in the [indexed string field](/en/reference/schemas/schemas#indexing-index) _name_, which must have _enable-bm25_ set. Each cell is labeled with the query item label and holds the sum of the BM25 scores of that label's terms in _name_. This makes it possible to rank on the labeled parts of the query individually without adding one [bm25(field, label)](#bm25(field,label)) feature per label:
 
-```txt
+```vespa-ranking-expression
 reduce(bm25_for_labels(myfield), max, label)          # score of the best scoring labeled clause
 sum(bm25_for_labels(myfield) * query(label_weights))  # weight the labels from the query
 ```
@@ -1188,7 +1188,7 @@ A single label can be extracted with `bm25_for_labels(myfield){label:mylabel}`, 
 
 Calculates the [Okapi BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking function over each element in the given _multi-valued_ [indexed string field](/en/reference/schemas/schemas#indexing-index) and creates a tensor with a single mapped dimension containing the bm25 score for each matching element. The element indexes (starting at 0) are used as dimension labels. This feature is more expensive than [bm25](#bm25), does not need the _enable-bm25_ flag and can be tuned with [rank properties](/en/reference/ranking/rank-feature-configuration#elementwise-bm25).
 
-The _cell_type_ parameter can be omitted (the default value is `double`) except when setting rank properties.
+The _cell_type_ parameter can be omitted (the default value is `double`), except when setting rank properties.
 
 Example: If the `content` field is of type `array<string>` where query terms are found in elements 2 and 5 then the feature `elementwise(bm25(content),x,float)` as a summary feature might be shown as:
 
@@ -1198,6 +1198,33 @@ Example: If the `content` field is of type `array<string>` where query terms are
   "cells": {
     "2": 0.5112776,
     "5": 0.1021805
+  }
+}
+```
+
+</td>
+    </tr>
+    <tr>
+      <td>elementwise(matches(field),dimension,cell_type)</td>
+      <td>`tensor<cell_type>(dimension{}):{}`</td>
+      <td>
+
+<a id="elementwise-matches" />
+
+Returns a tensor with a single mapped dimension containing 1.0 for each element in an array or map that is matched by a [sameElement](/en/reference/querying/yql#sameelement) query item. The element indexes (starting at 0) are used as dimension labels. This can be used to find out which elements of an array of struct matched the query.
+
+The _cell_type_ parameter can be omitted (the default value is `float`).
+
+Currently, this feature is only supported for _sameElement_ over struct-fields that are [attributes](/en/reference/schemas/schemas#attribute) in an array of struct (or map) field.
+
+Example: If the `my_chunk_metadata` field is of type `array<my_struct>` and the _sameElement_ query item matches elements 2 and 5, then the feature `elementwise(matches(my_chunk_metadata),x)` as a summary feature might be shown as:
+
+```txt
+"elementwise(matches(my_chunk_metadata),x)": {
+  "type": "tensor(x{})",
+  "cells": {
+    "2": 1.0,
+    "5": 1.0
   }
 }
 ```

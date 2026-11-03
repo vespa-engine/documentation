@@ -69,6 +69,16 @@ def resolve(path: str, *maps: dict[str, str]) -> str:
         path = nxt
 
 
+# Pages the Mintlify site moved without a redirect on master: the old Japanese pages were
+# replaced by the full translation under ja/.
+MOVED = {
+    "/ja/features": "/ja/learn/features",
+    "/ja/overview": "/ja/learn/overview",
+    "/ja/introduction-to-documentation": "/ja/learn/about-documentation",
+    "/ja/vespa-quick-start": "/ja/basics/deploy-an-application-local",
+}
+
+
 def jekyll_page_urls() -> dict[str, str]:
     """URL the Jekyll site served (/en/foo.html, /en/dir/index.html) -> page path (/en/foo, /en/dir)."""
     out = subprocess.run(["git", "ls-tree", "-r", "--name-only", J.REF], cwd=ROOT, capture_output=True, text=True).stdout
@@ -95,6 +105,7 @@ def main() -> int:
     docs = json.loads(text)
     existing = {r["source"]: r["destination"] for r in docs.get("redirects", [])}
     pairs = jekyll_redirects()
+    pairs.update({k: v for k, v in MOVED.items() if k not in pairs})
 
     added, skipped = [], {"source is a page": [], "already in docs.json": [], "destination is not a page": [], "self": []}
     for src in sorted(pairs):

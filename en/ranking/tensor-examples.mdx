@@ -5,6 +5,7 @@ sidebarTitle: "Tensor Examples"
 
 Tensors can be used to express machine-learned models such as neural nets, but they can be used for much more than that. The tensor model in Vespa is powerful, since it supports sparse dimensions, dimension names and lambda computations. Whatever you want to compute, it is probably possible to express it succinctly as a tensor expression - the problem is learning how. This page collects some real-world examples of tensor usage to provide some inspiration.
 
+<a id="tensor-playground-examples" />
 ## Tensor playground
 
 The tensor playground is a tool to get familiar with and explore tensor algebra. It can be found at [docs.vespa.ai/playground](https://docs.vespa.ai/playground/). Below are some examples of common tensor compute operations using [tensor functions](../reference/ranking/ranking-expressions#tensor-functions). Feel free to play around with them to explore further:
@@ -26,13 +27,13 @@ In an ecommerce application you may have promotions that sets a different produc
 To do this, add three tensors to the document type as follows:
 
 ```vespa-schema
-field startTime type tensor(id{}} {
+field startTime type tensor(id{}) {
     indexing: attribute
 }
-field endTime type tensor(id{}} {
+field endTime type tensor(id{}) {
     indexing: attribute
 }
-field price type tensor(id{}} {
+field price type tensor(id{}) {
     indexing: attribute
 }
 ```
@@ -49,7 +50,7 @@ Now documents can include promotions as follows ([document JSON syntax](/en/refe
 
 And we can retrieve the currently valid price by the expression
 
-```js
+```vespa-ranking-expression
 reduce((attribute(startTime) < now) * (attribute(endTime) > now) * attribute(price), max)
 ```
 
@@ -57,7 +58,7 @@ This will return 0 if there is no matching interval, so a full expression will p
 
 To see why this retrieves the right price, notice that `(attribute(startTime) < now)`[is a shorthand for](../reference/ranking/ranking-expressions#non-primitive-functions)
 
-```js
+```vespa-ranking-expression
 join(attribute(startTime), now, f(x,y)(x < y))
 ```
 
@@ -71,7 +72,7 @@ That is joining all the cells of the `startTime` tensor by the zero-dimensional 
 
 A common situation is that you have dense embedding vectors to which you want to add some scalar attributes (or function return values) as input to a machine-learned model. This can be done by the following expression (assuming the dense vector dimension is named "x":
 
-```js
+```vespa-ranking-expression
 concat(concat(query(embedding),attribute(embedding),x), tensor(x[2]):[bm25(title),attribute(popularity)], x)
 ```
 
@@ -152,13 +153,13 @@ attribute(topics): tensor(topic{}) - A sparse, weighted set of the topics of a g
 
 From these we have generated all 3d combinations of these features and trained a logistic regression model, leading to a weight for each possible combination:
 
-```js
+```vespa-ranking-expression
 tensor(interest{}, location{}, topic{})
 ```
 
 This weight tensor can be added as a [constant tensor](/en/reference/schemas/schemas#constant) to the application package, say `constant(model)`. With that we can compute the model in a rank profile by the expression
 
-```js
+```vespa-ranking-expression
 sum(query(interests) * query(location) * attribute(topics) * constant(model))
 ```
 
@@ -186,7 +187,7 @@ that is set as `query(query_vector)` in a searcher as specified in [query featur
 
 To calculate the matrix product between the 1x3 vector and 3x2 matrix (to get a 1x2 vector) use the following ranking expression:
 
-```bash
+```vespa-ranking-expression
 sum(query(query_vector) * attribute(document_matrix),x)
 ```
 
@@ -202,25 +203,25 @@ Tensors with mapped dimensions look similar to maps, but are more general. What 
 
 Assume a tensor attribute `my_map` and this is the value for a specific document:
 
-```json
+```vespa-ranking-expression
 tensor<float>(x{},y[3]):{a:[1,2,3],b:[4,5,6],c:[7,8,9]}
 ```
 
 To create a query to select which of the 3 named vectors (a,b,c) to use for some other calculation, wrap the wanted label to look up inside a tensor. Assume a query tensor `my_key` with type/value:
 
-```json
+```vespa-ranking-expression
 tensor<float>(x{}):{b:1.0}
 ```
 
 Do the lookup, returning a tensor of type `tensor<float>(y[3])`:
 
-```js
+```vespa-ranking-expression
 sum(query(my_key)*attribute(my_map),x)
 ```
 
 If the key does not match anything, the result will be empty: `tensor<float>(y[3]):[0,0,0]`. For something else, add a check up-front to check if the lookup will be successful and run a fallback expression if it is not, like:
 
-```js
+```vespa-ranking-expression
 if(reduce(query(my_key)*attribute(my_map),count) == 3,
   reduce(query(my_key)*attribute(my_map),sum,x),
   tensor<float>(y[3]):[0.5,0.5,0.5])
@@ -240,8 +241,8 @@ A common use case is to use a tensor lambda function to slice out the first `k` 
 
 The following slices the first 256 dimensions of a tensor `t`:
 
-```js
-tensor<float>(x[256])(t{x:(x)})
+```vespa-ranking-expression
+  tensor<float>(x[256])(t{x:(x)})
 ```
 
 Importantly, this does only reference into the original tensor, avoiding copying the tensor to a smaller tensor.
@@ -269,7 +270,7 @@ schema example {
       expression: sum( query(query_vector) * attribute(document_vector) )
     }
   }
-}
+}    
 ```
 
 See also a runnable example in this [tensor playground example](https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QFNIAaFDSPBdDTAO30gFsBPAfQAsBLAc3dYBNOjVgDcCAYwAuWAE4kyNSEQSRJBWgGdZAHmgAbLAENJAPgAUAD0QBGAEwBdAJRwbxW8QDMxACzEArMQAbMQA7MQAHMQAnMTWAAyx1rEOkAoQAL4K6aQY1OS4DEQ5ipRoaXQM0JwyGpKsgQJCGqxY0KwsHDx8gsJiUrLyNJjKUGqaspaIgU5mHVy8jb0S0jLAFnCWjumOqUOZGNkKeZgFKkXlFPjH5PQqtLKMhnqcAF7nQxBKDHq2rPcyj2ebzMVRqdQaPWarXabHm3SEomWsmIYAsO3K+1QmPsIHSQA).
