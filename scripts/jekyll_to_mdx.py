@@ -1181,13 +1181,29 @@ HTML_BLOCK_START = re.compile(
 )
 FENCE_RE = re.compile(r"^(\s*)(`{3,}|~{3,})(.*)$")
 LIST_ITEM_RE = re.compile(r"^(\s*)([-*+]|\d+[.)])\s+")
-INLINE_TAG_RE = re.compile(r"<(/?)([a-zA-Z][\w-]*)((?:\s+[^<>]*?)?)(/?)>")
+INLINE_TAG_RE = re.compile(r'<(/?)([a-zA-Z][\w-]*)((?:\s+(?:"[^"]*"|[^<>"])*?)?)(/?)>')  # ">" may occur in quoted values
 KNOWN_INLINE = frozenset("a b i em strong code br img sub sup span kbd s u mark small del ins tt x-version x-chip".split())
 MDX_COMPONENTS = frozenset("Note Warning Danger Info Tip Tooltip Frame Steps Step Accordion".split())
 
 
+def join_split_tags(lines: list[str]) -> list[str]:
+    """Join an <img> tag that continues on the next lines, since prose is converted line by line."""
+    out: list[str] = []
+    fence = {i for i, _, f in outside_fences("\n".join(lines)) if f}
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        while (i not in fence and i + 1 < len(lines) and lines[i + 1].strip()
+               and re.search(r'<img(?:\s+(?:"[^"]*"|[^<>"])*)?$', line)):
+            i += 1
+            line += " " + lines[i].strip()
+        out.append(line)
+        i += 1
+    return out
+
+
 def markdown_to_mdx(body: str, page: Page) -> str:
-    lines = body.replace("\r\n", "\n").split("\n")
+    lines = join_split_tags(body.replace("\r\n", "\n").split("\n"))
     out: list[str] = []
     prose: set[int] = set()  # indexes in out of Markdown prose lines
     i = 0

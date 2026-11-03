@@ -369,17 +369,27 @@ The bundle plugin can be configured to tailor the resulting bundle to specific n
 
 A package _p_ is imported if all of this hold:
 
-1. Using a class in _p_ directly (i.e. not with reflection) in the bundle
-2. There's no classes in the bundle that is in _p_
-3. There's a bundle that exports _p_, and compiling against this bundle
+<Steps>
+  <Step>
+  Using a class in _p_ directly (i.e. not with reflection) in the bundle
+  </Step>
 
-To debug, run
+  <Step>
+  There's no classes in the bundle that is in _p_
+  </Step>
 
-```console
-$ mvn -X package
-```
+  <Step>
+  There's a bundle that exports _p_, and compiling against this bundle
 
-and look at Defined packages (=packages in the bundle), Exported packages of dependencies, Referenced packages(= packages used). A package is imported if it is in Exported packages and Referenced packages but not in Defined packages.
+  To debug, run
+
+  ```console
+  $ mvn -X package
+  ```
+
+  and look at Defined packages (=packages in the bundle), Exported packages of dependencies, Referenced packages(= packages used). A package is imported if it is in Exported packages and Referenced packages but not in Defined packages.
+  </Step>
+</Steps>
 
 ## Troubleshooting
 
@@ -430,7 +440,7 @@ $ ls -1 target/*.jar
 
 Error in log:
 
-```json highlight={4-5}
+```txt highlight={4-5}
 [2020-01-23 14:28:01.367] WARNING : qrserver         Container.com.yahoo.container.di.Container
 	Failed to set up new component graph. Retaining previous component generation.
 	exception=
@@ -502,7 +512,7 @@ If the strategy above does not resolve the case, it's most likely because the cl
 
 In the vespa log, a container startup looks like:
 
-```json
+```txt
 [2021-01-07 10:13:35.325] INFO    : container        Container.com.yahoo.container.core.config.ApplicationBundleLoader
   Installed bundles: {[0]org.apache.felix.framework:6.0.3, [1]container-disc:7.335.22 ...
 ...
@@ -595,46 +605,56 @@ Let's take a look at an example resolving the duplicate _javax.xml.namespace.QNa
 
 All 'javax.xml' packages in the JDK are exported by the JDisc core bundle. This means that they should be imported by user bundles, instead of embedded inside them. Hence, ensure that there are no classes from packages prefixed by 'javax.xml' in the bundle. Find out which library that pulls in the package:
 
-1. Extract the full component jar, including any embedded jars. One tool that does the job is [rjar](https://github.com/pojosontheweb/rjar/).
+<Steps>
+  <Step>
+  Extract the full component jar, including any embedded jars. One tool that does the job is [rjar](https://github.com/pojosontheweb/rjar/).
+  </Step>
 
-2. Search the folder where the jar was extracted for 'javax.xml' classes:
+  <Step>
+  Search the folder where the jar was extracted for 'javax.xml' classes:
 
-   ```console highlight={4}
-   $ find . | grep "javax/xml/.*\.class"
+  ```console highlight={4}
+  $ find . | grep "javax/xml/.*\.class"
 
-   ...
-   ./my_bundle-deploy.jar/dependencies/stax-api-1.0.1.jar/javax/xml/namespace/QName.class
-   ...
-   ```
+  ...
+  ./my_bundle-deploy.jar/dependencies/stax-api-1.0.1.jar/javax/xml/namespace/QName.class
+  ...
+  ```
+  </Step>
 
-3. Find out which libraries that pulled in the offending classes - here it was `stax-api-1.0.1`. Usually, these libraries are not pulled in by the pom as direct dependencies, but rather transitively via another library being used. Use maven's dependency plugin from the application directory to find the direct dependency:
+  <Step>
+  Find out which libraries that pulled in the offending classes - here it was `stax-api-1.0.1`. Usually, these libraries are not pulled in by the pom as direct dependencies, but rather transitively via another library being used. Use maven's dependency plugin from the application directory to find the direct dependency:
 
-   ```console highlight={6}
-   $ mvn dependency:tree -Dverbose
+  ```console highlight={6}
+  $ mvn dependency:tree -Dverbose
 
-   [INFO] +- com.acme.utils:jersey-utils:1.0.0:compile
-   [INFO] |  +- com.sun.jersey:jersey-json:jar:1.13:compile
-   [INFO] |  |  +- org.codehaus.jettison:jettison:jar:1.1:compile
-   [INFO] |  |    \- stax:stax-api:jar:1.0.1:compile
-   ```
+  [INFO] +- com.acme.utils:jersey-utils:1.0.0:compile
+  [INFO] |  +- com.sun.jersey:jersey-json:jar:1.13:compile
+  [INFO] |  |  +- org.codehaus.jettison:jettison:jar:1.1:compile
+  [INFO] |  |    \- stax:stax-api:jar:1.0.1:compile
+  ```
 
-   Observe that `stax:stax-api:1.0.1` is pulled in transitively from the direct dependency `com.acme.utils:jersey-utils`.
+  Observe that `stax:stax-api:1.0.1` is pulled in transitively from the direct dependency `com.acme.utils:jersey-utils`.
+  </Step>
 
-4. To exclude `stax:stax-api`, add the appropriate `exclusion` from the direct dependency `com.acme.utils:jersey-utils` in _pom.xml_:
+  <Step>
+  To exclude `stax:stax-api`, add the appropriate `exclusion` from the direct dependency `com.acme.utils:jersey-utils` in _pom.xml_:
 
-   ```xml highlight={5-10}
-   <dependency>
-       <groupId>com.acme.utils</groupId>
-       <artifactId>jersey-utils</artifactId>
-       <version>1.0.0</version>
-       <exclusions>
-           <exclusion>
-               <groupId>stax</groupId>
-               <artifactId>stax-api</artifactId>
-           </exclusion>
-       </exclusions>
-   </dependency>
-   ```
+  ```xml highlight={5-10}
+  <dependency>
+      <groupId>com.acme.utils</groupId>
+      <artifactId>jersey-utils</artifactId>
+      <version>1.0.0</version>
+      <exclusions>
+          <exclusion>
+              <groupId>stax</groupId>
+              <artifactId>stax-api</artifactId>
+          </exclusion>
+      </exclusions>
+  </dependency>
+  ```
+  </Step>
+</Steps>
 
 #### Multiple implementations example slf4j-api
 
@@ -658,7 +678,7 @@ org.slf4j.LoggerFactory.getLogger(LoggerFactory.java:269)
 
 Running _mvn dependency:tree_ in the previous example gives:
 
-```json
+```txt
 [INFO] +- com.yahoo.vespa:container-dev:jar:5.28.29:provided
 [INFO] |  +- com.yahoo.vespa:jdisc_core:jar:5.28.29:provided
 [INFO] |  |  +- (org.slf4j:slf4j-api:jar:1.7.5:compile - scope updated from provided; omitted for duplicate)
@@ -692,7 +712,7 @@ $ jar -tf mailsearch-docprocs-deploy.jar  | grep slf
 
 Something still pulls in slf4j... Other candidates:
 
-```json
+```txt
 [INFO] \- com.yahoo.vespa:application:jar:5.28.29:test
 ...
 [INFO]    +- com.yahoo.vespa:zkfacade:jar:5.28.29:test

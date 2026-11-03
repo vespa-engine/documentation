@@ -11,8 +11,10 @@ master's changes are merged into the branch's page with a three-way merge:
 so edits made on the branch are kept wherever master did not change the same lines. Where
 both changed, master's version wins, and the branch's version of that part is reported.
 New pages are converted, deleted pages are reported (not removed). Then code blocks get
-the language master gives the same code, since a change of language alone does not show
-in the merge (both conversions use the current converter).
+the language master labels the same code with, since a change of language alone does not
+show in the merge (both conversions use the current converter). Only master's own labels
+are copied, not the converter's guesses for unlabeled code, which would override
+languages set on the branch.
 
 Navigation, images and redirects are not handled here: see _data/sidebar.yml on master,
 assets/, and scripts/port_redirects.py.
@@ -45,15 +47,21 @@ def git(*args: str) -> str:
     return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True, check=True).stdout
 
 
-def convert_all(ref: str, sources: list[str]) -> dict[str, str | None]:
+def convert_all(ref: str, sources: list[str], guess: bool = True) -> dict[str, str | None]:
     J.REF = ref
     for f in (J.ref_file, J.ref_listing, J.site_variables, J.sidebar_names, J.redirects):
         f.cache_clear()
-    out = {}
-    for src in sources:
-        text = J.ref_file(src)
-        out[src] = None if text is None or "redirect_to:" in text[:600] else J.convert(text, src)
-    return out
+    guess_lang = J.guess_lang
+    if not guess:
+        J.guess_lang = lambda code: "txt"  # what copy_languages ignores; "" would make the meta the language
+    try:
+        out = {}
+        for src in sources:
+            text = J.ref_file(src)
+            out[src] = None if text is None or "redirect_to:" in text[:600] else J.convert(text, src)
+        return out
+    finally:
+        J.guess_lang = guess_lang
 
 
 def merge(ours: str, base: str, theirs: str) -> tuple[str, list[str]]:
@@ -92,7 +100,8 @@ def code_blocks(text: str):
 
 
 def copy_languages(page: str, master: str, counts: Counter) -> str:
-    """Give each code block the language of the block with the same code in master's version."""
+    """Give each code block the language of the block with the same code in master's version,
+    converted without guessing languages for unlabeled code."""
     langs: dict[str, str] = {}
     for _, _, _, lang, _, code in code_blocks(master):
         if lang and lang != "txt":
@@ -118,6 +127,7 @@ def main() -> int:
     sources = sorted({c[2] for c in changes if c[0] != "D"} | {c[1] for c in changes if c[0] in "MR"})
     base = convert_all(args.base, sources)
     theirs = convert_all(args.ref, sources)
+    labelled = convert_all(args.ref, sources, guess=False)
 
     stats: Counter = Counter()
     langs: Counter = Counter()
@@ -146,7 +156,7 @@ def main() -> int:
             if conflicts:
                 replaced[str(rel)] = conflicts
             stats["conflicts, master wins" if conflicts else ("unchanged" if result == ours else "merged")] += 1
-        result = copy_languages(result, theirs[src], langs)
+        result = copy_languages(result, labelled[src], langs)
         if not args.dry_run and (not target.exists() or result != target.read_text(encoding="utf-8")):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(result, encoding="utf-8")
