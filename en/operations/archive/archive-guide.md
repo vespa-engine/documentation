@@ -65,7 +65,7 @@ $ gsutil -u resonant-triode-123456 \
   gs://vespa-cloud-data-prod-gcp-us-central1-f-73770f/vespa-team/vespacloud-docsearch/default/h404a \
   .
 ```
-Use [zstd](https://facebook.github.io/zstd/) to decompress files:
+Use [zstd](https://github.com/meta/zstd) to decompress files:
 ```
 $ zstd -d *
 ```
