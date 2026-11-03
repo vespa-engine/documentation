@@ -97,7 +97,7 @@ SCHEMA_PLACEHOLDER_EXPECTATIONS = [
   ['type',              1, 'Keyword'],
   ['[type-name]',       1, 'Generic.Emph'],            # not "type" as a keyword
   ['[attribute name]',  1, 'Generic.Emph'],
-  ['3]',                1, 'Literal.Number.Integer'],  # a tensor dimension, as before
+  ['3]',                1, 'Literal.Number'],          # a tensor dimension, as before
   ['[1, 2',             1, 'Text'],                    # a tensor value, as before
   ['[attribute(price)', 1, 'Text'],
 ].freeze
