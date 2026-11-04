@@ -152,15 +152,15 @@ Adding content nodes to a content cluster (keeping the total document volume fix
 
 Since _DQW_ depends and scales almost linearly with the number of documents on the content nodes, one can try to distribute the work over more nodes. _Amdahl's law_ specifies that the maximum speedup one achieve by parallelizing the dynamic work (_DQW_) is given by the formula:
 
-{/* depends on mathjax */}
-
-&#36;&#36;\\text\{max_speedup\}\_\{\\text\{group\}\} = \\frac\{1\}\{1 - \\frac\{DQW\}\{SQW+DQW\}\}&#36;&#36;
+$$
+\text{max\_speedup}_{\text{group}} = \frac{1}{1 - \frac{DQW}{SQW+DQW}}
+$$
 
 For example, if one by inspecting [metrics](#metrics-for-vespa-sizing) see that the _DQW_ = 0.50, the maximum speedup one can get by increasing parallelism by using more nodes and decreasing _DQW_ is 2. With fixed occupancy (number of users, clients or load), [Little's Law'](https://en.wikipedia.org/wiki/Little%27s_law) tells us that one could achieve two times the throughput if one is able to speed up the latency by a factor of two:
 
-{/* depends on mathjax */}
-
-&#36;&#36;\\frac\{1\}\{1 - \\frac\{0.5\}\{0.5+0.5\}\} = 2&#36;&#36;
+$$
+\frac{1}{1 - \frac{0.5}{0.5+0.5}} = 2
+$$
 
 When _SQW_ is no longer significantly less than _DQW_, adding more nodes in a flat distributed cluster just increases the overall system cost. This without any serving performance gain, except increasing overall supported feed throughput, which increases almost linearly with number of nodes.
 
@@ -168,6 +168,10 @@ Two different _DQW/(DQW+SQW)_ factors are illustrated in the figures below. The 
 
 <Frame>
 ![Scaling throughput/latency where DQW/(SQW+DQW)=0.5](/assets/img/ScalingLatencyFactor0.5.svg)
+</Frame>
+
+<Frame>
+![Scaling throughput/latency where DQW/(SQW+DQW)=0.9](/assets/img/ScalingLatencyFactor0.005.svg)
 </Frame>
 
 In the first figure the overall latency is 10 ms, but the dynamic query work (latency) is only 50% and given _Amdahl's law_ it follows that the maximum speedup one can get is two. This is true regardless of how many processors or nodes the dynamic query work is parallelized over. No matter how many nodes one adds, one don't get above 4800 queries/s. The only thing one achieve by adding more nodes is increasing the cost without _any_ performance benefits.
@@ -262,4 +266,116 @@ The current max document size is limited by the max protobuf message size of 2 G
 _Split too-large documents into smaller units for better search quality and performance!_ Natural subdivisions like chapters, parts or sections are good candidates for splitting into separate Vespa documents.
 
 <a id="when-documents-are-too-large" />
-### When documents are too large If each document is a complete PDF file and some are very large, what problems could we run into? **Usefulness of the result** - knowing that there are relevant parts _somewhere_ in several hundred pages of text is not very helpful to the user. As of 2025, this is still true also if the "user" is an LLM in a RAG or agentic workflow. We can improve the usefulness by providing [dynamic snippets](/en/querying/document-summaries#dynamic-snippets) or returning per-chunk similarity scores as [feature values](/en/ranking/ranking-expressions-features#accessing-feature-function-values-in-results) to be able to identify the most relevant portions of the returned summary. **Performance** - Returning large document values in the query response over HTTP has a significant cost, both in CPU time spent in rendering the response, compression, and network transfer time. This can easily become the largest contribution to the total end-to-end latency. Large documents can also contribute to poor performance in indexing and query execution, or greatly increase the amount of temporary memory required for complex ranking expressions like multi-dimensional ColBert maxsim. As document are processed, indexed, stored and ranked as individual units, working on a few very large documents at a time may not offer the system enough opportunity to parallelize and result in poor, uneven utilization of resources, and even a small fraction of very large documents may impact your mean (and especially higher percentile) latencies both for processing and query execution. <a id="too-small-documents" />When documents are too small What problems can occur if documents are very small? Consider indexing small fragments of text, like a single sentence or even a word. **Granularity** - As the size of text fragments decrease, we are less likely to find good matches for queries as the relevant terms or context is spread across multiple documents. The response may not contain enough information to resolve the user information need, or to even judge if it is likely to resolve the need if the source is examined in full. This problem is described both in [traditional information retrieval literature](https://nlp.stanford.edu/IR-book/html/htmledition/choosing-a-document-unit-1.html) and has also been a popular topic in recent years as "chunking" for semantic search. **Overhead** - splitting a document into very small pieces means that more resources will be spent on per-document overhead. Shared metadata like e.g. the abstract or access permissions of a document will be replicated many times, and updates/deletes to the source document or its metadata must fan-out to all the sub-documents, increasing write load. Unlike too-large documents, having a fraction of very small documents is fine, what matters for efficiency is that the average size is not too small. <a id="scaling-document-volume-per-node" />Scaling document volume per node One want to fit as many documents as possible into a node given the node constrains (e.g. available cpu, memory, disk) while maintaining: The targeted search latency SLA The targeted feed and update rate, and feed latency With the latency SLA in mind, benchmark with increasing number of documents per node and watch system level metrics and Vespa metrics. If latency is within the stated latency SLA and the system meets the targeted sustained feed rate, overall cost is reduced by fitting more documents into each node (e.g. by increasing memory, cpu and disk constraints set by the node flavor). With larger fan-out using more nodes to partition the data also overcomes higher tail latency as search waits for all results from all nodes. Therefore, the overall execution time depends on the slowest node at the time of the query. In such cases with large fan-out, using [adaptive timeout](/en/reference/applications/services/content#coverage) is recommended to keep tail latency in check. Vespa will block feed operations if [resource limits](/en/reference/applications/services/content#resource-limits) have been reached. <a id="disk-usage-sizing" />Disk usage sizing Disk usage of a content node increases as the document volume increases: The disk usage per document depends on various factors like the number of schemas, the number of indexed fields and their settings, and most important the size of the fields that are indexed and stored. The simplest way to determine the disk usage is to simply index documents and watch the disk usage along with the relevant metrics. The _redundancy_ (number of copies) impact the disk usage footprint, obviously. Note that [content node maintenance jobs](/en/content/proton#proton-maintenance-jobs) temporarily increases disk usage. E.g. _index fusion_ is an example, where new index files are written, causing an increase in used disk space while running. Space used depends on configuration and data - headroom must include the temporary usage. See [metrics for capacity planning](#metrics-for-vespa-sizing). <a id="memory-usage-sizing" />Memory usage sizing The memory usage on a content node increases as the document volume increases. The memory usage increases almost linearly with the number of documents. The vespa-proton-bin process (content node) uses the full 64-bit virtual address space, so the virtual memory usage reported might be high, as both index and summary files are mapped into memory using mmap and pages are paged into memory as needed. The memory usage per document depends on the number of fields, the raw size of the documents and how many of the fields are defined as [attributes](/en/content/attributes). Also see [metrics for capacity planning](#metrics-for-vespa-sizing). <a id="scaling-throughput" />Scaling Throughput As seen in the previous sections, when the static query work (_SQW_) becomes large, scale throughput using grouped distribution. Regardless, if throughput is scaled by grouped distribution for use cases with high static query work portion or a flat distribution for high dynamic query work portion, one should identify how much throughput the total system supports. Finding where the latency starts climbing exponentially versus throughput is important in order to make sure that the deployed system is scaled well below this throughput threshold. Also, that it has capacity to absorb load increases over time, as well as having sufficient capacity to sustain node outages during peak traffic. At some throughput level some resource(s) in the system will be fully saturated, and requests will be queued up causing latency to spike up, as requests are spending more time waiting for the saturated resource. This behaviour is illustrated in the figure below: ![Latency vs throughput](/assets/img/QPS-scaling.svg) A small increase in serving latency is observed as throughput increases, until saturated at approximately 2200 QPS. Pushing more queries than this only increases queueing time, and latency increases sharply. <a id="scaling-for-failures-and-headroom" />Scaling for failures and headroom It is important to also measure behaviour under non-ideal circumstances, to avoid getting too good results. E.g., by simulating node failures or node replacements, verifying feeding concurrency versus search and serving. Generally, the higher utilization a system has in production, the more fragile it becomes when changing query patterns or ranking models. The target system utilization should be kept sufficiently low for the response times to be reasonable and within latency SLA, even with some extra traffic occurring at peak hours. See also [graceful degradation](/en/performance/graceful-degradation). Also see [sizing write versus read](/en/performance/sizing-feeding#feed-vs-search). <a id="metrics-for-vespa-sizing" />Metrics for Vespa Sizing The relevant [Vespa Metrics](/en/operations/metrics) for measuring the cost factors, in addition to system level metrics like cpu util, are: _Metric capturing static query work (SQW) at content nodes_ `content.proton.documentdb.matching.rank_profile.query_setup_time` _Metric capturing dynamic query work (DQW) at content nodes_ `content.proton.documentdb.matching.rank_profile.query_latency` By sampling these metrics, one can calculate the theoretical speedup we can achieve by increasing number of nodes using flat distribution, by using _Amdahl's law_: &#36;&#36;\\text\{max_speedup\}\_\{\\text\{\}\} = \\frac\{1\}\{1 - \\frac\{match\\\_time\}\{query\\\_setup\\\_time+match\\\_time\}\}&#36;&#36; In addition, the following metrics are used to find number of matches per query, per node: `content.proton.documentdb.matching.rank_profile.docs_matched content.proton.documentdb.matching.rank_profile.queries` **Disk usage**: documentdb: _vespa.content.proton.documentdb.disk_usage.last_ transaction log: _vespa.content.proton.transactionlog.disk_usage.last_ **Memory usage**: documentdb: _vespa.content.proton.documentdb.memory_usage.allocated_bytes.last_
+### When documents are too large
+
+If each document is a complete PDF file and some are very large, what problems could we run into?
+
+**Usefulness of the result** - knowing that there are relevant parts _somewhere_ in several hundred pages of text is not very helpful to the user. As of 2025, this is still true also if the "user" is an LLM in a RAG or agentic workflow.
+
+We can improve the usefulness by providing [dynamic snippets](/en/querying/document-summaries#dynamic-snippets) or returning per-chunk similarity scores as [feature values](/en/ranking/ranking-expressions-features#accessing-feature-function-values-in-results) to be able to identify the most relevant portions of the returned summary.
+
+**Performance** - Returning large document values in the query response over HTTP has a significant cost, both in CPU time spent in rendering the response, compression, and network transfer time. This can easily become the largest contribution to the total end-to-end latency.
+
+Large documents can also contribute to poor performance in indexing and query execution, or greatly increase the amount of temporary memory required for complex ranking expressions like multi-dimensional ColBert maxsim. As document are processed, indexed, stored and ranked as individual units, working on a few very large documents at a time may not offer the system enough opportunity to parallelize and result in poor, uneven utilization of resources, and even a small fraction of very large documents may impact your mean (and especially higher percentile) latencies both for processing and query execution.
+
+<a id="too-small-documents" />
+### When documents are too small
+
+What problems can occur if documents are very small? Consider indexing small fragments of text, like a single sentence or even a word.
+
+**Granularity** - As the size of text fragments decrease, we are less likely to find good matches for queries as the relevant terms or context is spread across multiple documents. The response may not contain enough information to resolve the user information need, or to even judge if it is likely to resolve the need if the source is examined in full. This problem is described both in [traditional information retrieval literature](https://nlp.stanford.edu/IR-book/html/htmledition/choosing-a-document-unit-1.html) and has also been a popular topic in recent years as "chunking" for semantic search.
+
+**Overhead** - splitting a document into very small pieces means that more resources will be spent on per-document overhead. Shared metadata like e.g. the abstract or access permissions of a document will be replicated many times, and updates/deletes to the source document or its metadata must fan-out to all the sub-documents, increasing write load. Unlike too-large documents, having a fraction of very small documents is fine, what matters for efficiency is that the average size is not too small.
+
+<a id="scaling-document-volume-per-node" />
+## Scaling document volume per node
+
+One want to fit as many documents as possible into a node given the node constrains (e.g. available cpu, memory, disk) while maintaining:
+
+- The targeted search latency SLA
+- The targeted feed and update rate, and feed latency
+
+With the latency SLA in mind, benchmark with increasing number of documents per node and watch system level metrics and Vespa metrics. If latency is within the stated latency SLA and the system meets the targeted sustained feed rate, overall cost is reduced by fitting more documents into each node (e.g. by increasing memory, cpu and disk constraints set by the node flavor).
+
+With larger fan-out using more nodes to partition the data also overcomes higher tail latency as search waits for all results from all nodes. Therefore, the overall execution time depends on the slowest node at the time of the query. In such cases with large fan-out, using [adaptive timeout](/en/reference/applications/services/content#coverage) is recommended to keep tail latency in check.
+
+Vespa will block feed operations if [resource limits](/en/reference/applications/services/content#resource-limits) have been reached.
+
+<a id="disk-usage-sizing" />
+### Disk usage sizing
+
+Disk usage of a content node increases as the document volume increases: The disk usage per document depends on various factors like the number of schemas, the number of indexed fields and their settings, and most important the size of the fields that are indexed and stored. The simplest way to determine the disk usage is to simply index documents and watch the disk usage along with the relevant metrics. The _redundancy_ (number of copies) impact the disk usage footprint, obviously.
+
+Note that [content node maintenance jobs](/en/content/proton#proton-maintenance-jobs) temporarily increases disk usage. E.g. _index fusion_ is an example, where new index files are written, causing an increase in used disk space while running. Space used depends on configuration and data - headroom must include the temporary usage. See [metrics for capacity planning](#metrics-for-vespa-sizing).
+
+<a id="memory-usage-sizing" />
+### Memory usage sizing
+
+The memory usage on a content node increases as the document volume increases. The memory usage increases almost linearly with the number of documents. The vespa-proton-bin process (content node) uses the full 64-bit virtual address space, so the virtual memory usage reported might be high, as both index and summary files are mapped into memory using mmap and pages are paged into memory as needed.
+
+The memory usage per document depends on the number of fields, the raw size of the documents and how many of the fields are defined as [attributes](/en/content/attributes). Also see [metrics for capacity planning](#metrics-for-vespa-sizing).
+
+<a id="scaling-throughput" />
+## Scaling Throughput
+
+As seen in the previous sections, when the static query work (_SQW_) becomes large, scale throughput using grouped distribution. Regardless, if throughput is scaled by grouped distribution for use cases with high static query work portion or a flat distribution for high dynamic query work portion, one should identify how much throughput the total system supports.
+
+Finding where the latency starts climbing exponentially versus throughput is important in order to make sure that the deployed system is scaled well below this throughput threshold. Also, that it has capacity to absorb load increases over time, as well as having sufficient capacity to sustain node outages during peak traffic.
+
+At some throughput level some resource(s) in the system will be fully saturated, and requests will be queued up causing latency to spike up, as requests are spending more time waiting for the saturated resource.
+
+This behaviour is illustrated in the figure below:
+
+<Frame>
+![Latency vs throughput](/assets/img/QPS-scaling.svg)
+</Frame>
+
+A small increase in serving latency is observed as throughput increases, until saturated at approximately 2200 QPS. Pushing more queries than this only increases queueing time, and latency increases sharply.
+
+<a id="scaling-for-failures-and-headroom" />
+## Scaling for failures and headroom
+
+It is important to also measure behaviour under non-ideal circumstances, to avoid getting too good results. E.g., by simulating node failures or node replacements, verifying feeding concurrency versus search and serving.
+
+Generally, the higher utilization a system has in production, the more fragile it becomes when changing query patterns or ranking models.
+
+The target system utilization should be kept sufficiently low for the response times to be reasonable and within latency SLA, even with some extra traffic occurring at peak hours. See also [graceful degradation](/en/performance/graceful-degradation). Also see [sizing write versus read](/en/performance/sizing-feeding#feed-vs-search).
+
+<a id="metrics-for-vespa-sizing" />
+## Metrics for Vespa Sizing
+
+The relevant [Vespa Metrics](/en/operations/metrics) for measuring the cost factors, in addition to system level metrics like cpu util, are:
+
+_Metric capturing static query work (SQW) at content nodes_
+
+```txt
+content.proton.documentdb.matching.rank_profile.query_setup_time
+```
+
+_Metric capturing dynamic query work (DQW) at content nodes_
+
+```txt
+content.proton.documentdb.matching.rank_profile.query_latency
+```
+
+By sampling these metrics, one can calculate the theoretical speedup we can achieve by increasing number of nodes using flat distribution, by using _Amdahl's law_:
+
+$$
+\text{max\_speedup} = \frac{1}{1 - \frac{match\_time}{query\_setup\_time+match\_time}}
+$$
+
+In addition, the following metrics are used to find number of matches per query, per node:
+
+```txt
+content.proton.documentdb.matching.rank_profile.docs_matched
+content.proton.documentdb.matching.rank_profile.queries
+```
+
+**Disk usage**:
+
+- documentdb: _vespa.content.proton.documentdb.disk_usage.last_
+- transaction log: _vespa.content.proton.transactionlog.disk_usage.last_
+
+**Memory usage**:
+
+- documentdb: _vespa.content.proton.documentdb.memory_usage.allocated_bytes.last_

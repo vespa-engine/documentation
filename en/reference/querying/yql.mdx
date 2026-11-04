@@ -385,9 +385,97 @@ By default, sameElement uses `AND` to combine the conditions: _All_ the conditio
 Usage examples for the `sameElement()` operator:
 
 - **array-of-struct** fields
+
+  For example, given the struct and array of this struct
+
+  ```vespa-schema-language
+  struct person {
+      field first_name    type string {}
+      field last_name     type string {}
+      field year_of_birth type int {}
+  }
+
+  field persons type array<person> {
+      indexing: summary
+      struct-field first_name    { indexing: attribute }
+      struct-field last_name     { indexing: attribute }
+      struct-field year_of_birth { indexing: attribute }
+  }
+  ```
+
+  we can use the query
+
+  ```vespa-yql
+  where persons contains sameElement(first_name contains 'Joe', last_name contains 'Smith', year_of_birth < 1940)
+  ```
+
+  to return all documents containing a Joe Smith born before 1940 in the `persons` array.
+
 - Search **map** fields
+
+  Searching a map is done by treating it as an array of a struct with the field members `key` and `value`. For example, given the map
+
+  ```vespa-schema-language
+  field identities type map<string, person> {
+      indexing: summary
+      struct-field key                 { indexing: attribute }
+      struct-field value.first_name    { indexing: attribute }
+      struct-field value.last_name     { indexing: attribute }
+      struct-field value.year_of_birth { indexing: attribute }
+  }
+  ```
+
+  we can use the query
+
+  ```vespa-yql
+  where identities contains sameElement(key contains 'father', value.first_name contains 'Joe', value.last_name contains 'Smith', value.year_of_birth < 1940)
+  ```
+
+  to return all documents that have a Joe Smith born before 1940 keyed as a 'father'.
+
 - **array-of-string** fields
+
+  `sameElement()` may also be used to search array of string fields. Supported query operators inside sameElement() are `and`, `equiv`, `near`, `onear`, `or`, `rank` and `phrase`. `and` can be used with `!`.
+
+  For example, given the field
+
+  ```vespa-schema-language
+  field chunks type array<string> {
+      indexing: index | summary
+  }
+  ```
+
+  we can use the following queries:
+
+  ```vespa-yql
+  where chunks contains sameElement("one" and "two")
+  where chunks contains sameElement("one" and equiv("two","three"))
+  where chunks contains sameElement("one" and ({distance: 5}near("two","three",!"four")))
+  where chunks contains sameElement("one" and phrase("two","three"))
+  where chunks contains sameElement("one" and !"two")
+  where chunks contains sameElement("one" or "two")
+  where chunks contains sameElement(rank("one" and "two", "three"))
+  ```
+
+  Features inside sameElement() for indexed fields are filtered based on the matching elements, e.g., [elementwise(bm25(descriptions),x,double)](/en/reference/ranking/rank-features#elementwise-bm25) will only contain tensor cells based on the matching elements.
+
 - **array fields** at **specific indices**
+
+  Use the [`elementFilter`](#elementfilter) annotation to restrict matching to specific element indices. For example, given a field `my_numbers type array<int>`:
+
+  ```vespa-yql
+  where my_numbers contains ({elementFilter:[2]}sameElement("42"))
+  ```
+
+  This only matches the element at index 2 in the array field. Multiple indices can be given: `{elementFilter:[0, 2, 5]}`.
+
+  A shorthand form is also available:
+
+  ```vespa-yql
+  where my_numbers[2] = 42
+  ```
+
+  The shorthand form only supports a single index. Use the [`elementFilter`](#elementfilter) annotation to match multiple indices.
 
 </td>
     </tr>
@@ -414,7 +502,67 @@ The second argument has to use `value` with
 Usage examples for the `mapMatch()` operator:
 
 - **[map](/en/reference/schemas/schemas#map)** fields
+
+  Searching a map is done analogously to the `sameElement()` operator. For example, given the map
+
+  ```vespa-schema-language
+  field my_map type map<string, string> {
+      indexing: summary
+      struct-field key   { indexing: attribute }
+      struct-field value { indexing: attribute }
+  }
+  ```
+
+  we can use the query
+
+  ```vespa-yql
+  where my_map contains mapMatch(key contains 'color', value contains 'black')
+  ```
+
+  or its shorthand form
+
+  ```vespa-yql
+  where my_map{'color'} contains 'black'
+  ```
+
+  to return all documents that have 'black' as their 'color'.
+
 - **[fast-search map fields](/en/reference/schemas/schemas#fast-search-map-field)**
+
+  The syntax is the same as for fields of type map; just use the full name of the fast-search map field instead. For example, given the map
+
+  ```vespa-schema-language
+  field my_map type map<string, int> {
+      indexing: summary
+      fast-search-map-field my_lookup
+  }
+  ```
+
+  we can search its fast-search map field via the query
+
+  ```vespa-yql
+  where my_map.my_lookup contains mapMatch(key contains 'price', value = 50)
+  ```
+
+  or its shorthand form
+
+  ```vespa-yql
+  where my_map.my_lookup{'price'} = 50
+  ```
+
+  to return all documents that have a 'price' of exactly 50. We can use the query
+
+  ```vespa-yql
+  where my_map.my_lookup contains mapMatch(key contains 'price', range(value, 0, 99))
+  ```
+
+  or its shorthand form
+
+  ```vespa-yql
+  where range(my_map.my_lookup{'price'}, 0, 99)
+  ```
+
+  to return all documents that have a 'price' between 0 and 99.
 
 </td>
     </tr>
@@ -429,6 +577,10 @@ The `alternatives` operator is used to provide multiple variants of a token at t
 ```vespa-yql
 where fieldName contains alternatives({"sneakers":1.0, "shoes":0.7})
 ```
+
+The query will match documents containing any of the alternatives given. The exactness score is reflected in some rank features, such that it is possible to rank more exact matches over less exact ones. Use 1.0 as the exactness of all alternatives if exactness information is not available or appropriate.
+
+Prefer `alternatives` to equiv when the purpose is to express alternative forms of a single token.
 
 </td>
     </tr>
@@ -649,9 +801,9 @@ Sets the query parse type to apply when interpreting the user input text.
 For any value of `grammar` other than `raw` or `segment`, only the following annotations are applied:
 
 - [defaultIndex](#defaultindex)
-- [totalTargetHits](#totaltargethits)
-- [targetHits](#targethits)
-- [distance](#distance)
+- [totalTargetHits](#totaltargethits) (for weakAnd)
+- [targetHits](#targethits) (for weakAnd)
+- [distance](#distance) (for near/oNear)
 - [ranked](#ranked)
 - [filter](#filter)
 - [stem](#stem)
