@@ -1,0 +1,239 @@
+---
+title: Migrating from Elasticsearch
+description: "This is a guide for how to move data from Elasticsearch to Vespa. By the end of this guide you will have exported documents from Elasticsearch, generated a deployable Vespa application package and tested this with documents and queries."
+---
+
+<Warning>
+**Prerequisites:**
+
+- Linux, macOS or Windows 10 Pro on x86\_64 or arm64, with [Podman Desktop](https://podman.io/) or [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed, with an engine running.
+	- Alternatively, start the Podman daemon:
+
+  ```bash
+  $ podman machine init --memory 6000
+  $ podman machine start
+  ```
+		- See [Docker Containers](/en/operations/self-managed/docker-containers) for system limits and other settings.
+- For CPUs older than Haswell (2013), see [CPU Support](/en/operations/self-managed/cpu-support).
+- Memory: Minimum RAM dedicated to Docker/Podman. [Memory recommendations](/en/operations/self-managed/node-setup#memory-settings).
+- Disk: Avoid `NO_SPACE` - the vespaengine/vespa container image + headroom for data requires disk space. [Read more](/en/writing/feed-block).
+- [Homebrew](https://brew.sh/) to install the [Vespa CLI](/en/clients/vespa-cli), or download the Vespa CLI from [Github releases](https://github.com/vespa-engine/vespa/releases).
+- Linux, macOS or Windows 10 Pro on x86\_64 or arm64, with Podman or [Docker](https://docs.docker.com/engine/install/) installed. See [Docker Containers](../operations/self-managed/docker-containers) for system limits and other settings.
+</Warning>
+
+To get started, [sign up](https://vespa.ai/free-trial/) to get an endpoint to deploy to. Set the *tenant name* from the signup:
+
+```bash
+$ export TENANT_NAME=vespa-team    # Replace with your tenant name
+```
+
+Alternatively, [test with local deployment](#test-with-local-deployment).
+
+## Feed a sample Elasticsearch index
+
+This section sets up an index with 1000 sample documents using [getting-started-index](https://www.elastic.co/guide/en/elasticsearch/reference/7.9/getting-started-index). Skip this part if you already have an index. Wait for Elasticsearch to start:
+
+```bash
+$ docker network create --driver bridge esnet
+
+$ docker run -d --rm --name esnode --network esnet -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node" \
+  docker.elastic.co/elasticsearch/elasticsearch:7.10.2
+
+$ while [[ "$(curl -s -o /dev/null -w ''%{http_code}'' localhost:9200)" != "200" ]]; do sleep 1; echo 'waiting ...'; done
+```
+
+Download test data, and feed it to the Elasticsearch instance:
+
+```bash
+$ curl 'https://raw.githubusercontent.com/elastic/elasticsearch/7.10/docs/src/test/resources/accounts.json' \
+  > accounts.json
+
+$ curl -H "Content-Type:application/json" --data-binary @accounts.json 'localhost:9200/bank/_bulk?pretty&refresh'
+```
+
+Verify that the index has 1000 documents:
+
+```bash
+$ curl 'localhost:9200/_cat/indices?v'
+```
+
+## Export documents from Elasticsearch
+
+This guide uses [ElasticDump](https://github.com/elasticsearch-dump/elasticsearch-dump) to export the index contents and the index mapping. Export the documents and mappings, then delete the Docker network and the Elasticsearch container:
+
+```bash
+$ docker run --rm --name esdump --network esnet -v "$PWD":/dump -w /dump elasticdump/elasticsearch-dump \
+  --input=http://esnode:9200/bank --output=bank_data.json --type=data
+
+$ docker run --rm --name esdump --network esnet -v "$PWD":/dump -w /dump elasticdump/elasticsearch-dump \
+  --input=http://esnode:9200/bank --output=bank_mapping.json --type=mapping
+
+$ docker rm -f esnode && docker network remove esnet
+```
+
+## Generate Vespa documents and Application Package
+
+[ES_Vespa_parser.py](https://github.com/vespa-engine/vespa/tree/master/config-model/src/main/python/ES_Vespa_parser.py) is provided for conversion of Elasticsearch data and index mappings to Vespa data and configuration. It is a basic script with minimal error checking - it is designed for a simple export, modify this as needed for your application's needs. Generate Vespa documents and configuration:
+
+```bash
+$ curl 'https://raw.githubusercontent.com/vespa-engine/vespa/master/config-model/src/main/python/ES_Vespa_parser.py' \
+  > ES_Vespa_parser.py
+
+$ python3 ./ES_Vespa_parser.py --application_name bank bank_data.json bank_mapping.json
+```
+
+This generates documents in *documents.json* (see [JSON format](/en/reference/schemas/document-json-format)) where each document has IDs like this `id:bank:_doc::1`. It also generates a *bank* folder with an [application package](/en/basics/applications):
+
+```txt
+/bank
+      │
+      ├── documents.json
+      ├── hosts.xml
+      ├── services.xml
+      └── /schemas
+            └── _doc.sd
+```
+
+Enter the application package directory:
+
+```bash
+$ cd bank
+```
+
+## Deploy
+
+Install [Vespa CLI](/en/clients/vespa-cli). In this example we use [Homebrew](https://brew.sh/), you can also download from [GitHub](https://github.com/vespa-engine/vespa/releases):
+
+```bash
+$ brew install vespa-cli
+```
+
+Configure for Vespa Cloud deployment, log in and add credentials:
+
+```bash
+$ vespa config set target cloud
+$ vespa config set application $TENANT_NAME.myapp.default
+```
+
+```bash
+$ vespa auth login
+```
+
+```bash
+$ vespa auth cert
+```
+
+Also see [getting started](/en/basics/deploy-an-application) guide. Deploy the application package:
+
+```bash
+$ vespa deploy --wait 300
+```
+
+Index the documents exported from Elasticsearch:
+
+```bash
+$ vespa feed documents.json
+```
+
+## Interfacing with Vespa
+
+Export all documents:
+
+```bash
+$ vespa visit
+```
+
+Get a document:
+
+```bash
+$ vespa document get id:bank:_doc::1
+```
+
+Count documents, find `"totalCount":1000` in the output:
+
+```bash
+$ vespa query 'select * from _doc where true'
+```
+
+Run a simple query against the *firstname* field:
+
+```bash
+$ vespa query 'select firstname,lastname from _doc where firstname contains "amber"'
+```
+
+## Next steps
+
+Review the differences in document records, Vespa to the right:
+
+Elasticsearch:
+
+```json
+{
+    "_index": "bank",
+    "_type": "_doc",
+    "_id": "1",
+    "_score": 1,
+    "_source": {
+      "account_number": 1,
+      "balance": 39225,
+      "firstname": "Amber",
+      "lastname": "Duke",
+      "age": 32,
+      "gender": "M",
+      "address": "880 Holmes Lane",
+      "employer": "Pyrami",
+      "email": "amberduke@pyrami.com",
+      "city": "Brogan",
+      "state": "IL"
+    }
+}
+```
+
+Vespa:
+
+```json
+{
+    "put": "id:bank:_doc::1",
+    "fields": {
+      "account_number": 1,
+      "balance": 39225,
+      "firstname": "Amber",
+      "lastname": "Duke",
+      "age": 32,
+      "gender": "M",
+      "address": "880 Holmes Lane",
+      "employer": "Pyrami",
+      "email": "amberduke@pyrami.com",
+      "city": "Brogan",
+      "state": "IL"
+    }
+}
+```
+
+The [id](/en/schemas/documents#document-ids) field `id:bank:_doc::1` is composed of:
+
+- namespace: `bank`
+- schema: `_doc`
+- id: `1`
+
+Read more in [Documents](/en/schemas/documents) and [Schemas](/en/basics/schemas). The schema is the key Vespa configuration file where field types and [ranking](/en/basics/ranking) are configured. The schema (found in `schemas/_doc.sd`) also has [indexing](/en/basics/schemas#document-fields) settings, example:
+
+```txt
+search _doc {
+    document _doc {
+        field account_number type long {
+            indexing: summary | attribute
+        }
+        field address type string {
+            indexing: summary | index
+        }
+        ...
+    }
+}
+```
+
+These settings impact both performance and how fields are matched. For example, the *account_number* above is using the *attribute* keyword, which makes the field available for [sorting](/en/reference/querying/sorting-language), [ranking](/en/basics/ranking), [grouping](/en/querying/grouping), but which by default does not have data structures for fast search. Read more in [attributes](/en/content/attributes) and [practical search performance guide](/en/performance/practical-search-performance-guide).
+
+## Test with local deployment
+
+To run the steps above, using a local deployment, follow the steps in the [quickstart](/en/basics/deploy-an-application-local) to start a local container running Vespa. Then, deploy the application package from the *bank* folder.

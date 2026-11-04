@@ -1,0 +1,340 @@
+---
+title: "Tensor Guide"
+sidebarTitle: "Tensor user guide"
+---
+
+Vespa provides a _tensor_ data model and computation engine to support advanced computations over data. This guide explains the tensor support in Vespa. See also the [tensor reference](/en/reference/ranking/tensor), and our [published paper](https://dl.acm.org/doi/10.1145/3459104.3459152) ([pdf](/assets/a_tensor_formalism_for_computer_science.pdf)).
+
+## Tensor concepts
+
+A tensor in Vespa is a data structure which generalizes scalars, vectors and matrices to any number of dimensions:
+
+- A scalar is a tensor of rank 0
+- A vector is a tensor of rank 1
+- A matrix is a tensor of rank 2
+- ...
+
+Tensors consist of a set of scalar valued _cells_, with each cell having a unique _address_. A cell's address is specified by its index or label in all the dimensions of that tensor. The number of dimensions in a tensor is the _rank_ of the tensor. Each dimension can be either _mapped_ or _indexed_. Mapped dimensions are sparse and allow any label (string identifier) designating their address, while indexed dimensions use dense numeric indices starting at 0.
+
+Example: Using [literal form](/en/reference/ranking/tensor#tensor-literal-form), the tensor:
+
+```js
+{
+    {user:bob, movie:"Heat"}:0.1,
+    {user:alice, movie:"Frozen"}:0.9,
+    {user:carol, movie:"Top Gun"}:0.3,
+}
+```
+
+has two dimensions named `user` and `movie`, and has three cells with defined values:
+
+<Frame>
+ ![Tensor graphical representation](/assets/img/tensor-mapped.png)
+</Frame>
+
+A tensor has a _type_, which consists of a set of dimension names, dimension types, and a [tensor cell value type](/en/reference/ranking/tensor#tensor-type-spec). The dimension name can be anything. This defines a 2-dimensional mapped tensor (sparse 2D matrix) of floats as illustrated above:
+
+```bash
+tensor<float>(user{},movie{})
+```
+This is a 2-dimensional indexed tensor (a 2D 1280x720 matrix). For example, used to represent an image:
+```bash
+tensor<int8>(x[1280],y[720])
+```
+This is a 3-dimensional indexed tensor. For example, used to represent spatial data:
+```bash
+tensor<float>(x[256], y[256], z[128])
+```
+This is a _mixed_ tensor combining a _mapped_ dimension and an _indexed_ dimension. For example, used to represent word2vec:
+```bash
+tensor<bfloat16>(word_id{},vec[300])
+```
+Another mixed tensor used to represent paragraph [embeddings](/en/rag/embedding) used to power [multi-vector indexing](https://blog.vespa.ai/semantic-search-with-multi-vector-indexing/).
+```bash
+tensor<float>(paragraph{},embedding[768])
+```
+
+Vespa uses the tensor type information to optimize tensor expression execution plans at configuration time.
+
+## Tensor document fields
+
+Document fields in [schemas](/en/basics/schemas) can be of any tensor type:
+
+```js expandable
+schema product {
+
+    document product {
+
+        field title type string {
+            indexing: summary | index
+        }
+
+        field price type int {
+            indexing: summary | attribute
+        }
+
+        field popularity type float {
+            indexing: summary | attribute
+        }
+
+        field sales_score type tensor<float>(category{}) {
+            indexing: summary | attribute
+        }
+
+        field embedding type tensor<float>(x[4]) {
+            indexing: summary | attribute | index
+            attribute {
+                distance-metric: dotproduct
+            }
+        }
+    }
+}
+```
+
+The above schema exemplifies a _product_ with two tensor fields. The `sales_score` tensor field represents how popular a product is per unique _category_. This information could be used when [ranking](/en/basics/ranking) products for a user query. The `embedding` tensor field represents an embedding vector representation of the product.
+
+- **sales\_score** is a _mapped_ tensor with a single mapped dimension `category`. Mapped dimensions are sparse and allow any label (string identifier) designating their address.
+- **embedding** is an _indexed_ tensor. Indexed dimensions use dense numeric indices starting at 0.
+
+To perform computations over a document tensor field in [ranking](/en/ranking/ranking-intro), the field must be defined with [attribute](/en/content/attributes).
+
+Tensors with the following types can be indexed with [HNSW](/en/querying/approximate-nn-hnsw) and searched efficiently using the [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) query operator:
+
+- One indexed dimension - single vector per tensor field
+- One mapped and one indexed dimension - multiple vectors per tensor field
+
+See [nearest neighbor search](/en/querying/nearest-neighbor-search) and [approximate nearest neighbor search](/en/querying/approximate-nn-hnsw).
+
+## Feeding tensors
+
+An example _product_ document in Vespa JSON format. This example uses the product category string as the mapped label key. The _embedding_ tensor stores and indexes ([HNSW](/en/querying/approximate-nn-hnsw)) a dense [embedding](/en/rag/embedding).
+
+```json 
+{
+    "put": "id:shopping:product::B0BFW5SXX2",
+    "fields": {
+        "title": "Keyboard Case for iPad Pro 12.9 inch",
+        "price": 29,
+        "popularity": 0.8,
+        "sales_score": {
+            "Tablet Keyboard Cases": 8.0,
+            "Keyboards": 2.0,
+            "Personal Computers": 0.1
+        },
+        "embedding": [
+            1,
+            2,
+            3,
+            4
+        ]
+    }
+}
+```
+
+The JSON feed format example above uses short value form. Tensor fields can be represented using different [JSON format](/en/reference/schemas/document-json-format#tensor) verbosity.
+
+You can use [partial updates](/en/writing/partial-updates) of tensor fields with [add](/en/reference/schemas/document-json-format#tensor-add), [remove](/en/reference/schemas/document-json-format#tensor-remove) and [modify](/en/reference/schemas/document-json-format#tensor-modify) tensor cells, or [assign](/en/reference/schemas/document-json-format#tensor-field) a completely new tensor value. From [container components](/en/applications/components) you can create and modify tensor values using the [tensor Java API](https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html).
+
+You would typically re-calculate the per category sales scores outside Vespa and update them continuously using [partial updates](/en/writing/partial-updates) to avoid re-feeding or re-indexing of other fields.
+
+## Querying with tensors
+
+Query input tensors **must** be defined in the schema [rank-profile](/en/ranking/ranking-intro) using [inputs](/en/reference/schemas/schemas#inputs):
+
+```js
+rank-profile product_ranking inherits default {
+    inputs {
+        query(q_category) tensor<float>(category{})
+        query(q_embedding) tensor<float>(x[4])
+    }
+    .....
+}
+```
+
+The above defines two query input tensors that we can reference in [ranking](/en/ranking/ranking-intro) expressions. With the tensor query name and tensor type defined, you can:
+
+- Add it to the query in a [Searcher](/en/applications/searchers) using the [Tensor class](https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html) and setting it by `Query.getRanking().getFeatures.put("query(q_embedding)", myTensorInstance)`, or 
+- Pass it in the request, using an HTTP parameter like `input.query(q_embedding)` and passing a tensor [value](/en/reference/ranking/tensor#tensor-literal-form). 
+
+An example query request using [Vespa CLI query request](/en/clients/vespa-cli#queries):
+
+```bash
+vespa query 'yql=select * from product where {targetHits:1}nearestNeighbor(embedding,q_embedding)' \
+  'input.query(q_embedding)=[1,2,3,4]' \
+  'input.query(q_category)={"Tablet Keyboard Cases":0.8, "Keyboards":0.3}' \
+  'ranking=product_ranking'
+```
+
+This query request example assumes that the user query has been mapped (classified) to be related to the _Tablet Keyboard Cases_ and _Keyboards_ categories. Similarly, the user query has been mapped to a dense vector representation (`query(q_embedding`) and is used as input to the [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) query operator, expressed with the [YQL query language](/en/querying/query-language).
+
+The Vespa CLI uses HTTP GET and you can use the _-v_ flag to see the curl GET equivalent. For [POST](/en/querying/query-api#using-post) query requests using JSON, the equivalent JSON is:
+
+```json
+{
+    "yql": "select * from product where {targetHits:1}nearestNeighbor(embedding,q_embedding)",
+    "input": {
+        "query(q_embedding)": [
+            1,
+            2,
+            3,
+            4
+        ],
+        "query(q_category)": {
+          "Tablet Keyboard Cases": 0.8,
+          "Keyboards":0.3
+        }
+    },
+    "ranking": "product_ranking"
+}
+```
+
+If the input query tensor used for the [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) operator is not defined in the schema rank-profile, the request will fail:
+
+```json
+"Expected 'query(q_embedding)' to be a tensor, but it is the string '[1,2,3,4]'"
+```
+
+## Ranking with tensors
+
+Tensors can be used in making inference computations over documents that are matched by a query. These computations are expressed with [ranking expressions](/en/reference/ranking/ranking-expressions) in schema [rank profiles](/en/reference/schemas/schemas#rank-profile). We can use this support to rank products by both the dense embedding dot product similarity and the category sales score.
+
+```js
+rank-profile product_ranking inherits default {
+
+    inputs {
+        query(q_category) tensor<float>(category{})
+        query(q_embedding) tensor<float>(x[4])
+    }
+
+    function p_sales_score() {
+        expression: sum(query(q_category) * attribute(sales_score))
+    }
+
+    function p_embedding_score() {
+        expression: closeness(field, embedding)
+    }
+
+    first-phase {
+        expression: p_sales_score() + p_embedding_score()
+    }
+    match-features: p_sales_score() p_embedding_score()
+}
+```
+
+The above profile uses a combination of two dot product calculations in the [first phase](/en/ranking/phased-ranking) expression. The `first-phase` expression is invoked for all documents that are **retrieved** by the [YQL query language](/en/querying/query-language).
+
+- The _p\_sales\_score_ function calculates the sparse tensor dotproduct between the _query(q\_category)_ and _attribute(sales\_score)_ tensor. 
+- The _p\_embedding\_score_ calculates the dense tensor dotproduct between the _query(q\_embedding)_ and _attribute(embedding)_ tensors. The function uses the [closeness(dimension,name)](/en/reference/ranking/rank-features#closeness(dimension,name)) [rank-feature](/en/reference/ranking/rank-features) which is calculated by the [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) query operator. Alternatively, if we don't use the _nearestNeighbor_ operator in the query request, we could use sparse tensor dotproduct:
+```js
+function p_embedding_score() {
+    expression: sum(query(q_embedding) * attribute(embedding))
+}
+```
+
+The full list of tensor functions are listed in the [ranking expression reference](/en/reference/ranking/ranking-expressions#tensor-functions). Using [match-features](/en/reference/schemas/schemas#match-features), developers can debug, or log function outputs in the search result.
+
+```json
+"matchfeatures": {
+    "p_embedding_score": 30.0,
+    "p_sales_score": 8.0,
+},
+"documentid": "id:shopping:product::B0BFW5SXX2",
+"title": "Keyboard Case for iPad Pro 12.9 inch"
+```
+
+## Creating tensors from document fields
+
+If you need to make tensor computations from non-tensor single-valued attributes, arrays, weighted sets, or array\<struct\> fields, you can convert them in a ranking expression:
+
+- Creating an _indexed_ tensor where the _values_ are lifted from single-value attributes (price and popularity) using the tensor generate function:
+```js
+function to_indexed_tensor() {
+    expression: tensor(x[2]):[attribute(price),attribute(popularity)]
+}
+```
+- Creating a _mapped_ tensor where the _values_ are lifted from single-value attributes using the tensor generate function:
+```js
+function to_mapped_tensor() {
+    expression: tensor(x{}):{key1:attribute(price),key2:attribute(popularity)}
+}
+```
+- Creating a _mapped_ tensor where the _label(s)_ are lifted from a string array or single-value attribute can be done with the [document feature](/en/reference/ranking/rank-features#document-features) `tensorFromLabels`. 
+- Creating a _mapped_ tensor where the labels _and_ values are lifted from a weighted set can be done with the [document feature](/en/reference/ranking/rank-features#document-features) `tensorFromWeightedSet`. 
+- Creating a _mapped_ tensor where labels and values are lifted from an `array<struct>` attribute can be done with the [document feature](/en/reference/ranking/rank-features#document-features) `tensorFromStructs`. 
+
+Converting non-tensor fields to tensors at query runtime has a performance penalty that is linear with the number of elements in the array, weighted set, or struct array. Prefer using native tensor fields instead. The benefit of converting non-tensor fields is that non-tensor fields like `int`, `float`, `weightedset`, or `array<struct>` can be efficiently queried. Only specific tensor types can be searched efficiently using the [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) query operator.
+
+## Constant tensors
+
+In addition to document tensors and query tensors, [constant tensors](/en/reference/schemas/schemas#constant) can be put in the [application package](/en/reference/applications/application-packages). This is useful for adding machine learned models. Example:
+
+```js
+constants {
+    my_tensor_constant tensor<float>(x[4]): file: constants/constant_tensor_file.json
+}
+```
+
+This defines a new tensor with the type as defined and the contents distributed with the application package in the file _constants/constant\_tensor\_file.json_. The format of this file is the [constant tensor JSON format](/en/reference/ranking/constant-tensor-json-format):
+
+```json
+{
+    "type": "tensor<float>(x[4])",
+    "values": [
+        0,
+        0,
+        0,
+        1.0
+    ]
+}
+```
+
+To use this constant tensor in a ranking expression, encapsulate the constant name with `constant(...)`:
+
+```js
+rank-profile use_constant_tensor inherits product_ranking {
+    constants {
+        my_tensor_constant tensor<float>(x[4]): file: constants/constant_tensor_file.json
+    }
+    first-phase {
+        expression: sum(query(q_embedding) * attribute(embedding) * constant(my_tensor_constant))
+    }
+}
+```
+
+Note that the rank profile `inherit` the inputs we defined in the `product_ranking` profile. With the example data used, the first-phase expression returns the 16.0 since:
+
+```json
+"embedding": [
+    1.0,
+    2.0,
+    3.0,
+    4.0
+  ],
+  "query(q_embedding)": [
+    1.0,
+    2.0,
+    3.0,
+    4.0
+  ],
+  "constant(my_tensor_constant)": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+  ]
+```
+
+## Tensors with strings
+
+Tensors in Vespa cannot have strings as values, since the mathematical tensor functions would be undefined for such "tensors". However, you can still represent sets of strings in tensors by using the strings as keys in a mapped tensor dimensions, using e.g 1.0 as values. This allows you to perform set operations on strings and similar without making those tensors incompatible with other tensors and with normal tensor operations.
+
+## Further reading
+
+See also:
+
+- [Blog post: Computing with tensors in Vespa](https://blog.vespa.ai/computing-with-tensors/).
+- [Using ONNX models](/en/ranking/onnx) to use machine-learned models taking tensor input in Vespa.
+- Some [practical tensor computation examples](/en/ranking/tensor-examples).
+- The [tensor playground](https://docs.vespa.ai/playground/#N4KABGBEBmkFxgNrgmUrWQPYAd5QGNIAaFDSPBdDTAF30gAkBTAJ2bAE8sBXMAgIYA7MDgA2AzmAGteQgCbSFYZgA8cbAJYBbZkNpgA7ptoALMLT0BnLKytLFloTdYr17K1c1ZnAOjAs7GCa9gJgVqa2BgA6QmoC2uLMxFy8-MJg0JrK2rYc2dC22gK03iIlYLGIZhxOLmA8VmxgAOY8mvLMALoAFKa0tDhWcAD0I-JYBFa+AG7MVjgCvgKaI3ojdbYAtI1sW20dzL792mIAlJBkqAC+V9ekGNTkuAxEDzQU+E8f9AiQAIIWay2YKhMDyEphKy0Vg8Ai0HhBMwVELSVp6NgCMSaABeJTKYCw0HCggkdhSc3htlCORKrE0BHm-liABVgXYwKYBHM0UIeNoAEbNIngnTWMr2ZEGQQiIUqEymZqdZwcEELGRNQmuMIELCC7L4ny+WL-ETxRJiVXEqGLOy1dlwS40MC3DD3K7fCDYShQZgkK5en2ezBCBjqu0AfU2rH9zq9fr+0Z6qmA1zOcGAAjgAEZiAK4AAma5Omium7vCDB72vWMfIMBugMQHKzXRowKiyGLCi3TOCUpTS+I5o4owzSqR0NssQd2PBvVv5+iuYetxqChv4t5hR9m152QBNQJOqRAFrrETiIADMXXTiEQuYLxBvxEQABZiABWYgANi6XRLN07mXKsXj+N551XONIF+KA2Wcal0hELkeQFLAzHCW1NWERQtx7cUfCsFIPB4MRSiEFpgnKMBtHHZhHHZfxAg4YwMJqMAAANoDELASg42IIVoMJaE4DRJ2dacXRA+cwN9PcVy+BsvQ3KBaNUeidwQmNl3IQ8YPZAAebjeNoAA+ZNUwva9bwzLMH2IJ8X3zd8v1-LpiynYCPRkn1IAg-coP3WDIHglx7BQjgoWYAwRVwTFSkI6QxB44wKMyEEwnkTQ5jtcJosJYldUSHghISoR-AAMRBbJoWERkUjCDiACssGyDjxNLLy533WSD3kwNFLXSAVMgfrMD0lrsh6cMmk0lwUjUjToxSaAegEPMzjWgAqAUzguTy3WknrfP8utBug4KWVMVFUWYABHdoZixPQDFoLAOqAw7vOOhgl0g879xGsb4zDLDtzbLaaLo+Q5tsQCbi61BQJOsbPioJSjwYKrXFyIJzSSIi8o4RAJimWZ5kWZZVnWaMtnxy1phOMRen6QZhjGUnpjmdUqbWIQNnZOnVASAnjloU59oku4UC6EBriAA) which allows you to create and compute with Vespa tensors in your browser.
+- The [Tensor Java API](https://javadoc.io/doc/com.yahoo.vespa/vespajlib/latest/com/yahoo/tensor/Tensor.html).
+- [Tensor ranking performance](/en/performance/feature-tuning#tensor-ranking).
