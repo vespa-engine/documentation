@@ -52,7 +52,8 @@ SCHEMA_SAMPLE = <<~'SD'
 SD
 
 # [text in the sample, occurrence (1-based), expected token]. The token of the first character of
-# that occurrence is checked.
+# that occurrence is checked. An expected token ending in '.*' also accepts its subtokens: use it
+# where the exact token is the grammar's choice, which vespa-engine/vespa may change.
 SCHEMA_EXPECTATIONS = [
   ['# A schema',     1, 'Comment.Single'],
   ['schema',         2, 'Keyword.Declaration'],
@@ -64,7 +65,7 @@ SCHEMA_EXPECTATIONS = [
   ['|',              1, 'Operator'],
   ['tensor',         1, 'Keyword'],
   ['float',          1, 'Keyword.Type'],
-  ['384',            1, 'Literal.Number'],
+  ['384',            1, 'Literal.Number.*'],
   ['embed',          2, 'Name.Function'],
   ['angular',        1, 'Name.Constant'],
   ['array',          1, 'Keyword.Type'],
@@ -97,7 +98,7 @@ SCHEMA_PLACEHOLDER_EXPECTATIONS = [
   ['type',              1, 'Keyword'],
   ['[type-name]',       1, 'Generic.Emph'],            # not "type" as a keyword
   ['[attribute name]',  1, 'Generic.Emph'],
-  ['3]',                1, 'Literal.Number.Integer'],  # a tensor dimension, as before
+  ['3]',                1, 'Literal.Number.*'],        # a tensor dimension, not a placeholder
   ['[1, 2',             1, 'Text'],                    # a tensor value, as before
   ['[attribute(price)', 1, 'Text'],
 ].freeze
@@ -222,7 +223,9 @@ def check_lexer(tag, sample, expectations, failures)
     next failures << "#{tag}: #{snippet.inspect} occurrence #{occurrence} not in sample" unless index
 
     actual = tokens[index]&.qualname
-    failures << "#{tag}: #{snippet.inspect} (#{occurrence}) is #{actual}, expected #{expected}" unless actual == expected
+    base = expected.delete_suffix('.*')
+    matches = actual == base || (expected.end_with?('.*') && actual&.start_with?("#{base}."))
+    failures << "#{tag}: #{snippet.inspect} (#{occurrence}) is #{actual}, expected #{expected}" unless matches
   end
 end
 
