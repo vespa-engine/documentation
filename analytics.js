@@ -4,16 +4,11 @@
 // Mintlify loads every .js file in the content directory on every page, so this runs site-wide.
 // Order matters: consent defaults, then Osano, then GTM - same as _includes/htmlhead.html on the Jekyll site.
 (function () {
-    // TODO: replace with the docs-specific Osano config once it exists
     var OSANO_SRC = "https://cmp.osano.com/6gFOfdLuNB/06819a9e-81bf-4078-896b-32c0db4cfcb9/osano.js";
     var GTM_ID = "GTM-WM6MPVZP";
 
-    // Don't track local development (mint dev).
-    // TODO: before merging, also skip Mintlify preview deployments - only run on docs.vespa.ai
-    var host = window.location.hostname;
-    if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "[::1]" || host.endsWith(".local")) {
-        return;
-    }
+    // Production only - not on local development (mint dev), preview deployments or docs-beta
+    if (window.location.hostname !== "docs.vespa.ai") return;
 
     if (window.__vespaAnalyticsLoaded) return;
     window.__vespaAnalyticsLoaded = true;
@@ -99,10 +94,10 @@
             });
         }
         // Sidebar on desktop, page footer on mobile (a fixed link would cover the "Ask a question" bar),
-        // fixed to the screen on pages with neither (homepage)
+        // the homepage footer (index.mdx), or fixed to the screen on pages with none of these
         var sidebar = document.getElementById("sidebar");
         var parent = sidebar && getComputedStyle(sidebar).display !== "none" ? sidebar
-            : document.getElementById("footer") || document.body;
+            : document.getElementById("vespa-cookie-preferences-slot") || document.getElementById("footer") || document.body;
         if (button.parentElement !== parent) parent.appendChild(button);
     }
 })();
