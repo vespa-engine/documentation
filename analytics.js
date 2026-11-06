@@ -41,63 +41,35 @@
     // Shown only once Osano has loaded, so the link never does nothing
     loadScript(OSANO_SRC, function () {
         placeCookiePreferences();
-        onNavigate(placeCookiePreferencesAfterRender);
+        // Mintlify navigates client-side and re-renders the sidebar and footer, which removes the link.
+        // Put it back whenever that happens; the check is cheap since the link is usually still in place
+        new MutationObserver(function () {
+            if (!cookiePreferences.isConnected || cookiePreferences.parentElement === document.body) placeCookiePreferences();
+        }).observe(document.body, { childList: true, subtree: true });
         window.matchMedia("(min-width: 1024px)").addEventListener("change", placeCookiePreferences);
     });
 
     // Skip GTM for internal users
-    if (!document.cookie.split(';').some(function (cookie) { return cookie.trim().startsWith('vespa_internal=1'); })) {
+    if (!document.cookie.split(';').some(function (cookie) { return cookie.trim() === 'vespa_internal=1'; })) {
         window.dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
         loadScript("https://www.googletagmanager.com/gtm.js?id=" + GTM_ID);
     }
 
-    // Mintlify navigates client-side without rerunning scripts. Not all Mintlify versions fire mintlify:navigate,
-    // so also watch the History API
-    function onNavigate(callback) {
-        var path = location.pathname;
-        function check() {
-            if (location.pathname === path) return;
-            path = location.pathname;
-            callback();
-        }
-        ["pushState", "replaceState"].forEach(function (name) {
-            var original = history[name];
-            history[name] = function () {
-                var result = original.apply(this, arguments);
-                check();
-                return result;
-            };
-        });
-        window.addEventListener("popstate", check);
-        window.addEventListener("mintlify:navigate", check);
-    }
-
     // "Cookie preferences" link. Styles in custom.css.
-    // The sidebar is re-rendered on navigation, which removes the link, so keep placing it until the new page settles
-    function placeCookiePreferencesAfterRender() {
-        var tries = 0;
-        var timer = setInterval(function () {
-            placeCookiePreferences();
-            if (++tries >= 20) clearInterval(timer);
-        }, 100);
-    }
+    var cookiePreferences = document.createElement("button");
+    cookiePreferences.id = "vespa-cookie-preferences";
+    cookiePreferences.type = "button";
+    cookiePreferences.textContent = "Cookie preferences";
+    cookiePreferences.addEventListener("click", function () {
+        window.Osano.cm.showDrawer('osano-cm-dom-info-dialog-open');
+    });
 
     function placeCookiePreferences() {
-        var button = document.getElementById("vespa-cookie-preferences");
-        if (!button) {
-            button = document.createElement("button");
-            button.id = "vespa-cookie-preferences";
-            button.type = "button";
-            button.textContent = "Cookie preferences";
-            button.addEventListener("click", function () {
-                window.Osano.cm.showDrawer('osano-cm-dom-info-dialog-open');
-            });
-        }
         // Sidebar on desktop, page footer on mobile (a fixed link would cover the "Ask a question" bar),
         // the homepage footer (index.mdx), or fixed to the screen on pages with none of these
         var sidebar = document.getElementById("sidebar");
         var parent = sidebar && getComputedStyle(sidebar).display !== "none" ? sidebar
             : document.getElementById("vespa-cookie-preferences-slot") || document.getElementById("footer") || document.body;
-        if (button.parentElement !== parent) parent.appendChild(button);
+        if (cookiePreferences.parentElement !== parent) parent.appendChild(cookiePreferences);
     }
 })();
