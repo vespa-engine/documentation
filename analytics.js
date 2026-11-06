@@ -35,14 +35,20 @@
 
     // Dynamically inserted scripts are async by default; async = false makes them execute in insertion order,
     // so Osano is in place before GTM runs
-    function loadScript(src) {
+    function loadScript(src, onload) {
         var s = document.createElement("script");
         s.src = src;
         s.async = false;
+        if (onload) s.onload = onload;
         document.head.appendChild(s);
     }
 
-    loadScript(OSANO_SRC);
+    // Shown only once Osano has loaded, so the link never does nothing
+    loadScript(OSANO_SRC, function () {
+        placeCookiePreferences();
+        onNavigate(placeCookiePreferencesAfterRender);
+        window.matchMedia("(min-width: 1024px)").addEventListener("change", placeCookiePreferences);
+    });
 
     // Skip GTM for internal users
     if (!document.cookie.split(';').some(function (cookie) { return cookie.trim().startsWith('vespa_internal=1'); })) {
@@ -50,12 +56,53 @@
         loadScript("https://www.googletagmanager.com/gtm.js?id=" + GTM_ID);
     }
 
-    // "Cookie Preferences" footer link (docs.json): any link to #cookie-preferences opens the Osano drawer.
-    // Capture phase so this runs before the Next.js link handler navigates
-    document.addEventListener("click", function (e) {
-        var link = e.target.closest && e.target.closest('a[href$="#cookie-preferences"]');
-        if (!link || !window.Osano || !window.Osano.cm) return;
-        e.preventDefault();
-        window.Osano.cm.showDrawer('osano-cm-dom-info-dialog-open');
-    }, true);
+    // Mintlify navigates client-side without rerunning scripts. Not all Mintlify versions fire mintlify:navigate,
+    // so also watch the History API
+    function onNavigate(callback) {
+        var path = location.pathname;
+        function check() {
+            if (location.pathname === path) return;
+            path = location.pathname;
+            callback();
+        }
+        ["pushState", "replaceState"].forEach(function (name) {
+            var original = history[name];
+            history[name] = function () {
+                var result = original.apply(this, arguments);
+                check();
+                return result;
+            };
+        });
+        window.addEventListener("popstate", check);
+        window.addEventListener("mintlify:navigate", check);
+    }
+
+    // "Cookie preferences" link. Styles in custom.css.
+    // The sidebar is re-rendered on navigation, which removes the link, so keep placing it until the new page settles
+    function placeCookiePreferencesAfterRender() {
+        var tries = 0;
+        var timer = setInterval(function () {
+            placeCookiePreferences();
+            if (++tries >= 20) clearInterval(timer);
+        }, 100);
+    }
+
+    function placeCookiePreferences() {
+        var button = document.getElementById("vespa-cookie-preferences");
+        if (!button) {
+            button = document.createElement("button");
+            button.id = "vespa-cookie-preferences";
+            button.type = "button";
+            button.textContent = "Cookie preferences";
+            button.addEventListener("click", function () {
+                window.Osano.cm.showDrawer('osano-cm-dom-info-dialog-open');
+            });
+        }
+        // Sidebar on desktop, page footer on mobile (a fixed link would cover the "Ask a question" bar),
+        // fixed to the screen on pages with neither (homepage)
+        var sidebar = document.getElementById("sidebar");
+        var parent = sidebar && getComputedStyle(sidebar).display !== "none" ? sidebar
+            : document.getElementById("footer") || document.body;
+        if (button.parentElement !== parent) parent.appendChild(button);
+    }
 })();
