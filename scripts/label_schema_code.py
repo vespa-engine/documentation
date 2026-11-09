@@ -5,7 +5,7 @@ Only the language of a fence is changed (```js expandable -> ```vespa-schema exp
 which blocks are schema code is decided by is_schema() in jekyll_to_mdx.py.
 
 Usage:
-    scripts/label_schema_code.py                # all pages under en/ and ja/
+    scripts/label_schema_code.py                # all pages under en/
     scripts/label_schema_code.py en/querying    # pages under a path
     scripts/label_schema_code.py --dry-run
 """
@@ -47,7 +47,7 @@ def label(text: str, counts: Counter) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("paths", nargs="*", default=["en", "ja"], help="files or directories (default: en ja)")
+    parser.add_argument("paths", nargs="*", default=["en"], help="files or directories (default: en)")
     parser.add_argument("--dry-run", action="store_true", help="report without writing")
     args = parser.parse_args()
     counts: Counter = Counter()

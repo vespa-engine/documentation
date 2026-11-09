@@ -15,7 +15,7 @@ All Vespa features must be documented - this document explains how to add to the
 Vespa documentation is served using [Mintlify](https://mintlify.com/docs).
 To edit documentation, check out and work off the master branch in this repository.
 
-Documentation is written in [MDX](https://mintlify.com/docs/text) and lives under `en/` (and `ja/`).
+Documentation is written in [MDX](https://mintlify.com/docs/text) and lives under `en/`.
 Navigation is defined in [docs.json](docs.json).
 
 ### Local development
