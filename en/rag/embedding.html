@@ -676,7 +676,9 @@ embeddings API to generate embeddings for semantic search.</p>
 <a href="#bert-embedder">Bert</a>, <a href="#colbert-embedder">ColBERT</a>, and <a href="#splade-embedder">SPLADE</a> embedders),
 using <a href="../reference/rag/embedding.html#embedder-onnx-reference-config">GPU</a>, especially for longer sequence lengths (documents),
 can dramatically improve performance and reduce cost.
-See the blog post on <a href="https://blog.vespa.ai/gpu-accelerated-ml-inference-in-vespa-cloud/">GPU-accelerated ML inference in Vespa Cloud</a>.
+See the blog post on <a href="https://blog.vespa.ai/gpu-accelerated-ml-inference-in-vespa-cloud/">GPU-accelerated ML inference in Vespa Cloud</a>,
+and the <a href="../performance/instance-types/aws-instance-types.html">AWS</a> and
+<a href="../performance/instance-types/gcp-instance-types.html">GCP</a> instance types with GPUs.
 With GPU-accelerated instances, using fp16 models instead of fp32 can increase throughput by as much as 3x compared to fp32.</p>
 <p>For cloud embedders that call an external API
 (<a href="#voyageai-embedder">VoyageAI</a>, <a href="#openai-embedder">OpenAI</a>, <a href="#mistral-embedder">Mistral</a>),
@@ -687,6 +689,80 @@ See <a href="#thread-pool-tuning">Thread pool tuning for cloud embedders</a> and
   Refer to <a href="../rag/binarizing-vectors">binarizing vectors</a> for how to reduce vector size.
 </p>
 
+
+
+{% include chip-cloud.html %}
+<h3 id="local-model-inference">Local model inference</h3>
+
+<p>Vespa Cloud can queue inference requests and combine them into batches for local ONNX embedders.
+    Batching is most useful for short inputs on a GPU.</p>
+
+<h4 id="inference-queue-and-concurrency">Inference queue and concurrency</h4>
+<p>The inference queue and the concurrency limit are available in Vespa Cloud only.
+    Concurrency limits how many inference calls can run at once.
+    Requests that cannot start wait in an inference queue.
+    Limiting concurrency reduces contention and bounds the memory needed for active inference calls.</p>
+
+<h4 id="batching-and-padding">Batching and padding</h4>
+<p>Dynamic batching and padding are available in Vespa Cloud only.
+    A <em>batch</em> groups several texts into one inference call.
+    This spreads the overhead of launching operations and transferring data across requests.
+    Each text still gets its own embedding.</p>
+<p>With <em>dynamic batching</em>, Vespa forms batches from compatible requests already in the queue.
+    Local models do not wait for more requests to fill a batch.
+    At low load, a batch may contain just one request.</p>
+<p>Requests can share a batch when their input shapes match.
+    <em>Padding</em> extends token sequences to configured lengths, called <em>padding buckets</em>.
+    With buckets of 32 and 64 tokens, inputs of 12 and 25 tokens are both padded to 32 and can share a batch.
+    An input of 40 tokens is padded to 64 and runs in a separate batch.</p>
+<img src="/assets/img/embedder-padding-buckets.svg"
+     alt="Inputs of 12 and 25 tokens are padded to 32 tokens and can share a batch. An input of 40 tokens is padded to 64 and runs in a separate batch."
+     width="880px" height="auto"/>
+<p>Concurrency applies to whole batches because each batch runs as one inference call.
+    With concurrency set to two, Vespa can run two batches at once.
+    When one finishes, queued requests form a new batch while the other keeps running:</p>
+<img src="/assets/img/embedder-dynamic-batching.svg"
+     alt="Requests C, D and E wait while inference calls A and B run. When A finishes, C, D and E form a batch and start while B keeps running."
+     width="880px" height="auto"/>
+
+<h4 id="configuring-local-model-inference">Configuring local model inference</h4>
+<p>On a container node with a GPU, configure batching and concurrency on the embedder component in
+    <a href="../reference/applications/services/services.html">services.xml</a>.
+    This example batches up to eight texts per call and keeps the default concurrency:</p>
+<pre>{% highlight xml %}
+<component id="arctic" type="hugging-face-embedder">
+    <transformer-model model-id="snowflake-arctic-embed-m-v2.0"/>
+    <max-tokens>512</max-tokens>
+    <transformer-output>token_embeddings</transformer-output>
+    <pooling-strategy>cls</pooling-strategy>
+    <normalize>true</normalize>
+    <prepend>
+        <query>query: </query>
+    </prepend>
+    <batching max-size="8" max-delay="0ms" padding-buckets="32 64"/>
+</component>
+{% endhighlight %}</pre>
+<p>The <a href="../reference/rag/embedding.html#local-model-inference">configuration reference</a>
+    lists defaults, relative concurrency, and padding restrictions.
+    Keep <code>max-delay="0ms"</code> for local models; the attribute is required but has no effect.</p>
+
+<h4 id="tuning-local-model-inference">Tuning local model inference</h4>
+<p>Test with representative input lengths and the expected load.
+    Compare throughput, median latency, and tail latency.</p>
+<p>For short queries, try batching with small padding buckets, as in the example above.
+    For short documents or chunks, consider adding a 128-token bucket: <code>padding-buckets="32 64 128"</code>.
+    Start with the default concurrency. Tune it together with maximum batch size if measurements show a need.
+    Higher concurrency can reduce queue time, but it also increases contention and memory use.
+    It can leave fewer requests available for each batch.</p>
+<p>Choose padding buckets from the token lengths of your inputs before padding.
+    Fewer buckets let more requests share a batch, at the cost of more padding.
+    More buckets reduce padding but leave fewer requests with matching lengths.
+    Inputs longer than the largest bucket are not padded.</p>
+<p>For long documents, start with the default concurrency and no batching.
+    A long input can keep the GPU busy on its own, leaving little benefit from batching.
+    The input length at which this happens depends on the model and GPU.
+    Compare feed throughput with and without batching on your workload.
+    If queries and documents share an embedder, measure both workloads when tuning concurrency.</p>
 
 
 <h2 id="metrics">Metrics</h2>
@@ -914,12 +990,13 @@ and gives two additional benefits: <strong>cost optimization</strong> (via model
     For additional throughput improvements, consider enabling <a href="#dynamic-batching">dynamic batching</a>.</p>
 
 <h3 id="dynamic-batching">Dynamic batching</h3>
+<p>This section covers API embedders. For local ONNX models, see <a href="#local-model-inference">local model inference</a>.</p>
 <p>Dynamic batching combines multiple concurrent embedding requests into a single embedding invocation.
     This is useful when throughput is constrained by the provider's
     requests-per-minute (RPM) limit rather than the tokens-per-minute (TPM) limit.
     Batching reduces RPM usage by combining requests; TPM usage is unaffected.</p>
 
-<p>Dynamic batching is supported by the <a href="#voyageai-embedder">VoyageAI</a>,
+<p>For API embedders, dynamic batching is supported by the <a href="#voyageai-embedder">VoyageAI</a>,
     <a href="#openai-embedder">OpenAI</a>, and <a href="#mistral-embedder">Mistral</a> embedders.</p>
 
 <pre>{% highlight xml %}
@@ -964,6 +1041,31 @@ Error: services not ready: http://127.0.0.1:8080
 </pre>
 
 
+<h3 id="padding-not-applied">Padding not applied</h3>
+<p>Check the container log for a message such as:</p>
+<pre>
+Padding inputs of model_7c1e5a9f3b2d4e60 to padding-buckets [32, 64], unpadding outputs [token_embeddings] back, verified not to change its output
+</pre>
+<p>The model is named by its file name and a hash, not by the id in <code>services.xml</code>.
+    Search the log for <code>padding-buckets</code>.</p>
+<p>When loading the model, Vespa evaluates a sample input with and without padding and compares the outputs.
+    If it cannot construct or evaluate the sample, or the outputs differ beyond the numerical tolerance,
+    Vespa runs the model without padding and logs a message that starts with <code>Not padding inputs of</code>.
+    Deployment warns when <code>padding-buckets</code> can have no effect, because <code>max-size</code> is 1
+    or <code>onnx-gpu-device</code> is -1.</p>
+<p>If padding is not active, check that:</p>
+<ul>
+    <li>The application runs in Vespa Cloud, with <code>max-size</code> above 1 and <code>padding-buckets</code> configured.</li>
+    <li><code>onnx-gpu-device</code> is not -1. The default 0 requests a GPU.
+        On a node without a GPU, omit <code>padding-buckets</code>, since padding only adds work on a CPU.</li>
+    <li>All inputs have shape <code>[batch, sequence]</code>, one of them an attention mask, and the model ignores tokens whose mask value is zero.</li>
+    <li>The model is not dynamically quantized.</li>
+    <li>The input fits in a bucket. Longer inputs are not padded.</li>
+</ul>
+<p>See <a href="../reference/rag/embedding.html#padding-buckets">padding-buckets</a>
+    for input shape requirements and how buckets are capped at the embedder's token limit.</p>
+
+
 <h3 id="tensor-shape-mismatch">Tensor shape mismatch</h3>
 <p>
     The native embedder implementations expect that the output tensor has a specific shape. 
@@ -977,7 +1079,7 @@ Processing failed. Error message: java.lang.IllegalArgumentException: Expected 3
 This means that the exported ONNX model output tensor does not have the expected shape. For example, the above is 
 logged by the <a href="#huggingface-embedder">hf-embedder</a> that expects the output shape to be [batch, sequence, embedding] (A 3D tensor). This is because the embedder
 implementation performs the <a href="../reference/rag/embedding.html#huggingface-embedder">pooling-strategy</a> over the sequence dimension to produce a single embedding vector.
-The batch size is always 1 for Vespa embeddings.
+With <a href="#local-model-inference">dynamic batching</a>, the inference runtime can combine requests along the batch dimension.
 </p>
 <p>
 See <a href="../ranking/onnx#using-optimum-to-export-models-to-onnx-format">onnx export</a> for how to export models to ONNX format with the correct output shapes and
