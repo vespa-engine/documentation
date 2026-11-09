@@ -728,7 +728,7 @@ See <a href="#thread-pool-tuning">Thread pool tuning for cloud embedders</a> and
 <h4 id="configuring-local-model-inference">Configuring local model inference</h4>
 <p>On a container node with a GPU, configure batching and concurrency on the embedder component in
     <a href="../reference/applications/services/services.html">services.xml</a>.
-    This example batches up to eight texts per call and keeps the default concurrency:</p>
+    This example batches up to eight texts per call and runs one inference call at a time:</p>
 <pre>{% highlight xml %}
 <component id="arctic" type="hugging-face-embedder">
     <transformer-model model-id="snowflake-arctic-embed-m-v2.0"/>
@@ -740,6 +740,7 @@ See <a href="#thread-pool-tuning">Thread pool tuning for cloud embedders</a> and
         <query>query: </query>
     </prepend>
     <batching max-size="8" max-delay="0ms" padding-buckets="32 64"/>
+    <concurrency type="absolute">1</concurrency>
 </component>
 {% endhighlight %}</pre>
 <p>The <a href="../reference/rag/embedding.html#local-model-inference">configuration reference</a>
@@ -751,9 +752,11 @@ See <a href="#thread-pool-tuning">Thread pool tuning for cloud embedders</a> and
     Compare throughput, median latency, and tail latency.</p>
 <p>For short queries, try batching with small padding buckets, as in the example above.
     For short documents or chunks, consider adding a 128-token bucket: <code>padding-buckets="32 64 128"</code>.
-    Start with the default concurrency. Tune it together with maximum batch size if measurements show a need.
-    Higher concurrency can reduce queue time, but it also increases contention and memory use.
-    It can leave fewer requests available for each batch.</p>
+    Start with concurrency 1 for queries, as in the example above.
+    With one inference call at a time, every request that arrives while the GPU is busy joins the next batch, so batches are larger.
+    Higher concurrency splits the queue into smaller batches that compete for the GPU, and increases memory use.
+    To reduce inference latency at the cost of throughput, increase concurrency or reduce the maximum batch size, or both.
+    Smaller batches finish sooner, and a second inference call starts without waiting for the first to finish.</p>
 <p>Choose padding buckets from the token lengths of your inputs before padding.
     Fewer buckets let more requests share a batch, at the cost of more padding.
     More buckets reduce padding but leave fewer requests with matching lengths.
