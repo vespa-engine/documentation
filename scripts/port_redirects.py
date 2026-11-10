@@ -69,13 +69,13 @@ def resolve(path: str, *maps: dict[str, str]) -> str:
         path = nxt
 
 
-# Pages the Mintlify site moved without a redirect on master: the old Japanese pages were
-# replaced by the full translation under ja/.
+# Pages the Mintlify site moved without a redirect on master: the old Japanese pages now
+# go to their English counterparts, since the Japanese documentation is no longer maintained.
 MOVED = {
-    "/ja/features": "/ja/learn/features",
-    "/ja/overview": "/ja/learn/overview",
-    "/ja/introduction-to-documentation": "/ja/learn/about-documentation",
-    "/ja/vespa-quick-start": "/ja/basics/deploy-an-application-local",
+    "/ja/features": "/en/learn/features",
+    "/ja/overview": "/en/learn/overview",
+    "/ja/introduction-to-documentation": "/en/learn/about-documentation",
+    "/ja/vespa-quick-start": "/en/basics/deploy-an-application-local",
 }
 
 
