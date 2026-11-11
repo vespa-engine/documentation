@@ -1,0 +1,904 @@
+---
+title: "Rank Feature Reference"
+sidebarTitle: "Rank features"
+---
+
+This is the list of the rank features in Vespa. These features are available during document ranking for combination into a complete rank score by a [ranking expression](/en/reference/ranking/ranking-expressions). The features are a combination of coarse grained features suitable for handwritten expressions, and finer grained features suitable for machine learning.
+
+See also [the overview of the ranking framework](/en/basics/ranking), and [rank feature configuration parameters](/en/reference/ranking/rank-feature-configuration). Notes:
+
+- Types: All rank feature values are doubles or tensors. Integers are converted to exact whole value doubles. String values are converted to exact whole value doubles using a hash function. String literals in ranking expressions are converted using the same hash function, to enable equality tests on string values. 
+- Features which are _normalized_ are between 0 and 1, where 0 is always the minimum and 1 the maximum. Normalized features should normally be preferred because they are more easily combined by [ranking expressions](/en/reference/ranking/ranking-expressions) into a complete normalized score. 
+- A query may override _any_ rank feature value by submitting that value as a feature with the query. 
+- Some features have parameters. It is always allowed to quote parameters with _"_. Nested quotes are not allowed and must be escaped using _\_. Parameters that can be parsed as feature names may be left unquoted. Examples: _foo(bar(baz(5.5)))_, _foo("bar(\"baz(\\\"5.5\\\")\")")_, _foo("need quote")_
+
+## Feature list
+### Query features
+
+- **query(value)**<br/>
+	Default: 0
+
+	An application specific feature submitted with the query, see [using the query feature](/en/ranking/ranking-expressions-features#using-query-variables).
+- **term(n).significance**<br/>
+	Default: 0
+
+	A normalized number (between 0.0 and 1.0) describing the significance of the term; used as a multiplier or weighting factor by many other text matching rank features.
+
+	This should ideally be set by a searcher in the container for global correctness as each node will estimate the significance values from the local corpus. Use the [Java API for significance](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/TaggableItem.html#setSignificance\(double\)) or [YQL annotation for significance](/en/reference/querying/yql#significance).
+
+	As a fallback, a significance based on Robertson-Sparck-Jones term weighting is used; it is logarithmic from 1.0 for rare terms down to 0.5 for common terms (those occurring in every document seen).
+
+	Note that "rare" is defined as a frequency of 0.000001 or less. This is the term document frequency (how many documents contain the term out of all documents that can be observed), so you cannot get 1.0 as the fallback until you actually have a large number of documents (minimum 1 million) in the same search process.
+	See [numTerms](/en/reference/ranking/rank-feature-configuration#term) config.
+- **term(n).weight**<br/>
+	Default: 100
+
+	The importance of matching this query term given in the query
+- **term(n).connectedness**<br/>
+	Default: 0.1
+
+	The normalized strength with which this term is connected to the previous term in the query. Must be assigned to query terms in a [searcher](/en/applications/searchers) using the [Java API for connectivity](https://javadoc.io/doc/com.yahoo.vespa/container-search/latest/com/yahoo/prelude/query/TaggableItem.html#setConnectivity\(com.yahoo.prelude.query.Item,double\)) or [YQL annotation for connectivity](/en/reference/querying/yql#connectivity).
+- **queryTermCount**<br/>
+	Default: 0
+
+	The total number of terms in this query, including both user and synthetic terms in all fields.
+
+### Document features
+
+ - **fieldLength(name)**<br/>
+	Default: 1000000
+
+	The number of terms in this field if one or more query term matched the field, 1000000 if no query term matched the field.
+- **attribute(name)**<br/>
+
+	Default: null
+
+	The value of a [tensor](/en/reference/schemas/schemas#tensor) or single value *numeric* attribute or null/NaN if not set. Use *isNan()* to check if value is not defined. Using undefined values in ranking expressions leads to undefined behavior.
+- **attribute(name,n)**<br/>
+	Default: 0
+
+	The value at index n (base 0) of a *numeric* array attribute with the given name. Note that the index number must be explicit, it cannot be the output of an [expression function](/en/reference/schemas/schemas#function-rank). The order of the items in an array attribute is the same as the order they have in the input feed. If items are added using partial updates they are added to the end of the existing items list.
+- **attribute(name,key).weight**<br/>
+	Default: 0
+
+	The weight found at a given key in a weighted set attribute
+- **attribute(name,key).contains**<br/>
+	Default: 0
+
+	1 if the given key is present in a weighted set attribute, 0 otherwise
+- **attribute(name).count**<br/>
+	Default: 0
+
+	The number of elements in the attribute with the given name.
+- **tensorFromWeightedSet(source,dimension)**<br/>
+	Default: empty tensor
+
+	Creates a `tensor<double>` with one mapped dimension from the given integer or string weighted set attribute. The attribute is specified as the full feature name, `attribute(name)`. The *dimension* parameter is optional. If omitted the dimension name will be the attribute name.
+	Example: Given the weighted set:
+
+  ```bash
+	{key1:0, key2:1, key3:2.5}
+  ```
+	*tensorFromWeightedSet(attribute(myField), dim)* produces:
+  ```bash
+	tensor<double>(dim{}):{ {dim:key1}:0.0, {dim:key2}:1.0, {dim:key3}:2.5} }
+  ```
+  <Info>
+	**Note:** This creates a temporary tensor, and has build cost and extra memory is touched. Tensor evaluation is most effective when the cell types of all tensors are equal - use [cell\_cast](/en/reference/ranking/ranking-expressions#cell_cast) to enable optimizations. Also, duplicating the field in the schema to a native tensor instead of creating from a set can increase performance.
+  </Info>
+
+- **tensorFromLabels(attribute,dimension)**<br/>
+	Default: empty tensor
+
+	Creates a `tensor<double>` with one mapped dimension from the given single value or array attribute. The value(s) must be integers or strings. The attribute is specified as the full feature name, `attribute(name)`. The *dimension* parameter is optional. If omitted the dimension name will be the attribute name.
+	Example: Given an attribute field `myField` containing the array value:
+
+  ```bash
+	[v1, v2, v3]
+  ```
+	*tensorFromLabels(attribute(myField), dim)* produces:
+  ```bash
+	tensor<double>(dim{}):{ {dim:v1}:1.0, {dim:v2}:1.0, {dim:v3}:1.0} }
+  ```
+	See *tensorFromWeightedSet* for performance notes.
+
+- **tensorFromStructs(attribute,key,value,type)**<br/>
+	Default: empty tensor
+
+	Creates a `tensor<type>` with one mapped dimension from the given `array<struct>` attribute. Keys are taken from the struct field *key* and values from the struct field *value*. The resulting tensor will have one mapped dimension named after the *key* field. The *type* parameter is required and must be `float` or `double`.
+
+	Example: Given an `array<struct>` attribute `items` with fields `name` (string) and `price` (float):
+
+  ```bash
+	tensorFromStructs(attribute(items), name, price, float)
+  ```
+  ```bash
+	tensor<float>(name{}):{ {name:apple}:1.5, {name:banana}:0.75, {name:cherry}:2.25 }
+  ```
+
+	Example: Integer keys and float values:
+  ```bash
+	tensorFromStructs(attribute(ids), id, score, double)
+  ```
+  ```bash
+	tensor(id{}):{ {id:100}:10.5, {id:200}:20.75, {id:300}:30.25 }
+  ```
+	The function takes at least four arguments; it's possible to use several *key* arguments to get multiple mapped dimensions. If the `struct` above also contained a `region` field one could use
+
+  ```bash
+	tensorFromStructs(attribute(items), name, region, price, float)
+  ```
+	to get a `tensor<float>(name{},region{})` making it possible to have different prices of apples in different regions.
+	
+  *Details:* Empty or missing arrays yield an empty tensor of the requested type. The first argument must be an `attribute(...)` source. It's an application responsibility to ensure that the key (or combination of keys in the multi-dimensional case) is unique.
+	
+  See *tensorFromWeightedSet* for performance notes.
+
+### Field match features - normalized
+
+fieldMatch features provide a good measure of the degree to which a query matches the text of a field, but are expensive to calculate and therefore often only suitable for [second-phase](/en/ranking/phased-ranking) ranking expressions. See the [string segment match](/en/reference/ranking/string-segment-match) document for details on the algorithm computing this rank-feature set. Note that even using a fine-grained sub features like fieldMatch(_name_).absoluteOccurrence will have the same complexity and cost as using the general top level fieldMatch(_name_) feature.
+
+- **fieldMatch(name)**<br/>
+	Default: 0
+
+	A normalized measure of the degree to which this query and field matched (default, the long name of this is `match`). Use this if you do not want to create your own combination function of more fine-grained fieldmatch features.
+
+- **fieldMatch(name).proximity**<br/>
+	Default: 0
+
+	Normalized proximity - a value which is close to 1 when matched terms are close *inside each segment*, and close to zero when they are far apart inside segments. Relatively more connected terms influence this value more. This is absoluteProximity/average connectedness for the query terms for this field.
+
+	Note that if all the terms are far apart, the proximity will be 1, but the number of segments will be high. Proximity is only concerned with closeness within segments, a total score must also take the number of segments into account.
+
+- **fieldMatch(name).completeness**<br/>
+	Default: 0
+
+	The normalized total completeness, where field completeness is more important:
+
+	queryCompleteness *         ( 1 - [fieldCompletenessImportance](/en/reference/ranking/rank-feature-configuration#fieldMatch) )         + [fieldCompletenessImportance](/en/reference/ranking/rank-feature-configuration#fieldMatch) * fieldCompleteness
+- **fieldMatch(name).queryCompleteness**<br/>
+	Default: 0
+
+	The normalized ratio of query tokens matched in the field:
+
+	`matches/query terms searching this field`
+- **fieldMatch(name).fieldCompleteness**<br/>
+	Default: 0
+
+	The normalized ratio of query tokens which was matched in the field:
+
+	`matches/fieldLength`
+- **fieldMatch(name).orderness**<br/>
+	Default: 0
+
+	A normalized metric of how well the order of the terms agrees in the chosen segments:
+
+	`1-outOfOrder/pairs`
+- **fieldMatch(name).relatedness**<br/>
+	Default: 0
+
+	A normalized measure of the degree to which different terms are related (occurring in the same segment):
+
+	`1-(segments-1)/(matches-1)`
+- **fieldMatch(name).earliness**<br/>
+	Default: 0
+
+	A normalized measure of how early the first segment occurs in this field.
+
+- **fieldMatch(name).longestSequenceRatio**<br/>
+	Default: 0
+
+	A normalized metric of the relative size of the longest sequence:
+
+	`longestSequence/matches`
+
+- **fieldMatch(name).segmentProximity**<br/>
+	Default: 0
+
+	A normalized metric of the closeness (inverse of spread) of segments in the field:
+
+	`1-segmentDistance/fieldLength`
+
+- **fieldMatch(name).unweightedProximity**<br/>
+	Default: 0
+
+	The normalized proximity of the matched terms, not taking term connectedness into account. This number is close to 1 if all the matched terms are following each other in sequence, and close to 0 if they are far from each other or out of order.
+  
+- **fieldMatch(name).absoluteProximity**<br/>
+	Default: 0
+
+	Returns the normalized proximity of the matched terms, weighted by the connectedness of the query terms. This number is 0.1 if all the matched terms are and have default or lower connectedness, close to 1 if they are following in sequence and have a high connectedness, and close to 0 if they are far from each other in the segments or out of order.
+
+- **fieldMatch(name).occurrence**<br/>
+	Default: 0
+
+	Returns a normalized measure of the number of occurrences of the terms of the query. This is 1 if there are many occurrences of the query terms *in absolute terms, or relative to the total content of the field*, and 0 if there are none.
+
+	This is suitable for occurrence in fields containing regular text.
+
+- **fieldMatch(name).absoluteOccurrence**<br/>
+	Default: 0
+  
+	Returns a normalized measure of the number of occurrence of the terms of the query:
+
+	$$
+	\frac{\underset{\text{all query terms}}{\sum} \left(\right. m i n \left(\right. \text{number of occurrences of the term} , m a x O c c u r r e n c e s \left.\right) \left.\right)}{\left(\right. \text{query term count} \times 100 \left.\right)}
+	$$
+
+	This is 1 if there are many occurrences of the query terms, and 0 if there are none.
+
+	This number is not relative to the field length, so it is suitable for uses of occurrence to denote relative importance between matched terms (i.e. fields containing keywords, not normal text).
+
+- **fieldMatch(name).weightedOccurrence**<br/>
+	Default: 0
+
+	Returns a normalized measure of the number of occurrence of the terms of the query, weighted by term weight. This number is close to 1 if there are many occurrences of highly weighted query terms, in absolute terms, or relative to the total content of the field, and 0 if there are none.
+
+- **fieldMatch(name).weightedAbsoluteOccurrence**<br/>
+	Default: 0
+
+	Returns a normalized measure of the number of occurrence of the terms of the query, taking weights into account so that occurrences of higher weighted query terms has more impact than lower weighted terms.
+	This is 1 if there are many occurrences of the highly weighted terms, and 0 if there are none.
+
+	This number is not relative to the field length, so it is suitable for uses of occurrence to denote relative importance between matched terms (i.e. fields containing keywords, not normal text).
+
+- **fieldMatch(name).significantOccurrence**<br/>
+	Default: 0
+
+	Returns a normalized measure of the number of occurrence of the terms of the query *in absolute terms, or relative to the total content of the field*, weighted by term significance.
+
+	This number is 1 if there are many occurrences of the highly significant terms, and 0 if there are none
+
+### Field match features - normalized and relative to the whole query
+- **fieldMatch(name).weight**<br/>
+	Default: 0
+
+	The normalized weight of this match relative to the whole query: The sum of the weights of all *matched* terms/the sum of the weights of all *query* terms. If all the query terms were matched, this is 1. If no terms were matched, or these matches has weight zero this is 0.
+
+	As the sum of this number over all the terms of the query is always 1, sums over all fields of normalized rank features for each field multiplied by this number for the same field will produce a normalized number.
+
+	Note that this scales with the number of matched query terms in the field. If you want a component which does not, divide by matches.
+
+- **fieldMatch(name).significance**<br/>
+	Default: 0
+
+	Returns the normalized term significance of the terms of this match relative to the whole query: The sum of the significance of all *matched* terms/the sum of the significance of all *query* terms. If all the query terms were matched, this is 1. If no terms were matched, or if the significance of all the matched terms is zero, this number is zero.
+
+	This metric has the same properties as weight.
+  
+	See the [term(n).significance](/en/reference/ranking/rank-features#term(n).significance) feature for how the significance for a single term is calculated.
+- **fieldMatch(name).importance**<br/>
+	Default: 0
+
+	Returns the average of significance and weight. This has the same properties as those metrics.
+### Field match features - not normalized
+
+- **fieldMatch(name).segments**<br/>
+	Default: 0
+
+	The number of field text segments which are needed to match the query as completely as possible
+- **fieldMatch(name).matches**<br/>
+	Default: 0
+
+	The total number of query terms which was matched in this field
+- **fieldMatch(name).degradedMatches**<br/>
+	Default: 0
+
+	The number of degraded query terms which was matched in this field. A degraded term is a term where no occurrence information is available during calculation. The number of degraded matches is less than or equal to the total number of matches.
+- **fieldMatch(name).outOfOrder**<br/>
+	Default: 0
+
+	The total number of out of order token sequences *within* matched field segments
+- **fieldMatch(name).gaps**<br/>
+	Default: 0
+
+	The total number of position jumps (backward or forward) within field segments
+- **fieldMatch(name).gapLength**<br/>
+	Default: 0
+
+	The summed length of all gaps within segments
+- **fieldMatch(name).longestSequence**<br/>
+	Default: 0
+
+	The size of the longest matched continuous, in-order sequence in the field
+- **fieldMatch(name).head**<br/>
+	Default: 0
+
+	The number of tokens in the field preceding the start of the first matched segment
+- **fieldMatch(name).tail**<br/>
+	Default: 0
+
+	The number of tokens in the field following the end of the last matched segment
+- **fieldMatch(name).segmentDistance**<br/>
+	Default: 0
+
+	The sum of the distance between all segments making up a match to the query, measured as the sum of the number of token positions separating the *start* of each *field* adjacent segment.
+
+### Query and field similarity
+ - **fieldTermMatch(name,n).firstPosition**<br/>
+	Default: 1000000
+
+	The position of the first occurrence of this query term in this index field. [numTerms](/en/reference/ranking/rank-feature-configuration#fieldTermMatch) configuration
+- **fieldTermMatch(name,n).occurrences**<br/>
+	Default: 0
+
+	The number of occurrences of this query term in this index field
+
+- **matchCount(name)**<br/>
+	Default: 0
+
+	Returns number of times any term in the query matches this index/attribute field.
+
+- **matches(name)**<br/>
+	Default: 0
+
+	Returns 1 if the index/attribute field with the given name is matched by the query.
+- **matches(name,n)**<br/>
+	Default: 0
+
+	Returns 1 if the index/attribute field with the given name is matched by the query term with position *n*.
+- **termDistance(name,x,y).forward**<br/>
+	Default: 1000000
+
+	The minimum distance between the occurrences of term *x* and term *y* in this index field. Term *x* occurs before term *y*.
+
+- **termDistance(name,x,y).forwardTermPosition**<br/>
+	Default: 1000000
+
+	The position of the occurrence of term *x* in this index field used for the forward distance.
+- **termDistance(name,x,y).reverse**<br/>
+	Default: 1000000
+
+	The minimum distance between the occurrences of term *y* and term *x* in this index field. Term *y* occurs before term *x*.
+- **termDistance(name,x,y).reverseTermPosition**<br/>
+	Default: 1000000
+
+	The position of the occurrence of term *y* in this index field used for the reverse distance.
+
+### Query term and field match features
+
+- **fieldTermMatch(name,n).firstPosition**<br/>
+	Default: 1000000
+
+	The position of the first occurrence of this query term in this index field. [numTerms](/en/reference/ranking/rank-feature-configuration#fieldTermMatch) configuration
+- **fieldTermMatch(name,n).occurrences**<br/>
+	Default: 0
+
+	The number of occurrences of this query term in this index field
+- **matchCount(name)**<br/>
+	Default: 0
+
+	Returns number of times any term in the query matches this index/attribute field.
+- **matches(name)**<br/>
+	Default: 0
+
+	Returns 1 if the index/attribute field with the given name is matched by the query.
+- **matches(name,n)**<br/>
+	Default: 0
+
+	Returns 1 if the index/attribute field with the given name is matched by the query term with position *n*.
+- **termDistance(name,x,y).forward**<br/>
+	Default: 1000000
+
+	The minimum distance between the occurrences of term *x* and term *y* in this index field. Term *x* occurs before term *y*.
+- **termDistance(name,x,y).forwardTermPosition**<br/>
+	Default: 1000000
+
+	The position of the occurrence of term *x* in this index field used for the forward distance.
+- **termDistance(name,x,y).reverse**<br/>
+	Default: 1000000
+
+	The minimum distance between the occurrences of term *y* and term *x* in this index field. Term *y* occurs before term *x*.
+- **termDistance(name,x,y).reverseTermPosition**<br/>
+	Default: 1000000
+
+	The position of the occurrence of term *y* in this index field used for the reverse distance
+
+### Features for indexed multivalue string fields
+- **elementCompleteness(name).completeness**<br/>
+	Default: 0
+
+	A weighted combination of fieldCompleteness and queryCompleteness for the element in the field that produces the highest value for this output after the elements weight is factored in. The weighting can be adjusted using [elementCompleteness(name).fieldCompletenessImportance](/en/reference/ranking/rank-feature-configuration#elementCompleteness).
+- **elementCompleteness(name).fieldCompleteness**<br/>
+	Default: 0
+
+	The field completeness of the best matching element. This is calculated as:
+
+	`max( (number of query terms matched in the element) /       (element size), 1.0)`.
+- **elementCompleteness(name).queryCompleteness**<br/>
+	Default: 0
+
+	The query completeness of the best matching element. This is calculated as:
+
+	`(sum of weight for query terms matched in the element) /       (sum of weight for query terms searching the field)`.
+- **elementCompleteness(name).elementWeight**<br/>
+	Default: 0
+
+	The weight of the best matching element, starting from the default - i.e., negative weights will return 0.
+- **elementSimilarity(name)**<br/>
+	Default: 0
+
+	Aggregated similarity between the query and individual field elements. The same sub-scores used by the `textSimilarity` feature are calculated for each individual element in the field. The final output is calculated as the maximum of the combined element similarity measures (similarity measures are combined the same way as the default output of the `textSimilarity` feature) multiplied with the element weight which is 1 for arrays, and the supplied weights for indexed weighted sets.
+
+	This is a flexible feature; how sub-scores are combined for each element and how element scores are aggregated may be configured. You may also add additional outputs if you want to capture multiple signals from a single field. Use [elementSimilarity](/en/reference/ranking/rank-feature-configuration#elementSimilarity) to customize this feature.
+### Attribute match features - normalized
+ - **attributeMatch(name)**<br/>
+	Default: 0
+
+	A normalized measure of the degree to which this query and field matched. This is currently the same as completeness. Note that depending on what the attribute is used for, this may or may not be a suitable metric. If the attribute is a weighted set representing counts of items (like tags), `normalizedWeight` is probably a better metric.
+- **attributeMatch(name).completeness**<br/>
+	Default: 0
+
+	The normalized total completeness, where field completeness is more important:
+	
+  queryCompleteness * ( 1 - [fieldCompletenessImportance](/en/reference/ranking/rank-feature-configuration#attributeMatch) +        [fieldCompletenessImportance](/en/reference/ranking/rank-feature-configuration#attributeMatch) * fieldCompleteness )`
+- **attributeMatch(name).queryCompleteness**<br/>
+	Default: 0
+
+	The query completeness for this attribute:
+	`matches/the number of query terms searching this attribute`
+- **attributeMatch(name).fieldCompleteness**<br/>
+	Default: 0
+
+	The normalized ratio of query tokens which was matched in the field. For arrays: `matches/array length` For weighted sets: `sum of weight of matched terms/sum of weights of entire set`. This is relatively expensive to calculate for large weighted sets.
+- **attributeMatch(name).normalizedWeight**<br/>
+	Default: 0
+
+	A number which is close to 1 if the attribute weights of most matches in a weighted set are high (relative to [maxWeight](/en/reference/ranking/rank-feature-configuration#attributeMatch)), 0 otherwise
+- **attributeMatch(name).normalizedWeightedWeight**<br/>
+	Default: 0
+
+	A number which is close to 1 if the attribute weights of most matches in a weighted set are high (relative to [maxWeight](/en/reference/ranking/rank-feature-configuration#attributeMatch)), and where highly weighted query terms has more impact, 0 otherwise
+- **closeness(dimension,name)**<br/>
+	Default: 0
+
+	Used with the [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) query operator. A number which is close to 1 when a vector in the document tensor is close to the vector given in the query. The indexed dimension representing a vector in document and query tensors must be identical.
+	- *dimension*: Specifies the dimension of *name*. This must be either the string `field` or the string `label`.
+		When using `field`, the name given must be a field with a tensor attribute of appropriate type. Often used when the document type has only one vector field, see [example](/en/querying/nearest-neighbor-search#minimal-example).
+		When using `label`, queries are assumed to contain a [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) query item with a [label](/en/reference/querying/yql#label) that matches the given *name*. This is useful when having multiple vector fields, where `closeness()` then maps to the nearestNeighbor operator with the field configured. [Example](/en/querying/nearest-neighbor-search-guide#using-label).
+	- *name*: The value of the field name or label.
+
+  <Info>
+	**Note:** `closeness()` is calculated **only** based on the vectors matched with nearestNeighbor operator. This means that the value of `closeness()` is not necessarily calculated based on the same vector returned by `closest()` rank feature if nearestNeighbor search is approximate, as `closest()` will be calculated based on *all* specified document vectors.
+  </Info>
+	The output value is 
+	$$
+	closeness(dimension, name) = \frac{1.0}{1.0 + distance(dimension, name)}
+	$$
+	When the tensor field stores multiple vectors per document, the minimum distance between the vectors of a document and the query vector is used in the calculation above.
+- **freshness(name)**<br/>
+	Default: 0
+
+	A number which is close to 1 if the timestamp in attribute *name* is recent compared to the current time compared to [maxAge](/en/reference/ranking/rank-feature-configuration#freshness):
+
+	`max( 1-age(name)/maxAge , 0 )`
+
+	Scales linearly with age, see [freshness plot](#freshness).
+- **freshness(name).logscale**<br/>
+	Default: 0
+
+	A logarithmic-shaped freshness; also goes from 1 to 0, but looks like [freshness plot](/en/reference/ranking/rank-features#freshness). The function is based on `-log(age(name) + scale)` and is calculated as:
+
+	$$ 
+	\frac{l o g \left(\right. m a x A g e + s c a l e \left.\right) - l o g \left(\right. a g e \left(\right. n a m e \left.\right) + s c a l e \left.\right)}{l o g \left(\right. m a x A g e + s c a l e \left.\right) - l o g \left(\right. s c a l e \left.\right)}
+	$$
+
+	where scale is defined using [halfResponse and maxAge](/en/reference/ranking/rank-feature-configuration#freshness):
+
+	$$
+	\frac{- h a l f R e s p o n s e^{2}}{2 \times h a l f R e s p o n s e - m a x A g e}
+	$$
+
+	When `age(name) == halfResponse` the function output is 0.5.
+### Attribute match features - normalized and relative to the whole query
+ 
+- **attributeMatch(name).weight**<br/>
+	Default: 0
+
+	This has the same semantics as fieldMatch(*name*).weight.
+- **attributeMatch(name).significance**<br/>
+	Default: 0
+
+	This has the same semantics as fieldMatch(*name*).significance.
+- **attributeMatch(name).importance**<br/>
+	Default: 0
+
+	Returns the average of significance and weight. This has the same properties as those metrics.
+
+### Attribute match features - not normalized
+
+- **attributeMatch(name).matches**<br/>
+	Default: 0
+
+	The number of query terms which was matched in this attribute
+- **attributeMatch(name).totalWeight**<br/>
+	Default: 0
+
+	The sum of the weights of the attribute keys matched in a weighted set attribute
+- **attributeMatch(name).averageWeight**<br/>
+	Default: 0
+
+	totalWeight/matches
+- **attributeMatch(name).maxWeight**<br/>
+	Default: 0
+
+	The maximum weight of the attribute keys matched in a weighted set attribute
+- **closest(name)**<br/>
+	Default: {}
+
+	Used with the [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) query operator and a tensor field attribute *name* storing multiple vectors per document. This feature returns a tensor with one or more mapped dimensions and one point with a value of 1.0, where the label of that point indicates which document vector was closest to the query vector in the nearest neighbor search.
+
+	Given a tensor field with type `tensor<float>(m{},x[3])` used with the *nearestNeighbor* operator, an example output of this feature is:
+
+  ```bash
+	tensor<float>(m{}):{ 3: 1.0 }
+  ```
+	In this example, the document vector with label *3* in the mapped *m* dimension was closest to the query vector.
+- **closest(name,label)**<br/>
+	Default: {}
+
+	Used with the [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) query operator tagged with a [label](/en/ranking/multivalue-query-operators#raw-scores-and-query-item-labeling) *label* and a tensor field attribute *name* storing multiple vectors per document.
+	See [closest(name)](/en/reference/ranking/rank-features#closest(name)) for details.
+- **distance(dimension,name)**<br/>
+	Default: max double value
+	Used with the [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) query operator. A number which is close to 0 when a point vector in the document is close to a matching point vector in the query. The document vectors and the query vector must be the same tensor type, with one indexed dimension of size N, representing a point in an N-dimensional space.
+	- *dimension*: Specifies the dimension of *name*. This must be either the string `field` or the string `label`.
+		When using `field`, the name given must be a field with a tensor attribute of appropriate type. Often used when the document type has only one vector field, see [example](/en/querying/nearest-neighbor-search#minimal-example).
+		When using `label`, queries are assumed to contain a [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) query item with a [label](/en/reference/querying/yql#label) that matches the given *name*. This is useful when having multiple vector fields, where `distance()` then maps to the nearestNeighbor operator with the field configured. [Example](/en/querying/nearest-neighbor-search-guide#using-label).
+	- *name*: The value of the field name or label.
+
+	The output value depends on the [distance metric](/en/reference/schemas/schemas#distance-metric) used. The default is the Euclidean distance between the "n"-dimensional query point "d" and the point "d" in the document tensor field: 
+	
+	$$ 
+	d i s t a n c e = \sqrt{\sum_{i = 1}^{n} \left(\right. q_{i} - d_{i} \left.\right)^{2}}
+	$$
+
+
+	When the tensor field stores multiple vectors per document, the minimum distance between the vectors of a document and the query vector is used in the calculation above.
+- **age(name)**<br/>
+	Default: 10B
+
+	The document age in seconds relative to the unit time value stored in the attribute having this name
+### Features combining multiple fields and attributes
+- **match**<br/>
+	Default: 0
+
+	A normalized average of the fieldMatch and attributeMatch scores of all the searched fields and attributes, where the contribution of each field and attribute is weighted by its *weight* setting.
+- **match.totalWeight**<br/>
+	Default: 0
+
+	The sum of the weight settings of all the field and attributes searched by the query
+- **match.weight.name**<br/>
+	Default: 100
+
+	The (schema) weight setting of a field or attribute
+
+### Rank scores
+
+- **bm25(field)**<br/>
+	Default: 0
+
+	Calculates the [Okapi BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking function over the given [indexed string field](/en/reference/schemas/schemas#indexing-index). This feature is cheap to compute, about 3-4 times faster than nativeRank, while still providing a good rank score quality wise. This feature is a good candidate for usage in a first phase ranking function when ranking text documents. Note that the field must be enabled to be used with the bm25 feature; set the *enable-bm25* flag in the [index](/en/reference/schemas/schemas#index) section of the field definition. See the [BM25 Reference](/en/ranking/bm25) for more detailed information.
+- **elementwise(bm25(field),dimension,cell\_type)**<br/>
+	Default: tensor(dimension{}):{}
+	Calculates the [Okapi BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking function over each element in the given *multi-valued* [indexed string field](/en/reference/schemas/schemas#indexing-index) and creates a tensor with a single mapped dimension containing the bm25 score for each matching element. The element indexes (starting at 0) are used as dimension labels. This feature is more expensive than [bm25](#bm25), does not need the *enable-bm25* flag and can be tuned with [rank properties](/en/reference/ranking/rank-feature-configuration#elementwise-bm25).
+
+	The *cell\_type* parameter can be omitted (the default value is `double`) except when setting rank properties.
+	
+  Example: If the `content` field is of type `array<string>` where query terms are found in elements 2 and 5 then the feature `elementwise(bm25(content),x,float)` as a summary feature might be shown as:
+
+  ```bash
+	"elementwise(bm25(content),x,float)": {
+	  "type": "tensor(x{})",
+	  "cells": {
+	    "2": 0.5112776,
+	    "5": 0.1021805
+	  }
+	}
+  ```
+- **nativeRank**<br/>
+	Default: 0
+
+	A reasonably good rank score which is computed cheaply by Vespa. This value only is a good candidate first phase ranking function, and is the default used in the default rank profile. The value computed by this function may change between Vespa versions. See the [native rank reference](/en/reference/ranking/nativerank) for more information.
+- **nativeRank(field,...)**<br/>
+	Default: 0
+
+	Same as *nativeRank*, but only the given set of fields are used in the calculation.
+- **nativeFieldMatch**<br/>
+	Default: 0
+
+	Captures how well query terms match in index fields. Used by *nativeRank*. See the [native rank reference](/en/reference/ranking/nativerank) for more information.
+- **nativeFieldMatch(field,...)**<br/>
+	Default: 0
+
+	Same as *nativeFieldMatch*, but only the given set of index fields are used in the calculation.
+- **nativeProximity**<br/>
+	Default: 0
+
+	Captures how near matched query terms occur in index fields. Used by *nativeRank*. See the [native rank reference](/en/reference/ranking/nativerank) for more information.
+- **nativeProximity(field,...)**<br/>
+	Default: 0
+
+	Same as *nativeProximity*, but only the given set of index fields are used in the calculation.
+- **nativeAttributeMatch**<br/>
+	Default: 0
+
+	Captures how well query terms match in attribute fields. Used by *nativeRank*. See the [native rank reference](/en/reference/ranking/nativerank) for more information.
+- **nativeAttributeMatch(field,...)**<br/>
+	Default: 0
+
+	Same as *nativeAttributeMatch*, but only the given set of attribute fields are used in the calculation.
+- **nativeDotProduct(field)**<br/>
+	Default: 0
+
+	Calculates the sparse dot product between query term weights and match weights for the given field. Example: A weighted set string field X:
+
+  ```bash
+	"X": {
+	    "x": 10,
+	    "y": 20,
+	    "z": 30
+	}
+  ```
+	For the query (x!2 OR y!4), the nativeDotProduct(X) feature will have the value 100 (10\*2+20\*4) for that document.
+  <Info>
+	**Note:** `nativeDotProduct` and `nativeDotProduct(field)` is less optimal for computing the dot product - consider using [dotProduct(name,vector)](/en/reference/ranking/rank-features#dotProduct(name,vector)).
+  </Info>
+- **nativeDotProduct**<br/>
+	Default: 0
+
+	Calculates the sparse dot product between query term weights and match weights as above, but for all term/field combinations.
+- **firstPhase**<br/>
+	Default: 0
+
+	The value of the rank score calculated in the first phase (unavailable in first phase ranking expressions)
+- **secondPhase**<br/>
+	Default: 0
+
+	The value of the rank score calculated in the second phase (unavailable in first phase and second phase ranking expressions)
+- **firstPhaseRank**<br/>
+	Default: max double value
+
+	The rank of the document after first phase within the content node when selecting which documents to rerank in second phase. The best document after first phase has rank 1, the second best 2, etc. The feature returns the default value for documents not selected for second phase ranking and for unsupported cases ([streaming search](/en/performance/streaming-search#differences-in-streaming-search), [summary features](/en/reference/schemas/schemas#summary-features), first phase expressions). Multiple documents can have the same *firstPhaseRank* value in multi-node configurations.
+- **firstPhaseMax**<br/>
+	Default: -infinity
+
+	The maximum first-phase rank score among all hits matched on the content node. Calculated locally on each content node, so may yield different results on different nodes.
+- **relevanceScore**<br/>
+	Default: -
+
+	The value of the rank score calculated either in the first or (when defined) in the second phase (unavailable in first phase and second phase ranking expressions) (since 8.559.30).
+### Global features
+- **globalSequence**<br/>
+	Default: n/a
+
+	A global sequence number computed as (1 `<<` 48) - (LocalDocumentId `<<` 16 || [distribution-key](/en/reference/applications/services/content#node)). This will give a global sequence to documents. This is a cheap way of having stable ordering of documents. Note the large range of this value. Also note that if the system is not stable, e.g. if documents move around due to new nodes coming in, or nodes being removed, it will no longer be stable as documents might be found in a different replica. If you need true global ordering we suggest assigning a unique numeric id to your documents as an [attribute](/en/reference/schemas/schemas#attribute) field and use the [attribute(name)](/en/reference/ranking/rank-features#attribute(name)) feature.
+- **now**<br/>
+	Default: n/a
+
+	Time at which the query is executed in unix-time (seconds since epoch)
+- **random**<br/>
+	Default: n/a
+
+	A pseudorandom number in the range `[0,1>` which is drawn once per document during rank evaluation. By default, the current time in microseconds is used as a seed value. Users can specify a seed value by setting [random.seed](/en/reference/ranking/rank-feature-configuration#random) in the rank profile. If you need several independent random numbers the feature can be named like this: `random(foo)`, `random(bar)`.
+- **random.match**<br/>
+	Default: n/a
+
+	A pseudorandom number in the range `[0,1>` that is stable for a given hit. This means that a hit will always receive the same random score (on a single node). If it is required that the scores be different between different queries, specify a seed value dependent upon the query. By default, the seed value is 1024. Users can specify a seed value by adding the query parameter [rankproperty.random.match.seed=`<value>`](/en/reference/api/query#ranking.properties). If you need several independent random numbers the feature can be named like this: `random(foo).match`, `random(bar).match`.
+- **randomNormal(mean,stddev)**<br/>
+	Default: 0.0,1.0
+
+	Same as [random](/en/reference/ranking/rank-features#random), except the random number is drawn from the Gaussian distribution using the supplied mean and stddev parameters. Can be called without parameters; default values are assumed. Seed is set similarly as *random*. If you need several independent random numbers with the same parameters, the feature can be named like this: `randomNormal(0.0,1.0,foo)`, `randomNormal(0.0,1.0,bar)`. If the parameters to *randomNormal* are not the same, you do not need to supply an additional name, e.g. `randomNormal(0.0, 0.1)` and `randomNormal(0.0, 0.5)` results in two independent values.
+- **randomNormalStable(mean,stddev)**<br/>
+	Default: 0.0,1.0
+
+	Same as [randomNormal](/en/reference/ranking/rank-features#randomNormal(mean,stddev)), except that the generated number is stable for a given hit, similar to [random.match](/en/reference/ranking/rank-features#random.match).
+- **constant(name)**<br/>
+	Default: n/a
+
+	Returns the [constant](/en/reference/schemas/schemas#constant) tensor value.
+### Match operator scores
+
+See [Raw scores and query item labeling](/en/ranking/multivalue-query-operators#raw-scores-and-query-item-labeling) 
+
+- **rawScore(field)**<br/>
+	Default: 0
+
+	The sum of all raw scores produced by match operators for this field.
+- **itemRawScore(label)**<br/>
+	Default: 0
+
+	The raw score produced by the query item with the given label.
+
+### Geo search
+These features are for ranking on the distances between geographical coordinates, i.e. points on the surface of the earth defined by latitude/longitude pairs. See the main documentation for [Geo Search](/en/querying/geo-search).
+
+<Info>
+**Note:** Some of these features have the same names as features used with the [nearestNeighbor](/en/reference/querying/yql#nearestneighbor) query operator. Take care not to get them mixed up!
+</Info>
+
+- **closeness(name)**<br/>
+	Default: 0
+
+	A number which is close to 1 if the position in attribute *name* is close to the query position compared to [maxDistance](/en/reference/ranking/rank-feature-configuration#closeness):
+
+	`max(1-distance(name)/maxDistance , 0)`
+
+	Scales linearly with distance, see [closeness plot](/en/reference/ranking/rank-features#closeness).
+- **closeness(name).logscale**<br/>
+	Default: 0
+
+	A logarithmic-shaped closeness; like normal closeness it goes from 1 to 0, but looks like [closeness plot](/en/reference/ranking/rank-features#closeness). The function is a logarithmic fall-off based on `log(distance + scale)` and is calculated as:
+
+	$$
+	c l o s e n e s s \left(\right. n a m e \left.\right) . l o g s c a l e = \frac{l o g \left(\right. m a x D i s t a n c e + s c a l e \left.\right) - l o g \left(\right. d i s t a n c e \left(\right. n a m e \left.\right) + s c a l e \left.\right) \left.\right)}{\left(\right. l o g \left(\right. m a x D i s t a n c e + s c a l e \left.\right) - l o g \left(\right. s c a l e \left.\right) \left.\right)}
+	$$
+
+	where scale is defined using [halfResponse and maxDistance](/en/reference/ranking/rank-feature-configuration#closeness):
+
+	$$
+	s c a l e = \frac{h a l f R e s p o n s e^{2}}{\left(\right. m a x D i s t a n c e - 2 \times h a l f R e s p o n s e \left.\right)}
+	$$
+
+	When `distance(name) == halfResponse` the function output is 0.5; halfResponse should be less than `maxDistance/2` since that means adding a certain distance when you are close matters more than adding the same distance when you're already far away.
+- **distance(name)**<br/>
+	Default: 6400M
+
+	The Euclidean distance from the query position to the given position attribute in millionths of degrees (about 10 cm). If there are multiple positions in the query, items that actually search in *name* is preferred. Also: if multiple query items search in *name*, or *name* is an array of positions, or both, the closest distance found is returned.
+- **distance(name).km**<br/>
+	Default: 711648.5
+
+	As above, but scaled, so it uses the kilometer as unit of distance, instead of "micro-degrees".
+- **distance(name).index**<br/>
+	Default: -1
+
+	The array index of the closest position found. Useful when *name* is of `array<position>` type.
+- **distance(name).latitude**<br/>
+	Default: 90
+
+	The latitude (geographical north-south coordinate) of the closest position found. In range from -90.0 (South Pole) to +90.0 (North Pole). Useful when *name* is of `array<position>` type.
+- **distance(name).longitude**<br/>
+	Default: -180
+
+	The latitude (geographical east-west coordinate) of the closest position found. In range from -180.0 (extreme west) to +180.0 (extreme east). Useful when *name* is of `array<position>` type.
+- **distanceToPath(name).distance**<br/>
+	Default: 6400M
+
+	The Euclidean distance from a path through 2d space given in the query to the given position attribute in millionths of degrees. This is useful e.g. for finding the closest locations to a given road. The query path is set in the [rankproperty.distanceToPath(*name*).path](/en/reference/api/query#ranking.properties) query parameter, using syntax `"(x1,y1,x2,y2,..)"` also in millionth of degrees, see the [distance to path](/en/querying/geo-search#distance-to-path) example. The closest point along the path is referred to as the *intersection*.
+
+	<Info>
+	**Note:** For documents with multiple locations, only the closest location is used for ranking purposes.
+	</Info>
+- **distanceToPath(name).traveled**<br/>
+	Default: 1
+
+	The normalized distance along the query path traveled before intersection (0.0 indicates start of path, 0.5 is middle, and 1.0 is end of path).
+- **distanceToPath(name).product**<br/>
+	Default: 0
+
+	The cross-product of the intersected path segment and the intersection-to-document vector. Given that the document was found to lie closest to the path element `A->B`, the intersected path segment vector is `[ B.x - A.x, B.y - A.y ]`. Furthermore, given that the intersection of that path element occurred at point `I` for document location `D`, the intersection-to-document vector is `[ I.x - D.x, I.y - D.y]`. This is useful e.g. for finding what side of a path a document exists by looking at the sign of this value.
+### Utility features
+- **foreach(dimension, variable, feature, condition, operation)**<br/>
+	Default: n/a
+
+	*foreach* iterates over a set of feature output values and performs an operation on them. Only the values where the condition evaluates to true are considered for the operation. The result of this operation is returned.
+
+	- *dimension*: Specifies what to iterate over. This can be:
+		- *terms*: All query term indices, from 0 and up to [maxTerms](/en/reference/ranking/rank-feature-configuration#foreach).
+		- *fields*: All index field names.
+		- *attributes*: All attribute field names.
+	- *variable*: The name of the variable 'storing' each of the items you are iterating over.
+	- *feature*: The name of the feature you want to use the output value from. Use the *variable* as part of the feature name, and for each item you iterate over this *variable* is replaced with the actual item. Note that the variable replacement is a simple string replace, so you should use a variable name that is not in conflict with the feature name.
+	- *condition*: The condition used on each feature output value to find out if the value should be considered by the operation. The condition can be:
+		- *\>a*: Use feature output if greater than number a.
+		- *`<a`*: Use feature output if less than number a.
+		- *true*: Use all feature output values.
+	- *operation*: The operation you want to perform on the feature output values. This can be:
+		- *sum*: Calculate the sum of the values.
+    	- *product*: Calculate the product of the values.
+    	- *average*: Calculate the average of the values.
+    	- *max*: Find the max of the values.
+    	- *min*: Find the min of the values.
+    	- *count*: Count the number of values.
+
+	Let's say you want to calculate the average score of the *fieldMatch* feature for all index fields, but only consider the scores larger than 0. Then you can use the following setup of the *foreach* feature:
+
+	`foreach(fields,N,fieldMatch(N), ">0", average)`.
+  
+	Note that when using the conditions *`>a`* and *`<a`* the arguments must be quoted.
+
+	You can also specify a ranking expression in the *foreach* feature by using the *rankingExpression* feature. The *rankingExpression* feature takes the expression as the first and only parameter and outputs the result of evaluating this expression. Let's say you want to calculate the average score of the squared *fieldMatch* feature score for all index fields. Then you can use the following setup of the *foreach* feature:
+	`foreach(fields, N, rankingExpression("fieldMatch(N)*fieldMatch(N)"), true, average)`
+
+	Note that you must quote the expression passed in to the *rankingExpression* feature.
+
+- **dotProduct(name,vector)**<br/>
+	Default: 0
+
+  <Info>
+	**Note:** Most dot product use cases are better solved using [tensors](/en/ranking/tensor-user-guide).
+  </Info>
+	The sparse dot product of the vector represented by the given weighted set attribute and the vector sent down with the query.
+	You can also do an ordinary full dotproduct by using arrays instead of weighted sets. This will be a lot faster when you have full vectors in the document with more than 5-10% non-zero values. You are also then not limited to integer weights. All the numeric datatypes can be used with arrays, so you have full floating point support. The 32 bit floating point type yields the fastest execution.
+	- *name*: The name of the weighted set string/integer or array of numeric attribute.
+	- *vector*: The name of the vector sent down with the query.
+	
+Each unique string/integer in the weighted set corresponds to a dimension and the belonging weight is the vector component for that dimension. The query vector is set in the [rankproperty.dotProduct.*vector*](/en/reference/api/query#ranking.properties) query parameter, using syntax `{d1:c1,d2:c2,…}` where *d1* and *d2* are dimensions matching the strings/integers in the weighted set and *c1* and *c2* are the vector components (floating point numbers). The number of dimensions in the weighted set and the query vector do not need to be the same. When calculating the dot product we only use the dimensions present in both the weighted set and the query vector.
+
+When using an array the dimensions is a positive integer starting at 0. If the query is sparse all non given dimensions are zero. That also goes for dimensions that outside of the array size in each document.
+
+Assume a weighted set string attribute X with:
+
+  ```bash
+	"X": {
+	    "x": 10,
+	    "y": 20
+	}
+  ```
+
+for a particular document. The result of using the feature dotProduct(X,Y) with the query vector rankproperty.dotProduct.Y=`{x:2,y:4}` will then be 100 (10\*2+20\*4) for this document.
+
+Arrays can be passed down as `[w1 w2 w3 …]` or on sparse form `{d1:c1,d2:c2,…}` as is already supported for weighted sets.
+
+  <Info>
+	**Note:** When the query vector ends up being the same as the query, it is better to annotate the query terms with weights (see [term weight](/en/reference/querying/simple-query-language#term-weight)) and use the nativeDotProduct feature instead. This will run more efficiently and improve the correlation between results produced by the WAND operator and the final relevance score.
+  </Info>
+  <Info>
+	**Note:** When using the dotProduct feature, [fast-search](/en/content/attributes#fast-search) is not needed, unless also used for searching. When using the dotProduct query operator, use fast-search.
+  </Info>
+
+- **tokenInputIds(length, input\_1, input\_2, ...)**<br/>
+	Default: n/a
+
+	Convenience function for generating token sequence input to Transformer models. Creates a tensor with dimensions `d0[1], d1[length]`, where `d0` is the batch dimension and `d1` is the maximum length of the token sequence. Assumes the inputs are zero-padded tensors representing token sequences. The result is the token sequence:
+
+	`CLS + input_1 + SEP + input_2 + SEP + ... + 0's`
+	- *length*: The maximum length of the token sequence
+	- *input\_N*: Where to retrieve input from. At least one is required.
+
+	The inputs are typically retrieved from the query, document attributes or constants. For instance, `tokenInputIds(128, query(my_input), attribute(my_field))` where input types are:
+
+	- `query(my_input): tensor(d0[32])`
+	- `attribute(my_field): tensor(d0[128])`
+
+	will create a tensor of type `d0[1],d1[128]` consisting of the CLS token `101`, the tokens from the query, the SEP token `102`, the tokens from the document field, the SEP token `102`, and 0's for the rest of the tensor.
+
+- **customTokenInputIds(start\_sequence\_id, sep\_sequence\_idlength, input\_1, input\_2, ...)**<br/>
+	Default: n/a
+
+	Convenience function for generating token sequence input to Transformer models. Creates a tensor with dimensions `d0[1], d1[length]`, where `d0` is the batch dimension and `d1` is the maximum length of the token sequence. Assumes the inputs are zero-padded tensors representing token sequences. The result is the token sequence:
+	`start_sequence_id + input_1 + sep_sequence_id + input_2 + sep_sequence_id + ... + 0's`
+	- *start\_sequence\_id*The start sequence id, typically *1*
+	- *sep\_sequence\_id*The separator sequence id, typically *2*
+	- *length*: The maximum length of the token sequence
+	- *input\_N*: Where to retrieve input from. At least one is required.
+
+The inputs are typically retrieved from the query, document attributes or constants. For instance, `customTokenInputIds(1,2,128, query(my_input), attribute(my_field))` where input types are:
+	- `query(my_input): tensor(d0[32])`
+	- `attribute(my_field): tensor(d0[128])`
+- **tokenTypeIds(length, input\_1, input\_2, ...)**<br/>
+	Default: n/a
+
+	Convenience function for generating token sequence input to Transformer models. Similar to the `tokenInputIds`, creates a tensor of type `d0[1],d1[length]` which represents a mask with zeros for the first input including CLS and SEP token, ones for the rest of the inputs (up to and including the final SEP token), and 0's for the rest of the tensor.
+- **tokenAttentionMask(length, input\_1, input\_2, ...)**<br/>
+	Default: n/a
+
+	Convenience function for generating token sequence input to Transformer models. Similar to the `tokenInputIds`, creates a tensor of type `d0[1],d1[length]` which represents a mask with ones for all tokens that are set (CLS and SEP and all inputs), and zeros for the rest.
+
+## Graphs for selected ranking functions
+
+### closeness
+
+<Frame>
+ ![Closeness logscale plot](/assets/img/relevance/closeness-logscale.png)
+</Frame>
+
+The plot above shows the possible outputs from the closeness distance rank feature using the default maxDistance of 1000 km. The _linear(x)_ graph shows the default closeness output while the other graphs are logscale output for various values of the scaleDistance parameter: 9013.305 (1 km), 45066.525 (5 km - the default value), and 901330.5 (100 km). These values correspond to the following values of the halfResponse parameter: 276154.903 (30.64 km), 593861.739 (65.89 km), and 2088044.581 (231.66 km).
+
+### freshness
+
+<Frame>
+ ![Freshness logscale plot](/assets/img/relevance/freshness-logscale.png)
+</Frame>
+
+The plot above shows the possible outputs from the freshness rank feature using the default maxAge of 7776000s (90 days). The _linear(x)_ graph shows the default freshness output while the other graphs are logscale output for various values of the halfResponse parameter: 172800s (2 days), 604800s (7 days - the default value), 1209600s (14 days).

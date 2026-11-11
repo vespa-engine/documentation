@@ -1,0 +1,57 @@
+---
+title: "The BuM25 rank featre"
+---
+
+The [bm25 rank feature](/en/reference/ranking/rank-features#bm25) implements the [Okapi BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking function used to estimate the relevance of a text document given a search query. It is a pure text ranking feature which operates over an [indexed string field](/en/reference/schemas/schemas#indexing-index). The feature is cheap to compute, about 3-4 times faster than [nativeRank](/en/ranking/nativerank), while still providing a good rank score quality wise. It is a good candidate to use in a first phase ranking function when ranking text documents.
+
+## Ranking function
+
+The *bm25* feature calculates a score for how good a query with terms $q_{1} , . . . , q_{n}$ matches an indexed string field *t* in a document *D*. The score is calculated as follows:
+
+$$
+\sum_{i}^{n} I D F \left(\right. q_{i} \left.\right) \cdot \frac{f \left(\right. q_{i} , D \left.\right) \cdot \left(\right. k_{1} + 1 \left.\right)}{f \left(\right. q_{i} , D \left.\right) + k_{1} \cdot \left(\right. 1 - b + b \cdot \frac{f i e l d _ l e n}{a v g _ f i e l d _ l e n} \left.\right)}
+$$
+
+Where the components in the function are:
+
+- $I D F \left(\right. q_{i} \left.\right)$: The [inverse document frequency](https://en.wikipedia.org/wiki/Tf%E2%80%93idf#Inverse_document_frequency) (*IDF*) of query term *i* in field *t*. This is calculated as:
+	$$
+	l o g \left(\right. 1 + \frac{N - n \left(\right. q_{i} \left.\right) + 0.5}{n \left(\right. q_{i} \left.\right) + 0.5} \left.\right)
+	$$
+	*N* is the total number of documents on the content node. $n \left(\right. q_{i} \left.\right)$ is the number of documents containing query term *i* for field *t*, which is calculated per index existing for that field. The max value among the indexes is used in the calculation, which typically comes from the largest [disk index](/en/content/proton#index).
+	As the *IDF* is calculated per content node and index, slight variations might occur. To use the same *IDF* across all content nodes, set it as the *significance* on each query term using [annotations](/en/reference/querying/yql#annotations).
+- $f \left(\right. q_{i} , D \left.\right)$: The number of occurrences (term frequency) of query term *i* in the field *t* of document *D*. For multi-value fields we use the sum of occurrences over all elements.
+- f i e l d __ l e n : The field length (in number of words) of field *t* in document *D*. For multi-value fields we use the sum of field lengths over all elements.
+- a v g _ f i e l d _ l e n: The average field length of field *t* among the documents on the content node. Can be configured using [rank-properties](/en/reference/ranking/rank-feature-configuration#bm25).
+- $k_{1}$: A parameter used to limit how much a single query term can affect the score for document *D*. With a higher value the score for a single term can continue to go up relatively more when more occurrences for that term exists. Default value is 1.2. Can be configured using [rank-properties](/en/reference/ranking/rank-feature-configuration#bm25).
+- $b$: A parameter used to control the effect of the field length of field *t* compared to the average field length. Default value is 0.75. Can be configured using [rank-properties](/en/reference/ranking/rank-feature-configuration#bm25).
+
+## Example
+
+In the following example we have an indexed string field *content*, and a rank profile using the *bm25* rank feature. Note that the field must be enabled for usage with the bm25 feature by setting the *enable-bm25* flag in the [index](/en/reference/schemas/schemas#index) section of the field definition.
+
+```js
+schema example {
+  document example {
+    field content type string {
+      indexing: index | summary
+      index: enable-bm25
+    }
+  }
+  rank-profile default {
+    first-phase {
+      expression {
+        bm25(content)
+      }
+    }
+  }
+}
+```
+
+If the *enable-bm25* flag is turned on after documents are already fed then [proton](/en/content/proton) performs a [memory index flush](/en/content/proton#memory-index-flush) followed by a [disk index fusion](/en/content/proton#disk-index-fusion) to prepare the posting lists for use with *bm25*.
+
+Use the [custom component state API](/en/content/proton#custom-component-state-api) on each content node and examine `pending_urgent_flush` to determine if the preparation is still ongoing:
+
+```bash
+/state/v1/custom/component/documentdb/mydoctype/subdb/ready/index
+```

@@ -1,0 +1,92 @@
+---
+title: "Delete a VespaSet"
+sidebarTitle: "Delete a VespaSet"
+---
+
+This page provides instructions for deleting a VespaSet.
+
+The ConfigServer and Application Pods use [Kubernetes PreStop Hooks](https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/) to prevent their immediate removal when evicted voluntarily or deleted involuntarily. In production cases, these finalizers are paramount for ensuring proper data redistribution between the Content Pods. However, they also have the adverse side effect of making Vespa difficult to fully uninstall.
+
+Follow the steps below to fully uninstall your setup. This example assumes the Pods were created for the [Album Recommendation](https://github.com/vespa-engine/sample-apps/tree/master/album-recommendation) sample application, the Pods are scheduled in the `$NAMESPACE` namespace, and a `VespaSet` called `vespaset-test` was deployed.
+
+<Warning>
+ **Important:** These instructions should not be run on production serving environments.
+</Warning>
+
+## Steps
+
+### Delete Pods
+
+Run `vespa-stop-configserver` on all ConfigServer Pods. This will ensure that any finalizers will exit immediately, since all finalizers ultimately route to a ConfigServer.
+
+```bash
+$ kubectl exec -n $NAMESPACE cfg-1 -- vespa-stop-configserver
+$ kubectl exec -n $NAMESPACE cfg-2 -- vespa-stop-configserver
+$ kubectl exec -n $NAMESPACE cfg-3 -- vespa-stop-configserver
+```
+
+Run `vespa-stop-services` on all Application Pods.
+
+```bash
+$ kubectl exec -n $NAMESPACE default-100 -- vespa-stop-services
+$ kubectl exec -n $NAMESPACE default-101 -- vespa-stop-services
+$ kubectl exec -n $NAMESPACE music-102 -- vespa-stop-services
+$ kubectl exec -n $NAMESPACE music-103 -- vespa-stop-services
+$ kubectl exec -n $NAMESPACE cluster-controllers-104 -- vespa-stop-services
+$ kubectl exec -n $NAMESPACE cluster-controllers-105 -- vespa-stop-services
+$ kubectl exec -n $NAMESPACE cluster-controllers-106 -- vespa-stop-services
+```
+
+Delete all the ConfigServer and Application Pods. The finalizers will exit immediately.
+
+```bash
+$ kubectl delete pod -n $NAMESPACE cfg-1 --grace-period=0 --force --ignore-not-found
+$ kubectl delete pod -n $NAMESPACE cfg-2 --grace-period=0 --force --ignore-not-found
+$ kubectl delete pod -n $NAMESPACE cfg-3 --grace-period=0 --force --ignore-not-found
+$ kubectl delete pod -n $NAMESPACE default-100 --grace-period=0 --force --ignore-not-found
+$ kubectl delete pod -n $NAMESPACE default-101 --grace-period=0 --force --ignore-not-found
+$ kubectl delete pod -n $NAMESPACE music-102 --grace-period=0 --force --ignore-not-found
+$ kubectl delete pod -n $NAMESPACE music-103 --grace-period=0 --force --ignore-not-found
+$ kubectl delete pod -n $NAMESPACE cluster-controllers-104 --grace-period=0 --force --ignore-not-found
+$ kubectl delete pod -n $NAMESPACE cluster-controllers-105 --grace-period=0 --force --ignore-not-found
+$ kubectl delete pod -n $NAMESPACE cluster-controllers-106 --grace-period=0 --force --ignore-not-found
+```
+
+### Delete Persistent Volume Claims
+
+Delete all PersistentVolumeClaims (PVCs) from the namespace. This should be performed after all Pods have been deleted, to ensure PVC deletion does not hang on a Pod binding.
+
+```bash
+$ kubectl delete pvc -n $NAMESPACE cfg-1-data --ignore-not-found
+$ kubectl delete pvc -n $NAMESPACE cfg-2-data --ignore-not-found
+$ kubectl delete pvc -n $NAMESPACE cfg-3-data --ignore-not-found
+$ kubectl delete pvc -n $NAMESPACE default-100-data --ignore-not-found
+$ kubectl delete pvc -n $NAMESPACE default-101-data --ignore-not-found
+$ kubectl delete pvc -n $NAMESPACE music-102-data --ignore-not-found
+$ kubectl delete pvc -n $NAMESPACE music-103-data --ignore-not-found
+```
+
+### Delete ConfigMaps
+
+Delete all remaining ConfigMaps in the namespace.
+
+```bash
+$ kubectl delete configmap -n $NAMESPACE vespa-config --ignore-not-found
+```
+
+### Delete Services
+
+Delete any Services and other networking components that may have been setup by the operator.
+
+```bash
+$ kubectl delete svc -n $NAMESPACE x --ignore-not-found
+$ kubectl delete svc -n $NAMESPACE cfg-internal --ignore-not-found
+```
+
+### Delete VespaSet
+
+Delete the `VespaSet` resource. With all Pods and services already removed, the operator's finalizer will exit immediately.
+
+```bash
+$ kubectl delete vespaset -n $NAMESPACE vespaset-test --ignore-not-found
+```
