@@ -1,3 +1,4 @@
+import baseURL from "./search_sources.js";
 
 const unescapeMap = Object.freeze({
   '&amp;' : '&',
@@ -43,15 +44,6 @@ const handleResults = (data, query) => {
     const unorderedList = document.createElement("ul");
     unorderedList.className = "search-result-list";
     result.appendChild(unorderedList);
-
-    const baseURL = {
-      open: "http://docs.vespa.ai",
-      cloud: "https://cloud.vespa.ai",
-      blog: "https://blog.vespa.ai",
-      vespaai: "https://vespa.ai",
-      vespaapps: "https://github.com/vespa-engine/sample-apps/tree/master",
-      pyvespa: "https://vespa-engine.github.io/pyvespa",
-    };
 
     const sourceName = {
       open: "Documentation",

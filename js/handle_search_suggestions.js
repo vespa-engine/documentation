@@ -1,3 +1,5 @@
+import baseURL from "./search_sources.js";
+
 // Function to create and manage search suggestions for a specific input
 const createSearchSuggestionHandler = (input) => {
   const inputParent = input.parentElement;
@@ -136,11 +138,12 @@ const createSearchSuggestionHandler = (input) => {
       // Add document results
       if (hasDocResults) {
         docData.forEach((child) => {
+          const path = baseURL[child.fields.namespace] + child.fields.path;
           const p = document.createElement("p");
           p.className = "suggestion-doc";
           p.innerHTML = `📃 ${child.fields.title}`;
-          p.setAttribute("data-path", child.fields.path);
-          p.addEventListener("mousedown", (e) => handleDocClick(e, child.fields.path));
+          p.setAttribute("data-path", path);
+          p.addEventListener("mousedown", (e) => handleDocClick(e, path));
           dropdown.appendChild(p);
         });
       }

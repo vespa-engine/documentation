@@ -1,4 +1,5 @@
 import { getHandlerForInput } from "./handle_search_suggestions.js"; 
+import searchEndpoint from "./search_endpoint.js";
 
 if (window.location.pathname != "/search.html"){
 
@@ -37,7 +38,7 @@ const handleInput = (e) => {
     };
     
     const docFetch = fetch(
-      `https://api.search.vespa.ai/search/?${encode(docSearchParams)}`
+      `${searchEndpoint}?${encode(docSearchParams)}`
     ).then((res) => res.json());
 
     // Second fetch: Term suggestions (prefix matching)
@@ -48,7 +49,7 @@ const handleInput = (e) => {
     };
     
     const termFetch = fetch(
-      `https://api.search.vespa.ai/search/?${encode(termSearchParams)}`
+      `${searchEndpoint}?${encode(termSearchParams)}`
     ).then((res) => res.json());
 
     // Wait for both fetches
