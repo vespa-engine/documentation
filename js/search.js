@@ -1,5 +1,6 @@
 import handleResults from "./handle_results.js";
 import { getHandlerForInput } from "./handle_search_suggestions.js";
+import searchEndpoint from "./search_endpoint.js";
 
 const escapeMap = Object.freeze({
   '&': '&amp;',
@@ -53,7 +54,7 @@ const handleQuery = (query, inputId) => {
 
     document.getElementById("hits").innerHTML = "";
     result.innerHTML = `Searching for '${escapeHtml(query)}' ...`;
-    fetch("https://api.search.vespa.ai/search/?" + encode({term: query}))
+    fetch(searchEndpoint + "?" + encode({term: query}))
         .then((res) => res.json())
         .then((res) => { const children = (res.root.children)? res.root.children : [];
           if (handler) {
@@ -92,7 +93,7 @@ const handleLocationQuery = () => {
       userinput: query,
     };
 
-    fetch("https://api.search.vespa.ai/search/?" + encode(searchParams))
+    fetch(searchEndpoint + "?" + encode(searchParams))
         .then((res) => res.json())
         .then((res) => handleResults(res.root.children, escapeHtml(query)))
   }
