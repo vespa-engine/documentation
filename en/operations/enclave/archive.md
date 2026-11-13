@@ -28,14 +28,15 @@ that frequency of uploads will depend on the activity of the Vespa application.
 The directory structure in the bucket for logs and service dumps is as follows:
 
 ```
-<tenant>/<application>/<instance>/<host>/logs/<logtype>/<logfile>
+<tenant>/<application>/<instance>/<cluster>/<host>/logs/<logtype>/<logfile>
 
-<tenant>/<application>/<instance>/<host>/service-dump/<dump-id>/<file>
+<tenant>/<application>/<instance>/<cluster>/<host>/service-dump/<dump-id>/<file>
 ```
 
 * `tenant` is the tenant ID.
 * `application` is the application ID that generated the log.
 * `instance` is the instance ID of the generated log, e.g. `default`.
+* `cluster` is the ID of the cluster in services.xml that the host belongs to, e.g. `default`.
 * `host` is the name prefix of the host that generated the log, e.g. `e103a`.
 * `logtype` is the type of log in the directory (see below).
 * `logfile` is the specific file of the log.
