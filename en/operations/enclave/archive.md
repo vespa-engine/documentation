@@ -6,7 +6,7 @@ redirect_from:
 - /en/cloud/enclave/archive
 ---
 
-Refer to the [Artifact Archive](../archive/archive-guide.html) for general information about logs and artifacts like heap dumps.
+Refer to the [Archive guide](../archive/archive-guide.html) for general information about logs and artifacts like heap dumps.
 
 After Vespa Cloud Enclave is set up,
 a storage bucket is created per Vespa Cloud zone you configured in the enclave.
