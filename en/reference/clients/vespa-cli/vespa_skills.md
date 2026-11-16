@@ -16,6 +16,9 @@ application packages, queries, feeding and more. Skills are downloaded from
 https://github.com/vespa-engine/skills and installed for one or more
 agent harnesses: Claude Code, Codex, Cursor and Antigravity CLI.
 
+Deployed applications can also serve skills documenting themselves, such as
+their schemas, which 'vespa skills get' prints.
+
 ```
 vespa skills [flags]
 ```
@@ -42,6 +45,7 @@ vespa skills [flags]
 ### SEE ALSO
 
 * [vespa](vespa.html)	 - The command-line tool for Vespa.ai
+* [vespa skills get](vespa_skills_get.html)	 - Get the skills of a deployed application
 * [vespa skills install](vespa_skills_install.html)	 - Install Vespa AI-assistant skills
 * [vespa skills list](vespa_skills_list.html)	 - List available Vespa AI-assistant skills
 * [vespa skills update](vespa_skills_update.html)	 - Update previously installed Vespa AI-assistant skills
