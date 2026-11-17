@@ -75,3 +75,5 @@ they can also contain explanations for the inputs to the profile. See the
 Explanations should be used when there is *additional relevant information to provide*, such as
 the range and unit of values of a field, what are suitable use cases for a rank profile, and similar.
 They should not explain what's obvious, or repeat information that is provided automatically, such as the type.
+
+You can also get the schema skills using the Vespa CLI: ```vespa skills get schemas```
