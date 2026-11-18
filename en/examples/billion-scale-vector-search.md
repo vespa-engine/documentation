@@ -103,7 +103,7 @@ $ vespa feed if-vectors.jsonl
 </div>
 
 Now is a good time to open the
-<a href="https://console.vespa-cloud.com/link/tenant/application/autotest/environment/dev/instance/default/region/aws-us-east-1c/metrics" data-proofer-ignore>Vespa Cloud Dashboard</a>
+<a href="https://console.vespa-cloud.com" data-proofer-ignore>Vespa Cloud Console</a>
 to track progress.
 
 Refer to [&lt;resources&gt;](https://github.com/vespa-engine/sample-apps/blob/master/billion-scale-vector-search/app/src/main/application/services.xml)
@@ -145,7 +145,7 @@ $ python3 app/src/main/python/recall.py --endpoint http://localhost:8080/search/
 
 Find the path to the credentials from the `vespa auth cert` step above, like
 <pre>
-/Users/username/.vespa/tenant_name.autotest.default/data-plane-public-cert.pem
+/Users/username/.vespa/tenant_name.myapp.default/data-plane-public-cert.pem
 </pre>
 Replace the two filenames in the command below.
 (This is not needed when running a [local test](#local-test-with-oci-image))
