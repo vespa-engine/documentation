@@ -824,8 +824,9 @@ Add the secret to the container <code>&lt;secrets&gt;</code> and refer to it in 
 <h2 id="embedder-onnx-reference-config">Embedder ONNX reference config</h2>
 <p>
   Vespa uses <a href="https://onnxruntime.ai/">ONNX Runtime</a> to accelerate inference of embedding models.
-  These parameters are valid for both <a href="#bert-embedder">Bert embedder</a> and
-  <a href="#huggingface-embedder">Huggingface embedder</a>.
+  These parameters apply to the <a href="#bert-embedder">Bert</a>,
+  <a href="#huggingface-embedder">Hugging Face</a>, <a href="#colbert-embedder">ColBERT</a>,
+  and <a href="#splade-embedder-reference-config">SPLADE</a> embedders.
 </p>
 <table class="table">
   <thead>
@@ -872,8 +873,111 @@ Add the secret to the container <code>&lt;secrets&gt;</code> and refer to it in 
       <td>numeric</td>
       <td>0</td>
     </tr>
+    <tr>
+      <td><a href="#concurrency">concurrency</a></td>
+      <td>Zero or one</td>
+      <td>Limits concurrent inference calls in Vespa Cloud. Supports an absolute count or a factor relative to vCPUs.</td>
+      <td>positive number</td>
+      <td>One inference call per vCPU</td>
+    </tr>
+    <tr>
+      <td><a href="#batching">batching</a></td>
+      <td>Zero or one</td>
+      <td>Configures dynamic batching and optional padding buckets in Vespa Cloud.</td>
+      <td>element</td>
+      <td>Disabled</td>
+    </tr>
   </tbody>
 </table>
+
+{% include chip-cloud.html %}
+<h3 id="local-model-inference">Local model inference</h3>
+<p>The following settings control local ONNX inference in Vespa Cloud.
+    Configure them as children of the embedder's <code>component</code> element in
+    <a href="../applications/services/services.html">services.xml</a>.
+    See the <a href="../../rag/embedding.html#local-model-inference">guide</a> for examples and tuning.</p>
+
+<h4 id="concurrency">Concurrency</h4>
+<p>Vespa Cloud only.
+    Limits the number of inference calls that can run at once.
+    When batching is enabled, each batch counts as one inference call.
+    If omitted, concurrency defaults to one inference call per vCPU.</p>
+<pre>{% highlight xml %}
+<concurrency type="absolute">1</concurrency>
+{% endhighlight %}</pre>
+<p>The value must be greater than zero. The optional <code>type</code> attribute defaults to <code>absolute</code>:</p>
+<table class="table">
+  <thead><tr><th>Type</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>absolute</code></td>
+      <td>A fixed number of concurrent inference calls.</td>
+    </tr>
+    <tr>
+      <td><code>relative</code></td>
+      <td>A factor multiplied by the number of vCPUs available to the container.
+        For example, <code>&lt;concurrency type="relative"&gt;0.5&lt;/concurrency&gt;</code>
+        allows two concurrent inference calls on a container with four vCPUs.</td>
+    </tr>
+  </tbody>
+</table>
+<p>Vespa rounds the resulting count to the nearest integer, with half values rounded up, and uses a minimum of one.</p>
+
+<h4 id="batching">Batching</h4>
+<p>Vespa Cloud only.
+    Combines compatible queued requests into a single inference call.
+    Batching is disabled when the element is omitted.</p>
+<pre>{% highlight xml %}
+<batching max-size="8" max-delay="0ms" padding-buckets="32 64"/>
+{% endhighlight %}</pre>
+<table class="table">
+  <thead><tr><th>Attribute</th><th>Required</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>max-size</code></td>
+      <td>Yes</td>
+      <td>Maximum number of requests in a batch. Use <code>1</code> to disable dynamic batching.
+        Values above <code>1</code> enable it. The default is <code>1</code> when the element is omitted.</td>
+    </tr>
+    <tr>
+      <td><code>max-delay</code></td>
+      <td>Yes</td>
+      <td>Required for configuration compatibility, but ignored for local models. Use <code>0ms</code>.
+        Local models use requests already in the queue without adding a delay to fill a batch.
+        <a href="../../rag/embedding.html#dynamic-batching">API embedders</a> use this attribute to control batch delay.</td>
+    </tr>
+    <tr>
+      <td><a href="#padding-buckets"><code>padding-buckets</code></a></td>
+      <td>No</td>
+      <td>Whitespace-separated positive integers specifying token lengths for padding. No padding by default.</td>
+    </tr>
+  </tbody>
+</table>
+<p>The model must support a variable batch size in the first dimension of its inputs and outputs.
+    Requests in a batch must have matching input shapes outside the batch dimension.</p>
+
+<h4 id="padding-buckets">Padding buckets</h4>
+<p>Vespa Cloud only.
+    Vespa pads each input to the smallest configured bucket that fits its token sequence.
+    Inputs longer than the largest bucket are not padded.
+    Bucket order does not matter; Vespa sorts the values and removes duplicates.</p>
+<p>Buckets above the embedder's maximum token length are capped at that limit.
+    For example, with <code>max-tokens</code> set to <code>48</code>, buckets <code>32 64 128</code>
+    become <code>32 48</code>. Capping does not change the embedder's truncation settings.</p>
+<p>Padding requires all of the following:</p>
+<ul>
+    <li><code>onnx-gpu-device</code> not set to <code>-1</code> (the default <code>0</code> requests a GPU), and <code>max-size</code> greater than <code>1</code>.
+        Padding only adds work on a CPU, so omit <code>padding-buckets</code> on nodes without a GPU.</li>
+    <li>All inputs with shape <code>[batch, sequence]</code>, one of them the attention mask.
+        The sequence dimension must have a variable length, and all inputs must have the same length.
+        The model must ignore tokens whose attention mask is zero.</li>
+    <li>A model without dynamic quantization. Padding can change the output of dynamically quantized models.</li>
+</ul>
+<p>Vespa pads sequence inputs with zeros and removes padding from sequence outputs before returning them to the embedder.
+    It verifies that padding preserves the output within a numerical tolerance.
+    See <a href="../../rag/embedding.html#padding-not-applied">padding troubleshooting</a>
+    for verification logs and reasons padding may be disabled.</p>
+
 
 <h2 id="sentencepiece-embedder">SentencePiece embedder</h2>
   <p>
