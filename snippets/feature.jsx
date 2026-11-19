@@ -13,6 +13,8 @@
 //          name="matches_for_labels(_name_)" italicizes only "name". Write \_
 //          for any other literal underscore. MDX attribute values are not
 //          JavaScript strings, so that is a single backslash: name="\_x\_".
+// type     The type or allowed values, shown in monospace. Surrounding
+//          backticks are ignored. Optional.
 // default  The default value, shown in monospace. Surrounding backticks are
 //          ignored. Leave it out when the feature has no default.
 // id       The anchor. It defaults to the name with the italic markers removed,
@@ -44,9 +46,11 @@ const parseName = (name) => {
 
 const stripBackticks = (value) => String(value).replace(/^`(.+)`$/, "$1");
 
-export const Feature = ({ name, default: def, id, children }) => {
+export const Feature = ({ name, type, default: def, id, children }) => {
   const parts = parseName(name);
   const anchor = id ?? parts.map((part) => part.text).join("");
+  const hasType = type !== undefined && type !== "";
+  const hasDefault = def !== undefined && def !== "";
 
   return (
     <div
@@ -71,11 +75,21 @@ export const Feature = ({ name, default: def, id, children }) => {
             #
           </span>
         </a>
-        {def !== undefined && def !== "" && (
+        {(hasType || hasDefault) && (
           // strong, because Mintlify resets the weight of other descendants
-          <strong className="max-w-full break-words text-xs font-semibold text-gray-500 dark:text-gray-400">
-            Default ={" "}
-            <span className="font-mono text-gray-800 dark:text-gray-200">{stripBackticks(def)}</span>
+          <strong className="flex max-w-full flex-wrap gap-x-4 break-words text-xs font-semibold text-gray-500 dark:text-gray-400">
+            {hasType && (
+              <span>
+                Type ={" "}
+                <span className="font-mono text-gray-800 dark:text-gray-200">{stripBackticks(type)}</span>
+              </span>
+            )}
+            {hasDefault && (
+              <span>
+                Default ={" "}
+                <span className="font-mono text-gray-800 dark:text-gray-200">{stripBackticks(def)}</span>
+              </span>
+            )}
           </strong>
         )}
       </div>
