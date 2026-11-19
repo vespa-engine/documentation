@@ -13,8 +13,8 @@
 //          name="matches_for_labels(_name_)" italicizes only "name". Write \_
 //          for any other literal underscore. MDX attribute values are not
 //          JavaScript strings, so that is a single backslash: name="\_x\_".
-// default  The default value. Wrap it in backticks to render it as code. Leave
-//          it out when the feature has no default.
+// default  The default value, shown in monospace. Surrounding backticks are
+//          ignored. Leave it out when the feature has no default.
 // id       The anchor. It defaults to the name with the italic markers removed,
 //          so term(_n_).significance is #term(n).significance. Set it to keep
 //          an existing anchor that differs from the name.
@@ -42,10 +42,7 @@ const parseName = (name) => {
   return parts;
 };
 
-const renderDefault = (value) => {
-  const code = /^`(.+)`$/.exec(String(value));
-  return code ? <code>{code[1]}</code> : value;
-};
+const stripBackticks = (value) => String(value).replace(/^`(.+)`$/, "$1");
 
 export const Feature = ({ name, default: def, id, children }) => {
   const parts = parseName(name);
@@ -54,30 +51,36 @@ export const Feature = ({ name, default: def, id, children }) => {
   return (
     <div
       id={anchor}
-      className="group scroll-mt-24 border-b border-gray-200 py-4 dark:border-gray-800"
+      className="group my-6 scroll-mt-24 border-l-2 border-gray-200 py-0.5 pl-4 hover:border-gray-400 dark:border-gray-700 dark:hover:border-gray-500"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <a
           href={`#${anchor}`}
-          className="min-w-0 break-words font-semibold no-underline"
+          className="min-w-0 break-words border-none font-mono text-sm font-semibold text-gray-900 no-underline dark:text-gray-100"
         >
           {parts.map((part, i) =>
-            part.italic ? <em key={i}>{part.text}</em> : <span key={i}>{part.text}</span>
+            part.italic ? (
+              <em key={i} className="font-normal text-primary dark:text-primary-light">
+                {part.text}
+              </em>
+            ) : (
+              <span key={i}>{part.text}</span>
+            )
           )}
           <span
             aria-hidden="true"
-            className="ml-2 font-normal text-gray-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+            className="ml-2 font-sans font-normal text-gray-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
           >
             #
           </span>
         </a>
         {def !== undefined && def !== "" && (
-          <span className="max-w-full break-words rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-            default: {renderDefault(def)}
+          <span className="max-w-full break-words text-xs text-gray-500 dark:text-gray-400">
+            Default <span className="font-mono">{stripBackticks(def)}</span>
           </span>
         )}
       </div>
-      <div className="mt-2 text-sm leading-relaxed">{children}</div>
+      <div className="prose-sm mt-1">{children}</div>
     </div>
   );
 };
