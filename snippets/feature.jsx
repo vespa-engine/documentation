@@ -56,17 +56,14 @@ export const Feature = ({ name, default: def, id, children }) => {
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <a
           href={`#${anchor}`}
-          className="min-w-0 break-words border-none font-mono text-sm font-semibold text-gray-900 no-underline dark:text-gray-100"
+          className="min-w-0 break-words border-none font-mono text-sm font-bold text-gray-900 no-underline dark:text-gray-100"
         >
-          {parts.map((part, i) =>
-            part.italic ? (
-              <em key={i} className="font-normal text-primary dark:text-primary-light">
-                {part.text}
-              </em>
-            ) : (
-              <span key={i}>{part.text}</span>
-            )
-          )}
+          {/* strong, because Mintlify resets the weight of other descendants */}
+          <strong>
+            {parts.map((part, i) =>
+              part.italic ? <em key={i}>{part.text}</em> : <span key={i}>{part.text}</span>
+            )}
+          </strong>
           <span
             aria-hidden="true"
             className="ml-2 font-sans font-normal text-gray-400 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
