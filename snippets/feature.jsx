@@ -73,8 +73,9 @@ export const Feature = ({ name, default: def, id, children }) => {
         </a>
         {def !== undefined && def !== "" && (
           // strong, because Mintlify resets the weight of other descendants
-          <strong className="max-w-full break-words text-xs font-semibold text-gray-800 dark:text-gray-200">
-            Default = <span className="font-mono">{stripBackticks(def)}</span>
+          <strong className="max-w-full break-words text-xs font-semibold text-gray-500 dark:text-gray-400">
+            Default ={" "}
+            <span className="font-mono text-gray-800 dark:text-gray-200">{stripBackticks(def)}</span>
           </strong>
         )}
       </div>
