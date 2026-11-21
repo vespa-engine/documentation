@@ -1,0 +1,134 @@
+---
+title: Ranking
+---
+
+*Ranking* in Vespa is the computation that is done on matching documents during query execution. These are specified as [ranking functions](/en/ranking/ranking-expressions-features) in *rank profiles* in the schema.
+
+The special function named `first-phase` will determine the initial *rank* of the matches, such that the top k can be selected as response to a query:
+
+```js
+rank-profile my-rank-profile {
+  first-phase {
+    expression: 0.7 * bm25(text) + 0.3 * attribute(popularity)
+  }
+}
+```
+
+## Ranking functions and features
+
+The ranking functions can be any mathematical function combining rank features, including [tensor math](/en/ranking/tensor-user-guide#ranking-with-tensors) and [machine-learned models](#machine-learned-model-inference).
+
+The rank features these functions can use are of three categories:
+
+- **Document features**, using `attribute(fieldName)`: any document field which has `attribute` in the indexing statement.
+- **Query features**, aka inputs, using `query(name)`: any value sent with the query as an input. When these are tensors (not scalars) they must be declared as an input in the rank profile.
+- **Match features**: a built-in feature which says something about how well a query and document matches, e.g. bm25 or closeness.
+
+Refer to the [full list of rank features](/en/reference/ranking/rank-features).
+
+Query features (inputs) that are tensors must be declared in the rank profile:
+
+```js
+rank-profile my-rank-profile {
+  inputs {
+    query(user_context) tensor<float>(x[3])
+  }
+  first-phase {
+    expression: bm25(text) + sum(query(user_context) * attribute(document_context))
+  }
+}
+```
+
+This is also how the type of query vectors in vector search are declared.
+
+## Rank profiles
+
+A schema can have any number of rank profiles specifying computations and ranking for different use cases, experiments, and so on. Queries select one using the [ranking.profile](/en/reference/api/query#ranking.profile) parameter in requests or a [query profile](/en/querying/query-profiles). If no profile is specified in the request, the one called `default` is used, and if that isn't specified in the schema, a default one ranking by the [nativeRank](/en/ranking/nativerank) feature is used. Another built-in rank profile `unranked` is also always available. Specifying this boosts serving performance in queries which do not need ranking because ordering is not important or [explicit field sorting](/en/reference/querying/sorting-language) is used.
+
+To avoid very long schema files, rank profiles can also be specified in their own files in the application package, named `schemas/[schema-name]/[profile-name].profile`. See the [schema reference](/en/reference/schemas/schemas#rank-profile) for documentation of all the content of rank profiles.
+
+Rank profiles can inherit other profiles to avoid duplication, as in `rank-profile myProfile inherits default, another`.
+
+## Phased ranking
+
+In addition to first-phase which specifies the initial ranking that will be applied on all matching documents during matching, rank profiles can also specify functions that will be applied to *rerank* the top k documents before returning the final result. This is useful to direct more computation towards the most promising candidate documents:
+
+```js
+schema myapp {
+
+    rank-profile my-rank-profile {
+
+        first-phase {
+            expression {
+                attribute(quality) * freshness(timestamp) + bm25(title)
+            }
+        }
+
+        second-phase {
+            expression: xgboost(my_xgboost_reranker)
+            total-rerank-count: 1000 # Over all nodes
+        }
+
+        global-phase {
+          expression: sum(onnx(my_large_onnx_model))
+          rerank-count: 20
+        }
+
+    }
+
+}
+```
+
+The `second-phase` expression is executed locally on the content node, using local data. This is efficient on thousands of candidates. The `global-phase` expression is executed on the global result set after merging, in the container node and is best used for any very expensive and high quality final reranking. See [phased ranking](/en/ranking/phased-ranking) for details.
+
+## Ranking functions
+
+A rank profile can define any number of functions which can be used in other ranking expressions or (when taking no arguments) be returned with results.
+
+```js expandable
+schema myapp {
+
+    rank-profile my-rank-profile {
+
+        function clickProbability() {
+            expression: xgboost('myClickModel')
+        }
+
+        function textRanking(field) {
+            expression: 0.7 * bm25(field) + 0.3 * nativeProximity(field)
+        }
+
+        first-phase {
+            expression {
+                0.1 * clickProbability()
+                0.2 * closeness(embeddingsField) +
+                0.3 * textRanking(titleField) +
+                0.4 * textRanking(bodyField)
+            }
+        }
+
+        summary-features {
+            clickProbability() # Returned with every matched document
+        }
+
+    }
+
+}
+```
+
+Read more in [ranking expressions and functions](/en/ranking/ranking-expressions-features).
+
+## Layered ranking
+
+In addition to ranking *documents*, a rank profile can also rank and select array elements within documents. This is most commonly used to select individual chunks within documents in RAG applications — see [working with chunks](/en/rag/working-with-chunks#layered-ranking-selecting-chunks-to-return).
+
+## Machine-Learned model inference
+
+The best quality is achieved by learning relevance functions using machine learning from a training set. Vespa lets you use machine-learned models in these formats in distributed ranking (first- and second phase):
+
+- [ONNX](/en/ranking/onnx), allowing importing models from ML frameworks like Tensorflow, PyTorch and scikit-learn.
+- [XGBoost](/en/ranking/xgboost)
+- [LightGBM](/en/ranking/lightgbm)
+
+As these are exposed as rank features, they can be used in ranking expressions exactly like any other rank feature.
+

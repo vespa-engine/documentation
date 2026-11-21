@@ -1,0 +1,119 @@
+---
+title: Deploy an application locally
+---
+
+Follow these steps to deploy a Vespa application on your own machine.
+
+Alternative versions of this guide:
+
+- [Deploy an application using pyvespa](https://vespa-engine.github.io/pyvespa/getting-started-pyvespa-cloud.html) - for Python developers
+- [Deploy an application](/en/basics/deploy-an-application)
+- [Deploy an application having Java components](/en/basics/deploy-an-application-java)
+- [Deploy an application without Vespa CLI](/en/basics/deploy-an-application-shell)
+- [Deploy an application having Java components locally](/en/basics/deploy-an-application-local-java)
+
+This is tested with _vespaengine/vespa:8.692.16_ container image.
+
+  
+<Warning>
+**Prerequisites:**
+
+- Linux, macOS or Windows 10 Pro on x86\_64 or arm64, with [Podman Desktop](https://podman.io/) or [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed, with an engine running. 
+  - Alternatively, start the Podman daemon:
+    ```bash
+    $ podman machine init --memory 6000
+    $ podman machine start
+    ```
+  - See [Docker Containers](/en/operations/self-managed/docker-containers) for system limits and other settings.
+
+- For CPUs older than Haswell (2013), see [CPU Support](/en/operations/self-managed/cpu-support).
+- Memory: Minimum 4 GB RAM dedicated to Docker/Podman. [Memory recommendations](/en/operations/self-managed/node-setup#memory-settings). 
+- Disk: Avoid `NO_SPACE` - the vespaengine/vespa container image + headroom for data requires disk space. [Read more](/en/writing/feed-block). 
+- [Homebrew](https://brew.sh/) to install the [Vespa CLI](/en/clients/vespa-cli), or download the Vespa CLI from [Github releases](https://github.com/vespa-engine/vespa/releases). 
+
+</Warning>
+
+<Steps>
+<Step>
+**Validate the environment:**
+
+```bash
+$ docker info | grep "Total Memory"
+
+or
+
+$ podman info | grep "memTotal"
+```
+</Step>
+<Step>
+**Install the [Vespa CLI](/en/clients/vespa-cli)** using [Homebrew](https://brew.sh/):
+
+```bash
+$ brew install vespa-cli
+```
+Windows/No Homebrew? See the [Vespa CLI page](/en/clients/vespa-cli) to download directly.
+</Step>
+<Step>
+**Set local target:**
+```bash
+$ vespa config set target local
+```
+</Step>
+<Step>
+**Start a Vespa Docker container:**
+```bash
+docker run --detach --name vespa --hostname vespa-container \
+  --publish 8080:8080 --publish 19071:19071 \
+  vespaengine/vespa
+```
+Alternatively, use `podman` in the command above.
+
+The port `8080` is published to make the search and feed interfaces accessible from outside the container, `19071` is the deploy-endpoint. Only one container named `vespa` can run at a time, so change the name if needed. See [Docker containers](/en/operations/self-managed/docker-containers) for more insights.
+</Step>
+
+<Step>
+**Clone a sample [application](/en/basics/applications):**
+```bash
+$ vespa clone album-recommendation myapp && cd myapp
+```
+</Step>
+
+<Step>
+**[Deploy](/en/basics/applications#deploying-applications) the application:**
+```bash
+$ vespa deploy --wait 300 ./app
+```
+</Step>
+
+<Step>
+**[Feed](/en/writing/reads-and-writes) [documents](/en/schemas/documents):**
+```bash
+$ vespa feed dataset/documents.jsonl
+```
+</Step>
+<Step>
+**Run [queries](/en/querying/query-api):**
+```bash
+vespa query "select * from music where album contains 'head'"
+```
+```bash
+vespa query \
+  "select * from music where true" \
+  "ranking=rank_albums" \
+  "ranking.features.query(user_profile)={{cat:pop}:0.8,{cat:rock}:0.2,{cat:jazz}:0.1}"
+```
+</Step>
+<Step>
+**Get documents:**
+```bash
+vespa document get id:mynamespace:music::a-head-full-of-dreams
+```
+```bash
+vespa visit
+```
+
+Get a document by ID, or export all documents - see [/document/v1](/en/writing/document-v1-api-guide) and [vespa visit](/en/writing/visiting).
+</Step>
+</Steps>
+
+Congratulations, you have deployed your first Vespa application!

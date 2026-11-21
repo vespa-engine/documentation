@@ -1,0 +1,322 @@
+---
+title: Using machine-learned models from Vespa Cloud
+sidebarTitle: "Model hub"
+---
+
+Vespa Cloud provides a set of machine-learned models that you can use in your applications. These models will always be available on Vespa Cloud and are [frozen models](https://blog.vespa.ai/tailoring-frozen-embeddings-with-vespa/). You can also bring your own embedding model, by deploying it in the Vespa application package.
+
+You specify to use a model provided by Vespa Cloud by setting the `model-id` attribute where you specify a model config. For example, when configuring the [Huggingface embedder](/en/rag/embedding#huggingface-embedder) provided by Vespa, you can write:
+
+```xml
+<container id="default" version="1.0">
+    <component id="e5" type="hugging-face-embedder">
+        <transformer-model model-id="e5-small-v2"/>
+    </component>
+    ...
+</container>
+```
+
+With this, your application will have support for [text embedding](/en/rag/embedding#embedding-a-query-text) inference for both queries and documents. Nodes that have been provisioned with GPU acceleration, will automatically use GPU for embedding inference.
+
+## Vespa Cloud Embedding Models
+
+Models on Vespa model hub are selected open-source embedding models with great performance. See the [Vespa blog on embedding tradeoffs](https://blog.vespa.ai/embedding-tradeoffs-quantified/) for details on performance and quality. These embedding models are useful for retrieval (semantic search), re-ranking, clustering, classification, and more.
+
+### Huggingface Embedder
+
+These models are available for the Huggingface Embedder `type="hugging-face-embedder"`. All these models support mapping from `string` or `array<string>` to tensor representations.
+
+The output tensor [cell-precision](/en/performance/feature-tuning#cell-value-types) can be `<float>`, `<bfloat16>`, or `<int8>`.
+
+Most models also support [binarization](/en/rag/binarizing-vectors), which requires using [distance-metric](/en/reference/schemas/schemas#distance-metric) `hamming` instead of `angular`. The E5 and multilingual-e5 models do not support binarization. See the [nanobeir hybrid evaluation leaderboard](https://huggingface.co/spaces/vespa-engine/nanobeir-hybrid-evaluation) for details on quality impact.
+
+
+#### alibaba-gte-modernbert
+
+| | |
+| :--- | :--- |
+| GTE (General Text Embedding) model trained from ModernBERT-base. | |
+| Model id | `alibaba-gte-modernbert` |
+| Tensor definition | `tensor<float>(x[768])` |
+| Matryoshka dimensions | `x[768]`, `x[256]` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/Alibaba-NLP/gte-modernbert-base](https://huggingface.co/Alibaba-NLP/gte-modernbert-base) @ 3ab3f8c |
+| Language | English |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id"type="hugging-face-embedder"><transformer-model model-id="alibaba-gte-modernbert"/><max-tokens>8192</max-tokens><pooling-strategy>cls</pooling-strategy></component> ``` </CodeBlock> |
+
+#### alibaba-gte-modernbert-int8
+
+| | |
+| :--- | :--- |
+| INT8 quantized variant of alibaba-gte-modernbert. Offers faster inference with minimal accuracy loss. | |
+| Model id | `alibaba-gte-modernbert-int8` |
+| Tensor definition | `tensor<float>(x[768])` |
+| Matryoshka dimensions | `x[768]`, `x[256]` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/Alibaba-NLP/gte-modernbert-base](https://huggingface.co/Alibaba-NLP/gte-modernbert-base) @ e7f32e3 |
+| Language | English |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="alibaba-gte-modernbert-int8"/><max-tokens>8192</max-tokens><pooling-strategy>cls</pooling-strategy></component> ``` </CodeBlock> |
+
+#### e5-base-v2
+| | |
+| :--- | :--- |
+| The base model of the _E5_ family. | |
+| Model id | `e5-base-v2` |
+| Tensor definition | `tensor<float>(x[768])` or `tensor<float>(p{},x[768])` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [MIT](https://github.com/microsoft/unilm/blob/master/LICENSE) |
+| Source | [https://huggingface.co/intfloat/e5-base-v2](https://huggingface.co/intfloat/e5-base-v2) @ 121b23b |
+| Language | English |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="e5-base-v2"/><max-tokens>512</max-tokens><prepend><query>query: </query><document>passage: </document></prepend></component> ``` </CodeBlock> |
+
+
+#### e5-large-v2
+
+| | |
+| :--- | :--- |
+| The largest model of the _E5_ family, at time of writing, this is the best performing embedding model on the MTEB benchmark. | |
+| Model id | `e5-large-v2` |
+| Tensor definition | `tensor<float>(x[1024])` or `tensor<float>(p{},x[1024])` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [MIT](https://github.com/microsoft/unilm/blob/master/LICENSE) |
+| Source | [https://huggingface.co/intfloat/e5-large-v2](https://huggingface.co/intfloat/e5-large-v2) |
+| Language | English |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="e5-large-v2"/><max-tokens>512</max-tokens><prepend><query>query: </query><document>passage: </document></prepend></component> ``` </CodeBlock> |
+
+#### e5-small-v2
+
+| | |
+| :--- | :--- |
+| The smallest and most cost-efficient model from the _E5_ family. | |
+| Model id | `e5-small-v2` |
+| Tensor definition | `tensor<float>(x[384])` or `tensor<float>(p{},x[384])` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [MIT](https://github.com/microsoft/unilm/blob/master/LICENSE) |
+| Source | [https://huggingface.co/intfloat/e5-small-v2](https://huggingface.co/intfloat/e5-small-v2) |
+| Language | English |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="e5-small-v2"/><max-tokens>512</max-tokens><prepend><query>query: </query><document>passage: </document></prepend></component> ``` </CodeBlock> |
+
+#### lightonai-modernbert-large
+
+| | |
+| :--- | :--- |
+| Trained from ModernBERT-large on the Nomic Embed datasets, bringing the new advances of ModernBERT to embeddings. | |
+| Model id | `lightonai-modernbert-large` |
+| Tensor definition | `tensor<float>(x[1024])` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/lightonai/modernbert-embed-large](https://huggingface.co/lightonai/modernbert-embed-large) @ b3a781f |
+| Language | English |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="lightonai-modernbert-large"/><max-tokens>8192</max-tokens><prepend><query>search_query: </query><document>search_document: </document></prepend></component> ``` </CodeBlock> |
+#### lightonai-modernbert-large-int8
+
+
+| | |
+| :--- | :--- |
+| INT8 quantized variant of lightonai-modernbert-large. Offers faster inference with minimal accuracy loss. | |
+| Model id | `lightonai-modernbert-large-int8` |
+| Tensor definition | `tensor<float>(x[1024])` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/lightonai/modernbert-embed-large](https://huggingface.co/lightonai/modernbert-embed-large) @ 95a19bf |
+| Language | English |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="lightonai-modernbert-large-int8"/><max-tokens>8192</max-tokens><prepend><query>search_query: </query><document>search_document: </document></prepend></component> ``` </CodeBlock> |
+
+#### multilingual-e5-base
+
+| | |
+| :--- | :--- |
+| The multilingual model of the _E5_ family. Use this model for multilingual queries and documents. | |
+| Model id | `multilingual-e5-base` |
+| Tensor definition | `tensor<float>(x[768])` or `tensor<float>(p{},x[768])` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [MIT](https://github.com/microsoft/unilm/blob/master/LICENSE) |
+| Source | [https://huggingface.co/intfloat/multilingual-e5-base](https://huggingface.co/intfloat/multilingual-e5-base) |
+| Language | Multilingual |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="multilingual-e5-base"/><max-tokens>512</max-tokens><prepend><query>query: </query><document>passage: </document></prepend></component> ``` </CodeBlock> |
+
+
+#### nomic-ai-modernbert
+
+
+| | |
+| :--- | :--- |
+| Trained from ModernBERT-base on the Nomic Embed datasets, bringing the new advances of ModernBERT to embeddings. | |
+| Model id | `nomic-ai-modernbert` |
+| Tensor definition | `tensor<float>(x[768])` |
+| Matryoshka dimensions | `x[768]`, `x[256]` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/nomic-ai/modernbert-embed-base](https://huggingface.co/nomic-ai/modernbert-embed-base) @ 92168cb |
+| Language | English |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="nomic-ai-modernbert"/><transformer-output>token_embeddings</transformer-output><max-tokens>8192</max-tokens><prepend><query>search_query: </query><document>search_document: </document></prepend></component> ``` </CodeBlock> |
+
+#### nomic-ai-modernbert-int8
+
+
+| | |
+| :--- | :--- |
+| INT8 quantized variant of nomic-ai-modernbert. Offers faster inference with minimal accuracy loss. | |
+| Model id | `nomic-ai-modernbert-int8` |
+| Tensor definition | `tensor<float>(x[768])` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/nomic-ai/modernbert-embed-base](https://huggingface.co/nomic-ai/modernbert-embed-base) @ d556a88 |
+| Language | English |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="nomic-ai-modernbert-int8"/><transformer-output>token_embeddings</transformer-output><max-tokens>8192</max-tokens><prepend><query>search_query: </query><document>search_document: </document></prepend></component> ``` </CodeBlock> |
+
+#### snowflake-arctic-embed-m-v2.0
+
+| | |
+| :--- | :--- |
+| Embedding model based on snowflake-arctic-embed-m-v2.0. | |
+| Model id | `snowflake-arctic-embed-m-v2.0` |
+| Tensor definition | `tensor<float>(x[768])` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/Snowflake/snowflake-arctic-embed-m-v2.0](https://huggingface.co/Snowflake/snowflake-arctic-embed-m-v2.0) @ 95c2741 |
+| Language | Multilingual |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="snowflake-arctic-embed-m-v2.0"/><max-tokens>8192</max-tokens><transformer-output>token_embeddings</transformer-output><pooling-strategy>cls</pooling-strategy><normalize>true</normalize><prepend><query>query: </query></prepend></component> ``` </CodeBlock> |
+
+#### snowflake-arctic-embed-m-v2.0-int8
+ | | |
+| :--- | :--- |
+| INT8 quantized variant of snowflake-arctic-embed-m-v2.0. Offers faster inference with minimal accuracy loss. | |
+| Model id | `snowflake-arctic-embed-m-v2.0-int8` |
+| Tensor definition | `tensor<float>(x[768])` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/Snowflake/snowflake-arctic-embed-m-v2.0](https://huggingface.co/Snowflake/snowflake-arctic-embed-m-v2.0) @ 95c2741 |
+| Language | Multilingual |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="snowflake-arctic-embed-m-v2.0-int8"/><max-tokens>8192</max-tokens><transformer-output>token_embeddings</transformer-output><pooling-strategy>cls</pooling-strategy><normalize>true</normalize><prepend><query>query: </query></prepend></component> ``` </CodeBlock> |
+
+
+#### voyage-4-nano
+
+| | |
+| :--- | :--- |
+| Embedding model based on voyage-4-nano-ONNX. | |
+| Model id | `voyage-4-nano` |
+| Tensor definition | `tensor<float>(x[2048])` |
+| Matryoshka dimensions | `x[2048]`, `x[1024]`, `x[512]`, `x[256]` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/thomasht86/voyage-4-nano-ONNX](https://huggingface.co/thomasht86/voyage-4-nano-ONNX) @ fcf290d |
+| Language | English |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="voyage-4-nano"/><max-tokens>32768</max-tokens><pooling-strategy>mean</pooling-strategy><normalize>true</normalize><prepend><query>Represent the query for retrieving supporting documents: </query><document>Represent the document for retrieval: </document></prepend></component> ``` </CodeBlock> |
+
+#### voyage-4-nano-int8
+| | |
+| :--- | :--- |
+| INT8 quantized variant of voyage-4-nano. Offers faster inference with minimal accuracy loss. | |
+| Model id | `voyage-4-nano-int8` |
+| Tensor definition | `tensor<float>(x[2048])` |
+| Matryoshka dimensions | `x[2048]`, `x[1024]`, `x[512]`, `x[256]` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/thomasht86/voyage-4-nano-ONNX](https://huggingface.co/thomasht86/voyage-4-nano-ONNX) @ fcf290d |
+| Language | English |
+| Component declaration | <CodeBlock> ```<component id="my-embedder-id" type="hugging-face-embedder"><transformer-model model-id="voyage-4-nano-int8"/><max-tokens>32768</max-tokens><pooling-strategy>mean</pooling-strategy><normalize>true</normalize><prepend><query>Represent the query for retrieving supporting documents: </query><document>Represent the document for retrieval: </document></prepend></component> ``` </CodeBlock> |
+
+### Bert Embedder
+
+These models are available for the [Bert Embedder](/en/rag/embedding#bert-embedder)`type="bert-embedder"`:
+
+```xml
+<container id="default" version="1.0">
+    <component id="mini" type="bert-embedder">
+        <transformer-model model-id="minilm-l6-v2"/>
+        <tokenizer-vocab model-id="bert-base-uncased"/>
+    </component>
+    ...
+</container>
+```
+
+Note bert-embedder requires both `transformer-model` and `tokenizer-vocab`.
+
+#### minilm-l6-v2
+
+A small, fast sentence-transformer model.
+
+| | |
+| :--- | :--- |
+| Model-id | minilm-l6-v2 |
+| Tensor definition | `tensor<float>(x[384])` or `tensor<float>(p{},x[384])` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) |
+| Language | English |
+| 
+#### mpnet-base-v2
+
+A larger, but better than **minilm-l6-v2** sentence-transformer model.
+
+| | |
+| :--- | :--- |
+| Model-id | mpnet-base-v2 |
+| Tensor definition | `tensor<float>(x[768])` or `tensor<float>(p{},x[768])` |
+| [distance-metric](/en/reference/schemas/schemas#distance-metric) | `angular` |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/sentence-transformers/all-mpnet-base-v2](https://huggingface.co/sentence-transformers/all-mpnet-base-v2) |
+| Language | English |
+
+### Tokenization Embedders
+
+These are embedder implementations that tokenize text and embed string to the vocabulary identifiers. These are most useful for creating the tensor inputs to re-ranking models that take both the query and document token identifiers as input. Find examples in the [sample applications](https://github.com/vespa-engine/sample-apps/blob/master/README.md#vector-search-hybrid-search-and-embeddings).
+
+
+#### bert-base-uncased
+| | |
+| :--- | :--- |
+| A vocabulary text (_vocab.txt_) file on the format expected by [WordPiece](/en/rag/embedding#wordpiece-embedder): A text token per line. |
+| Model-id | bert-base-uncased |
+| License | [apache-2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| Source | [https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) |
+
+#### e5-base-v2-vocab
+| | |
+| :--- | :--- |
+| A _tokenizer.json_ configuration file on the format expected by [HF tokenizer](/en/rag/embedding#huggingface-tokenizer-embedder). This tokenizer configuration can be used with `e5-base-v2`, `e5-small-v2` and `e5-large-v2`. |
+| Model-id | e5-base-v2-vocab |
+| License | [MIT](https://github.com/microsoft/unilm/blob/master/LICENSE) |
+| Source | [https://huggingface.co/intfloat/e5-base-v2](https://huggingface.co/intfloat/e5-base-v2) |
+| Language | English |
+| 
+#### multilingual-e5-base-vocab
+| | |
+| :--- | :--- |
+| A _tokenizer.json_ configuration file on the format expected by [HF tokenizer](/en/rag/embedding#huggingface-tokenizer-embedder). This tokenizer configuration can be used with `multilingual-e5-base-vocab`. |
+| Model-id | multilingual-e5-base-vocab |
+| License | [MIT](https://github.com/microsoft/unilm/blob/master/LICENSE) |
+| Source | [https://huggingface.co/intfloat/multilingual-e5-base](https://huggingface.co/intfloat/multilingual-e5-base) |
+| Language | Multilingual |
+
+### Significance models
+
+These are [global significance models](/en/ranking/significance#significance-models-in-servicesxml) that can be added to [significance element in services.xml](/en/reference/applications/services/search#significance).
+
+#### significance-en-wikipedia-v1
+| | |
+| :--- | :--- |
+| This significance model was generated from [English Wikipedia dump data from 2024-08-01](https://dumps.wikimedia.org/enwiki/). Available in Vespa as of version 8.426.8. |
+| Model-id | significance-en-wikipedia-v1 |
+| License | [Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0) License](https://creativecommons.org/licenses/by-sa/3.0/deed.en). |
+| Source | [https://data.vespa-cloud.com/significance\_models/significance-en-wikipedia-v1.json.zst](https://data.vespa-cloud.com/significance_models/significance-en-wikipedia-v1.json.zst) |
+| Language | English |
+
+## Creating applications working both self-hosted and on Vespa Cloud
+
+You can also specify both a `model-id`, which will be used on Vespa Cloud, and a url/path, which will be used on self-hosted deployments:
+
+```bash
+<transformer-model model-id="minilm-l6-v2" path="myAppPackageModels/myModel.onnx"/>
+```
+
+This can be useful for example to create an application package which uses models from Vespa Cloud for production and a scaled-down or dummy model for self-hosted development.
+
+## Using Vespa Cloud models with any config
+
+Specifying a model-id can be done for any [config field of type `model`](/en/applications/configuring-components#adding-files-to-the-component-configuration), whether the config is from Vespa or defined by you.
+

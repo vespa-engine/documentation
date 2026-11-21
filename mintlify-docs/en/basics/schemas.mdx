@@ -1,0 +1,103 @@
+---
+title: Schemas
+description: "This is an introduction to schemas in Vespa. You can find all the details in the [schema reference](/en/reference/schemas/schemas)."
+---
+
+A schema defines a type of data and what we want to compute over it. An application package can contain multiple schemas for different kinds of data. Each content cluster specified in `services.xml` refers to the schemas that should be stored and indexed in that cluster. Schemas can inherit other schemas to avoid repeating common content.
+
+Schemas are placed in files named the same as the schema, with the ending `.sd` (for schema definition), in the `schemas/` directory of the application package.
+
+## Document fields
+
+A schema contains a document type, which is a named collection of fields:
+
+```js
+schema mySchema {
+
+    document mySchema {
+
+        field myField type string {
+            indexing: summary | index
+        }
+
+        ... more fields
+
+    }
+
+}
+```
+
+Each field has a type, a way it should be processed and indexed, and optionally other settings. The main decision you make is how the field should be used in queries, determined by the `indexing` statement:
+
+- `indexing: summary`: The field should be available in query responses ([document summaries](/en/querying/document-summaries)).
+- `indexing: index`: If a string: create a full-text on-disk index. If a tensor: create an HNSW vector index (requires `attribute` in addition).
+- `indexing: attribute`: For any field type: make the field value available for structured search (exact, range, regexp etc.), ranking, sorting, grouping, and aggregation in the [in-memory column store](/en/content/attributes). Suitable for structured data.
+- `indexing: attribute` and `attribute: fast-search`: As above, but in addition, create an index over this data to make it an efficient filter. Suitable for structured fields that are used as strong filters in queries.
+
+The indexing statement can contain multiple expressions separated by a pipe character, and these can also preprocess the value, so the pipe should be read as passing to the next expression, as on Unix. See the [reference](/en/reference/schemas/schemas#field) for all the types and content of fields.
+
+When a schema is defined and added to a content cluster, you can [write data](/en/basics/writing) according to it, and [query](/en/basics/querying) using the attributes and indexed fields in it. Indexing always happens automatically in real time.
+
+## Synthetic fields
+
+The document type in the schema defines the fields that you can put and get (read and write) for that document type. However, sometimes you want to take an input field and process it in some way before it is stored/indexed. To do that, you can create additional synthetic fields outside the document in the schema (for example using the [embed](/en/rag/embedding) function):
+
+```js
+schema mySchema {
+
+    document mySchema {
+
+        field myField type string {
+            indexing: summary | index
+        }
+
+        ...
+
+    }
+
+    field mySyntheticField type tensor(x[386]) {
+        indexing: input myField | embed | attribute | index
+    }
+
+}
+```
+
+## Rank profiles
+
+A *rank profile* specifies what should be computed over the data described by the schema, and how the documents of it should be ranked to select the ones to return in a query response:
+
+```js
+schema mySchema {
+
+    ...
+
+    rank-profile hybrid {
+
+        first-phase {
+            expression {
+                0.3 * bm25(myText) +
+                0.5 * closeness(myEmbedding) +
+                0.2 * attribute(popularity)
+            }
+        }
+
+    }
+
+}
+```
+
+A schema can have any number of rank profiles for different use cases, experiments and so on, and each can have multiple functions that compute some value to be returned or used in ranking. In addition to simple math functions like the above these can also be machine-learned models. See [ranking](/en/basics/ranking) for more.
+
+## Working with schemas
+
+Schemas may become thousands of lines, with inheritance, multiple rank functions calling each other and so on. The most efficient way of working with them is to use an IDE and install the Vespa plugin to get syntax highlighting, completions and navigation — see [IDE support](/en/applications/ide-support).
+
+What happens if you change the schema of a running application?
+
+- **Adding new fields**: No problem; the new field will be added and have no value until data is written to it.
+- **Changing how a field is indexed**: This will automatically cause a background reindexing on Vespa Cloud, but in the meantime there may be inconsistency in how the field is used in queries and writes, so in production it is sometimes preferable to create a new field instead.
+- **Removing a field**: Data and indexes are removed for the field.
+- **Changing the type of a field**: Existing data and indexes are removed for the field. For this reason, it is often preferable to add a new field instead, populate it, switch usages to the new field, then remove the old.
+
+You can find the details in [modifying schemas](/en/reference/schemas/schemas#modifying-schemas).
+

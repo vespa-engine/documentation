@@ -1,0 +1,152 @@
+---
+title: "Configure Log Collection"
+description: "Use the Fluent Bit Operator to collect logs and forward them to Grafana Cloud Loki."
+---
+
+## 1. Install Fluent Bit Operator
+
+Install the Fluent Bit Operator in a dedicated `logging` namespace.
+
+```bash
+$ helm repo add fluent https://fluent.github.io/helm-charts
+$ helm repo update
+$ kubectl create namespace logging
+$ helm install fluent-operator fluent/fluent-operator --namespace logging --set operator.logLevel=debug
+```
+
+Verify the installation by ensuring the operator Pod is running:
+
+```bash
+$ kubectl get pods -n logging
+```
+
+## 2. Configure Loki Credentials
+
+To forward logs to Grafana Cloud Loki, you must create a Kubernetes Secret containing your credentials. Obtain your User ID and API Token from the Grafana Cloud Portal under *Connections → Loki*.
+
+```bash
+$ kubectl create secret generic grafana-cloud-loki -n logging --from-literal=username=$USER_ID --from-literal=password=$API_TOKEN
+```
+
+## 3. Deploy Fluent Bit Configuration
+
+The Fluent Operator uses Custom Resources to define the logging pipeline. The following configuration sets up a **ClusterInput** to tail container logs, a **ClusterFilter** to add Kubernetes metadata, and a **ClusterOutput** to ship logs to Loki.
+
+Save the following as `fluentbit-logging.yaml`. **Note:** Replace `logs-prod-006.grafana.net` with your specific Loki endpoint.
+
+```yaml expandable
+    apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterFluentBitConfig
+metadata:
+  name: fluent-bit-config
+spec:
+  service:
+    httpServer: true
+    parsersFile: parsers.conf
+  inputSelector:
+    matchLabels:
+      fluentbit.fluent.io/enabled: "true"
+  filterSelector:
+    matchLabels:
+      fluentbit.fluent.io/enabled: "true"
+  outputSelector:
+    matchLabels:
+      fluentbit.fluent.io/enabled: "true"
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterInput
+metadata:
+  name: kube-containers
+  labels:
+    fluentbit.fluent.io/enabled: "true"
+spec:
+  tail:
+    tag: kube.*
+    path: /var/log/containers/*.log
+    parser: cri
+    readFromHead: false
+    memBufLimit: 5MB
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterFilter
+metadata:
+  name: k8s-meta
+  labels:
+    fluentbit.fluent.io/enabled: "true"
+spec:
+  match: "kube.*"
+  filters:
+    - kubernetes:
+        mergeLog: true
+        keepLog: false
+        labels: true
+        annotations: true
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: ClusterOutput
+metadata:
+  name: loki
+  labels:
+    fluentbit.fluent.io/enabled: "true"
+spec:
+  match: "kube.*"
+  loki:
+    host: logs-prod-006.grafana.net
+    port: 443
+    tls:
+      verify: false
+    httpUser:
+      valueFrom:
+        secretKeyRef:
+          name: grafana-cloud-loki
+          key: username
+    httpPassword:
+      valueFrom:
+        secretKeyRef:
+          name: grafana-cloud-loki
+          key: password
+    labels:
+      - job=fluentbit
+      - cluster=minikube
+    autoKubernetesLabels: "off"
+---
+apiVersion: fluentbit.fluent.io/v1alpha2
+kind: FluentBit
+metadata:
+  name: fluent-bit
+  namespace: logging
+spec:
+  fluentBitConfigName: fluent-bit-config
+  image: ghcr.io/fluent/fluent-operator/fluent-bit:3.1.4
+  tolerations:
+    - operator: Exists
+```
+
+Apply the configuration to your cluster:
+
+```bash
+$ kubectl apply -f fluentbit-logging.yaml
+```
+
+## 4. Query Logs
+
+Once deployed, Fluent Bit will run as a `DaemonSet` on every node. You can query the logs using LogQL in Grafana Explore.
+
+Check the Fluent Bit logs to ensure there are no authentication errors (HTTP 401):
+
+```bash
+$ kubectl logs -n logging -l app.kubernetes.io/name=fluent-bit --tail=50
+```
+
+Use these LogQL queries to inspect Vespa components specifically:
+
+```bash
+# Filter logs for the Config Server
+{cluster="minikube", namespace_name="default", pod_name=~"cfg-.*"}
+
+# Filter logs for specific containers (e.g., query container)
+{cluster="minikube", container_name="vespa"}
+
+# Search for errors across all Vespa pods
+{cluster="minikube"} |= "error"
+```
