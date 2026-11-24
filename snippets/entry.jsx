@@ -1,15 +1,16 @@
-// One entry in a feature reference list, such as the rank feature reference.
+// One entry in a reference list: a rank feature, a configuration property,
+// a query parameter, a query operator and so on.
 //
-//   import { Feature } from "/snippets/feature.jsx";
+//   import { Entry } from "/snippets/entry.jsx";
 //
-//   <Feature name="term(_n_).significance" default="0">
+//   <Entry name="term(_n_).significance" default="0">
 //
 //   The description, written as ordinary Markdown.
 //
-//   </Feature>
+//   </Entry>
 //
-// name     The feature name. _text_ renders italic. As in Markdown, an underscore
-//          between two letters or digits is literal, so
+// name     The name of the entry. _text_ renders italic. As in Markdown, an
+//          underscore between two letters or digits is literal, so
 //          name="matches_for_labels(_name_)" italicizes only "name". Write \_
 //          for any other literal underscore. MDX attribute values are not
 //          JavaScript strings, so that is a single backslash: name="\_x\_".
@@ -17,7 +18,7 @@
 // type     The type or allowed values, shown in monospace. Surrounding
 //          backticks are ignored. Optional.
 // default  The default value, shown in monospace. Surrounding backticks are
-//          ignored. Leave it out when the feature has no default.
+//          ignored. Leave it out when there is no default.
 // id       The anchor. It defaults to the name with the italic markers removed,
 //          so term(_n_).significance is #term(n).significance. Set it to keep
 //          an existing anchor that differs from the name.
@@ -47,7 +48,7 @@ const parseName = (name) => {
 
 const stripBackticks = (value) => String(value).replace(/^`(.+)`$/, "$1");
 
-export const Feature = ({ name, alias, type, default: def, id, children }) => {
+export const Entry = ({ name, alias, type, default: def, id, children }) => {
   const parts = parseName(name);
   const anchor = id ?? parts.map((part) => part.text).join("");
   const hasAlias = alias !== undefined && alias !== "";
