@@ -15,13 +15,20 @@
 //          for any other literal underscore. MDX attribute values are not
 //          JavaScript strings, so that is a single backslash: name="\_x\_".
 // alias    Other names for the entry, rendered like the name. Optional.
+// occurrence
+//          How many times the entry may occur, such as One or Optional.
+//          Optional.
 // type     The type or allowed values, shown in monospace. Surrounding
 //          backticks are ignored. Optional.
+// typeHref A link for the type, such as "#model-config-reference". Optional.
 // default  The default value, shown in monospace. Surrounding backticks are
 //          ignored. Leave it out when there is no default.
 // id       The anchor. It defaults to the name with the italic markers removed,
 //          so term(_n_).significance is #term(n).significance. Set it to keep
 //          an existing anchor that differs from the name.
+//
+// Use plain string attributes only. Mintlify drops expression attributes
+// such as type={...} when a page is edited in its web editor.
 //
 // All layout decisions live here, so the whole list can be restyled by
 // editing this file.
@@ -48,10 +55,11 @@ const parseName = (name) => {
 
 const stripBackticks = (value) => String(value).replace(/^`(.+)`$/, "$1");
 
-export const Entry = ({ name, alias, type, default: def, id, children }) => {
+export const Entry = ({ name, alias, occurrence, type, typeHref, default: def, id, children }) => {
   const parts = parseName(name);
   const anchor = id ?? parts.map((part) => part.text).join("");
   const hasAlias = alias !== undefined && alias !== "";
+  const hasOccurrence = occurrence !== undefined && occurrence !== "";
   const hasType = type !== undefined && type !== "";
   const hasDefault = def !== undefined && def !== "";
 
@@ -78,7 +86,7 @@ export const Entry = ({ name, alias, type, default: def, id, children }) => {
             #
           </span>
         </a>
-        {(hasAlias || hasType || hasDefault) && (
+        {(hasAlias || hasOccurrence || hasType || hasDefault) && (
           // strong, because Mintlify resets the weight of other descendants
           <strong className="flex max-w-full flex-wrap gap-x-4 break-words text-xs font-semibold text-gray-500 dark:text-gray-400">
             {hasAlias && (
@@ -91,10 +99,22 @@ export const Entry = ({ name, alias, type, default: def, id, children }) => {
                 </span>
               </span>
             )}
+            {hasOccurrence && (
+              <span>
+                Occurrence ={" "}
+                <span className="font-mono text-gray-800 dark:text-gray-200">{occurrence}</span>
+              </span>
+            )}
             {hasType && (
               <span>
                 Type ={" "}
-                <span className="font-mono text-gray-800 dark:text-gray-200">{stripBackticks(type)}</span>
+                {typeHref ? (
+                  <a href={typeHref} className="font-mono text-gray-800 dark:text-gray-200">
+                    {stripBackticks(type)}
+                  </a>
+                ) : (
+                  <span className="font-mono text-gray-800 dark:text-gray-200">{stripBackticks(type)}</span>
+                )}
               </span>
             )}
             {hasDefault && (
