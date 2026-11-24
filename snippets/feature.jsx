@@ -13,6 +13,7 @@
 //          name="matches_for_labels(_name_)" italicizes only "name". Write \_
 //          for any other literal underscore. MDX attribute values are not
 //          JavaScript strings, so that is a single backslash: name="\_x\_".
+// alias    Other names for the entry, rendered like the name. Optional.
 // type     The type or allowed values, shown in monospace. Surrounding
 //          backticks are ignored. Optional.
 // default  The default value, shown in monospace. Surrounding backticks are
@@ -46,9 +47,10 @@ const parseName = (name) => {
 
 const stripBackticks = (value) => String(value).replace(/^`(.+)`$/, "$1");
 
-export const Feature = ({ name, type, default: def, id, children }) => {
+export const Feature = ({ name, alias, type, default: def, id, children }) => {
   const parts = parseName(name);
   const anchor = id ?? parts.map((part) => part.text).join("");
+  const hasAlias = alias !== undefined && alias !== "";
   const hasType = type !== undefined && type !== "";
   const hasDefault = def !== undefined && def !== "";
 
@@ -75,9 +77,19 @@ export const Feature = ({ name, type, default: def, id, children }) => {
             #
           </span>
         </a>
-        {(hasType || hasDefault) && (
+        {(hasAlias || hasType || hasDefault) && (
           // strong, because Mintlify resets the weight of other descendants
           <strong className="flex max-w-full flex-wrap gap-x-4 break-words text-xs font-semibold text-gray-500 dark:text-gray-400">
+            {hasAlias && (
+              <span>
+                Alias ={" "}
+                <span className="font-mono text-gray-800 dark:text-gray-200">
+                  {parseName(alias).map((part, i) =>
+                    part.italic ? <em key={i}>{part.text}</em> : <span key={i}>{part.text}</span>
+                  )}
+                </span>
+              </span>
+            )}
             {hasType && (
               <span>
                 Type ={" "}
