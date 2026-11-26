@@ -1,0 +1,145 @@
+---
+title: "vespa-feed-client"
+sidebarTitle: "Java feed client"
+---
+
+- Java library and command line client for feeding document operations using [Document v1](/en/writing/document-v1-api-guide) over [HTTP/2](/en/performance/http2).
+- Asynchronous, high-performance Java implementation, with retries and dynamic throttling.
+- Supports a JSON array of feed operations, as well as [JSONL](https://jsonlines.org): one operation JSON per line.
+
+## Installing
+
+### Java library
+
+The Java library is available as a [Maven JAR artifact](https://search.maven.org/search?q=g:com.yahoo.vespa%20a:vespa-feed-client) at Maven Central. It requires minimum JDK17.
+
+Find an example application using this client at [client-java](https://github.com/vespa-engine/sample-apps/blob/master/examples/clients/client-java/README.md).
+
+### Command line client
+
+Two alternatives:
+
+- Install [_vespa-clients_/_vespa_](/en/operations/self-managed/build-install) RPM package.
+- Download [vespa-feed-client **zip** artifact](https://search.maven.org/artifact/com.yahoo.vespa/vespa-feed-client-cli) from Maven Central.
+
+Download example:
+
+```bash
+$ F_REPO="https://repo1.maven.org/maven2/com/yahoo/vespa/vespa-feed-client-cli" && \
+  F_VER=$(curl -Ss "${F_REPO}/maven-metadata.xml" | sed -n 's/.*<release>\(.*\)<.*>/\1/p') && \
+  curl -SsLo vespa-feed-client-cli.zip ${F_REPO}/${F_VER}/vespa-feed-client-cli-${F_VER}-zip.zip && \
+  unzip -o vespa-feed-client-cli.zip
+```
+
+## Enable feed endpoint in Vespa
+
+Requirements:
+
+- [Document API must be enabled on container](/en/reference/applications/services/container#document-api).
+
+HTTP/2 over [TLS](/en/reference/applications/services/http#ssl) is optional but recommended from a security perspective.
+
+Example _services.xml_ with TLS:
+
+```xml highlight= {4-13}
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0">
+    <container version="1.0" id="default">
+        <http>
+            <server id="default" port="443">
+                <ssl>
+                    <private-key-file>/path/to/private-key.pem</private-key-file>
+                    <certificate-file>/path/to/certificate.pem</certificate-file>
+                    <ca-certificates-file>/path/ca-certificates.pem</ca-certificates-file>
+                </ssl>
+            </server>
+        </http>
+        <document-api/>
+    </container>
+</services>
+
+```
+
+Example _services.xml_ without TLS:
+
+```xml highlight= {4}
+<?xml version="1.0" encoding="utf-8" ?>
+<services version="1.0">
+    <container version="1.0" id="default">
+        <document-api/>
+    </container>
+</services>
+```
+
+## Using the client
+
+The Javadoc for the programmatic API is available at [javadoc.io](https://javadoc.io/doc/com.yahoo.vespa/vespa-feed-client-api). See output of `$ vespa-feed-client --help` for usage.
+
+Use `--speed-test` for bandwidth testing.
+
+### Example Java
+
+Add _vespa-feed-client_ as dependency to your Maven (or other build system using Maven for dependency management):
+
+```
+<dependency>
+    <groupId>com.yahoo.vespa</groupId>
+    <artifactId>vespa-feed-client</artifactId>
+    <version>8.689.26</version>
+</dependency>
+```
+
+Code examples are listed in the [vespa-feed-client source code](https://github.com/vespa-engine/vespa/tree/master/vespa-feed-client-api/src/test/java/ai/vespa/feed/client/examples) on GitHub.
+
+- [JsonFileFeederExample.java](https://github.com/vespa-engine/vespa/blob/master/vespa-feed-client-api/src/test/java/ai/vespa/feed/client/examples/JsonFileFeederExample.java)
+- [JsonStreamFeederExample.java](https://github.com/vespa-engine/vespa/blob/master/vespa-feed-client-api/src/test/java/ai/vespa/feed/client/examples/JsonStreamFeederExample.java)
+- [SimpleExample.java](https://github.com/vespa-engine/vespa/blob/master/vespa-feed-client-api/src/test/java/ai/vespa/feed/client/examples/SimpleExample.java)
+
+### Example command line
+
+HTTP/2 over TLS:
+
+```bash
+$ vespa-feed-client \
+  --connections 4 \
+  --certificate cert.pem --private-key key.pem --ca-certificates ca.pem \
+  --file /path/to/json/file \
+  --endpoint https://container-endpoint:443/
+```
+
+The input must be either a proper JSON array, or a series, of JSON feed operations ([JSONL](https://jsonlines.org)), in the format described for the Vespa feed client [here](../reference/schemas/document-json-format#document-operations).
+
+HTTP/2 without TLS:
+
+```bash
+$ vespa-feed-client \
+  --connections 4 \
+  --file /path/to/json/file \
+  --endpoint http://container-endpoint:8080/
+```
+
+## Tuning for multi-worker pipelines
+
+A common pattern is feeding from an [Apache Beam](https://beam.apache.org/) topology (e.g., [Google Cloud Dataflow](https://docs.cloud.google.com/dataflow/docs/overview)). It is important to balance the number of workers and the connection settings.
+
+As each of the workers initializes its own `FeedClient` instance, the default settings can create too many connections. In this example we assume 128 workers and 10 Vespa Container nodes. With defaults (8 connections per endpoint, 128 max streams per connection), 128 workers opens 1,024 connections - each requiring a TLS handshake to the endpoint - which is a major source of container CPU overhead.
+
+Recommended configuration per worker ([Javadoc](https://javadoc.io/doc/com.yahoo.vespa/vespa-feed-client-api/latest/ai/vespa/feed/client/package-summary.html)):
+
+```java
+FeedClient client = FeedClientBuilder.create(endpoint)
+    .setConnectionsPerEndpoint(1)
+    .setMaxStreamPerConnection(maxStreams)
+    .setInitialInflightFactor(factor)
+    .build();
+```
+
+- `setConnectionsPerEndpoint(1)`: One connection per worker gives 128 total, which is more than sufficient for 10 container nodes. 
+- `setMaxStreamPerConnection(maxStreams)`: Calculate based on the target feed rate and total number of workers. For example, if the target is 50k docs/sec across 128 workers, each worker needs ~390 docs/sec. With typical per-document latency of 5-10 ms, each worker needs ~2-4 concurrent streams. 
+- `setInitialInflightFactor(factor)`: The dynamic throttler starts at a low inflight count and slowly ramps up via random walk. If you observe slow ramp-up at the start of a feed job, set this to a higher value (e.g., 4-8) to start closer to the optimal inflight level. The factor multiplies the minimum inflight (2 x connectionsPerEndpoint x endpoints), so with 1 connection and factor 8, you'd start at 16 inflight instead of 2. 
+
+<Danger>
+ **Important:** Each worker should create a single `FeedClient` instance and reuse it for the lifetime of the worker. Creating new instances per batch or per document group defeats connection reuse and prevents the throttler from converging.
+</Danger>
+
+Also, use vespa-feed-client 8.657 or later, for the latest improvements to connection handling and stability.

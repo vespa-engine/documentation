@@ -1,0 +1,106 @@
+---
+title: Vespa applications
+---
+
+You use Vespa by deploying an *application* to it. Why applications? Because Vespa handles both data and the computations you do over them — together an application.
+
+An application is specified by an *application package* — a directory with some files. The application package contains *everything* that is needed to run your application: config, schemas, components, ML models, and so on.
+
+The *only* way to change an application is to make the change in the application package and then deploy it again. Vespa will then safely change the running system to match the new application package revision, without impacting queries, writes, or data.
+
+## A minimal application package
+
+You can create a complete application package with just a single file: `services.xml`. This file specifies the clusters that your application should run. It could just be a single stateless cluster — what's called *container* — like this:
+
+```xml
+<services version="1.0">
+    <container version="1.0" id="default">
+        <nodes count="2">
+            <resources vcpu="4" memory="16Gb" disk="50Gb"/>
+        </nodes>
+    </container>
+</services>
+```
+
+Put this in a file called `services.xml`, and you have created the world's smallest application package. However, this won't do much; usually you want to have a `content` cluster which can store data, maintain indexes, and run the distributed part of queries. You'll also want your container cluster to load the necessary middleware for this. With that we get a services file like this:
+
+```xml
+<services version="1.0">
+    <container version="1.0" id="queryfeedendpoint">
+        <search/>
+        <document-api/>
+        <nodes count="2">
+            <resources vcpu="4" memory="16Gb" disk="50Gb"/>
+        </nodes>
+    </container>
+    <content id="mydocs" version="1.0">
+        <min-redundancy>2</min-redundancy>
+        <nodes count="2">
+            <resources vcpu="8" memory="64Gb" disk="200Gb"/>
+        </nodes>
+        <documents>
+            <document type="myschema" mode="index"/>
+        </documents>
+    </content>
+</services>
+```
+
+This specifies a pretty normal simple Vespa application, but now we need another file: the schema of the document type we'll use. This goes into the directory `schemas/`, so our application package now looks like this:
+
+```txt
+services.xml
+schemas/myschema.sd
+```
+
+The schema file describes a kind of data and the computations (such as ranking/scoring) you want to do over it. At minimum it just lists the fields of that data type and whether each field should be indexed:
+
+```txt
+schema myschema {
+
+    document myschema {
+
+        field text type string {
+            indexing: summary | index
+        }
+
+        field embedding type tensor<bfloat16>(x[384]) {
+            indexing: attribute | index
+        }
+
+        field popularity type double {
+            indexing: summary | attribute
+        }
+
+    }
+
+}
+```
+
+With these two files we have specified a fully functional application that can do text, vector and hybrid search with filtering.
+
+Rather than creating applications from scratch like this, you can also clone one of our sample applications as a starting point like we did in [getting started](/en/basics/deploy-an-application).
+
+To read more on schemas, see the [schemas](/en/basics/schemas) guide. To see everything an application package can contain, see the [application package reference](/en/reference/applications/application-packages).
+
+## Deploying applications
+
+To create running instances of an application, or make changes to one take effect, you *deploy* it. Deployments to the dev zone and to self-managed clusters set up a single instance, while deployments to production can set up multiple instances in one or more regions.
+
+To deploy an application package you use the [deploy command](/en/clients/vespa-cli#deployment) in Vespa CLI:
+
+```bash
+vespa deploy .
+```
+
+This will deploy the application package at the current directory to the current target and the default dev zone (use `vespa deploy -h` to see other options).
+
+Deployment to production zones use a separate command:
+
+```bash
+vespa prod deploy .
+```
+
+Production deployments also require an additional file in the application package to specify where it should be deployed: `deployment.xml`. See [production deployment](/en/operations/production-deployment). The recommended way to deploy to production is by setting up a continuous deployment job — see [automated deployments](/en/operations/automated-deployments).
+
+Deploying a change to an application package is generally safe to do at any time. It does not disrupt queries and writes, and invalid or destructive changes are rejected before taking effect. You can also add tests that verify the application before deployment to production zones.
+
